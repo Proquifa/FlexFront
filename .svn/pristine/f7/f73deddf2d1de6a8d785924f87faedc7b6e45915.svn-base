@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+								   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="inicia()" chromeColor="#cccccc"
+								   xmlns:combo="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" titulo="CONSULTA LLAMADAS"
+								   xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:label="skins.skin.label.*" xmlns:dateField="skins.skin.dateField.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.menu.EventoMenuContinuo;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.comun.llamadas.EventoConsultaLLamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			
+			private var _estadoVentana:String;
+			private var _componenteGarficas:ConsultaLlamadasGrafica = null;
+			
+			[Bindable]
+			private var _listaEstado:ArrayCollection = new ArrayCollection( [{llave:0, valor:"--TODOS--"},
+				{llave:1, valor:"CERRADA"},
+				{llave:2, valor:"ABIERTA"}]); //EN ESPERA
+			
+			[Bindable]
+			private var _listaDatos:ArrayCollection = new ArrayCollection();
+			
+			/**
+			 * Metodo para iniciar 
+			 */
+			private function inicia():void{
+				this.dtfFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				this.dtfInicio.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				this.dtfFin.selectedDate = new Date();
+				this.dtfInicio.selectedDate = new Date();
+				
+				var evt:EventoConsultaLLamada= new EventoConsultaLLamada(EventoConsultaLLamada.MOSTRAR_OCULTAR_TAB_GRAFICAS)
+				evt.tabGrafica = true;
+				dispatchEvent(evt);   
+				realizarBusquedaInicial();
+			}
+			/**
+			 * Metodo para mandar a llamar del mapa las Llamadas  
+			 */ 																
+			private function consultaLlamadas():void{
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("CONSULTA_LLAMADAS");
+				dispatchEvent(eventEspera);
+				
+				var _llamada:Llamada = new Llamada();
+				var evento:EventoConsultaLLamada = new EventoConsultaLLamada( EventoConsultaLLamada.CONSULTA_LLAMADAS );
+				_llamada.fechaInicio = this.dtfInicio.selectedDate;
+				_llamada.fechaFin = this.dtfFin.selectedDate;
+				_llamada.empresa = this.clientes.selectedItem.valor;
+				_llamada.destino = this.destino.selectedItem.valor;
+				_llamada.atendio = this.atendio.selectedItem.valor;
+				_llamada.estado = this.cmbEstado.selectedItem.valor;
+				evento.llamada = _llamada;
+				dispatchEvent( evento );
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = _llamada.fechaInicio;
+				currentFFin = _llamada.fechaFin;
+				currentCliente = _llamada.empresa;
+				currentDestino = _llamada.destino;
+				currentAtendio = _llamada.atendio;
+				currentEstado = _llamada.estado;
+			}
+			
+			private function realizarBusquedaInicial():void{
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("CONSULTA_LLAMADAS");
+				dispatchEvent(eventEspera);
+				
+				var _llamada:Llamada = new Llamada();
+				var evento:EventoConsultaLLamada = new EventoConsultaLLamada( EventoConsultaLLamada.CONSULTA_LLAMADAS );
+				_llamada.fechaInicio = this.dtfInicio.selectedDate;
+				_llamada.fechaFin = this.dtfFin.selectedDate;
+				_llamada.empresa = "--TODOS--";
+				_llamada.destino = "--TODOS--";
+				_llamada.atendio = "--TODOS--";
+				_llamada.estado = "--TODOS--";
+				evento.llamada = _llamada;
+				dispatchEvent( evento );
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = _llamada.fechaInicio;
+				currentFFin = _llamada.fechaFin;
+				currentCliente = _llamada.empresa;
+				currentDestino = _llamada.destino;
+				currentAtendio = _llamada.atendio;
+				currentEstado = _llamada.estado;
+			}
+			private function regresaMenu():void{
+				var evento:EventoMenuContinuo = new EventoMenuContinuo(EventoMenuContinuo.REGRESA_MENU);
+				dispatchEvent( evento );
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar){
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentCliente:String;
+			private var currentDestino:String;
+			private var currentAtendio:String;
+			private var currentEstado:String;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtfInicio":{CompararYControlarBoton(event.newDate.time,currentFInicio.time,"dtfInicio",btnBusqueda);break;}
+					case "dtfFin":{CompararYControlarBoton(event.newDate.time,currentFFin.time,"dtfFin",btnBusqueda);	break;}
+					case "clientes":	{CompararYControlarBoton(clientes.selectedItem.valor,currentCliente,"clientes",btnBusqueda);break;}
+					case "destino":{CompararYControlarBoton(destino.selectedItem.valor,currentDestino,"destino",btnBusqueda);break;}
+					case "atendio":{CompararYControlarBoton(atendio.selectedItem.valor,currentAtendio,"atendio",btnBusqueda);break;}
+					case "cmbEstado":{CompararYControlarBoton(cmbEstado.selectedItem.valor,currentEstado,"cmbEstado",btnBusqueda);break;}
+				}
+			} 
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" horizontalAlign="center">
+				<s:HGroup width="100%" >
+					<s:VGroup width="50%">
+						<label:Titulo_w100  text="Del" paddingTop="0" />
+						<dateField:DatePickerSpanish id="dtfInicio"  width="130" change="filtros_changeEvent(event)"/>
+					</s:VGroup>
+					<s:Spacer width="100%"/>
+					<s:VGroup width="50%">
+						<label:Titulo_w100  text="Al" paddingTop="0" />
+						<dateField:DatePickerSpanish id="dtfFin" width="130" change="filtros_changeEvent(event)"/>
+					</s:VGroup>
+				</s:HGroup>	
+				<s:Spacer height="1"/>
+				<label:Titulo_w100  text="Empresa:" paddingTop="0" />
+				<combo:ComboCatalogos id="clientes" creationComplete="this.clientes.cargaClientes('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+				<s:Spacer height="1"/>
+				<label:Titulo_w100  text="Destino:" paddingTop="0" />
+				<combo:ComboCatalogos id="destino"  creationComplete="this.destino.cargarEmpleadosActivos('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+				<s:Spacer height="1"/>
+				<label:Titulo_w100  text="Atendió:" paddingTop="0" />
+				<combo:ComboCatalogos id="atendio" creationComplete="this.atendio.cargarEmpleadosActivos('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+				<s:Spacer height="1"/>
+				<label:Titulo_w100  text="Estado:" paddingTop="0" />
+				<s:ComboBox dataProvider="{ this._listaEstado }" labelField="valor" selectedIndex="0" id="cmbEstado" width="100%" change="filtros_changeEvent(event)"/>
+				<s:Spacer height="15"/>
+				<pqNet:botonPqNetLargo	width="100%"  id="btnBusqueda" click="consultaLlamadas()" botonRedondo="true" icono="iconoActualizarNormal"/>
+				<s:Spacer height="15"/>
+				<otros:divisionHueca width="100%"/>
+			</s:VGroup>
+		</s:VGroup>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		 xmlns:etiquetas="mx.com.proquifa.vista.vistas.tramitarCompra.componentes.*" 
+		 xmlns:otros="skins.otros.*"
+		 resize="calc(event)" 
+		 xmlns:gestionarac="mx.com.proquifa.vista.vistas.gestionarac.*" 
+		 xmlns:grafica="mx.com.proquifa.vista.vistas.gestionarac.grafica.*"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.ResizeEvent;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			
+			
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFontAgente:Number;
+			[Bindable] public var dataProvider:ArrayCollection = new ArrayCollection();
+			[Bindable] public var cliente:String;
+			
+			private var query:Query;
+			private var _origen:String;
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				lstOrdenesCompra.dataProvider = UtilsGrid.queryCampoXLikeDosCampos(dataProvider,"nombreCliente","folio",txtBuscador.text);
+			}
+			
+			protected function cambioIndice(event:IndexChangeEvent):void
+			{
+				cliente = lstOrdenesCompra.selectedItem.nombreCliente;
+			}
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontAgente = (20 / 2005) * (unscaledWidth);
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+				
+				sizeFont = (15 / 2005) * (unscaledWidth);
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 12 ? 12:sizeFont;
+			}
+			
+			public function recibeDatos(sql:Query):void
+			{
+				(txtBuscador.skin as skinTextInputBusqueda2D ).colorBorder = 0xd8d7d8;
+				
+				query = sql;
+				dataProvider = new ArrayCollection();
+				var punterosCliente:Array = new Array();
+				var totalContactos:int = 0;
+				var totalNotificaciones:int = 0;
+				var totalPedidos:int = 0;
+				var total4dias:int = 0;
+				var total3dias:int = 0;
+				var total2dias:int = 0;
+				var total1dias:int = 0;
+				var totalMonto:Number = 0;
+				punterosCliente = query.getPunteros([origen],"cliente");
+				
+				for (var i:int = 0; i < punterosCliente.length; i++) 
+				{
+					var avisoCambios:Object = new Object;
+					avisoCambios.nombreCliente = query.universo.getItemAt(punterosCliente[i]).cliente;
+					var punterosPorCliente:Array = query.getPunteros([origen, avisoCambios.nombreCliente]);
+					if (punterosPorCliente.length > 0)
+					{
+						avisoCambios.folio = "NT"
+						avisoCambios.contactos = query.getPunteros([origen,avisoCambios.nombreCliente], "contacto").length;
+						avisoCambios.pedidos = query.getPunteros([origen,avisoCambios.nombreCliente], "cpedido").length;
+						avisoCambios.ac = query.getPunteros([origen,avisoCambios.nombreCliente], "folioNT").length;
+						avisoCambios.notificaciones = avisoCambios.ac;
+						avisoCambios.monto = query.getSumarCampo("pt",punterosPorCliente);
+						avisoCambios.dia1 = query.getSumarCampo("dia1",punterosPorCliente);
+						avisoCambios.dia2 = query.getSumarCampo("dia2",punterosPorCliente);
+						avisoCambios.dia3 = query.getSumarCampo("dia3",punterosPorCliente);
+						avisoCambios.dia4 = query.getSumarCampo("dia4",punterosPorCliente);
+						
+						avisoCambios.enTiempo = query.universo.getItemAt(punterosPorCliente[0]).enTiempo;
+						avisoCambios.urgente = query.universo.getItemAt(punterosPorCliente[0]).urgente;
+						avisoCambios.fueraDeTiempo = query.universo.getItemAt(punterosPorCliente[0]).fueraDeTiempo;
+						
+						var date:Date = query.universo.getItemAt(punterosPorCliente[0]).fee;
+						for (var j:int = 1; j < punterosPorCliente.length; j++) 
+						{
+							if (query.universo.getItemAt(punterosPorCliente[j-1]).fee && query.universo.getItemAt(punterosPorCliente[j]).fee)
+							{
+								if (query.universo.getItemAt(punterosPorCliente[j-1]).fee.time < query.universo.getItemAt(punterosPorCliente[j]).fee.time)
+									date = query.universo.getItemAt(punterosPorCliente[j-1]).fee;
+								else
+									date = query.universo.getItemAt(punterosPorCliente[j]).fee;
+							}
+							else
+							{
+								if (query.universo.getItemAt(punterosPorCliente[j-1]).fee)
+								{
+									date = query.universo.getItemAt(punterosPorCliente[j-1]).fee;
+								}
+								else if (query.universo.getItemAt(punterosPorCliente[j]).fee)
+								{
+									date = query.universo.getItemAt(punterosPorCliente[j-1]).fee;
+								}
+							}
+						}
+						avisoCambios.fee = date;
+						dataProvider.addItem(avisoCambios);
+						
+						totalContactos += avisoCambios.contactos;
+						totalNotificaciones += avisoCambios.notificaciones;
+						totalPedidos += avisoCambios.pedidos;
+						
+						total1dias += avisoCambios.dia1;
+						total2dias += avisoCambios.dia2;
+						total3dias += avisoCambios.dia3;
+						total4dias += avisoCambios.dia4;
+						
+						totalMonto += avisoCambios.monto;
+					}
+				}
+				
+				lstOrdenesCompra.dataProvider = dataProvider;
+				txtTotalPendientes.text = dataProvider.length.toString();
+				txtTotalContactos.text = totalContactos.toString().concat( totalContactos == 1 ? " contacto" : " contactos");
+				txtTotalNotificaciones.text = totalNotificaciones.toString().concat( totalNotificaciones == 1 ? " notificación" : " notificaciones");
+				txtTotalPedidos.text = totalPedidos.toString().concat( totalPedidos == 1 ? " pedido" : " pedidos");
+				
+				graficaClientes.recibirInfoGrafica = dataProvider;
+				graficaBarras.recibeInfoGraficos = dataProvider;
+				graficaSemaforo.recibeInfoGraficos = dataProvider;
+				
+				lbl4dias.text = total4dias.toString();
+				lbl3dias.text = total3dias.toString();
+				lbl2dias.text = total2dias.toString();
+				lbl1dias.text = total1dias.toString();
+				lblTotal.text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalMonto);
+				
+			}
+			
+			public function get origen():String
+			{
+				return _origen;
+			}
+			
+			public function set origen(value:String):void
+			{
+				_origen = value;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" gap="0">
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="GESTIONAR AC"  />
+		<s:HGroup id="hgpClientes" width="100%" height="100%" gap="0">
+			<s:VGroup id="grpOrden" width="35%" height="100%" gap="20" paddingRight="16" paddingTop="20" paddingLeft="5"> 
+				<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontAgente}" color="#000000" text="CLIENTES" width="100%" textAlign="left" />
+				<s:TextInput id="txtBuscador" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)" prompt="Cliente, notificado"/>
+				<s:VGroup width="100%" height="100%" gap="0">
+					<otros:division width="100%" grueso="2" height="2" color="#9a9a9a" visible="{lstOrdenesCompra.selectedIndex==0?false:true}"/>
+					<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+							selectedIndex="0" id="lstOrdenesCompra" contentBackgroundAlpha="0" change="cambioIndice(event)"
+							itemRenderer="mx.com.proquifa.vista.vistas.gestionarac.ClientesGestionarAC_IR"
+							/>
+					<otros:division width="100%" grueso="2" height="2" color="#a5a5a5"/>
+					<s:HGroup width="100%" padding="20" >
+						<s:Label id="txtTotalPendientes" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+						<s:Spacer width="7%" />
+						<s:Label id="txtTotalContactos" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+						<s:Spacer width="16%" />
+						<s:Label id="txtTotalNotificaciones" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+						<s:Spacer width="14%" />
+						<s:Label id="txtTotalPedidos" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+					</s:HGroup> 
+				</s:VGroup>
+			</s:VGroup>
+			
+			<!---Graficas-->
+			<s:Group width="65%" height="100%" >
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="#f3f3f4" />
+					</s:fill>
+				</s:Rect>
+				<s:HGroup width="100%" height="100%" paddingBottom="20" >
+					<s:VGroup width="55%" height="100%" verticalAlign="middle" horizontalAlign="center">
+						<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="CLIENTES" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+						<grafica:GraficaClienteGestionarAC id="graficaClientes" width="100%" height="70%" />
+						<s:VGroup width="100%"  horizontalAlign="center" gap="30">
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="MONTO TOTAL" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+							<s:HGroup width="100%" horizontalAlign="center" >
+								<s:HGroup width="25%" verticalAlign="middle" horizontalAlign="center">
+									<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="3+ DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+									<s:Label id="lbl4dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+								</s:HGroup>
+								<s:HGroup width="25%" verticalAlign="middle" horizontalAlign="center">
+									<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="3 DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+									<s:Label id="lbl3dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+								</s:HGroup>
+								<s:HGroup width="25%" verticalAlign="middle" horizontalAlign="center">
+									<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="2 DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+									<s:Label id="lbl2dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+								</s:HGroup>
+								<s:HGroup width="25%" verticalAlign="middle" horizontalAlign="center">
+									<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="1 DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+									<s:Label id="lbl1dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+								</s:HGroup>
+							</s:HGroup>
+							<s:HGroup width="100%" horizontalAlign="center" >
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" text="Monto total:" />
+								<s:Label id="lblTotal" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" />
+							</s:HGroup>
+						</s:VGroup>  
+						
+					</s:VGroup>  
+					
+					<s:VGroup width="45%" height="100%" gap="40">
+						<s:VGroup width="100%" height="50%" paddingTop="20" gap="20" >
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="TIEMPO NOTIFICACIÓN" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+							<grafica:GraficaBarrasTiempoAC id="graficaBarras" width="100%" height="100%" />
+						</s:VGroup>  
+						
+						
+						<s:VGroup width="100%" height="50%" paddingTop="20" gap="20" >
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="SEMÁFORO DE ENTREGA" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+							<grafica:GraficaSemaforoAC id="graficaSemaforo" width="100%" height="100%" />
+						</s:VGroup>  
+						
+					</s:VGroup>  
+					
+				</s:HGroup>  
+			</s:Group>  
+			
+		</s:HGroup>
+		
+		
+	</s:VGroup>
+	
+</s:Group>

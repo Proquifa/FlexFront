@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 creationComplete="PanelContactosAnimado_creationCompleteHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.generales.EventoCatProContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.empresasGeneral.ItemRendererPanelContactosAnimado;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			private var arregloCubos:ArrayCollection;
+			private var numCubosPorFila:uint;
+			private var _dataProvider:ArrayCollection;
+			public var contactoNaftaActual:Contacto;
+			public var contactoAmodificar:Contacto = new Contacto;
+			public var existeNafta:Boolean;
+			public var rutaVista:String;
+			public var imagenVista:ByteArray = new ByteArray;
+			
+			
+			public var isCurrentHabilitados:Boolean = true;
+			
+			protected function reorganizarFilas():void
+			{
+				if(currentArray != null && currentArray.length > 0){
+					
+					if(numCubosPorFila >0){
+						
+						arregloCubos = new ArrayCollection;
+						
+						var filasCompletas:uint =int(currentArray.length / numCubosPorFila);
+						
+						var arrayTemp:Array = currentArray.source;
+						var starIndex:uint;
+						var tmp:Array;
+						
+						for (var i:int = 0; i < filasCompletas; i++) 
+						{
+							starIndex = i * numCubosPorFila;
+							tmp = arrayTemp.slice(starIndex,starIndex + (numCubosPorFila));
+							
+							arregloCubos.addItem(tmp);
+						}
+						
+						if(filasCompletas == 0)
+						{
+							starIndex = 0;
+							tmp = arrayTemp.slice(starIndex,(currentArray.length));
+							arregloCubos.addItem(tmp);
+							
+						}else{
+							if((currentArray.length % numCubosPorFila) > 0 ){
+								starIndex = starIndex + (numCubosPorFila);
+								tmp = arrayTemp.slice(starIndex,(currentArray.length));
+								arregloCubos.addItem(tmp);
+							}
+						}
+						
+						myList.dataProvider = arregloCubos;
+					}
+				}
+			}
+			
+			private var currentWidth:int;
+			public var currentCubosPorFila:int;
+			override public function setActualSize(w:Number, h:Number):void{
+				super.setActualSize(w,h);
+				
+				var sobrante:Number;
+				if(currentWidth != w){
+					currentWidth = w;			
+					numCubosPorFila = int(w/255);
+					
+					sobrante = w%255;
+					sobrante = sobrante/255;
+					if(sobrante > 0.6){
+						numCubosPorFila += 1;
+					}
+					
+					if(currentCubosPorFila != numCubosPorFila){
+						currentCubosPorFila = numCubosPorFila;
+						reorganizarFilas();
+					}
+				}
+			}
+			
+			public function verificarNafta(evento:EventoCatProContactos):void
+			{
+				contactoAmodificar = evento.contacto;
+			/*	imagenVista = evento.firmaEvento;
+				rutaVista = evento.rutaFirmaEvento;*/
+				
+				var listaAux:ArrayCollection = new ArrayCollection();
+				var l:int = 0;
+				var j:int = 0;
+				
+				for (l=0;l< myList.dataProvider[0].length;l++)
+				{
+					listaAux.addItem(myList.dataProvider[0][l])
+				}
+				
+				
+				for(j=0;j<listaAux.length;j++ ){ 
+					if(listaAux[j].contactoNAFTA && listaAux[j].idContacto != contactoAmodificar.idContacto)
+					{
+						contactoNaftaActual =  ObjectUtil.copy(listaAux[j]) as Contacto; 
+						existeNafta = true;
+					}
+				}
+				
+				if(existeNafta)
+					escuchaAltaContactoNafta();
+					else
+					escucharModificarContacto();
+				
+			}
+			
+			private var currentArray:ArrayCollection;
+			public function get dataProvider():ArrayCollection
+			{
+				return _dataProvider;
+			}
+			
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				myList.dataProvider = new ArrayCollection;
+				_dataProvider = value;
+				currentArray = _dataProvider;
+				
+				if(isCurrentHabilitados){
+					var agregarContacto:Object = new Object;
+					agregarContacto.CuboAgregar = "agregarContacto";
+					currentArray.addItem(agregarContacto);
+				}
+				
+				reorganizarFilas();
+			}
+			
+			//============================================================TIENE QUE VER CON LA EDICIÓN DEL CONTACTO ============================================================
+			
+			public function set recibeProveedorSeleccionado($pro:Proveedor):void{
+				if( $pro == null )
+					return;
+				_proveedor = $pro;
+				obtenerContactosDelProveedorSeleccionado();
+			}
+			
+			private var _soloUnaVez:Boolean;
+			private var _contacto:Contacto; 
+			
+			public function set recibeDelAlert( $dato:ResultAlert ):void{
+				if( $dato == null || $dato.vieneD == null ){
+					return;
+				}
+				if( _soloUnaVez ){
+					if( $dato.vieneD == "catProEliminarContacto" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						var evtElimina:EventoCatProContactos = new EventoCatProContactos( EventoCatProContactos.ELIMINAR_CONTACTO_SERVER );
+						evtElimina.idContacto = _contacto.idContacto;
+						evtElimina.ventana = "CatProveedor_Contactos deshabilita( idContacto:"+_contacto.idContacto+" )";
+						dispatchEvent( evtElimina );
+					}else if( $dato.vieneD == "catProEditaContacto" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						var evtEdita:EventoCatProContactos = new EventoCatProContactos( EventoCatProContactos.EDITA_CONTACTO_SERVICE );
+						evtEdita.contacto = _contacto;
+						evtEdita.ventana = "CatProveedor_Contactos ( idContacto:"+_contacto.idContacto+" )";
+				/*		evtEdita.firmaEvento = imagenVista;
+						evtEdita.rutaFirmaEvento = rutaVista;*/
+						dispatchEvent( evtEdita );
+					}
+					
+					else if( $dato.vieneD == "catProEditaContactoNafta" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						var evtActivaNafta:EventoCatProContactos = new EventoCatProContactos( EventoCatProContactos.MODIFICA_CONTACTO_NAFTA );
+						evtActivaNafta.contacto = _contacto;
+						evtActivaNafta.ventana = "CatProveedor_Contactos ( idContacto:"+_contacto.idContacto+" )";
+					/*	evtActivaNafta.firmaEvento = imagenVista;
+						evtActivaNafta.rutaFirmaEvento = rutaVista;*/
+						dispatchEvent( evtActivaNafta );
+						
+					}
+				}
+			}
+			
+			private var _proveedor:Proveedor;
+			
+			private function obtenerContactosDelProveedorSeleccionado():void{
+				var evt:EventoCatProContactos = new EventoCatProContactos( EventoCatProContactos.OBTENER_CONTACTOS );
+				evt.idContacto = _proveedor.idProveedor;
+				evt.isSolicitudDeHabilitados = isCurrentHabilitados;
+				evt.tipo = "Linea";
+				dispatchEvent( evt );
+			}
+			
+			protected function PanelContactosAnimado_creationCompleteHandler(event:FlexEvent):void
+			{
+				myList.addEventListener( EventoCatProContactos.MODIFICAR_CONTACTO_VISTA , escucharModificarContacto, false,0,true);
+				myList.addEventListener( EventoCatProContactos.AGREGAR_CONTANTO_VISTA, agregaNuevoContacto,false,0,true);
+				myList.addEventListener( EventoCatProContactos.ELIMINAR_CONTACTO_VISTA,escucharEliminarContacto,false,0,true);
+				addEventListener(EventoCatProContactos.VERIFICACONTACTONAFTA,verificarNafta);
+			}
+			
+			private function escucharEliminarContacto(e:EventoCatProContactos):void
+			{
+				_soloUnaVez = true;
+				_contacto = e.contacto;
+				alertaSingleton.show( '¿Desea eliminar el contacto?' ,catalogoAlertas.TIT_ADV_atencion,'catProEliminarContacto','','','SI','NO');
+			}
+			
+			private function escucharModificarContacto():void
+			{
+				_contacto = contactoAmodificar;
+				_soloUnaVez = true;
+				/*if(existeNafta)*/
+				/*alertaSingleton.show( 'Ya existe otro contacto de NAFTA ¿Desea contunuar con la operación?' ,catalogoAlertas.TIT_ADV_atencion,'catProEditaContacto','','','SI','NO');
+				else*/
+				alertaSingleton.show( '¿Desea modificar el contacto?' ,catalogoAlertas.TIT_ADV_atencion,'catProEditaContacto','','','SI','NO');
+			}
+			
+			private function escuchaAltaContactoNafta():void
+			{
+				_contacto = contactoAmodificar;
+				_soloUnaVez = true;
+				alertaSingleton.show( 'Ya existe otro contacto de NAFTA ¿Desea contunuar con la operación?' ,catalogoAlertas.TIT_ADV_atencion,'catProEditaContactoNafta','','','SI','NO');
+			}
+			private function agregaNuevoContacto(evt:EventoCatProContactos):void{
+				
+				var evtAgrega:EventoCatProContactos = new EventoCatProContactos( EventoCatProContactos.AGREGA_CONTACTO_SERVICE );
+				evtAgrega.tipo = 'inserta';
+				evtAgrega.contacto = evt.contacto;
+				evtAgrega.contacto.empresa = _proveedor.nombre;
+				evtAgrega.contacto.idProveedor = _proveedor.idProveedor;
+				evtAgrega.ventana = "CatProveedor_Contactos nuevo( idProveedor:"+_proveedor.idProveedor+", Nombre:"+evt.contacto.nombre+" )";
+				dispatchEvent( evtAgrega );
+			}
+			
+			public function set confirmaNuevoContacto( $dato:Number):void{
+				if( isNaN( $dato ) || $dato < 0 ){
+					return;
+				} 
+				obtenerContactosDelProveedorSeleccionado();
+			} 
+			
+			public function set confirmaModificacionAContacto( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				obtenerContactosDelProveedorSeleccionado();
+				alertaSingleton.show('El contacto fue modificado.', catalogoAlertas.TIT_CONF_operacionExitosa );
+			}
+			
+			
+			
+			public function set confirmaEliminacionDeContacto( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				obtenerContactosDelProveedorSeleccionado();
+				alertaSingleton.show('El contacto fue eliminado.', catalogoAlertas.TIT_CONF_operacionExitosa );
+			}
+			
+			public function set confirmaAltaContaxctoNafta( $dato2:Boolean ):void{
+				if( !$dato2 ){
+					return;
+				}
+				var evtEditado:EventoCatProContactos = new EventoCatProContactos( EventoCatProContactos.EDITA_CONTACTO_SERVICE2 );
+				evtEditado.contacto = contactoNaftaActual;
+				evtEditado.contacto.contactoNAFTA = false;
+				evtEditado.ventana = "CatProveedor_Contactos ( idContacto:"+contactoNaftaActual.idContacto+" )";
+				dispatchEvent( evtEditado );
+		        
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:List id="myList" height="100%" width="100%" contentBackgroundAlpha="0" borderVisible="false"	horizontalScrollPolicy="off" 
+			itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.empresasGeneral.ItemRendererPanelContactosAnimado">
+	</s:List>	
+</s:Group>
+
+
+

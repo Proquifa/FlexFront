@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:altos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.altos.*"
+		  xmlns:medios="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.medios.*"
+		  xmlns:todos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.todos.*"
+		  xmlns:hd="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" 
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.utils.ObjectUtil;
+			
+			public const CLIENTE_VISTA:String = "cliente";
+			public const ESAC_VISTA:String = "esac";
+			
+			public var _currentVista:String = CLIENTE_VISTA;
+			public var _nivelSeleccionado:String = "TODOS";
+			public const EV_VISTA:String = "ev";
+			
+			[Bindable]
+			private var vistaCliente:Boolean = true;
+			
+			private var updateCalculosVCliente:Boolean = false;
+			private var updateCalculosVEsac:Boolean = false;
+			private var currentClientes:ArrayCollection;
+			private var _event:EventoTableroClientes;
+			private var _filtros:EventoTableroClientes;
+			private var altoRequerido:Number;
+			private var _sql:Query;
+			
+			//GRID
+			private var todosMediosProvider:ArrayCollection;
+			private var maProvider:ArrayCollection;
+			private var mmProvider:ArrayCollection;
+			private var mbProvider:ArrayCollection;
+			
+			public function get filtros():EventoTableroClientes
+			{
+				return _filtros;
+			}
+			
+			public function set filtros(value:EventoTableroClientes):void
+			{
+				if (!value)
+					return;
+				
+				_filtros = value;
+				mediosVista_ESAC.filtros = _filtros;
+				totalesClientes.filtros = _filtros;
+				grpEV.filtros = _filtros;
+			}
+			
+			public function set recibeListaResumenVentasTodosClientesMedios($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+					return;
+				
+				_sql = new Query($clientes,["nivelIVista","usuarioVista","conceptoResultado","etiqueta"]);
+				hacerCalculosVistaCliente(); 
+			}
+			
+			private function hacerCalculosVistaCliente():void
+			{
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					updateCalculosVCliente = false;
+					var punterosMediosTodos:Array = _sql.getPunteros([null,null,null,"MEDIOS"]);
+					var punterosMA:Array = _sql.getPunteros(["MA"]);
+					var punterosMM:Array = _sql.getPunteros(["MM"]);
+					var punterosMB:Array = _sql.getPunteros(["MB"]);
+					
+					todosMediosProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosMediosTodos)) as ArrayCollection,punterosMediosTodos);
+					maProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosMA)) as ArrayCollection,punterosMA);
+					mmProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosMM)) as ArrayCollection,punterosMM);
+					mbProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosMB)) as ArrayCollection,punterosMB);
+					
+					settearGrid();
+				}
+				else
+				{
+					listMedios.dataProvider = new ArrayCollection();
+					totalesClientes.calcularTotales(new ArrayCollection());
+				}
+			}
+			
+			public function setEvento($arreglo:ArrayCollection,$punteros:Array):ArrayCollection
+			{
+				if(_filtros)
+				{
+					var granTotal:Number = _sql.getSumarCampo("total",$punteros);
+					var granTotalAnterior:Number = _sql.getSumarCampo("montoAnterior",$punteros);	
+					Util.sortArray($arreglo,"total",true);
+					
+					for (var u:int=0; u < $arreglo.length; u++)
+					{
+						var temp:ResumenConsulta = $arreglo[u];
+						if(u == ($arreglo.length-1))
+							temp.nivelI = "ultimo";
+						temp.eventoTabClientes = _filtros;
+						temp.numFila = (u+1);
+						temp.porcentaje = ((temp.total * 100)/granTotal);
+						temp.porcentaje2 = ((temp.montoAnterior * 100)/granTotalAnterior);
+					}
+				}
+				return $arreglo;
+			}
+			
+			public function settearGrid():void
+			{
+				switch(_nivelSeleccionado)
+				{
+					case "TODOS":
+					{
+						lblTitulo.text="MEDIOS"
+						listMedios.dataProvider = todosMediosProvider;
+						totalesClientes.calcularTotales(todosMediosProvider);
+						break;
+					}
+					case "MA":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listMedios.dataProvider = maProvider;
+						totalesClientes.calcularTotales(maProvider);
+						break;
+					}
+					case "MM":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listMedios.dataProvider = mmProvider;
+						totalesClientes.calcularTotales(mmProvider);
+						break;
+					}
+					case "MB":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listMedios.dataProvider = mbProvider;
+						totalesClientes.calcularTotales(mbProvider);
+						break;
+					}
+					default:
+					{
+						lblTitulo.text = "";
+						listMedios.dataProvider = new ArrayCollection();
+						totalesClientes.calcularTotales(new ArrayCollection); 
+						break;
+					}
+				}
+			}
+			
+			protected function cambioVista(event:Event):void
+			{
+				_currentVista = checkBusqueda.selected;
+				selecionarVista();
+				
+				if (_currentVista == ESAC_VISTA)
+					lblTitulo.text="MEDIOS";
+				else if (_currentVista == CLIENTE_VISTA)
+					lblTitulo.text = _nivelSeleccionado == "TODOS" ? "MEDIOS":_nivelSeleccionado;
+				else if (_currentVista == EV_VISTA)
+					lblTitulo.text="MEDIOS";
+				
+				var evt:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.CAMBIOS_GRAFICA_MEDIOS);
+				evt.currentVista = _currentVista;
+				dispatchEvent(evt);
+			}
+			
+			private function selecionarVista():void
+			{
+				if (_currentVista == ESAC_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = false;
+					mediosVista_ESAC.visible = mediosVista_ESAC.includeInLayout = true;
+					grpEV.visible = grpEV.includeInLayout = false;
+				}
+				else if(_currentVista == CLIENTE_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = true;
+					mediosVista_ESAC.visible = mediosVista_ESAC.includeInLayout = false;					
+					grpEV.visible = grpEV.includeInLayout = false;
+				}
+				else if(_currentVista == EV_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = false;
+					mediosVista_ESAC.visible = mediosVista_ESAC.includeInLayout = false;					
+					grpEV.visible = grpEV.includeInLayout = true;
+				}
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup id="grpContenedorPrincipal" width="100%" height="57"  paddingLeft="20" paddingRight="20" verticalAlign="middle" >
+		<label:Titulo_22_pTop10 id="lblTitulo" paddingTop="15"/>
+		<s:Spacer width="100%" />
+		<s:VGroup height="50" width="220" paddingTop="7" >
+			<hd:switchVentasPeriodo id="checkBusqueda" width="100%" height="100%" click="cambioVista(event)"/>
+		</s:VGroup>
+	</s:HGroup>
+	
+	<!-- /////////////// ESTA ES LA PARTE DE CLIENTES  ///////////////  -->
+	<s:VGroup id="grpClientes" width="100%" height="100%">
+		<s:VGroup width="100%" height="100%" gap="0">
+			
+			<hd:AV_Header_Clientes width="100%" />
+			<s:List id="listMedios" borderVisible="false" width="100%" height="100%"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.altos.IR_AnalisisVentas_Altos_Clientes" />
+		</s:VGroup>
+		<altos:Totales_Altos_Clientes id="totalesClientes" width="100%" />
+	</s:VGroup>
+	
+	
+	<!-- /////////////// ESTA ES LA PARTE DE ESAC   ///////////////  -->
+	<medios:AnalisisVenta_areaMedios_ESAC id="mediosVista_ESAC" width="100%" height="100%" visible="false" includeInLayout="false" />
+	
+	<!-- /////////////// ESTA ES LA PARTE DE EV   ///////////////  -->
+	<medios:AnalisisVenta_areaMedios_EV id="grpEV" width="100%" height="100%" visible="false" includeInLayout="false" />
+	
+</s:VGroup>

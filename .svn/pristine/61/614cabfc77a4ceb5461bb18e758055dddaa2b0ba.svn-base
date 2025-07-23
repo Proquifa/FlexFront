@@ -1,0 +1,647 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%"
+		 creationComplete="group1_creationCompleteHandler(event)"
+		 resize="group1_resizeHandler(event)" xmlns:arribo="mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.*"
+		 >
+	
+	<fx:Metadata>
+		[Event(name="asociarPartidas", type="mx.com.proquifa.vista.eventos.EventoGestorCompras")]
+		[Event(name="quitarPartidas", type="mx.com.proquifa.vista.eventos.EventoGestorCompras")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComun;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.modelo.gestorCompras.ModeloGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.itemrender.ListaAsociarPartidas;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.skin.popUpEvento.PopUpMenuABC;
+			
+			
+			public var totales:Object = new Object();
+			public var totalesA:Object = new Object();
+			private var _IGI:Number = 0.0;
+			private var _DTA:Number = 0.0;
+			[Bindable] public var dataProvider:ArrayCollection;
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public  var sizeWidth:Number;
+			[Bindable] public  var sizeHeight:Number;
+			[Bindable] public var sizeRow:Number;
+			
+			public var universo:ArrayCollection;
+			[Bindable] public var universoCopiaArriba:ArrayCollection;
+			[Bindable] public var universoCopiaAbajo:ArrayCollection;
+			/*public var indiceRetorno:int;*/
+			[Bindable] public var tipoMoneda:String;
+			public var fleteAux:Number=0.0;
+			
+			public function get DTA():Number
+			{
+				return _DTA;
+			}
+
+			public function set DTA(value:Number):void
+			{
+				_DTA = value;
+			}
+
+			public function get IGI():Number
+			{
+				return _IGI;
+			}
+
+			public function set IGI(value:Number):void
+			{
+				_IGI = value;
+			}
+
+			public function set partidasTotalesPorOC(data:Object):void
+			{
+				totales = data;
+				lblMonto.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.monto);
+				lblImporte.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.importe);
+				lblPartidas.text = totales.partidas;
+				lblCantidad.text = totales.cantidad;
+				
+				mostrarVacio();
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				dataProvider = new ArrayCollection();
+				
+				addEventListener(EventoGestorCompras.ASOCIAR_PARTIDAS_GRID, asociarPartidasGrid);
+				addEventListener(EventoGestorCompras.ELIMINAR_ASOCIAR_PARTIDAS_GRID, eliminarAsociarPartidasGrid);
+				
+				headerGridPArtidas.addEventListener(EventoComun.HEADER_CLICK, partidasAAsociar);
+				headerPartidasAsociadas.addEventListener(EventoComun.HEADER_CLICK, partidasAEliminar);
+				
+				headerGridPArtidas.addEventListener(EventoComun.ORDENAR_NOMB, ordenarPartidas);
+				headerPartidasAsociadas.addEventListener(EventoComun.ORDENAR_NOMB, ordenarPartidasAsociadas);
+			}
+			
+			protected function partidasAAsociar(event:EventoComun):void
+			{
+				for (var i:int = 0; i < gridPartidas.dataProvider.length; i++) 
+				{
+					var partida:PartidaCompra = gridPartidas.dataProvider[i];
+					if(partida.asociar)
+					{
+						partida.object = "eliminarCargaFactura";
+						dataProvider.addItem(partida);
+						gridPartidasAsociadas.dataProvider = ObjectUtil.copy(dataProvider) as ArrayCollection;
+						(gridPartidas.dataProvider as ArrayCollection).removeItem(partida);
+						//reacomodarIndicesApartirDelSeleccionado((gridPartidas.dataProvider as ArrayCollection),partida.numFila);
+						/*reacomodarIndicesApartirDelSeleccionado(dataProvider,dataProvider.length-1);
+						reacomodarIndicesApartirDelSeleccionado(dataProvider,partida.numFila);*/
+						
+						totales.cantidad -= partida.cantidadCompra;
+						totales.monto -= partida.precioUnitario;
+						totales.importe -= partida.precioTotal;
+						totales.partidas -= 1;
+						totalesA.cantidad += partida.cantidadCompra;
+						totalesA.monto += partida.precioUnitario;
+						totalesA.importe += partida.precioTotal;
+						totalesA.partidas += 1;
+						
+						//Calculo de IGI y DTA
+						if (gridPartidasAsociadas.dataProvider)
+						{
+							IGI = 0;
+							DTA = 0;
+							for (var j:int = 0; j < gridPartidasAsociadas.dataProvider.length; j++) 
+							{
+								
+								//totalesA.monto += gridPartidasAsociadas.dataProvider[j].precioUnitario;
+								//totalesA.montoTotal += gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario;
+								var porcionFlete:Number = 0.0;
+								var porcentaje:Number = 0.0;
+								var porcionFleteAux:Number = 0.0;
+								porcentaje=((gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario)/totalesA.importe);
+								porcionFleteAux= porcentaje*fleteAux;
+								porcionFlete =porcionFleteAux+(gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario);
+								IGI += porcionFlete * 0.05;
+								DTA += porcionFlete * 0.008;
+							}
+						}
+						
+						i--;
+						
+						/*indiceRetorno--;*/
+					}
+					
+				}
+				var evento:EventoGestorCompras = new EventoGestorCompras("asociarPartidas");
+				evento.partida = partida;
+				if(evento != null){
+					dispatchEvent(evento);
+				}
+				universoCopiaAbajo = ObjectUtil.copy(dataProvider) as ArrayCollection;
+				mostrarVacio();
+				mostrarTotales();
+				/*universoCopiaArriba =  ObjectUtil.copy(gridPartidas.dataProvider) as ArrayCollection;*/
+				
+			}
+			
+			public function recibirFlete(flete:Number):void
+			{
+			  fleteAux=flete;
+			  calcularImpuestosICIyDTA();
+			}
+			
+			protected function asociarPartidasGrid(evt:EventoGestorCompras):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras("asociarPartidas");
+				evento.partida = evt.partida;
+				dataProvider.addItem(evt.partida);
+				gridPartidasAsociadas.dataProvider = dataProvider;
+				(gridPartidas.dataProvider as ArrayCollection).removeItem(evt.partida);
+				
+				/*universoCopiaArriba.removeItem(evt.partida);*/
+				universoCopiaArriba = eliminarPorId(evt.partida.idPartidaCompra,universoCopiaArriba);
+				
+				/*reacomodarIndicesApartirDelSeleccionado((gridPartidas.dataProvider as ArrayCollection),evt.partida.numFila);
+				reacomodarIndicesApartirDelSeleccionado(dataProvider,dataProvider.length-1);*/
+				
+				totales.cantidad -= evt.partida.cantidadCompra;
+				totales.monto -= evt.partida.precioUnitario;
+				totales.importe -= evt.partida.precioTotal;
+				totales.partidas -= 1;
+				totalesA.cantidad += evt.partida.cantidadCompra;
+				totalesA.monto += evt.partida.precioUnitario;
+				totalesA.importe += evt.partida.precioTotal;
+				totalesA.partidas += 1;
+				
+				//Calculo de IGI y DTA
+				if (gridPartidasAsociadas.dataProvider)
+				{
+					IGI = 0;
+					DTA = 0;
+					for (var j:int = 0; j < gridPartidasAsociadas.dataProvider.length; j++) 
+					{
+					
+						//totalesA.monto += gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						//totalesA.montoTotal += gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						var porcionFlete:Number = 0.0;
+						var porcentaje:Number = 0.0;
+						var porcionFleteAux:Number = 0.0;
+						porcentaje=((gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario)/totalesA.importe);
+						porcionFleteAux= porcentaje*fleteAux;
+						porcionFlete =porcionFleteAux+(gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario);
+						IGI += porcionFlete * 0.05;
+						DTA += porcionFlete * 0.008;
+					}
+				}
+				
+				
+				
+				/*indiceRetorno--;*/
+				dispatchEvent(evento);
+				mostrarVacio();
+				universoCopiaAbajo = ObjectUtil.copy(dataProvider) as ArrayCollection;
+				mostrarTotales();
+				/*universoCopiaArriba =  ObjectUtil.copy(gridPartidas.dataProvider) as ArrayCollection;*/
+			}
+			
+			public function calcularImpuestosICIyDTA():void
+			{
+				//Calculo de IGI y DTA
+				if (gridPartidasAsociadas.dataProvider)
+				{
+					IGI = 0;
+					DTA = 0;
+					for (var j:int = 0; j < gridPartidasAsociadas.dataProvider.length; j++) 
+					{
+						
+						//totalesA.monto += gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						//totalesA.montoTotal += gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						var porcionFlete:Number = 0.0;
+						var porcentaje:Number = 0.0;
+						var porcionFleteAux:Number = 0.0;
+						porcentaje=((gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario)/totalesA.importe);
+						porcionFleteAux= porcentaje*fleteAux;
+						porcionFlete =porcionFleteAux+(gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario);
+						IGI += porcionFlete * 0.05;
+						DTA += porcionFlete * 0.008;
+					}
+				}
+				
+			}
+			
+			public function partidasAEliminar(event:EventoComun):void
+			{
+				while(dataProvider.length > 0 )
+				{
+					var partida:PartidaCompra = dataProvider[0];
+					var evento:EventoGestorCompras = new EventoGestorCompras("quitarPartidas");
+					evento.partida = partida;
+					partida.object = "agregarCargaFactura";
+					/*gridPartidasAsociadas.dataProvider.removeItemAt(partida.numFila);*/
+					//dataProvider.removeItem(partida);
+					dataProvider.removeItemAt(0);
+					/*dataProvider.removeItemAt(partida.numFila);*/
+					/*reacomodarIndicesApartirDelSeleccionado(dataProvider,partida.numFila);*/
+					if (itemSeEncuentraEnElGrid(partida.idPartidaCompra.toString()))
+					{
+						(gridPartidas.dataProvider as ArrayCollection).addItem(partida);
+						/*reacomodarIndicesApartirDelSeleccionado((gridPartidas.dataProvider as ArrayCollection),gridPartidas.dataProvider.length);*/
+						
+						totales.cantidad += partida.cantidadCompra;
+						totales.monto += partida.precioUnitario;
+						totales.importe += partida.precioTotal;
+						totales.partidas += 1;
+						
+						/*indiceRetorno++;*/
+					}
+					
+					totalesA.cantidad -= partida.cantidadCompra;
+					totalesA.monto -= partida.precioUnitario;
+					totalesA.importe -= partida.precioTotal;
+					totalesA.partidas -= 1;
+					
+					//Calculo de IGI y DTA
+					if (gridPartidasAsociadas.dataProvider)
+					{
+						IGI = 0;
+						DTA = 0;
+						for (var j:int = 0; j < gridPartidasAsociadas.dataProvider.length; j++) 
+						{
+							
+							//totalesA.monto += gridPartidasAsociadas.dataProvider[j].precioUnitario;
+							//totalesA.montoTotal += gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario;
+							var porcionFlete:Number = 0.0;
+							var porcentaje:Number = 0.0;
+							var porcionFleteAux:Number = 0.0;
+							if(totalesA.importe>0){
+							porcentaje=((gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario)/totalesA.importe);
+							porcionFleteAux= porcentaje*fleteAux;
+							porcionFlete =porcionFleteAux+(gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario);
+							IGI += porcionFlete * 0.05;
+							DTA += porcionFlete * 0.008;
+							}else{
+								IGI = 0;
+								DTA = 0;
+							}
+							
+						}
+					}
+				}
+				if(evento != null){
+					dispatchEvent(evento);
+				}
+					universoCopiaAbajo = ObjectUtil.copy(dataProvider) as ArrayCollection;
+					universoCopiaArriba =  ObjectUtil.copy(gridPartidas.dataProvider) as ArrayCollection;
+					dataProvider= new ArrayCollection;
+					mostrarTotales();
+					mostrarVacio();
+				
+			}
+			
+			protected function eliminarAsociarPartidasGrid(evt:EventoGestorCompras):void
+			{
+				/*gridPartidasAsociadas.dataProvider.removeItemAt(evt.partida.numFila);*/
+				dataProvider.removeItemAt(evt.partida.numFila);
+				if(gridPartidasAsociadas.dataProvider != dataProvider)
+				gridPartidasAsociadas.dataProvider.removeItemAt(evt.partida.numFila);
+				
+				/*reacomodarIndicesApartirDelSeleccionado(dataProvider,evt.partida.numFila);*/
+				if (itemSeEncuentraEnElGrid(evt.partida.idPartidaCompra.toString()))
+				{
+					(gridPartidas.dataProvider as ArrayCollection).addItem(ObjectUtil.copy(evt.partida) as PartidaCompra);
+					universoCopiaArriba.addItem(ObjectUtil.copy(evt.partida) as PartidaCompra); 
+					
+					/*reacomodarIndicesApartirDelSeleccionado((gridPartidas.dataProvider as ArrayCollection),gridPartidas.dataProvider.length);*/
+					
+					totales.cantidad += evt.partida.cantidadCompra;
+					totales.monto += evt.partida.precioUnitario;
+					totales.importe += evt.partida.precioTotal;
+					totales.partidas += 1;
+					
+					/*indiceRetorno++;*/
+				}
+				
+				totalesA.cantidad -= evt.partida.cantidadCompra;
+				totalesA.monto -= evt.partida.precioUnitario;
+				totalesA.importe -= evt.partida.precioTotal;
+				totalesA.partidas -= 1;
+				
+				//Calculo de IGI y DTA
+				if (gridPartidasAsociadas.dataProvider)
+				{
+					IGI = 0;
+					DTA = 0;
+					for (var j:int = 0; j < gridPartidasAsociadas.dataProvider.length; j++) 
+					{
+						
+						//totalesA.monto += gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						//totalesA.montoTotal += gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						var porcionFlete:Number = 0.0;
+						var porcentaje:Number = 0.0;
+						var porcionFleteAux:Number = 0.0;
+						porcentaje=((gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario)/totalesA.importe);
+						porcionFleteAux= porcentaje*fleteAux;
+						porcionFlete =porcionFleteAux+(gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario);
+						IGI += porcionFlete * 0.05;
+						DTA += porcionFlete * 0.008;
+					}
+				}
+				
+				var evento:EventoGestorCompras = new EventoGestorCompras("quitarPartidas");
+				evento.partida = evt.partida;
+				dispatchEvent(evento);
+				mostrarVacio();
+				universoCopiaAbajo = ObjectUtil.copy(dataProvider) as ArrayCollection;
+				mostrarTotales();
+				/*universoCopiaArriba =  ObjectUtil.copy(gridPartidas.dataProvider) as ArrayCollection;*/
+				/*gridPartidasAsociadas.dataProvider = dataProvider;*/
+			}
+			
+			private function itemSeEncuentraEnElGrid(valor:String):Boolean
+			{
+				//var arr:ArrayCollection = UtilsGrid.queryCampoXLike(universo,"idPartidaCompra",valor);
+				if (UtilsGrid.queryCampoXLike(universo,"idPartidaCompra",valor).length == 1 )
+				{
+					return true;
+				}
+				return false;
+			}
+			
+			/*private function reacomodarIndicesApartirDelSeleccionado(data:ArrayCollection, indice:int):void
+			{
+				if (data && data.length > 0 && data.length > indice)
+				{
+					for (var i:int = indice; i < data.length; i++) 
+					{
+						data[i].numFila = ++indice;
+					}
+					
+				}
+			}*/
+			
+			/*Ya no va*/
+			public function quitarLosAgregadosDelGrid():void
+			{
+				var remove:ArrayCollection = new ArrayCollection();
+				if (!ModeloGestorCompras.totalesPartidas)
+				{
+					totales = new Object();
+					totales.cantidad = 0;
+					totales.monto = 0;
+					totales.importe = 0;
+					totales.partidas = 0;
+				}
+				else
+				{
+					totales = ModeloGestorCompras.totalesPartidas;
+				}
+				for (var i:int = 0; i < dataProvider.length; i++) 
+				{
+					
+					for (var j:int = 0; j < gridPartidas.dataProvider.length; j++) 
+					{
+						if (gridPartidas.dataProvider[j].idPartidaCompra == dataProvider[i].idPartidaCompra)
+						{
+							remove.addItem(gridPartidas.dataProvider[j]);
+						}
+					}
+				}
+				
+				for (var k:int = 0; k < remove.length; k++) 
+				{
+					(gridPartidas.dataProvider as ArrayCollection).removeItem(remove[k]);
+					
+					totales.cantidad -= remove[k].cantidadCompra;
+					totales.monto -= remove[k].precioUnitario;
+					totales.importe -= remove[k].precioTotal;
+					totales.partidas -= 1;
+					/*indiceRetorno--;*/
+				}
+				
+				lblMonto.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.monto);
+				lblImporte.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.importe);
+				lblPartidas.text = totales.partidas;
+				lblCantidad.text = totales.cantidad;
+				
+				/*gridPartidas.dataProvider.refresh();*/
+				/*reacomodarIndicesApartirDelSeleccionado(gridPartidas.dataProvider as ArrayCollection,0);*/
+				
+			}
+			
+			protected function gridPartidas_reajustarTamanoLetraHandler(event:EventoComun):void
+			{
+				sizeFont = event.current;
+				
+			}
+			
+			protected function group1_resizeHandler(event:ResizeEvent):void
+			{
+				sizeWidth = (30/2005) * (unscaledWidth);
+				sizeHeight = (40/612) * (unscaledHeight);
+				sizeRow = (80/1140) * (unscaledHeight);
+			}
+			
+			[Bindable] public static var font19:Number;
+			[Bindable] private var font15:Number;
+			[Bindable] private var font13:Number;
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				
+				super.updateDisplayList($width,$height);
+				
+				font19 = (19 / 1167) * ($width);
+				font15 = (15 / 1167) * ($width);
+				font13 = (13 / 1167) * ($width);
+				
+				
+				font19 = font19 > 19 ? 19:font19;
+				font15 = font15 > 15 ? 15:font15;
+				font13 = font13 > 13 ? 13:font13;
+				
+				gridPartidas.invalidateDisplayList();
+			}
+			
+			private function ordenarPartidas(evt:EventoComun):void
+			{
+				gridPartidas.dataProvider = ordenarLista(universoCopiaArriba,evt.current.text);
+				/*reacomodarIndicesApartirDelSeleccionado((gridPartidas.dataProvider as ArrayCollection),0);*/
+				mostrarTotales();	
+			}
+			private function ordenarPartidasAsociadas(evt:EventoComun):void
+			{
+				if(gridPartidasAsociadas.dataProvider != null && universoCopiaAbajo != null)
+				gridPartidasAsociadas.dataProvider = ordenarLista(universoCopiaAbajo,evt.current.text);
+				/*reacomodarIndicesApartirDelSeleccionado(gridPartidasAsociadas.dataProvider as ArrayCollection,0);*/
+				mostrarTotales();
+			}
+			private function ordenarLista(array:ArrayCollection, letra:String):ArrayCollection
+			{
+				//busquedaLetra = letra;
+				if(letra != "TODOS")
+					array = UtilsGrid.queryCampoXLike(array,"sortChar",letra);
+				
+				return ObjectUtil.copy(array) as ArrayCollection;
+			}
+			
+			
+			public function mostrarTotales():void
+			{
+				var totales:Object = new Object();
+				var totalesA:Object = new Object();
+				
+				totales.cantidad = 0;
+				totales.monto = 0;
+				totales.partidas = 0;
+				totales.montoTotal = 0;
+				totalesA.cantidad = 0;
+				totalesA.monto = 0;
+				totalesA.partidas = 0;
+				totalesA.montoTotal = 0;
+				
+				
+				for (var i:int = 0; i < gridPartidas.dataProvider.length; i++) 
+				{
+					totales.cantidad += gridPartidas.dataProvider[i].cantidadCompra;
+					totales.monto += gridPartidas.dataProvider[i].precioUnitario;
+					totales.partidas += 1;
+					totales.montoTotal += gridPartidas.dataProvider[i].cantidadCompra * gridPartidas.dataProvider[i].precioUnitario;
+				}
+				if (gridPartidasAsociadas.dataProvider)
+				{
+					for (var j:int = 0; j < gridPartidasAsociadas.dataProvider.length; j++) 
+					{
+						totalesA.cantidad += gridPartidasAsociadas.dataProvider[j].cantidadCompra;
+						totalesA.monto += gridPartidasAsociadas.dataProvider[j].precioUnitario;
+						totalesA.partidas += 1;
+						totalesA.montoTotal += gridPartidasAsociadas.dataProvider[j].cantidadCompra * gridPartidasAsociadas.dataProvider[j].precioUnitario;
+					}
+				}
+				
+				
+				lblMonto.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.monto);
+				lblImporte.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.montoTotal);
+				lblPartidas.text = totales.partidas;
+				lblCantidad.text = totales.cantidad;
+				
+				lblMontoA.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalesA.monto);
+				lblImporteA.text = tipoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalesA.montoTotal);
+				lblPartidasA.text = totalesA.partidas;
+				lblCantidadA.text = totalesA.cantidad;
+				
+				mostrarVacio();
+			}
+			
+			
+			protected function mostrarVacio():void
+			{
+				if(gridPartidas.dataProvider.length == 0){
+					gridPartidas.height = 0;
+					lblSeleccionNoOrden.visible = lblSeleccionNoOrden.includeInLayout = true;
+				}
+				else{
+					gridPartidas.percentHeight = 100;
+					lblSeleccionNoOrden.visible = lblSeleccionNoOrden.includeInLayout = false;
+				}
+				
+				if(gridPartidasAsociadas.dataProvider.length == 0){
+					gridPartidasAsociadas.height = 0;
+					lblSeleccionNoPartidas.visible = lblSeleccionNoPartidas.includeInLayout = true;
+				}
+				else{
+					gridPartidasAsociadas.percentHeight = 100;
+					lblSeleccionNoPartidas.visible = lblSeleccionNoPartidas.includeInLayout = false;
+				}
+			}
+			private function eliminarPorId(idValue:int,valueLista:ArrayCollection):ArrayCollection
+			{	
+				for (var i:int = 0; i < valueLista.length; i++) 
+				{
+					if(idValue == valueLista[i].idPartidaCompra){
+						valueLista.removeItemAt(i);
+						break;
+					}
+				}
+				return valueLista;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" paddingBottom="30" gap="0">
+		<s:Group width="100%" height="100%" >
+			<s:Rect width="100%" height="100%">
+				<s:stroke>
+					<s:SolidColorStroke color="#008894" weight="1"/>
+				</s:stroke>
+			</s:Rect>
+			<s:VGroup width="100%" height="100%" paddingLeft="1" paddingRight="1" paddingBottom="20" paddingTop="0">
+				<s:VGroup width="100%" height="100%" gap="0">
+					<s:VGroup width="100%" height="100%" gap="0">
+						<arribo:headerGestorComprasListaArribo id="headerGridPArtidas" width="100%" height="60" headerTipo="agregarPartidaCargarFactura"/>
+						<s:List id="gridPartidas" width="100%" height="0%" borderVisible="false" horizontalScrollPolicy="off"
+								selectedIndex="0" contentBackgroundAlpha="0"
+								itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.ListaAsociarPartidas"
+								/>
+						<label:TituloNovecento_18 id="lblSeleccionNoOrden" text="NO SE HA SELECCIONADO ORDEN DE COMPRA" height="100%" width="100%" textAlign="center" verticalAlign="middle" horizontalCenter="0" color="#c2c3c9" fontSize="21"/>
+					</s:VGroup>
+					<otros:LineaPunteada height="1" width="99.8%"/>
+					<s:HGroup width="100%" paddingTop="0" gap="0">
+						<s:HGroup width="100%" paddingTop="10" paddingBottom="10">
+							<label:Titulo_15_Helvetica width="5%" textAlign="center" id="lblPartidas" fontSize="{font13}" fontWeight="bold"/>
+							<s:Spacer width="33%" />
+							<label:Titulo_15_Helvetica width="7%" id="lblCantidad" textAlign="center" fontSize="{font13}" paddingRight="0" fontWeight="bold"/>
+							<label:Titulo_15_Helvetica width="11%" id="lblMonto" textAlign="center" fontSize="{font13}" paddingRight="0" fontWeight="bold"/>
+							<label:Titulo_15_Helvetica width="12%" id="lblImporte" textAlign="center" fontSize="{font13}" paddingRight="0" fontWeight="bold"/>
+							<s:Spacer width="27.5%" />
+						</s:HGroup>
+					</s:HGroup> 
+				</s:VGroup>
+				
+				<s:VGroup width="100%" paddingTop="0" horizontalAlign="center" gap="0">
+					<otros:divisionGruesa width="100%" color="#008894"/>
+				</s:VGroup>	
+				
+				<s:VGroup width="100%" height="100%" gap="0">
+					<s:VGroup width="100%" height="100%" gap="0">
+						<arribo:headerGestorComprasListaArribo id="headerPartidasAsociadas" width="100%" height="60" headerTipo="eliminarPartidaCargarFactura"/>
+						<s:List id="gridPartidasAsociadas" width="100%" height="0%" borderVisible="false" horizontalScrollPolicy="off"
+								selectedIndex="0" contentBackgroundAlpha="0"
+								itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.ListaAsociarPartidasAbajo"
+								dataProvider="{dataProvider}"
+								/>
+						<label:TituloNovecento_18 id="lblSeleccionNoPartidas" text="NO EXISTEN PARTIDAS FACTURADAS" width="100%" height="100%" textAlign="center" verticalAlign="middle" horizontalCenter="0" color="#c2c3c9" fontSize="21"/>
+					</s:VGroup>
+					<otros:LineaPunteada width="99.8%" height="1" />
+					<s:HGroup width="100%"  paddingTop="0" gap="0">
+						<s:HGroup width="100%" paddingTop="10" paddingBottom="0">
+							<label:Titulo_15_Helvetica width="5%" textAlign="center" id="lblPartidasA" fontSize="{font13}" fontWeight="bold" />
+							<s:Spacer width="33%" />
+							<label:Titulo_15_Helvetica width="7%" id="lblCantidadA" textAlign="center" fontSize="{font13}" fontWeight="bold" paddingRight="0"/>
+							<label:Titulo_15_Helvetica width="11%" id="lblMontoA" textAlign="center" fontSize="{font13}" fontWeight="bold" paddingRight="0"/>
+							<label:Titulo_15_Helvetica width="12%" id="lblImporteA" textAlign="center" fontSize="{font13}" fontWeight="bold" paddingRight="0"/>
+							<s:Spacer width="27.5%" />
+						</s:HGroup> 
+					</s:HGroup> 
+				</s:VGroup>
+			</s:VGroup>
+			
+			
+		</s:Group>
+	</s:VGroup>
+	
+</s:Group>

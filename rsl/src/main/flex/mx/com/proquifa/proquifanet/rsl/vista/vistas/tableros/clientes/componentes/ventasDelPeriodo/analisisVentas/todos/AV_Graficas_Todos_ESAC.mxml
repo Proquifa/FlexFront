@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" xmlns:otros="skins.otros.*" 
+		 >
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			private var currentEsac:String = null;
+			private var currentNivel:String = null;
+			private var _sql:Query;
+			
+			public function set recibeListaResumenVentasTodosClientes($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+					return;
+				
+				_sql = new Query($clientes,["nivelIVista","usuarioVista","conceptoResultado"]);
+				hacerCalculosVistaEsac();
+			}
+			
+			private function hacerCalculosVistaEsac($conEsac:Boolean = true):void
+			{
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					if ($conEsac)
+					{
+						var providerChartClientesPorEsac:ArrayCollection = new ArrayCollection;
+						providerChartClientesPorEsac = generateChartReporte("usuarioVista",null,[null,"usuarioVista",null]);
+						piechartTodosClientesPorEsac.dataProvider = piechartTodosClientesPorEsac.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesPorEsac,"ESACS");
+					}
+					var providerChartClientesPorNI:ArrayCollection = new ArrayCollection;
+					providerChartClientesPorNI = generateChartReporte("nivelIVista",null,["nivelIVista",currentEsac,null]);
+					piechartTodosClientesPorNI.dataProvider = piechartTodosClientesPorNI.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesPorNI,"NIVEL DE INGRESO");
+					
+					var providerChartClientesAAplus:ArrayCollection = new ArrayCollection;
+					providerChartClientesAAplus = generateChartReporte("conceptoResultado",null,[currentNivel,currentEsac,"conceptoResultado"]);
+					piechartTodosClientesPorClientes.dataProvider = piechartTodosClientesPorClientes.aplicarFormatoClientesDistribucionXNivelesRanking(providerChartClientesAAplus);
+				}
+				else
+				{
+					piechartTodosClientesPorEsac.dataProvider = new ArrayCollection;
+					piechartTodosClientesPorNI.dataProvider = new ArrayCollection;
+					piechartTodosClientesPorClientes.dataProvider = new ArrayCollection;
+				}
+			}
+			
+			private function generateChartReporte( $propiedad:String, $filtro:String, $consulta:Array ):ArrayCollection
+			{
+				var arrayProvider:ArrayCollection = new ArrayCollection();
+				if( _sql.indexObject[ $propiedad ] != null )
+				{
+					// determino si el filtro aplica por campo o por propiedad en campo
+					var posIdx:int = $consulta.indexOf( $propiedad );
+					for( var key:String in _sql.indexObject[ $propiedad ] )
+					{
+						var consultaReformulada:Array = ObjectUtil.copy( $consulta ) as Array; 
+						if( posIdx != -1 )
+							consultaReformulada[ posIdx ] = key;
+						if( $filtro != null )
+							consultaReformulada[ posIdx ] = $filtro;
+						if( posIdx != -1 && $filtro == null || key == $filtro )
+						{
+							var cachoPie:ResumenConsulta = new ResumenConsulta();
+							cachoPie.etiqueta = key;
+							var punterosFiltro:Array = _sql.getPunteros( consultaReformulada );
+							cachoPie.clientes = punterosFiltro.length; 
+							cachoPie.total = _sql.getSumarCampo( "total", punterosFiltro);
+							cachoPie.totalClientes = punterosFiltro.length; 
+							
+							var punterosEsac:Array = _sql.getPunteros([null,currentEsac]);
+							var totalXEsac:Number = _sql.getSumarCampo( "total", punterosEsac);
+							cachoPie.porcentajeDistribucion = UtilsFormatosNumericos.truncarDecimalesCeil((cachoPie.total * 100)/totalXEsac,2);
+							
+							arrayProvider.addItem( cachoPie );
+						}
+					}
+				}
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "total";
+				dataSortField.descending = true;
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				arrayProvider.sort = numericDataSort;
+				arrayProvider.refresh();
+				
+				for (var r:int = 1; r <= arrayProvider.length; r++)
+				{
+					(arrayProvider[r-1] as ResumenConsulta).rankingCliente = r;
+				}
+				
+				return arrayProvider;
+			}
+			
+			
+			protected function selectEsac(event:ChartItemEvent):void
+			{
+				currentEsac = (event.hitData.item as ResumenConsulta).etiqueta;
+				currentNivel = null;
+				
+				piechartTodosClientesPorNI.image.visible = false;
+				piechartTodosClientesPorNI.ponerOver();
+				lblTituloNIPorEsacs.text = currentEsac;
+				lblTituloCliente.text = "CLIENTES" + " · " + currentEsac;
+				lblTituloNI.text = "NIVEL DE INGRESO" + " · " + currentEsac;
+				
+				var providerChartClientesPorNI:ArrayCollection = new ArrayCollection;
+				providerChartClientesPorNI = generateChartReporte("nivelIVista",null,["nivelIVista",currentEsac,null]);
+				piechartTodosClientesPorNI.dataProvider = piechartTodosClientesPorNI.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesPorNI,"NIVEL DE INGRESO");
+				
+				var providerChartClientesAAplus:ArrayCollection = new ArrayCollection;
+				providerChartClientesAAplus = generateChartReporte("conceptoResultado",null,[currentNivel,currentEsac,"conceptoResultado"]);
+				piechartTodosClientesPorClientes.dataProvider = piechartTodosClientesPorClientes.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesAAplus);
+			}
+			
+			protected function selectNivel(event:ChartItemEvent):void
+			{
+				currentNivel = (event.hitData.item as ResumenConsulta).etiqueta;
+				
+				if(currentEsac)
+				{
+					lblTituloNI.text = currentNivel + " · " + currentEsac;
+					lblTituloCliente.text = "CLIENTES"+ " · " + currentNivel + " · " + currentEsac;
+				}
+				else
+					lblTituloNI.text = currentNivel;
+				
+				var providerChartClientesAAplus:ArrayCollection = new ArrayCollection;
+				providerChartClientesAAplus = generateChartReporte("conceptoResultado",null,[currentNivel,currentEsac,"conceptoResultado"]);
+				piechartTodosClientesPorClientes.dataProvider = piechartTodosClientesPorClientes.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesAAplus);
+			}
+			
+			protected function contenido_clickHandler(event:MouseEvent):void
+			{
+				currentEsac = null;
+				currentNivel = null;
+				piechartTodosClientesPorNI.image.visible = false;
+				piechartTodosClientesPorNI.ponerOver();
+				lblTituloNIPorEsacs.text = "ESAC";
+				lblTituloNI.text = "NIVEL DE INGRESO";
+				lblTituloCliente.text = "CLIENTES";
+				hacerCalculosVistaEsac();
+			}
+			
+			protected function contenidoNI_clickHandler(event:MouseEvent):void
+			{
+				currentNivel = null;
+				lblTituloNI.text = "NIVEL DE INGRESO";
+				lblTituloCliente.text = "CLIENTES";
+				hacerCalculosVistaEsac(false);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingTop="20" paddingBottom="20">
+		<s:VGroup width="100%" height="100%" horizontalAlign="center">
+			<label:Titulo_14_pTop10 id="lblTituloNIPorEsacs" text="ESAC"/>
+			<graficas:PieChartPqGris width="100%" height="100%" id="piechartTodosClientesPorEsac" showDataTips="false" innerRadius=".5" itemClick="selectEsac(event)"
+									 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" esConRealse="true" 
+									 icono="analisis_altos" clickImagen="contenido_clickHandler(event)" sinOver="true">
+				<graficas:series>
+					<graficas:pieSeriesPqNet field="total" /> 
+				</graficas:series>
+			</graficas:PieChartPqGris>
+		</s:VGroup>
+		<s:VGroup width="100%" horizontalAlign="center" gap="0">
+			<otros:division width="80%" grueso=".4" />
+		</s:VGroup>
+		<s:VGroup width="100%" height="100%" horizontalAlign="center">
+			<label:Titulo_14_pTop10 id="lblTituloNI" text="NIVEL DE INGRESO"/>
+			<graficas:PieChartPqGris width="100%" height="100%" id="piechartTodosClientesPorNI" showDataTips="false" innerRadius=".5" itemClick="selectNivel(event)"
+									 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" esConRealse="true" 
+									 icono="analisis_altos" clickImagen="contenidoNI_clickHandler(event)" sinOver="true">
+				<graficas:series>
+					<graficas:pieSeriesPqNet field="total" /> 
+				</graficas:series>
+			</graficas:PieChartPqGris>
+		</s:VGroup>
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center">
+			<label:Titulo_14_pTop10 id="lblTituloCliente" text="CLIENTES"/>
+			<graficas:PieChartPqGris width="100%" height="100%" id="piechartTodosClientesPorClientes" showDataTips="false" innerRadius=".5" 
+									 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+				<graficas:series>
+					<graficas:pieSeriesPqNet field="total" /> 
+				</graficas:series>
+			</graficas:PieChartPqGris>
+		</s:VGroup>
+		
+	</s:VGroup>
+	
+</s:Group>

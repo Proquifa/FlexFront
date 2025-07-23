@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:ViewStack xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			  xmlns:s="library://ns.adobe.com/flex/spark" 
+			  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.skin.datagrid.pqNet.*" xmlns:label="skins.skin.label.*" xmlns:largo="skins.botones.largo.*" xmlns:pqNet1="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flashx.textLayout.formats.Float;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProveedoresConPAC;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.CostoAdicionalPartidaConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			
+			import skins.catalogos.catalogoAlertas;
+			[Bindable]
+			private var _partidaConfirmacion:PartidaConfirmacion;
+			[Bindable]
+			private var _textoMonedaParaCostoBase:String;
+			[Bindable]
+			private var _textoMonedaPAraCostosAdicionales:String;
+			[Bindable]
+			public var _simboloMoneda:String;
+			[Bindable]
+			private var _costosTotalesAdicionales:Number;
+			public function cambiaAIndexSeleccionado(index:int):void{
+				this.selectedIndex = index;
+			}
+			public function iniciaComponente(partida:PartidaConfirmacion):void{
+
+				if( partida.tipoProveedor == "Nuevo"){
+					this.selectedIndex = 0;
+				}else{
+					this.selectedIndex = 1;
+				}
+				_costosTotalesAdicionales = 0;
+				_partidaConfirmacion = partida;
+				determinaMoneda(_partidaConfirmacion.tipoMoneda);
+				if( this._partidaConfirmacion.costosAdicionales == null ){
+					this._partidaConfirmacion.costosAdicionales = new ArrayCollection();
+				}else{
+					 for(var i:int = 0; i < this._partidaConfirmacion.costosAdicionales.length; i++){
+						(this._partidaConfirmacion.costosAdicionales[i] as CostoAdicionalPartidaConfirmacion).numFila = i + 1;
+						(this._partidaConfirmacion.costosAdicionales[i] as CostoAdicionalPartidaConfirmacion).monedaProveedor = _textoMonedaPAraCostosAdicionales;
+						_costosTotalesAdicionales = _costosTotalesAdicionales + (this._partidaConfirmacion.costosAdicionales[i] as CostoAdicionalPartidaConfirmacion).costo; 
+					} 
+				}
+			}
+			/**
+			 * funcion publica que determina la moneda del Proveedor
+			 */ 
+			private function determinaMoneda(tipoMoneda:String):void{
+				switch(tipoMoneda){
+					case "Pesos":
+						_textoMonedaParaCostoBase = " pesos";
+						_textoMonedaPAraCostosAdicionales = " mx";
+						_simboloMoneda = "$";
+						break;
+					case "Dolares":
+						_textoMonedaParaCostoBase = " dólares";
+						_textoMonedaPAraCostosAdicionales = " dls";
+						_simboloMoneda = "$";
+						break;
+					case "Euros":
+						_textoMonedaParaCostoBase = " euros";
+						_textoMonedaPAraCostosAdicionales = " eur";
+						_simboloMoneda = "€";
+						break;
+					case "Libras":
+						_textoMonedaParaCostoBase = " libras";
+						_textoMonedaPAraCostosAdicionales = " lbs";
+						_simboloMoneda = "£";
+						break;
+					case "DlCan":
+						_textoMonedaParaCostoBase = " dólares Can";
+						_textoMonedaPAraCostosAdicionales = " dls can";
+						_simboloMoneda = "$";
+						break;
+					case "Yenes":
+						_textoMonedaParaCostoBase = " yenes";
+						_textoMonedaPAraCostosAdicionales = " yns";
+						_simboloMoneda = "¥";
+						break;
+					case null:
+						_textoMonedaParaCostoBase = "";
+						_textoMonedaPAraCostosAdicionales = "";
+						_simboloMoneda = "";
+						break;
+				} 
+			}
+			/**
+			 * Funcion que regresa los datos a su componente Padre StackInspector.mxml solo regresa las variables necesarias,
+			 * en este caso solo se considera las usadas en este componente y no el objeto completo
+			 */ 
+			public function regresaDatos():void{
+				var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.REGRESA_DATOS_STACK_PRECIO );
+				if( rbPesos.selected ){
+					evento.tipoMoneda = "Pesos";
+				}else if( rbDolares.selected ){
+					evento.tipoMoneda = "Dolares";
+				}else if( rbEuros.selected ){
+					evento.tipoMoneda = "Euros";
+				}else if( rbLibras.selected  ){
+					evento.tipoMoneda = "Libras";
+				}else if( rbDlCan.selected ){
+					evento.tipoMoneda = "DlCan";
+				}else if( rbYenes.selected ){
+					evento.tipoMoneda = "Yenes";
+				}
+				//evento.costoWeb = parseInt( this.lblCostoWeb.text.substring(1, this.lblCostoWeb.text.length-8 ) );
+				evento.costoBaseConfirmado =  parseFloat( this.txtCostoBaseConfirmado.text);
+				 evento.costosAdicionales = this.gridCostoAdicional.dataProvider as ArrayCollection; 
+				dispatchEvent( evento );
+			}
+			/**
+			 * Funcion que agrega una partida a la lista de CostosAdicionales
+			 */ 
+			private function agregaCostoAdicional():void{
+				if( this.txtConcepto_Precio_CostosMas.text == "" ){
+					 alertaSingleton.show(catalogoAlertas.ADV_elConceptoEsObligatorio,catalogoAlertas.TIT_ADV_informacionIncompleta); 
+					return;
+				}
+				if( this.txtCosto_Precio_CostosMas.text == ""){
+					 alertaSingleton.show(catalogoAlertas.ADV_elCostoEsObligatorio,catalogoAlertas.TIT_ADV_informacionIncompleta); 
+					return;
+				}
+				if( this._textoMonedaPAraCostosAdicionales == ""){
+					 alertaSingleton.show(catalogoAlertas.ADV_debeIndicarMonedaNuevoProveedor,catalogoAlertas.TIT_ADV_informacionIncompleta); 
+					var eventoM:EventoAlertaPqNet = new EventoAlertaPqNet( EventoAlertaPqNet.MOSTRAR_ALERTA );
+					return;
+				}
+				var partida:CostoAdicionalPartidaConfirmacion = new CostoAdicionalPartidaConfirmacion();
+				if( this.txtNota_Precio_CostosMas.text == ""){
+					partida.nota = "ND" ;
+				}else{
+					partida.nota = this.txtNota_Precio_CostosMas.text;
+				}
+				partida.numFila = this._partidaConfirmacion.costosAdicionales.length + 1;
+				partida.concepto = this.txtConcepto_Precio_CostosMas.text;
+				var caosto:Float = new Float();
+				partida.costo =  parseFloat(this.txtCosto_Precio_CostosMas.text) /* 
+				partida.costoFormatoDecimales = UtilsFormatosNumericos.precisionADosDecimales(partida.costo); */
+				partida.monedaProveedor = this._textoMonedaPAraCostosAdicionales;
+				this._partidaConfirmacion.costosAdicionales.addItem( partida );
+				
+				this.txtConcepto_Precio_CostosMas.text = "";
+				this.txtCosto_Precio_CostosMas.text = "";
+				this.txtNota_Precio_CostosMas.text = "";
+				calculaCostosTotalesAdicionales();
+			}
+			/**
+			 * funcion que calcula lso costos totales
+			 */ 
+			private function calculaCostosTotalesAdicionales():void{
+				
+				if( this._partidaConfirmacion.costosAdicionales != null){
+					_costosTotalesAdicionales = 0;
+					for(var i:int = 0; i < this._partidaConfirmacion.costosAdicionales.length; i++ ){
+						_costosTotalesAdicionales = _costosTotalesAdicionales + (this._partidaConfirmacion.costosAdicionales.getItemAt(i) as CostoAdicionalPartidaConfirmacion).costo; 
+					}
+				}
+			}
+			/**
+			 * funcion q elminia un renglod de cosotos adicionales
+			 */ 
+			public function eliminaRenglon():void{
+				for(var i:int = 0; i < this._partidaConfirmacion.costosAdicionales.length; i++){
+					 if( (this._partidaConfirmacion.costosAdicionales[i] as CostoAdicionalPartidaConfirmacion).concepto == (this.gridCostoAdicional.selectedItem as CostoAdicionalPartidaConfirmacion).concepto ){
+						this._partidaConfirmacion.costosAdicionales.removeItemAt( i );
+					} 
+				}
+				for(var p:int = 0; p < this._partidaConfirmacion.costosAdicionales.length; p++ ){
+					this._partidaConfirmacion.costosAdicionales[p].numFila = p+1
+				}
+				calculaCostosTotalesAdicionales();
+			}
+		]]>
+	</fx:Script>
+	<s:NavigatorContent width="100%" height="100%">
+		<s:VGroup width="100%" height="100%">
+				<s:Spacer height="100%"/>
+				<s:HGroup width="100%">
+					<s:Spacer width="10%"/>
+					<s:VGroup verticalAlign="middle" horizontalAlign="center">
+						<s:Image source="@Embed('/rsl/src/main/flex/skins/imagenes/iconos/banderasPrecio/peso .png')"/>
+						<s:Label text="Pesos" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:Label text="Mexicanos" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:RadioButton id="rbPesos" selected="{ this._partidaConfirmacion.tipoMoneda == 'Pesos'}" click="determinaMoneda('Pesos')"/>
+					</s:VGroup>
+					<s:Spacer width="10%"/>
+					<s:VGroup verticalAlign="middle" horizontalAlign="center">
+						<s:Image source="@Embed('/rsl/src/main/flex/skins/imagenes/iconos/banderasPrecio/dolares.png')"/>
+						<s:Label text="Dólares" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:Label width="100%" height="20" fontWeight="bold" textAlign="center" fontSize="20"/>
+						<s:RadioButton id="rbDolares" selected="{ this._partidaConfirmacion.tipoMoneda == 'Dolares'}" click="determinaMoneda('Dolares')"/>
+					</s:VGroup>
+					<s:Spacer width="10%" />
+					<s:VGroup verticalAlign="middle" horizontalAlign="center">
+						<s:Image source="@Embed('/rsl/src/main/flex/skins/imagenes/iconos/banderasPrecio/euro.png')"/>
+						<s:Label text="Euros" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:Label width="100%" height="20" fontWeight="bold" textAlign="center" fontSize="20"/>
+						<s:RadioButton id="rbEuros" selected="{ this._partidaConfirmacion.tipoMoneda == 'Euros'}" click="determinaMoneda('Euros')"/>
+					</s:VGroup>
+					<s:Spacer width="10%"/>
+					<s:VGroup verticalAlign="middle" horizontalAlign="center">
+						<s:Image source="@Embed('/rsl/src/main/flex/skins/imagenes/iconos/banderasPrecio/libras.png')"/>
+						<s:Label text="Libras" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:Label width="100%" height="20" fontWeight="bold" textAlign="center" fontSize="20"/>
+						<s:RadioButton id="rbLibras" selected="{ this._partidaConfirmacion.tipoMoneda == 'Libras'}" click="determinaMoneda('Libras')"/>
+					</s:VGroup>
+					<s:Spacer width="10%"/>
+					<s:VGroup verticalAlign="middle" horizontalAlign="center">
+						<s:Image source="@Embed('/rsl/src/main/flex/skins/imagenes/iconos/banderasPrecio/dolarcanadiense.png')"/>
+						<s:Label text="Dólares" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:Label text="Canadienses" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:RadioButton id="rbDlCan" selected="{ this._partidaConfirmacion.tipoMoneda == 'DlCan'}" click="determinaMoneda('DlCan')"/>
+					</s:VGroup>
+					<s:Spacer width="10%"/>
+					<s:VGroup verticalAlign="middle" horizontalAlign="center">
+						<s:Image source="@Embed('/rsl/src/main/flex/skins/imagenes/iconos/banderasPrecio/yen.png')"/>
+						<s:Label text="Yenes" fontWeight="bold" width="100%" textAlign="center" fontSize="20"/>
+						<s:Label width="100%" height="20" fontWeight="bold" textAlign="center" fontSize="20"/>
+						<s:RadioButton id="rbYenes" selected="{ this._partidaConfirmacion.tipoMoneda == 'Yenes'}" click="determinaMoneda('Yenes')"/>
+					</s:VGroup>
+					<s:Spacer width="10%"/>
+				</s:HGroup>
+				<s:Spacer height="100%"/>
+		</s:VGroup>
+	</s:NavigatorContent>
+	<s:NavigatorContent width="100%" height="100%">
+		<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+			<s:Label fontSize="28" fontWeight="bold" width="334" text="WEB:" />
+			<s:Label fontSize="28" fontWeight="bold" width="334" text="{ this._simboloMoneda + ' ' + UtilsFormatosNumericos.precisionADosDecimales(this._partidaConfirmacion.costoWeb ) + _textoMonedaPAraCostosAdicionales}" id="lblCostoWeb"/>
+			<s:Spacer height="28"/>
+			<otros:division width="33%"/>
+			<s:Spacer height="28"/>
+			<s:Label fontSize="28" fontWeight="bold" text="Costo base confirmado:" />
+			<s:HGroup  horizontalAlign="center" gap="0" width="334">
+				<s:Label text="{this._simboloMoneda + ' '}" fontSize="28" backgroundColor="#dd0000" color="white" height="34" verticalAlign="bottom" paddingBottom="2" paddingLeft="5" paddingTop="2"/>
+				<!--<label:LabelFondoRojoFontWhiteX18 text="$ " fontSize="28" alto="34"/>-->
+				<mx:TextInput  id="txtCostoBaseConfirmado" width="100%" maxHeight="34" borderVisible="false" color="white" contentBackgroundColor="#dd0000" paddingLeft="3" restrict="0-9."
+							   fontSize="28" fontStyle="normal" text="{UtilsFormatosNumericos.precisionADosDecimales(this._partidaConfirmacion.costoBaseConfirmado )}"  />
+				<s:Label backgroundColor="#dd0000" color="white" fontSize="28"  height="34" paddingRight="5" text="{ ' '+  _textoMonedaParaCostoBase}" 
+						 paddingBottom="2" paddingTop="2" verticalAlign="bottom"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:NavigatorContent>
+	<s:NavigatorContent width="100%" height="100%">
+		<s:VGroup width="100%" height="100%" paddingLeft="5" paddingRight="5">
+			<s:HGroup width="100%" height="100%" paddingLeft="5" paddingRight="5" >
+				<s:VGroup width="35%" height="100%">
+					<s:Label fontSize="13" fontWeight="bold" text="Concepto:"/>
+					<s:TextInput fontSize="13" id="txtConcepto_Precio_CostosMas" width="100%"/>
+					<s:Label fontSize="13" fontWeight="bold" text="NOTA:"/>
+					<s:TextInput fontSize="13" id="txtNota_Precio_CostosMas" width="100%"/>
+					<s:Label fontSize="13" fontWeight="bold" text="Costo:"/>
+					<s:TextInput fontSize="13" id="txtCosto_Precio_CostosMas" width="100%" restrict="0-9."/>
+					<!--<s:Button width="100%" click="agregaCostoAdicional()"/>-->
+					<pqNet1:botonPqNetLargo  click="agregaCostoAdicional()" width="100%" icono="triangulo" />
+					<s:Spacer height="100%"/>
+					
+				</s:VGroup>
+				<otros:VDivisionHueca height="100%"/>
+				<pqNet:dataGridPqNet width="100%" height="100%" id="gridCostoAdicional" dataProvider="{this._partidaConfirmacion.costosAdicionales }" headerHeight="0" >
+					<pqNet:columns>
+						<mx:DataGridColumn >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<mx:HBox width="100%" paddingTop="7">
+											<fx:Script>
+												<![CDATA[
+													import skins.catalogos.catalogoIconosGrid;
+												]]>
+											</fx:Script>
+											<mx:VBox width="100%" horizontalAlign="center">
+												<fx:Script>
+													<![CDATA[
+														import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+													]]>
+												</fx:Script>
+												<mx:HBox width="100%" paddingTop="10">
+													<s:Label color="#666666" fontSize="14" fontWeight="bold" fontStyle="normal" text="{ '#' + this.data.numFila }" color.selected="white"/>
+													<s:Label fontSize="14" fontWeight="bold" fontStyle="normal" text="{ this.data.concepto }" color.selected="white"/>
+													<s:Spacer width="100%"/>
+													<s:Label color="#990000" fontSize="14" fontWeight="bold" fontStyle="normal" text="{outerDocument._simboloMoneda + ' ' + 
+															 UtilsFormatosNumericos.precisionADosDecimales(this.data.costo) + ' ' + this.data.monedaProveedor }" color.selected="white"/>
+												</mx:HBox>
+												<s:Label color="#666666" fontSize="14" fontWeight="normal" fontStyle="normal" text="{ this.data.nota }" width="100%" textAlign="left" color.selected="white"/>
+											</mx:VBox>
+											<s:Spacer width="2%"/>
+											<mx:Image source="{catalogoIconosGrid.getInstance().render_botedebasura}" source.selected="{catalogoIconosGrid.getInstance().render_botedebasurablanco}" click="this['outerDocument'].eliminaRenglon()"  height="100%" />
+											<s:Spacer width="2%"/>
+										</mx:HBox>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</pqNet:columns>
+				</pqNet:dataGridPqNet>
+			</s:HGroup>
+			<s:HGroup width="100%" paddingLeft="5" paddingRight="5" >
+				<s:Label fontSize="24" color="red" text="TOTAL COSTOS CARGADOS:" width="100%" textAlign="right"/>
+				<s:Label fontSize="24" color="red" id="txtToalCostosAdicionales" text="{this._simboloMoneda + ' ' + UtilsFormatosNumericos.precisionADosDecimales(this._costosTotalesAdicionales) + ' ' + this._textoMonedaPAraCostosAdicionales}"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:NavigatorContent>
+</mx:ViewStack>

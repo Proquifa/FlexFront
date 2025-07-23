@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:mapas="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.clientes.*"
+		 xmlns:mapasFinancieros="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.clientes.financieros.*"
+		 xmlns:mapasOferta="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.clientes.comerciales.oferta.*"
+		 xmlns:botonesToggle="skins.botonesToggle.*"
+		 width="100%" height="100%"  
+		 xmlns:catalogos="skins.skin.comun.catalogos.*"
+		 creationComplete="inicia()"  >
+	
+	
+	<fx:Declarations>
+		<mapas:MapaCatClientes_Gral />
+		<mapas:MapaCatClientesContactos />
+		<mapasFinancieros:MapaCatClientesFinancieros />
+		<mapasOferta:MapaCatClientes_Oferta />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var _arregloSinImagenes:ArrayCollection;
+			
+			private var _habilitados:ArrayCollection;
+			private var _deshabilitados:ArrayCollection;
+			private var _universoClientes:ArrayCollection;
+			private var _currentItem:Cliente;
+			private var _idAgente:int = 0;
+			private var seConstruyoDeshabilitados:Boolean = false;
+			private var itemsEnPantalla:int = 7;	
+			private var cambioNumItems:Boolean = false;
+			private var findOneImagen:Boolean = false;
+			private var pasoDivideAgente:Boolean;
+			
+			private var getDeshabilitado:Boolean = false;
+			private var _clienteSeleccionado:Cliente;
+			
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection( [  { valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+				{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }] );
+			
+			
+			private var _componenteZonaTrabajo:CatClientes_ZonaTrabajo = null;
+			/**
+			 * al crearse el componente se solicitan todos los proveedores
+			 */ 
+			public function inicia():void{
+				this.addEventListener( ResizeEvent.RESIZE, recreaVista );
+				this.addEventListener( EventoCatClientes_General.CAMBIA_VISTA_MENU_CLIENTES , cambiaVista );
+				this.addEventListener( EventoCatClientes_General.REFRESCAR_CLIENTES, resfrecarCliente );
+				_habilitados = new ArrayCollection();
+				_deshabilitados = new ArrayCollection();
+				
+				var $evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES);
+				$evt.user = DatosGlobales.getInstance()._usuario;
+				dispatchEvent($evt);
+			}
+			/**
+			 * al recibirse los proveedores, se solicitan las imagenes
+			 */ 
+			public function set recibeClientes($datos:ArrayCollection):void{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				
+				if (_clienteSeleccionado != null)
+				{
+					var _clie:ArrayCollection = new ArrayCollection();
+					_clie = UtilsGrid.queryCampoXLike( $datos, 'nombre', _clienteSeleccionado.nombre );
+					if (_clie.length > 0)
+					{
+						var cliente:Cliente = (_clie[0] as Cliente);
+						this._componenteZonaTrabajo.oferta.recibeClienteSeleccionado( cliente );
+						
+						var evgt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIA_CLIENTE);
+						evgt.clienteSeleccionado = cliente;
+						evgt.vieneDe = '';
+						dispatchEvent( evgt );
+					} 
+				}
+				
+				this.busquedaDeshabilitados.text = '';
+				this.busquedaDeshabilitados.prompt = 'Deshabilitados';
+				this.busquedaHabilitados.text = ''
+				this.busquedaHabilitados.prompt = 'Habilitados';
+				var current:Cliente = $datos.getItemAt(0) as Cliente;
+				
+				if(current.habilitado){
+					this.botoneraBarra.selectedIndex = 0;
+					_habilitados = new ArrayCollection();
+					grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = false;
+					grpHabilitados.visible = grpHabilitados.includeInLayout = true;
+				}
+				else{
+					this.botoneraBarra.selectedIndex = 1;
+					_deshabilitados = new ArrayCollection();
+					grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = true;
+					grpHabilitados.visible = grpHabilitados.includeInLayout = false;
+				}
+				
+				_universoClientes = new ArrayCollection();
+				_universoClientes = ObjectUtil.copy( $datos ) as ArrayCollection;
+				
+				//Optimización para recorrido en busca de las imágenes de cada proveedor
+				arrayKeyConImagenes = new Object;
+				var _arrTempSinImagenes:Array = ObjectUtil.copy( $datos.source ) as Array;
+				var temp:Array = _arrTempSinImagenes.filter(quitarProveedoresSinImagen);
+				_arrTempSinImagenes = null;
+				_arregloSinImagenes = new ArrayCollection(temp);
+				
+				solicitaImagenes();
+				if (pasoDivideAgente){
+					divideTipoAgente(); 
+					pasoDivideAgente = false;
+				}
+			}
+			
+			///////////////////////////////////////////////////////////  		MODIFICACIONES PARA LA IMAGEN       ///////////////////////////////////////////////////////////
+			
+			/**
+			 *permitira iniciar y/o continuar la solicitud de imagenes
+			 */ 
+			private function solicitaImagenes():void{
+				
+				for( var i:int = 0 ; i < _arregloSinImagenes.length; i++ ){
+					_currentItem = ObjectUtil.copy( _arregloSinImagenes[ i ] ) as Cliente;
+					if( _currentItem.imagen != null && _currentItem.imagen != '' ){ //se evalua si al proveedor se le a insertado un aimegn o no para evitar la solictud y disminuir el tiempo el proceso
+						findOneImagen = true;
+						
+						var variables:URLLoader = new URLLoader();
+						var request:URLRequest = new URLRequest();
+						variables.dataFormat = URLLoaderDataFormat.BINARY;
+						
+						request = new URLRequest("http://" + Destinos.ipUsandose+'/logoClientes/' + _currentItem.idCliente +'.' + _currentItem.imagen ); //ip oscar
+						
+						request.idleTimeout = 1*1000;
+						
+						variables.addEventListener(Event.COMPLETE, completeHandler);
+						variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandlerError);
+						try{
+							variables.load(request);
+						} 
+						catch (error:Error){
+							trace( "Unable to load URL: " + error );
+						}
+						_arregloSinImagenes.length > 0 ? _arregloSinImagenes.removeItemAt( i ) : null;
+						i = _arregloSinImagenes.length;
+					}
+				}
+				if (!findOneImagen){
+					divideTipoAgente();
+					findOneImagen=false;
+				}
+			}
+			/**
+			 * recibe sel request la imagen, se valida si existe la 
+			 */ 
+			private function completeHandlerError(event:Event):void
+			{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				bytes = null;
+				
+				remueveDatos();
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = loader.data;
+				}catch (error:*){
+					bytes = null;
+				}
+				
+				if(arrayKeyConImagenes.hasOwnProperty(_currentItem.idCliente)){
+					var posicionCliente:uint = arrayKeyConImagenes[_currentItem.idCliente] as Number;
+					(_universoClientes[posicionCliente] as Cliente).bytes = bytes;
+				}
+				
+				remueveDatos();
+			}
+			
+			private var arrayKeyConImagenes:Object;
+			private function quitarProveedoresSinImagen($item:Cliente, $id:uint,$array:Array):Boolean
+			{
+				if($item.imagen == null || StringUtil.trim($item.imagen).length <= 0)
+				{
+					return false;
+				}
+				else
+				{
+					arrayKeyConImagenes[$item.idCliente] = $id;
+					return true;
+				}
+			}
+			
+			private function remueveDatos():void{
+				if( _arregloSinImagenes.length > 0 )
+				{  //si aun existen datos se continuan solicitando las imagenes
+					solicitaImagenes();
+				}
+				else
+				{	//si ya no existen mas datos se continua generarndo la vista
+					divideTipoAgente();
+				}
+			}
+			
+			
+			///////////////////////////////////////////////////////////  		MODIFICACIONES PARA LA IMAGEN       ///////////////////////////////////////////////////////////
+			
+			
+			
+			
+			
+			private function divideTipoAgente():void{
+				pasoDivideAgente = false;
+				for( var i:int = 0; i < _universoClientes.length ; i++ ){
+					if( (_universoClientes[i] as Cliente).habilitado == false ){  
+						_deshabilitados.addItem( _universoClientes[i] );
+					}else {
+						_habilitados.addItem( _universoClientes[i] );
+					}
+				}	
+				generaRenglones( _habilitados, 'habilitados', 7 );
+				generaRenglones( _deshabilitados, 'deshabilitados', 7 );
+			}
+			
+			private function generaRenglones( $listas:ArrayCollection, $tipo:String, $elementosPorRenglon:int = 7 ):void{
+				var contador:int = 0;
+				var arregloTemp:ArrayCollection = new ArrayCollection();
+				var $lista:ArrayCollection = new ArrayCollection();
+				
+				$lista = ObjectUtil.copy( $listas ) as ArrayCollection;
+				for( var i:int = 0; i <= $lista.length; i++  ){
+					var renglon:ArrayCollection = new ArrayCollection;;
+					for( var c: int = 0; c < $elementosPorRenglon ; c++ ){
+						if( $lista.length > 0 ){
+							contador++;
+							renglon.addItem( $lista[0] );
+							$lista.length > 0 ? $lista.removeItemAt(0) : null;
+						}
+					}
+					arregloTemp.addItem( renglon );
+				}
+				if( $tipo == 'habilitados' ){
+					lstHabilitados.dataProvider = new ArrayCollection();
+					lstHabilitados.dataProvider = ObjectUtil.copy( arregloTemp ) as ArrayCollection;
+					$listas.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = $listas.length + ' Clientes';
+				}else if( $tipo == 'deshabilitados' ){
+					lstDeshabilitados.dataProvider = new ArrayCollection();
+					lstDeshabilitados.dataProvider = ObjectUtil.copy( arregloTemp ) as ArrayCollection;
+					$listas.length == 1 ? lblDesHabilitados.text = '1 Cliente' : lblDesHabilitados.text = $listas.length + ' Clientes';
+				}
+			}
+			
+			/**
+			 * esta funcion permite reHacer la vista segun el tama√±o de la ventana 
+			 */ 
+			private function recreaVista( $evt:Event ):void{
+				cambioNumItems = false;
+				if( this.width < 1200 ){
+					if(itemsEnPantalla != 5 ){
+						seConstruyoDeshabilitados = false; 
+						cambioNumItems = true;
+					}
+					itemsEnPantalla = 5 ;
+				}
+				if( this.width > 1200 && this.width < 1500 ){ 
+					if(itemsEnPantalla != 6 ){
+						seConstruyoDeshabilitados = false;
+						cambioNumItems = true;
+					}
+					itemsEnPantalla = 6 ;
+				}
+				if( this.width > 1500 ){ 
+					if(itemsEnPantalla != 7 ){
+						seConstruyoDeshabilitados = false;
+						cambioNumItems = true;
+					}
+					itemsEnPantalla = 7; 
+				}
+				if( grpHabilitados.visible && cambioNumItems  ){
+					if( this.busquedaHabilitados.text  != ""){
+						filtroPorTexto( 'habilitados' );
+					}else{
+						generaRenglones( _habilitados, 'habilitados', itemsEnPantalla );
+					}
+				}else if( grpHabilitados.visible && cambioNumItems ){
+					if( this.busquedaDeshabilitados.text  != ""){
+						filtroPorTexto( 'desHabilitados' );
+					}else{
+						generaRenglones( _deshabilitados, 'deshabilitados', itemsEnPantalla );
+					}
+				}
+			}
+			
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private function filtroPorTexto($vieneDe:String):void{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaHab:ArrayCollection = new ArrayCollection();
+				var _listaDeshab:ArrayCollection = new ArrayCollection();
+				
+				if( $vieneDe == 'habilitados' )
+				{
+					listaAFiltrar = ObjectUtil.copy( _habilitados ) as ArrayCollection;
+					if( this.busquedaHabilitados.text  != ""){
+						_listaHab = UtilsGrid.queryCampoXLike( listaAFiltrar, 'nombre', this.busquedaHabilitados.text );
+					}else{
+						_listaHab = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection; 
+					}
+					generaRenglones( _listaHab, 'habilitados', itemsEnPantalla );
+				}
+					
+				else
+					
+				{
+					listaAFiltrar = ObjectUtil.copy( _deshabilitados ) as ArrayCollection;
+					if( this.busquedaDeshabilitados.text  != ""){
+						_listaDeshab = UtilsGrid.queryCampoXLike( _deshabilitados, 'nombre', this.busquedaDeshabilitados.text );
+					}else{
+						_listaDeshab = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection; 
+					}
+					generaRenglones( _listaDeshab, 'deshabilitados', itemsEnPantalla );
+				}
+			}
+			
+			
+			/**
+			 * agregamos o reutilizamos la seccion de trabajo
+			 */ 
+			private function cambiaVista( $evt:EventoCatClientes_General ):void{
+				this.grpAgentes.visible = this.grpAgentes.includeInLayout = false;
+				this.zonaTrabajo.visible = this.zonaTrabajo.includeInLayout = false; 
+				if( _componenteZonaTrabajo == null ){
+					_componenteZonaTrabajo = new CatClientes_ZonaTrabajo();
+					this.zonaTrabajo.addElement( _componenteZonaTrabajo );
+				}
+				_componenteZonaTrabajo._contDes = false;
+				if( $evt.vieneDe == 'clienteSeleccionado' ){
+					var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIA_CLIENTE);
+					evt.clienteSeleccionado = _clienteSeleccionado = $evt.clienteSeleccionado;
+					evt.vieneDe = '';
+					this.zonaTrabajo.visible = this.zonaTrabajo.includeInLayout = true; 
+					this._componenteZonaTrabajo.recibeCliente( $evt.clienteSeleccionado );
+					this._componenteZonaTrabajo.oferta.recibeClienteSeleccionado( $evt.clienteSeleccionado );
+					dispatchEvent( evt );
+				}else{
+					this.grpAgentes.visible = this.grpAgentes.includeInLayout = true;
+				}
+			}
+			
+			
+			public function set actualizaClienteOferta($datos:ArrayCollection ):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				/* 	
+				var nom:String = _clienteSeleccionado.nombre;
+				var _clie:ArrayCollection = new ArrayCollection();
+				
+				_clie = UtilsGrid.queryCampoXLike( $datos, 'nombre', nom );
+				if (_clie.length > 0)
+				{
+				var cliente:Cliente = (_clie[0] as Cliente);
+				this._componenteZonaTrabajo.oferta.refrescaOferta( cliente );
+				}  */
+			}
+			
+			
+			
+			
+			
+			private function resfrecarCliente( $evt:EventoCatClientes_General ):void{
+				
+				var $evto:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES);
+				$evto.user = DatosGlobales.getInstance()._usuario;
+				dispatchEvent($evto);
+				getDeshabilitado = false;
+				
+				_clienteSeleccionado = $evt.clienteSeleccionado;
+			}
+			
+			
+			protected function agregarNuevoCliente(event:MouseEvent):void{
+				var evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.CAMBIA_VISTA_MENU_CLIENTES );
+				evt.clienteSeleccionado = new Cliente();
+				evt.vieneDe = 'clienteSeleccionado';
+				dispatchEvent( evt );				
+			}
+			
+			
+			
+			protected function botoneraBarra_changingHandler(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBarColores).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					if( botoneraBarra.selectedItem != undefined )
+					{
+						grpHabilitados.visible = grpHabilitados.includeInLayout = false;
+						grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = false;	
+						var $dato:String = '';
+						botoneraBarra.selectedItem.valor == 'Habilitados' ? $dato = 'habilitados' : $dato = 'deshabilitados' ;
+						
+						if( $dato == 'deshabilitados' )
+						{
+							grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = true;
+							
+							if(!getDeshabilitado)
+							{
+								getDeshabilitado=true;
+								pasoDivideAgente = true;
+								var eve:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_CLIENTES);
+								eve.habilitado=0;
+								dispatchEvent(eve);
+							}
+							
+							if( !seConstruyoDeshabilitados )
+							{
+								seConstruyoDeshabilitados = true;
+								generaRenglones( _deshabilitados, 'deshabilitados', itemsEnPantalla );
+							}
+						}
+						else
+						{
+							grpHabilitados.visible = grpHabilitados.includeInLayout = true;
+							if( !seConstruyoDeshabilitados )
+							{
+								seConstruyoDeshabilitados = true;
+								generaRenglones( _habilitados, 'habilitados', itemsEnPantalla );
+							}
+						}
+					}
+				}
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpAgentes" horizontalAlign="center" gap="10">
+		
+		<catalogos:TituloParaVistaDefaultEnCatalogos id="btnRegresar" labelIzquierdo="CLIENTES" labelDerecho="[CATÁLOGOS]"/>
+		
+		<botonesToggle:ButtonBarColores width="350" height="30" id="botoneraBarra" changing="botoneraBarra_changingHandler(event)" dataProvider="{_arrButton}" selectedIndex="0" requireSelection="true"/>
+		<otros:divisionGruesa width="100%"/>
+		<s:Group  width="100%" height="100%">
+			<s:VGroup id="grpHabilitados" width="100%" height="100%" horizontalAlign="center" gap="10" >
+				<s:TextInput fontStyle="normal" id="busquedaHabilitados" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Clientes" text="" change="filtroPorTexto('habilitados')" enter="filtroPorTexto('habilitados')" />
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstHabilitados" 
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.vistaPrincipal.CatClientes_IR_RenglonCliente"/>
+				<s:VGroup width="100%" horizontalAlign="center" gap="10">
+					<label:TituloGris  id="lblHabilitados" paddingTop="0"/>
+					<label:TituloGris text="TOTAL" paddingTop="0"/>
+				</s:VGroup>
+			</s:VGroup>
+			<s:VGroup id="grpDeshabilitados" width="100%" height="100%" horizontalAlign="center" visible="false" includeInLayout="false" gap="10">
+				<s:TextInput fontStyle="normal" id="busquedaDeshabilitados" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Clientes" change="filtroPorTexto('desHabilitados')" enter="filtroPorTexto('desHabilitados')" />
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstDeshabilitados"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.vistaPrincipal.CatClientes_IR_RenglonCliente"/>
+				<s:VGroup width="100%" horizontalAlign="center" gap="10">
+					<label:TituloGris  id="lblDesHabilitados" paddingTop="0"/>
+					<label:TituloGris text="TOTAL" paddingTop="0"/>
+				</s:VGroup>
+			</s:VGroup>
+		</s:Group>
+		<otros:divisionHueca width="100%" />
+		<pqNet:botonPqNetLargo icono="agregar" label="Agregar" click="agregarNuevoCliente(event)"/>
+	</contenedores:VGroupConPaddingStandardPqNet>
+	<s:HGroup  width="100%" height="100%" id="zonaTrabajo"/>
+</s:Group>

@@ -1,0 +1,629 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%" creationComplete="init()">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:StringValidator id="validaque" source="{que}" property="text" minLength="2" requiredFieldError="Contextualiza el problema identificado en la pregunta ¿Qué?" />
+		<mx:StringValidator id="validadonde" source="{donde}" property="text" minLength="2" requiredFieldError="Especificar el lugar donde se localizo el problema en la pregunta ¿Dónde?"/>
+		<mx:StringValidator id="validacuando" source="{cuando}" property="text" minLength="2" requiredFieldError="Anotar cuando identificaste el posible error en la pregunta ¿Cuándo?"/>
+		<!--<mx:StringValidator id="validacomentario" source="{comentarios}" property="text" minLength="2" requiredFieldError=""/>-->
+		<mx:StringValidator id="validaqueref" source="{quereformulacion}" property="text" minLength="2" requiredFieldError="Contextualiza el problema identificado en la pregunta ¿Qué?" />
+		<mx:StringValidator id="validadonderef" source="{dondereformulacion}" property="text" minLength="2" requiredFieldError="Especificar el lugar donde se localizo el problema en la pregunta ¿Dónde?"/>
+		<mx:StringValidator id="validacuandoref" source="{cuandoreformulacion}" property="text" minLength="2" requiredFieldError="Anotar cuando identificaste el posible error en la pregunta ¿Cuándo?"/>
+		
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaContactoService;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoReformulaIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Reformulacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.contactos.BuscaContacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.contactos.ObtenerContacto;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.validators.StringValidator;
+			import mx.validators.Validator;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var palabras:uint;
+			private var palabrasreformula:uint;
+			private var fechaHoy:Date = new Date();
+			private var validarTextArea:Array;
+			[Bindable]
+			public var _incidente:Incidente = null;
+			[Bindable]
+			public var _reformulacion:Reformulacion;
+			[Bindable]
+			public var _guardaReformulacion:Reformulacion = null;
+			[Bindable]
+			public var validarArr:Array;
+			[Bindable]
+			public var validarArrReformula:Array;
+			[Bindable]
+			private var _listaReformulacion:ArrayCollection;
+			
+			private function init():void{
+				this.buttonBarIncidente.selectedItem = "Incidente";
+				
+				validarArr = new Array();
+				validarArrReformula = new Array();
+				
+				validarArr.push(validaque);
+				validarArr.push(validadonde);
+				validarArr.push(validacuando);
+				//validarArr.push(validacomentario);
+				validarArrReformula.push(validaqueref);
+				validarArrReformula.push(validadonderef);
+				validarArrReformula.push(validacuandoref);
+			}
+			
+			public function cambiarViewStack(event:IndexChangeEvent):void
+			{
+
+				if (buttonBarIncidente.selectedItem=="Incidente") {
+					this.viewStackIncidente.selectedChild = this.incidente;
+				}
+				else if (buttonBarIncidente.selectedItem=="Reformulacion") {
+					this.viewStackIncidente.selectedChild = this.reformulacion;
+					
+					var evt:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.REFORMULA_INCIDENTE);
+					 evt.usuario = "OCardona";  /* evt.usuario = DatosGlobales.getInstance()._usuario.usuario; */ 
+					dispatchEvent(evt);
+				}
+				
+			}
+			
+		 	private function cuantasPalabras(event:Event):void {
+				this.situacion.maxChars = new int();
+				var caracteres:uint = event.target.length;
+				palabras = cuentaPalabras(situacion.text);
+				if(palabras == 51){
+					this.situacion.maxChars = caracteres;
+				}
+				else{
+					this.contadordpalabras.text = palabras.toString(10);
+				} 
+			} 
+			public static function cuentaPalabras(txt:String):uint {
+				var cuenta:uint = 0;
+				if (txt != null) {
+					//txt = StringUtil.trim(txt);
+					if (txt.length > 0 ) {
+						cuenta = txt.split(/\s+/g).length;
+					}	
+				}
+				return cuenta;
+			}
+			
+			private function alerta(evt:Event):void{
+				Alert.yesLabel = "SI";					
+				Alert.noLabel = "NO";
+				Alert.show("Está por REGISTRAR el INCIDENTE y no podrá modificarle posteriormente, ¿Desea continuar?","¡Aviso!",Alert.NO | Alert.YES ,this, alertaClick);
+			}
+			
+			private function alertaReformula(evt:Event):void{
+				Alert.yesLabel = "SI";					
+				Alert.noLabel = "NO";
+				Alert.show("Está por REFORMULAR y no podrá modificarle posteriormente, ¿Desea continuar?","¡Aviso!",Alert.NO | Alert.YES ,this, alertaClickReformulacion);
+			}
+			
+			public function alertaClick(evt:CloseEvent):void{
+				if(evt.detail == Alert.YES){
+					this._incidente = new Incidente();
+					this._incidente.descripcion = this.que.text;
+					this._incidente.lugar = this.donde.text;
+					this._incidente.cuando = this.cuando.text;
+					this._incidente.comentarios = this.comentarios.text;
+					this._incidente.situacionIdentificada = this.situacion.text;
+					this._incidente.fecha = this.fechaHoy;
+					 this._incidente.idEmpleado = 91;    /* this._incidente.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado; */ 
+					this._incidente.incidenteRelacionadoS = "nulo";
+					this._incidente.referencias = new ArrayCollection();
+					
+					var evento:EventoIncidente = new EventoIncidente(EventoIncidente.REGISTRA_INCIDENTE);
+					evento.incidente = this._incidente;
+					dispatchEvent(evento);
+					
+					reset();
+					
+					var evto:EventoIncidente = new EventoIncidente( EventoIncidente.RESET );
+					dispatchEvent( evto );
+					
+				}else{
+					Alert.show("NO");
+					return ;
+				}
+				
+			}
+			
+			public function alertaClickReformulacion(evt:CloseEvent):void{
+				if(evt.detail == Alert.YES){
+					_reformulacion = new Reformulacion();
+					_reformulacion.idReformulacion = this._guardaReformulacion.idReformulacion;
+					_reformulacion.situacionIdentificada = this.situacionreformulacion.text;
+					_reformulacion.descripcion = this.quereformulacion.text;
+					_reformulacion.lugar = this.dondereformulacion.text;
+					_reformulacion.cuando = this.cuandoreformulacion.text;
+					_reformulacion.comentarios = this.comentariosreformulacion.text;
+					_reformulacion.idIncidente = this._guardaReformulacion.idIncidente;
+					_reformulacion.justificacion = this._guardaReformulacion.justificacion;
+					
+					var evento:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.REGISTRAR_REFORMULACION);
+					evento.registraReformulacion = this._reformulacion;
+					dispatchEvent(evento);
+					 
+				}else{
+					Alert.show("NO");
+					return ;
+				}
+				
+			}
+			
+			public function guardaReformulacion(event:Event):void{
+					_reformulacion = new Reformulacion();
+					_reformulacion.idReformulacion = this._guardaReformulacion.idReformulacion;
+					_reformulacion.situacionIdentificada = this.situacionreformulacion.text;
+					_reformulacion.descripcion = this.quereformulacion.text;
+					_reformulacion.lugar = this.dondereformulacion.text;
+					_reformulacion.cuando = this.cuandoreformulacion.text;
+					_reformulacion.comentarios = this.comentariosreformulacion.text;
+					_reformulacion.idIncidente = this._guardaReformulacion.idIncidente;
+					_reformulacion.justificacion = this._guardaReformulacion.justificacion;
+					
+					var evento:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.ACTUALIZAR_REFORMULACION);
+					evento.actualizareformulacion = _reformulacion;
+					dispatchEvent(evento);
+			}
+			
+			private function reset():void{
+				this.que.text = "";
+				this.donde.text = "";
+				this.cuando.text = "";
+				this.comentarios.text = "";
+				this.situacion.text = "";
+			}
+			
+			private function resetReformulacion():void{
+				this.quereformulacion.text = "";
+				this.dondereformulacion.text = "";
+				this.cuandoreformulacion.text = "";
+				this.comentariosreformulacion.text = "";
+				this.situacionreformulacion.text = "";
+			}
+			
+			private function cargaReferencias():void{
+				var listasReferencias:CargaReferencias;
+				listasReferencias = CargaReferencias(PopUpManager.createPopUp(this, CargaReferencias,true));       
+				
+				/* var evt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.HAS_VISIBLE_POPUP_CONTACTOS);
+				evt.consulta = "cliente";
+				evt.vieneD = "DocumentosSalientesInspectorMail";
+				dispatchEvent(evt); */     
+				
+			}
+			
+			private function validarTapNavigator(evt:MouseEvent):void{
+				validarTextArea = []; 
+				validarTextArea =  Validator.validateAll(validarArr) ;
+				var textAreaCompleto:Boolean = validarTextArea.length == 0;
+				if(textAreaCompleto){
+					var events:Event;
+					alerta(events);
+				}else{
+					var error:ValidationResultEvent
+					var mensajerror:Array = [];
+					
+					for(var n:int = 0 ; n<validarTextArea.length ; n++){
+						mensajerror.push(validarTextArea[n].message);	
+					}
+					
+					Alert.show(mensajerror.join("\n\n"),"¡Importante ...!", Alert.OK);
+				}
+			}
+			
+			private function validarTapNavigatorReformula(evt:MouseEvent):void{
+				validarTextArea = []; 
+				validarTextArea =  Validator.validateAll(validarArrReformula) ;
+				var textAreaCompleto:Boolean = validarTextArea.length == 0;
+				if(textAreaCompleto){
+					var events:Event;
+					alertaReformula(events);
+				}else{
+					var error:ValidationResultEvent
+					var mensajerror:Array = [];
+					
+					for(var n:int = 0 ; n<validarTextArea.length ; n++){
+						mensajerror.push(validarTextArea[n].message);	
+					}
+					
+					Alert.show(mensajerror.join("\n\n"),"¡Importante ...!", Alert.OK);
+				}
+			}
+		
+			public function set muestraRegistroGuardado(dato:Incidente):void{
+				Alert.show( "El incidente " + dato.folio + " fue registrado","Operación exitosa");
+			}
+			
+			public function set actualizacionReformulacion(actualiza:Boolean):void{
+				if(actualiza == true){
+					Alert.show( "Tu cambios fueron guardados","Operación exitosa");
+				}else{
+					return;
+				}
+			}
+			
+			public function set registroReformulacion(registro:Boolean):void{
+				if(registro == true){
+					Alert.show( "La REFORMUACION fue registrada","Operación exitosa");
+					resetReformulacion();
+					
+					var refrescaReformulacion:IndexChangeEvent = new IndexChangeEvent("",false,false,-1,0);
+					refrescaReformulacion.newIndex = 1;
+					cambiarViewStack(refrescaReformulacion);
+				}else{
+					return;
+				}
+			}
+			
+			public function set listaReformulacion(lista:ArrayCollection):void{
+				this._listaReformulacion = lista;
+				
+				if(_listaReformulacion.length > 1 || _listaReformulacion.length == 0){
+					this.totalincidentes.text = _listaReformulacion.length.toString() + " Incidentes";
+				}else{
+					this.totalincidentes.text = _listaReformulacion.length.toString() + " Incidente";
+				}				
+			}
+			
+
+			private function clickReformula(event:Event):void{
+				if(event.currentTarget.selectedItems.length != 0){
+					this.areajustificacion.text = event.currentTarget.selectedItems[0].reformulaciones[0].justificacion;
+					this.situacionreformulacion.text = event.currentTarget.selectedItems[0].reformulaciones[0].situacionIdentificada;
+					this.quereformulacion.text = event.currentTarget.selectedItems[0].reformulaciones[0].descripcion;
+					this.dondereformulacion.text = event.currentTarget.selectedItems[0].reformulaciones[0].lugar;
+					this.cuandoreformulacion.text = event.currentTarget.selectedItems[0].reformulaciones[0].cuando;
+					this.comentariosreformulacion.text = event.currentTarget.selectedItems[0].reformulaciones[0].comentarios;
+					this.folioIncidente.label = event.currentTarget.selectedItems[0].folio;	
+					this._guardaReformulacion = event.currentTarget.selectedItems[0].reformulaciones[0];
+				}else{
+					return;
+				}
+			}
+
+			
+		]]>
+	</fx:Script>
+	
+<s:VGroup height="100%" width="100%" paddingLeft="20" paddingBottom="20" paddingRight="20">
+	
+	<s:HGroup width="100%">
+		<label:labelTitulo_Otros text="Incidente" width="100%"/>
+		<s:ButtonBar id="buttonBarIncidente" change="cambiarViewStack(event)" >
+			<s:dataProvider>
+				<mx:ArrayCollection> 
+					<fx:String>Incidente</fx:String> 
+					<fx:String>Reformulacion</fx:String> 
+				</mx:ArrayCollection>
+			</s:dataProvider> 
+		</s:ButtonBar> 
+	</s:HGroup>
+	
+	<mx:ViewStack id="viewStackIncidente" borderStyle="none" width="100%" height="100%" color="0x323232">
+		
+		<s:NavigatorContent id="incidente" label="Search" width="100%" height="100%" fontWeight="bold"  >
+			<s:VGroup width="100%" height="100%">	 
+				
+				<otros:divisionGruesa width="100%" height="2%"/>
+				
+				<s:HGroup>
+					<s:Image id="lapizregistro" source="@Embed('skins/imagenes/iconos/etiquetas/registro.png')"/>
+					<label:labelSubtitulo text="Registro" width="100%"/>
+				</s:HGroup>
+				<s:Spacer width="100%" height="2%"/>
+				<otros:divisionGruesa width="100%" height="2%"/>
+				<mx:Button label="REFERENCIAS" click="cargaReferencias()"/>
+				<s:Spacer width="100%" height="2%"/>
+				<otros:divisionGruesa width="100%" height="2%"/>
+				<label:labelSubtitulo text="Situación Identificada"/>
+				<s:Spacer width="100%" height="2%"/>
+				<otros:divisionGruesa width="100%"/>
+				
+				<mx:TextArea width="100%" height="10%" id="situacion" borderVisible="false" change="cuantasPalabras(event)" >
+					
+				</mx:TextArea>
+				<otros:division width="100%" height="2%"/>
+
+				<s:HGroup width="100%">
+					<s:Label text="Palabras:  " color="#999999"/>
+					<s:Label id="contadordpalabras" text="0" color="#999999" />
+					<s:Label text="/  50" color="#999999"/>
+				</s:HGroup>
+				
+				<otros:divisionGruesa width="100%" height="2%"/>
+				<label:labelSubtitulo text="QDC"/>
+				
+				<!--<mx:TabNavigator id="qdc" width="100%" height="100%" horizontalAlign="right" creationPolicy="all" >-->
+				<s:HGroup width="100%">
+					<s:Spacer width="100%"/>
+					<s:TabBar dataProvider="{this.qdcIncidente}" />
+				</s:HGroup>
+				
+					<mx:ViewStack id="qdcIncidente" width="100%" height="100%" creationPolicy="all">
+						
+						<s:NavigatorContent label="¿Qué?" width="100%" height="100%" > <!--click="cuantasPalabrasQue(event)"-->
+							<s:TextArea width="100%" height="100%" borderVisible="false" id="que" /> <!--change="cuantasPalabrasQue(event)"-->
+							<!--<fx:Script>
+								<![CDATA[
+									
+									private function cuantasPalabrasQue(event:Event):void {
+										this.que.maxChars = new int();
+										var caracteres:uint = event.target.length;
+										palabras = cuentaPalabras(que.text);
+										/* this.caracter.text = caracteres.toString(); */
+										if(palabras == 51){
+											this.que.maxChars = caracteres;
+										}else{
+											this.contadordpalabras.text = palabras.toString(10);
+										}
+									}
+								]]>
+							</fx:Script>-->
+						</s:NavigatorContent>
+						
+						<s:NavigatorContent label="¿Dónde?" width="100%" height="100%" > <!--click="cuantasPalabrasDonde(event)"-->
+							<s:TextArea width="100%" height="100%" borderVisible="false" id="donde" /> <!--change="cuantasPalabrasDonde(event)"-->
+							<!--<fx:Script>
+								<![CDATA[
+									
+									private function cuantasPalabrasDonde(event:Event):void {
+										this.donde.maxChars = new int();
+										var caracteres:uint = event.target.length;
+										palabras = cuentaPalabras(donde.text);
+										if(palabras == 51){
+											this.donde.maxChars = caracteres;
+										}else{
+											this.contadordpalabras.text = palabras.toString(10);
+										}
+									}
+								]]>
+							</fx:Script>-->
+						</s:NavigatorContent>
+						
+						<s:NavigatorContent label="¿Cuándo?" width="100%" height="100%" > <!--click="cuantasPalabrasCuando(event)"-->
+							<s:TextArea width="100%" height="100%" borderVisible="false" id="cuando" /> <!--change="cuantasPalabrasCuando(event)"-->
+							<!--<fx:Script>
+								<![CDATA[
+									
+									private function cuantasPalabrasCuando(event:Event):void {
+										this.cuando.maxChars = new int();
+										var caracteres:uint = event.target.length;
+										palabras = cuentaPalabras(cuando.text);
+										if(palabras == 51){
+											this.cuando.maxChars = caracteres;
+										}else{
+											this.contadordpalabras.text = palabras.toString(10);
+										}
+									}
+								]]>
+							</fx:Script>-->
+						</s:NavigatorContent>
+						
+						<s:NavigatorContent label="COMENTARIOS ADICIONALES" width="100%" height="100%" > <!--click="cuantasPalabrasComentario(event)"-->
+							<s:TextArea width="100%" height="100%" borderVisible="false" id="comentarios" /> <!--change="cuantasPalabrasComentario(event)"-->
+							<!--<fx:Script>
+								<![CDATA[
+									
+									private function cuantasPalabrasComentario(event:Event):void {
+										this.comentarios.maxChars = new int();
+										var caracteres:uint = event.target.length;
+										palabras = cuentaPalabras(comentarios.text);
+										if(palabras == 51){
+											this.comentarios.maxChars = caracteres;
+										}else{
+											this.contadordpalabras.text = palabras.toString(10);
+										}
+									}
+								]]>
+							</fx:Script>-->
+						</s:NavigatorContent>
+					</mx:ViewStack>		
+				<!--</mx:TabNavigator>-->
+				
+				<otros:divisionGruesa width="100%" height="2%"/>
+				
+				<s:HGroup width="100%">
+					<s:Spacer width="100%"/>
+					<s:Button styleName="botonNegroOld" label="Registrar"  id="registraincidente" click="validarTapNavigator(event)"/>
+				</s:HGroup>
+				<s:Spacer width="100%" height="2%"/>
+			</s:VGroup>
+		</s:NavigatorContent>
+		
+		<s:NavigatorContent id="reformulacion" label="Customer Info" width="100%" height="100%" fontWeight="bold" >
+			
+			<s:VGroup height="100%" width="100%">
+				
+				<otros:divisionGruesa width="100%" height="2%"/>
+				<s:HGroup width="100%">
+					<s:Image id="imagenreformulacion"/>
+					<label:labelSubtitulo text="Reformulación" width="100%"/>
+				</s:HGroup>
+				<otros:divisionGruesa width="100%" height="2%"/>
+				
+				<s:HGroup width="100%" height="100%">
+					
+					<s:VGroup height="100%" width="40%">						
+					<s:List height="100%" width="100%" id="listaincidente" borderVisible="false" dataProvider="{this._listaReformulacion}" click="clickReformula(event)"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.nuevavistaincidente.ListaIncidenteReformular"/>
+					<otros:division id="linea3"/>
+					<s:Label id="totalincidentes" width="100%" fontSize="14" textAlign="center" color="#999999"/>
+					<s:Label text="Total" color="#999999" fontSize="14" width="100%" textAlign="center"/>
+					</s:VGroup>
+					<otros:VDivisionClaro height="100%"/>
+						<s:VGroup height="100%" width="100%">
+							<s:HGroup width="100%">
+								<s:Button styleName="botonNegroOld" id="folioIncidente" label="           "/>
+								<s:Spacer width="100%"/>
+								<s:Button styleName="botonNegroOld" label="REFERENCIAS" click="cargaReferencias()"/>	
+							</s:HGroup>
+							<s:Spacer width="100%" height="2%"/>
+							<otros:divisionGruesa width="100%" height="2%"/>
+						
+							<s:HGroup width="100%" height="100%">
+								<s:VGroup height="100%" width="40%">
+									<label:labelSubtitulo text="Justificación" color="red"/>
+									<otros:division width="100%" color="red"/>
+									<s:TextArea borderVisible="false" id="areajustificacion" width="100%" height="100%" color="red"/>
+								</s:VGroup>
+								
+								<otros:VDivisionClaro height="100%"/>
+								
+								<s:VGroup height="100%" width="100%">
+									<label:labelSubtitulo text="Situación identificada" width="100%"/>
+									<otros:divisionGruesa width="100%" />
+									<mx:TextArea width="100%" height="10%" id="situacionreformulacion" borderVisible="false" change="cuantasPalabrasRefor(event)">
+										<fx:Script>
+											<![CDATA[
+												
+												private function cuantasPalabrasRefor(event:Event):void {
+													this.situacionreformulacion.maxChars = new int();
+													var caracteres:uint = event.target.length;
+													palabrasreformula = cuentaPalabras(situacionreformulacion.text);
+													if(palabrasreformula == 51){
+														this.situacionreformulacion.maxChars = caracteres;
+													}else{
+														this.contadordpalabras2.text = palabrasreformula.toString(10);
+													} 
+												}
+											]]>
+										</fx:Script>
+									</mx:TextArea>
+									<otros:division width="100%" height="2%"/>
+									
+									<s:HGroup width="100%">
+										<s:Label text="Palabras:  " color="#999999"/>
+										<s:Label id="contadordpalabras2" text="0" color="#999999" />
+										<s:Label text="/  50" color="#999999"/>
+									</s:HGroup>
+									
+									<otros:divisionGruesa width="100%" height="2%"/>
+									<label:labelSubtitulo text="QDC"/>
+									<!--<mx:TabNavigator id="qdcreformulacion" creationPolicy="all" width="100%" height="100%" horizontalAlign="right" borderVisible="false" >-->
+									
+									<s:HGroup width="100%">
+										<s:Spacer width="100%"/>										
+										<s:TabBar dataProvider="{this.qdcreformulacion}"/>
+									</s:HGroup>
+											
+									<mx:ViewStack width="100%" height="100%" id="qdcreformulacion" creationPolicy="all">
+										
+										<s:NavigatorContent label="¿Qué?" width="100%" height="100%">  <!-- click="cuantasPalabrasQueReformula(event)"-->
+											<s:TextArea id="quereformulacion" width="100%" height="100%" borderVisible="false"/> <!--change="cuantasPalabrasQueReformula(event)"-->
+											<!--<fx:Script>
+												<![CDATA[
+													
+													private function cuantasPalabrasQueReformula(event:Event):void {
+														this.quereformulacion.maxChars = new int();
+														var caracteres:uint = event.target.length;
+														palabras = cuentaPalabras(quereformulacion.text);
+														if(palabras == 51){
+															this.quereformulacion.maxChars = caracteres;
+														}else{
+															this.contadordpalabras2.text = palabras.toString(10);
+														}
+													}
+												]]>
+											</fx:Script>-->
+										</s:NavigatorContent>
+										
+										<s:NavigatorContent label="¿Dónde?" width="100%" height="100%"> <!--click ="cuantasPalabrasDondeReformula(event)"-->
+											<s:TextArea width="100%" height="100%" borderVisible="false" id="dondereformulacion" /> <!--change="cuantasPalabrasDondeReformula(event)"-->
+											<!--<fx:Script>
+												<![CDATA[
+													
+													private function cuantasPalabrasDondeReformula(event:Event):void {
+														this.dondereformulacion.maxChars = new int();
+														var caracteres:uint = event.target.length;
+														palabras = cuentaPalabras(dondereformulacion.text);
+														if(palabras == 51){
+															this.dondereformulacion.maxChars = caracteres;
+														}else{
+															this.contadordpalabras2.text = palabras.toString(10);
+														}
+													}
+												]]>
+											</fx:Script>-->
+										</s:NavigatorContent>
+										
+										<s:NavigatorContent label="¿Cuándo?" width="100%" height="100%" > <!--click="cuantasPalabrasCuandoReformula(event)"-->
+											<s:TextArea width="100%" height="100%" borderVisible="false" id="cuandoreformulacion" /> <!--change="cuantasPalabrasCuandoReformula(event)"-->
+											<!--<fx:Script>
+												<![CDATA[
+													
+													private function cuantasPalabrasCuandoReformula(event:Event):void {
+														this.cuandoreformulacion.maxChars = new int();
+														var caracteres:uint = event.target.length;
+														palabras = cuentaPalabras(cuandoreformulacion.text);
+														if(palabras == 51){
+															this.cuandoreformulacion.maxChars = caracteres;
+														}else{
+															this.contadordpalabras2.text = palabras.toString(10);
+														}
+													}
+												]]>
+											</fx:Script>-->
+										</s:NavigatorContent>
+										
+										<s:NavigatorContent label="COMENTARIOS ADICIONALES" width="100%" height="100%" > <!--click="cuantasPalabrasComentarioReformula(event)"--> 
+											<s:TextArea width="100%" height="100%" borderVisible="false" id="comentariosreformulacion" /> <!--change="cuantasPalabrasComentarioReformula(event)"-->
+											<!--<fx:Script>
+												<![CDATA[
+													
+													private function cuantasPalabrasComentarioReformula(event:Event):void {
+														this.comentariosreformulacion.maxChars = new int();
+														var caracteres:uint = event.target.length;
+														palabras = cuentaPalabras(comentariosreformulacion.text);
+														if(palabras == 51){
+															this.comentariosreformulacion.maxChars = caracteres;
+														}else{
+															this.contadordpalabras2.text = palabras.toString(10);
+														}
+													}
+												]]>
+											</fx:Script>-->
+										</s:NavigatorContent>
+										
+									</mx:ViewStack>	
+									<!--</mx:TabNavigator>-->
+								</s:VGroup>
+							</s:HGroup>
+							<otros:division width="100%" height="2%"/>
+							<s:HGroup width="100%">
+								<s:Button styleName="botonNegroOld" label="Guardar" click="guardaReformulacion(event)"/>
+								<s:Spacer width="100%"/>
+								<s:Button styleName="botonNegroOld" label="Registrar" click="validarTapNavigatorReformula(event)"/>
+							</s:HGroup>
+						</s:VGroup>	
+				</s:HGroup>
+			</s:VGroup>
+			
+			
+			
+		</s:NavigatorContent>
+		
+		
+	</mx:ViewStack>
+
+</s:VGroup>
+</s:Group>

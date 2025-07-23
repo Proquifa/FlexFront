@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Scroller width="100%" height="100%"
+		xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="vgroup1_creationCompleteHandler(event)"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:botonesToggle="skins.botonesToggle.*" xmlns:otros="skins.otros.*" 
+		 xmlns:textInputBordeadopPQNet="skins.skin.textInputBordeadopPQNet.*" 
+		 xmlns:componentesInspector="vista.vistas.ev_AsesorDeVentaReqMovil.inspector_GestionarVista.inspecor_GestionarVista_comopnentes.*" xmlns:pqNet="skins.botones.pqNet.*"
+	>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Temas;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Visita;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import vista.evento.EventoEVGestionarVisitas;
+			
+			/* colorBase:"0x"+ catalogoColores.LABEL_VERDE_AZUL  */
+			
+			[Bindable] private var _arrButtonActividad:ArrayCollection = new ArrayCollection([{label:"Planificación", id:"groupPlanificacion", colorBase:"0x"+ catalogoColores.LABEL_VERDE_AZUL, fontSize:13 },
+																					{label:"Solicitudes", id:"groupSolicitudes", colorBase:"0x"+ catalogoColores.LABEL_VERDE_AZUL, fontSize:13 }
+			]);
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection([{label:"Solicitante",id :"grpSolicitante", colorBase:"0x"+ catalogoColores.LABEL_VERDE_AZUL, fontSize:13 },
+																					{label:"EV", id:"grpEv", colorBase:"0x"+ catalogoColores.LABEL_VERDE_AZUL, fontSize:13 }
+			]);
+			[Bindable]
+			private var _solicitudVisita:SolicitudVisita;
+			[Bindable]
+			private var _tema:Temas;
+			[Bindable]
+			private var _solicitudSeleccionada:int = 0;
+			[Bindable]
+			private var _temaSeleccionado:int = 0;
+			[Bindable]
+			private var _vista:Visita;
+			
+			private var _contadorIdTema:int;
+			private function mostrarActividad():void{
+				if( botoneraBarraActividad.selectedItem != undefined ){
+					this.groupPlanificacion.visible = false
+					this.groupSolicitudes.visible = false;
+					this[botoneraBarraActividad.selectedItem.id].visible = true ;
+				}
+			}
+			
+			private function mostrarQuienSolicita():void{
+				if( botoneraBarra.selectedItem != undefined ){
+					this.grpSolicitante.visible = false;
+					this.grpEv.visible = false
+					this[botoneraBarra.selectedItem.id].visible = true ;
+				}
+			}
+			public function set obtenerVisita( $dato:Visita ):void{
+				if( $dato == null )
+					return;
+				_vista = new Visita();
+				_vista = ObjectUtil.copy( $dato ) as Visita;
+				this.txtArg.text = "";
+				this.txtAsunto.text = "";
+				lstTemas.dataProvider = new ArrayCollection();
+				lstVisita.dataProvider = new ArrayCollection();
+				_contadorIdTema = 1;
+				if( $dato == null ){
+					agregaConteoEnTema();
+					agregaConteoEnSolicitudes();
+					return;
+				}
+				 if( $dato.temas == null || $dato.temas.length == 0 ){
+					 $dato.temas=new ArrayCollection();
+				} 
+				lstTemas.dataProvider = ObjectUtil.copy($dato.temas) as ArrayCollection;
+				for( var i:int = 0; i < ( lstTemas.dataProvider.length ) ; i++ ){
+					( lstTemas.dataProvider[i] as Temas ).numFila = i+1;
+				}
+				agregaConteoEnTema();
+				 if( $dato.solicitudes == null || $dato.solicitudes.length == 0 ){
+					 $dato.solicitudes = new ArrayCollection();
+				} 
+				lstVisita.dataProvider = ObjectUtil.copy($dato.solicitudes ) as ArrayCollection;
+				agregaConteoEnSolicitudes();
+				if( lstVisita.dataProvider.length > 1){
+					_solicitudSeleccionada = 0;
+					_temaSeleccionado = 0;
+					lstVisita.selectedIndex = 0;
+					seleccionaSolicitudVisita();
+				}
+			}
+			private function agregaTemaALaLista(event:MouseEvent):void{
+				var temaTemporal:Temas = new Temas();
+				if( txtAsuntoTema.text != '' ){
+					temaTemporal.asunto = txtAsuntoTema.text;
+				}else{
+					return;
+				}
+				if( txtArgTema.text != '' ){
+					temaTemporal.argumentos = txtArgTema.text;
+				}else{
+					return;
+				}
+				temaTemporal.idVisita = _vista.idVisita;
+				temaTemporal.idTema = (-1 * _contadorIdTema) ;
+				_contadorIdTema++;
+				eliminaConteoEnTema();
+				lstTemas.dataProvider.addItem( temaTemporal );
+				agregaConteoEnTema();
+				txtAsuntoTema.text = '';
+				txtArgTema.text = '';
+				var eliminados:int = 0;
+				for( var i:int = 0; i < ( lstTemas.dataProvider.length - 1 ) ; i++ ){
+					if( ( lstTemas.dataProvider[i] as Temas ).eliminar){
+						eliminados++
+					}
+					if( !( lstTemas.dataProvider[i] as Temas ).eliminar){
+						( lstTemas.dataProvider[i] as Temas ).numFila = (i+1 - eliminados);
+					}
+				}
+			}
+			private function eliminaConteoEnTema():void{
+				if( lstTemas.dataProvider.length > 0 ){
+					lstTemas.dataProvider.removeItemAt( lstTemas.dataProvider.length - 1 );
+				}
+			}
+			private function agregaConteoEnTema():void{
+				var conteoTemas:Temas = new Temas();
+				var totales:int = 0;
+				for( var i:int = 0; i < ( lstTemas.dataProvider.length) ; i++ ){
+					if( !( lstTemas.dataProvider[i] as Temas ).eliminar){
+						totales++;
+					}
+				}
+				conteoTemas.totalTemas = totales;
+				lstTemas.dataProvider.addItem( conteoTemas );	
+			}
+			private function eliminaConteoEnSolicitudes():void{
+				if( lstVisita.dataProvider.length > 0 ){
+					lstVisita.dataProvider.removeItemAt( lstVisita.dataProvider.length - 1 );
+				}
+			}
+			private function agregaConteoEnSolicitudes():void{
+				var conteoSolicitud:SolicitudVisita = new SolicitudVisita();
+				conteoSolicitud.totalSolicitudes = lstVisita.dataProvider.length;
+				lstVisita.dataProvider.addItem( conteoSolicitud );
+			}
+			private function seleccionaSolicitudVisita():void{
+				if( this.lstVisita.selectedIndex == ( lstVisita.dataProvider.length -1 ) ){
+					this.lstVisita.selectedIndex = _solicitudSeleccionada;
+					return;
+				}
+				_solicitudVisita = new SolicitudVisita();
+				_solicitudVisita  = lstVisita.selectedItem;
+				this.txtArg.text = _solicitudVisita.argumento;
+				this.txtAsunto.text = _solicitudVisita.asunto;
+				lblPrioridad.text = _solicitudVisita.urgencia.toUpperCase();
+				lbldFolioVisita.text = _solicitudVisita.folio;
+				imgCirculoAmarilla.visible = imgCirculoRojo.visible = imgCirculoVerde.visible = false;
+				if( _solicitudVisita.urgencia == 'Alta' ){
+					this.imgCirculoRojo.visible = true;
+					this.lblPrioridad.setStyle('color', '0x'+catalogoColores.LABEL_ROJO);
+				}else if( _solicitudVisita.urgencia == 'Media' ){
+					this.imgCirculoAmarilla.visible = true;
+					this.lblPrioridad.setStyle('color', '0x'+catalogoColores.LABEL_AMARILLO);
+				}else{
+					this.imgCirculoVerde.visible = true;
+					this.lblPrioridad.setStyle('color', '0x'+catalogoColores.LABEL_VERDE);
+				}
+				_solicitudSeleccionada = this.lstVisita.selectedIndex
+			}
+			protected function vgroup1_creationCompleteHandler(event:FlexEvent):void{
+				this.addEventListener( EventoEVGestionarVisitas.EDITA_TEMA_INSPECTOR, editaTema );
+				this.addEventListener( EventoEVGestionarVisitas.ELIMINA_TEMA_INSPECTOR, eliminaTema );
+				
+			}
+			private function editaTema( evt:EventoEVGestionarVisitas ):void{
+				var eliminados:int = 0;
+				this.lstTemas.enabled = false;
+				for( var i:int = 0; i < ( lstTemas.dataProvider.length - 1 ) ; i++ ){
+					if( ( lstTemas.dataProvider[i] as Temas ).idTema == evt.tema.idTema  ){
+						this.txtAsuntoTema.text = ( lstTemas.dataProvider[i] as Temas ).asunto;
+						this.txtArgTema.text = ( lstTemas.dataProvider[i] as Temas ).argumentos;
+					}
+					if( ( lstTemas.dataProvider[i] as Temas ).eliminar){
+						eliminados++
+					}
+					if( !( lstTemas.dataProvider[i] as Temas ).eliminar){
+						( lstTemas.dataProvider[i] as Temas ).numFila = (i+1 - eliminados);
+					}
+				}
+				this.btnGuarda.visible = true;
+				this.btnRegistrar.visible = false;
+				
+			}
+			private function eliminaTema( evt:EventoEVGestionarVisitas ):void{
+				var eliminados:int = 0;
+				eliminaConteoEnTema();
+				for( var i:int = 0; i < ( lstTemas.dataProvider.length  ) ; i++ ){
+					if( ( lstTemas.dataProvider[i] as Temas ).idTema == evt.tema.idTema   ){
+						( lstTemas.dataProvider[i] as Temas ).eliminar = true;
+					}
+					if( ( lstTemas.dataProvider[i] as Temas ).eliminar){
+						eliminados++
+					}
+					if( !( lstTemas.dataProvider[i] as Temas ).eliminar){
+						( lstTemas.dataProvider[i] as Temas ).numFila = (i+1 - eliminados);
+					}
+				}
+				agregaConteoEnTema();
+			}
+			public function regresaListaTemas():ArrayCollection{
+				var $listaTemas:ArrayCollection = new ArrayCollection();
+				$listaTemas = ObjectUtil.copy( lstTemas.dataProvider ) as ArrayCollection;
+				$listaTemas.removeItemAt( $listaTemas.length -1 );
+				for( var i:int = 0; i < $listaTemas.length; i++ ){
+					if( ( $listaTemas[i] as Temas ).idTema < 0 ){
+						( $listaTemas[i] as Temas ).idTema = 0;
+					}
+				}
+				return $listaTemas;
+			}
+			public function regresaListaSolicitudes():ArrayCollection{
+				var $listaSolicitudes:ArrayCollection = new ArrayCollection();
+				$listaSolicitudes = ObjectUtil.copy( lstVisita.dataProvider ) as ArrayCollection;
+				$listaSolicitudes.removeItemAt( $listaSolicitudes.length - 1 );
+				return $listaSolicitudes;
+			}
+			public function validaTemas():Boolean{
+				var valida:Boolean = false;
+				if( lstTemas.dataProvider.length > 1 ){
+					valida = true
+				}
+				return valida;
+			}
+			public function validaSolicitudes():Boolean{
+				var valida:Boolean = true;
+				for(var i:int = 0; i < ( lstVisita.dataProvider.length - 1); i++ ){
+					if(  (lstVisita.dataProvider[i] as SolicitudVisita).argumento == null || (lstVisita.dataProvider[i] as SolicitudVisita).argumento == '' && (lstVisita.dataProvider[i] as SolicitudVisita).asunto == null || (lstVisita.dataProvider[i] as SolicitudVisita).asunto == '' ){
+						valida = false;
+						i =  lstVisita.dataProvider.length;
+					}
+				}
+				return valida;
+			}
+			public function limpiaTemas():void{
+				/* this.botoneraBarra.selectedIndex = 0;;
+				this.botoneraBarraActividad.selectedIndex = 0; */
+				this.lstTemas.dataProvider =  new ArrayCollection();
+				this.lstVisita.dataProvider = new ArrayCollection();
+				this._vista = new Visita();
+				this.lstTemas.enabled = true;
+				this.txtArgTema.text = "";
+				this.txtAsuntoTema.text = "";
+				agregaConteoEnSolicitudes();
+				agregaConteoEnTema();
+			}
+			public function salirComponentes():void{
+				this.botoneraBarra.selectedIndex = 0;;
+				this.botoneraBarraActividad.selectedIndex = 0;
+				this.lstTemas.dataProvider =  new ArrayCollection();
+				this.lstVisita.dataProvider = new ArrayCollection();
+				this._vista = new Visita();
+				this.lstTemas.enabled = true;
+				agregaConteoEnSolicitudes();
+				agregaConteoEnTema();
+				mostrarActividad();
+				mostrarQuienSolicita();
+			}
+			public function txtAsunto_changeHandler(event:EventoGenerico):void{
+				_solicitudVisita.asunto = event.text;
+				for( var i:int = 0; i < ( lstVisita.dataProvider.length - 1 ) ; i++ ){
+					if( ( lstVisita.dataProvider[i] as SolicitudVisita ).idSolicitudVisita == _solicitudVisita.idSolicitudVisita  ){
+						( lstVisita.dataProvider[i] as SolicitudVisita ).asunto = this.txtAsunto.text	
+					}
+				}
+			}
+			public function txtArg_changeHandler(event:EventoGenerico):void{
+				_solicitudVisita.argumento = txtArg.txtTexto.text;
+				for( var i:int = 0; i < ( lstVisita.dataProvider.length - 1 ) ; i++ ){
+					if( ( lstVisita.dataProvider[i] as SolicitudVisita ).idSolicitudVisita == _solicitudVisita.idSolicitudVisita  ){
+						( lstVisita.dataProvider[i] as SolicitudVisita ).argumento = this.txtArg.text;	
+					}
+				}
+			}
+			private function actualizaTema():void{
+				if( this.txtAsuntoTema.text!= null  && this.txtArgTema.text != '' && this.txtAsuntoTema.text!= null  && this.txtAsuntoTema.text != '' ){
+					(this.lstTemas.selectedItem as Temas).asunto =  this.txtAsuntoTema.text;
+					(this.lstTemas.selectedItem as Temas).argumentos = this.txtArgTema.text;
+					this.txtArgTema.text = '';
+					this.txtAsuntoTema.text = '';
+					this.btnGuarda.visible = false;
+					this.btnRegistrar.visible = true;
+					this.lstTemas.enabled = true;
+				}else{
+					alertaSingleton.show('Son obligatorios el asunto y el argumento', catalogoAlertas.TIT_ADV_informacionIncompleta );
+				}
+				
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup  	horizontalAlign="center">
+		<s:Spacer height="8"/>
+		<botonesToggle:ButtonBarColores  width="320" height="30" id="botoneraBarraActividad" selectedIndex="0" dataProvider="{_arrButtonActividad}"
+										 change="mostrarActividad()" creationComplete="this.botoneraBarra.selectedIndex = 0;"/>
+		<s:Spacer height="8"/>
+		<otros:division width="100%"/>
+		<s:Group width="100%" height="100%" id="groupGeneral" >
+			<s:VGroup width="100%" height="100%" id="groupPlanificacion" paddingBottom="15" paddingTop="15">
+				<s:HGroup width="100%">
+					<s:Label fontSize="17" fontWeight="bold" text="TEMAS"/>
+					<s:Spacer width="100%"/>
+					<botonesToggle:ButtonBarColores  width="320" height="30" id="botoneraBarra" selectedIndex="0" dataProvider="{_arrButton}"
+													 change="mostrarQuienSolicita()" creationComplete="this.botoneraBarra.selectedIndex = 0;"/>
+				</s:HGroup>
+				<s:Spacer height="8"/>
+				<otros:divisionHueca width="100%"/>
+				<s:Spacer height="8"/>
+				<s:Group width="100%" height="100%">
+					<s:HGroup width="100%" height="100%" id="grpSolicitante" visible="true">
+						<s:List width="50%" height="100%" mouseDown="seleccionaSolicitudVisita()" borderVisible="false" horizontalScrollPolicy="off" 
+								itemRenderer="vista.vistas.ev_AsesorDeVentaReqMovil.itemRendererGestionarVisitas.inspector.AsesorVentas_IR_Inspector_Solicitudes" id="lstVisita"/>
+						<s:Spacer width="10"/>
+						<otros:VDivisionHueca height="100%"/>
+						<s:Spacer width="10"/>	
+						<s:VGroup width="50%" height="100%">
+							<s:HGroup width="100%" verticalAlign="middle">
+								<s:Label id="lbldFolioVisita" fontSize="16" color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+								<s:Spacer width="100%"/>
+								<s:Label id="lblPrioridad" fontSize="16" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+								<s:Group >
+									<s:Image source="{catalogoIconosGrid.getInstance().render_circuloRojo}" id="imgCirculoRojo"/>
+									<s:Image source="{catalogoIconosGrid.getInstance().render_circuloNaranja}" id="imgCirculoAmarilla" visible="false"/>
+									<s:Image source="{catalogoIconosGrid.getInstance().render_circuloVerde}" id="imgCirculoVerde" visible="false"/>
+								</s:Group>
+							</s:HGroup>
+							<s:Spacer height="8"/>
+							<otros:divisionHueca width="100%"/>
+							<s:Spacer height="8"/>
+							<textInputBordeadopPQNet:TextInputConBordePunteado width="100%" height="25%" text="{_solicitudVisita.asunto}" maxLength="60" obligatorio="true" paddingRight="3"
+																			   prompt="Registra aquí el ASUNTO de la solicitud ( máximo 60 caracteres)"  id="txtAsunto" changeTextInputBordeado="txtAsunto_changeHandler(event)" />
+							<s:Spacer  height="4%"/>
+							<textInputBordeadopPQNet:TextInputConBordePunteado width="100%" height="75%" text="{_solicitudVisita.argumento}" obligatorio="true" paddingRight="3"
+																		  	   prompt="Registra aquí los ARGUMENTOS del tema" id="txtArg" changeTextInputBordeado="txtArg_changeHandler(event)"/>
+						</s:VGroup>
+					</s:HGroup>
+					<s:HGroup width="100%" height="100%" id="grpEv" visible="false" >				
+						<s:VGroup width="50%" height="100%" horizontalAlign="center">
+							<textInputBordeadopPQNet:TextInputConBordePunteado width="100%" height="25%" prompt="Registra aquí el ASUNTO del tema ( máximo 60 caracteres)" obligatorio="true"  
+																			   maxLength="60" id="txtAsuntoTema" minHeight="30" paddingLeft="3"/>
+							<s:Spacer height="4%"/>
+							<textInputBordeadopPQNet:TextInputConBordePunteado width="100%" height="75%" prompt="Registra aquí los ARGUMENTOS del tema" obligatorio="true" 
+																			   id="txtArgTema" minHeight="30" paddingLeft="3"/>
+							<s:Spacer height="7"/>
+							<otros:divisionHueca width="100%"/>
+							<s:Spacer height="4"/>
+							<s:Group >
+								<pqNet:botonPqNetLargo label="Registrar" click="agregaTemaALaLista(event)" id="btnRegistrar"/>
+								<pqNet:botonPqNetLargo label="Actualizar" visible="false" click="actualizaTema() ; btnRegistrar.visible = true; btnGuarda.visible = false;" id="btnGuarda"/>
+							</s:Group>
+						</s:VGroup>	
+						<s:Spacer width="10"/>
+						<otros:VDivisionHueca height="100%"/>
+						<s:Spacer width="10"/>
+						<s:VGroup width="50%" height="100%">
+							<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" 
+									itemRenderer="vista.vistas.ev_AsesorDeVentaReqMovil.itemRendererGestionarVisitas.inspector.AsesorVentas_IR_Inspector_Temas" id="lstTemas"/>
+						</s:VGroup>
+					</s:HGroup>
+				</s:Group>
+			</s:VGroup>
+			<s:VGroup width="100%" height="100%" id="groupSolicitudes" visible="false" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+				<componentesInspector:AsesorVentas_Inspector_TemasGrid />
+			</s:VGroup>
+		</s:Group>
+	</s:VGroup>
+</s:Scroller>

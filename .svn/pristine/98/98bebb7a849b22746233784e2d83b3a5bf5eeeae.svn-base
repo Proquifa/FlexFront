@@ -1,0 +1,603 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas creationComplete="init()" xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" xmlns:componentesExtras="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.componentesExtras.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:pqNet="skins.botones.pqNet.*">
+	<mx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteAsociado;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoPonderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.IncidentePonderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Ponderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.PonderacionImplicado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.Archivo;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.IncidenteImplicado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.seleccionador;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable]
+			public var _incidente:Incidente = new Incidente();
+			
+			private var _cmbSeleccionador:seleccionador = null;
+			public var referenciasActuales:ArrayCollection = new ArrayCollection();
+			public var referenciasEliminadas:ArrayCollection = new ArrayCollection();
+			public var _incidenteantesDCambio:Incidente = new Incidente();
+			
+			private var consecutivogrid:int = 0;
+			
+			private var productorAsociado:Producer = new Producer();
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet; 
+			[Bindable]
+			private var _listaEficacia:ArrayCollection = new ArrayCollection([{valor:'-- --', llave:0 },{valor:1, llave:1 },{valor:2, llave:2},
+				{valor:3, llave:3},{valor:4, llave:4},{valor:5, llave:5}]);
+			
+			private function init():void{
+				//para quitar la eficacia se deben de comentar las siguientes  lineas 
+				/*  this.visorgrid.addEventListener(EventoPonderacion.TRAER_IMPLICADOS_PONDERACION,cambiarchild); */
+				this.addEventListener(EventoPonderacion.REGRESAR_EFICIENCIA_PONDERACION,cambiarchild);  
+				/////////////fin//////////////////////
+				this.productorAsociado.destination = "actualizacionService";
+				this.productorAsociado.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAsociado = new ChannelSet();
+				this.canalesAsociado.addChannel(canalAsociado);
+				this.productorAsociado.channelSet = this.canalesAsociado;
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de registro de incidente asociado","Error");
+			}
+			//para quitar la eficacia se deben de comentar las siguientes  lineas 
+			  private function cambiarchild(evento:EventoPonderacion):void{
+				/* if(evento.type == EventoPonderacion.TRAER_IMPLICADOS_PONDERACION){
+					this.visorgrid.selectedChild = vistaimplicados;
+				} */
+				if(evento.type == EventoPonderacion.REGRESAR_EFICIENCIA_PONDERACION){
+					/* this.vistaeficiencia._incidente.implicados = evento._ponderacion.implicados;
+					this.visorgrid.selectedChild = vistaeficiencia; */
+					this._incidenteEficacia.implicados = evento._ponderacion.implicados;
+				}
+			}  
+			/////////////fin//////////////////////
+			
+			public function consecutivos():String{
+				this.consecutivogrid = this.consecutivogrid + 1;
+				return this.consecutivogrid.toString();
+			}
+			
+			public function set recibir_IncidenteSeleccionado(incidente:Incidente):void{
+				this.consecutivogrid = 0;
+				this.btnfinalizar.enabled = false;
+				if(isNaN(incidente.idIncidente) == false){
+					if(incidente.idIncidente != 0){
+						this._incidente = incidente;
+						var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.TRAER_PONDERACION_CON_INCIDENTE);
+						evento._incidente = this._incidente;
+						this.dispatchEvent(evento);
+					}
+				}
+				this.cargarComboNavegacion();
+			}
+			
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				if( this._incidente.referencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._incidente.referencias.source.length ; i++ ){
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._incidente.referencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._incidente.referencias ) as ArrayCollection;				
+				}
+				this._cmbSeleccionador.empleadoLogueado = new Empleado();
+				this._cmbSeleccionador.empleadoLogueado.usuario = "PLozada";
+				this._cmbSeleccionador.idIncidente = this._incidente.idIncidente
+				this._cmbSeleccionador.folioIncidente = this._incidente.folio;
+				this._cmbSeleccionador.vieneDe = "url";
+				this.contenedorCombo.addChild( this._cmbSeleccionador );
+			}
+			
+			private function salir():void{
+				this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorAsociado.send(mensaje);
+				var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.TRAER_PONDERACION);
+				evento._usuario = DatosGlobales.getInstance()._usuario.usuario;
+				this.dispatchEvent(evento);
+				//prueba 1
+				if( this.vistaimplicados != null ){
+					this.vistaimplicados._ponderacion = new Ponderacion();
+					this.vistaimplicados.promedio = 0;
+					this.vistaimplicados._ponderacionTemp = new PonderacionImplicado();
+					this.vistaimplicados._quedaVacia = false;
+				}
+				//para quitar la eficacia se deben de comentar las siguientes  lineas 
+				/*  if( this.vistaeficiencia != null){
+					this.vistaeficiencia._incidente = new IncidentePonderacion();
+					this.vistaeficiencia.promedio = 0;
+				}  */
+				/////////////fin//////////////////////
+				this.rbconforme.selected = false;
+				this.rbnoconforme.selected = false;
+			}
+			
+			public function actualizarPonderacion(event:MouseEvent):void{
+				if(event.currentTarget.id == "btnguardar"){
+					var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.ACTUALIZAR_PONDERACION);
+					this.vistaimplicados.borrarvacios();
+					//para quitar la eficacia se deben de comentar las siguientes  lineas 
+					evento._ponderacion = this._incidenteEficacia.get_Ponderacion(); 		
+					if( this._incidenteEficacia.implicados.length == 1 &&  this._incidenteEficacia.implicados[0].usuario == ''){
+						evento._ponderacion.implicados = null;
+					}else{
+						evento._ponderacion.implicados = this._incidenteEficacia.implicados; 	
+					}	
+					evento._ponderacion.folio = this.ponderacion.folio;
+					evento._ponderacion.eficaciaGlobalReal = this.cmbEficacia.selectedItem.valor;
+					/* evento._ponderacion.implicados = this.vistaimplicados._ponderacion.implicados; */	
+					/////////////fin//////////////////////
+					evento.accion = "guardar";
+					evento._ponderacion.acuerdoS = "nulo";
+					evento._ponderacion.archivo = this.ponderacion.archivo;
+					if( this.lblCNCFormato.text == ''){
+						evento._ponderacion.realCNC = 0;
+					}else{
+						var cantTemp:String = this.lblCNCFormato.text.split(",").join("");
+						evento._ponderacion.realCNC = parseFloat( cantTemp );
+					}
+					//para quitar la eficacia se deben de comentar las siguientes  lineas 
+					/* evento._ponderacion.eficaciaGlobalReal = this.vistaeficiencia.promedio; */
+					//evento._ponderacion.eficaciaGlobalReal = this.promedioEficacia; 
+					/////////////fin//////////////////////	
+					evento._ponderacion.montoTotalGlobal = this.vistaimplicados.promedio;
+					this.dispatchEvent(evento);
+					this.dispatchEvent(new EventoEsperar( EventoEsperar.INICIA_ESPERA ));
+					 /* this.vistaimplicados.rellenarSiEsVacia(; */
+				}
+				
+				if(event.currentTarget.id ==  "btnfinalizar"){
+					//evento.accion = "actualizar";
+					
+					if(this.vistaimplicados._ponderacion.implicados.length != 0){
+						/*Alert.show("Seleccione implicados para la ponderación");
+						this.btnfinalizar.enabled = false;
+						return;*/
+						for(var m:int = 0; m< this.vistaimplicados._ponderacion.implicados.length;m++){
+							if(this.vistaimplicados._ponderacion.implicados[m].razones == ""){
+								Alert.show("Complete la información de los implicados");
+								this.btnfinalizar.enabled = false;
+								return;
+							}
+						}
+					}
+					
+					if(this.rbconforme.selected == false && this.rbnoconforme.selected == false){
+						Alert.show("Por favor seleccione si esta de acuerdo sobre la eficacìa del incidente ponderado");
+						return;
+					}
+					this.alertEjecutar();
+				}
+				
+			}
+			
+			
+			private function alertEjecutar():void{
+				Alert.yesLabel = "Si";
+				Alert.noLabel = "No";
+				if(this.rbconforme.selected){
+					Alert.show("Ha establecido estar DEACUERDO con eficacia global obtenida y en lo futuro no  podrá alterar su decisión ¿Desea continuar?","ACUERDO",Alert.NO|Alert.YES,this,validarejecucion);
+				}
+				
+				if(this.rbnoconforme.selected){
+					Alert.show("Ha establecido estar en DESACUERDO con la eficacia global obtenida y en lo futuro no podrá alterar su decisión ¿Desea continuar?","DESACUERDO",Alert.NO|Alert.YES,this,validarejecucion);
+				}
+				//Alert.show("Una vez confirmada su 'PONDERACIÓN' no podrá modificarla posteriormente, ¿Desea continuar?","¡Atención!",Alert.NO|Alert.YES,this,validarejecucion);
+			}
+			
+			private function validarejecucion(event:CloseEvent):void{
+				
+				event.currentTarget.title == "ACUERDO";
+				event.currentTarget.title == "DESACUERDO";
+				pdfGuardado = true;
+				if(event.detail == 1){
+					if(event.currentTarget.title == "ACUERDO"){
+						//Alert.show("Ejecutar");
+						var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.ACTUALIZAR_PONDERACION);
+						this.vistaimplicados.borrarvacios();
+						//para quitar la eficacia se deben de comentar las siguientes  lineas 
+						 /* evento._ponderacion = this.vistaeficiencia._incidente.get_Ponderacion(); */ 
+						/* evento._ponderacion.implicados = this.vistaimplicados._ponderacion.implicados; */
+						 evento._ponderacion = this._incidenteEficacia.get_Ponderacion(); 
+						 if( this._incidenteEficacia.implicados.length == 1 &&  this._incidenteEficacia.implicados[0].usuario == ''){
+							 evento._ponderacion.implicados = null;
+						 }else{
+							 evento._ponderacion.implicados = this._incidenteEficacia.implicados; 	
+						 }
+						 evento._ponderacion.folio = this.ponderacion.folio;
+						/////////////fin//////////////////////
+						evento.accion = "actualizar";
+						evento._ponderacion.acuerdoS = "true";
+						evento._ponderacion.acuerdo = true;
+						evento._ponderacion.completa = true;
+						//para quitar la eficacia se deben de comentar las siguientes  lineas 
+						/* evento._ponderacion.eficaciaGlobalReal = this.vistaeficiencia.promedio; */ 
+						//evento._ponderacion.eficaciaGlobalReal = this.promedioEficacia; 
+						evento._ponderacion.eficaciaGlobalReal = this.cmbEficacia.selectedItem.valor;
+						/////////////fin//////////////////////
+						evento._ponderacion.montoTotalGlobal = this.vistaimplicados.promedio;
+						evento._ponderacion.archivo = this.ponderacion.archivo;
+						if( this.lblCNCFormato.text == ''){
+							evento._ponderacion.realCNC = 0;
+						}else{
+							var cantTemp:String = this.lblCNCFormato.text.split(",").join("");
+							evento._ponderacion.realCNC = parseFloat( cantTemp );
+						}
+						this.dispatchEvent(evento);
+						this.dispatchEvent(new EventoEsperar(EventoEsperar.INICIA_ESPERA));
+					}
+					if(event.currentTarget.title == "DESACUERDO"){
+						var evento2:EventoPonderacion = new EventoPonderacion(EventoPonderacion.ACTUALIZAR_PONDERACION);
+						this.vistaimplicados.borrarvacios();
+						//para quitar la eficacia se deben de comentar las siguientes  lineas 
+						/* evento2._ponderacion = this.vistaeficiencia._incidente.get_Ponderacion(); */ 
+						/* evento2._ponderacion.implicados = this.vistaimplicados._ponderacion.implicados; */
+						evento2._ponderacion = this._incidenteEficacia.get_Ponderacion();  
+						if( this._incidenteEficacia.implicados.length == 1 &&  this._incidenteEficacia.implicados[0].usuario == ''){
+							evento._ponderacion.implicados = null;
+						}else{
+							evento._ponderacion.implicados = this._incidenteEficacia.implicados; 	
+						}
+						evento._ponderacion.folio = this.ponderacion.folio;
+						evento._ponderacion.eficaciaGlobalReal = this.cmbEficacia.selectedItem.valor;
+						/////////////fin//////////////////////
+						evento2._ponderacion.folioIncidente = this._incidente.folio;
+						evento2._ponderacion.acuerdoS = "false";
+						evento2.accion = "actualizar";
+						//para quitar la eficacia se deben de comentar las siguientes  lineas 
+						/* evento2._ponderacion.eficaciaGlobalReal = this.vistaeficiencia.promedio; */ 
+						 evento2._ponderacion.eficaciaGlobalReal = this.promedioEficacia; 
+						 evento._ponderacion.archivo = this.ponderacion.archivo;
+						 if( this.lblCNCFormato.text == ''){
+							 evento._ponderacion.realCNC = 0;
+						 }else{
+							 var cantTemp2:String = this.lblCNCFormato.text.split(",").join("");
+							 evento._ponderacion.realCNC = parseFloat( cantTemp2 );
+						 }
+						/////////////fin//////////////////////
+						evento2._ponderacion.montoTotalGlobal = this.vistaimplicados.promedio;
+						this.dispatchEvent(evento2);
+						this.dispatchEvent(new EventoEsperar(EventoEsperar.INICIA_ESPERA));
+					}
+				}
+					
+			}
+			
+			/*public function set recibir_actualizarponderacion(resultado:Boolean):void{
+			this.btnfinalizar.enabled = resultado;
+			}*/
+			
+			
+			public function set recibir_actualizarponderacion(resultado:Object):void{
+				if(resultado.bandera == "guardar"){
+					//para quitar la eficacia se deben de comentar las siguientes  lineas 
+					/* this.vistaeficiencia._incidente.idPonderacion = resultado["ponderacion"].idPonderacion; */  //ya no se usa la vistaeficiencia 
+					 this._incidenteEficacia.idPonderacion =  resultado["ponderacion"].idPonderacion;  //linea puesta por osva para sustituir la pasada
+					 this.ponderacion = resultado["ponderacion"];
+					/////////////fin//////////////////////
+					this.btnfinalizar.enabled = resultado.permitir; 
+					//para quitar la eficacia se deben de comentar las siguientes  lineas 
+					/* this.vistaeficiencia._incidente.completa = resultado.permitir;  */
+					this._incidenteEficacia.completa = resultado.permitir;  //linea puesta por osva para sustituir la pasada
+					/////////////fin//////////////////////
+					Alert.show("Se actualizó la ponderación del incidente: " + this._incidente.folio ,"Operación Exitosa");
+				}
+				if(resultado.bandera == "actualizar"){
+					if(resultado["ponderacion"].acuerdoS == "true"){
+						this.salir();
+					}
+					if(resultado["ponderacion"].acuerdoS == "false"){
+						var evento:EventoIncidenteAsociado = new EventoIncidenteAsociado(EventoIncidenteAsociado.EVENTO_ASOCIADO_PONDERACION);
+						evento._ponderacion = resultado["ponderacion"] as Ponderacion;
+						evento._ponderacion.folioIncidente = this._incidente.folio;
+						evento._ponderacion.referencias = this._incidente.referencias;
+						this.dispatchEvent(evento);
+					}
+				}
+				this.dispatchEvent(new EventoEsperar(EventoEsperar.TERMINA_ESPERA));
+				this.vistaimplicados.rellenarSiEsVacia();
+				/* var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorAsociado.send(mensaje); */
+			}
+			
+			///////////////////////////////////////////////// Referencias ////////////////////////////////////////////////////////////
+			
+			private var PopUpRef:PopUpReferencias;
+			//private var numInvocaciones:int= 0;
+			
+			private function referencias(accion:String):void{
+				for(var m:int = 0; m<this._incidente.referencias.length;m++){
+					this._incidente.referencias[m].nombreArchivo = this._incidente.referencias[m].folio;
+					this._incidente.referencias[m].numFila = m + 1;
+				}
+				
+				PopUpRef = new PopUpReferencias();
+				this.PopUpRef = PopUpManager.createPopUp(this,PopUpReferencias,true) as PopUpReferencias;
+				this.PopUpRef.listaReferencias = this._incidente.referencias;
+				this.PopUpRef.referenciasEliminadas = new ArrayCollection();
+				//this.PopUpRef.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTIO_DE_REFERENCIAS_INCIDENTE,agregarreferencias);
+				this.PopUpRef.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cerrarpopup);
+				if(accion == "modificar"){
+					this.PopUpRef.btnAdjunto.enabled = true;
+				}
+				if(accion == "consultar"){
+					this.PopUpRef.btnAdjunto.enabled = false;
+				}
+				this.PopUpRef.Origen = "Ponderación";
+				this.PopUpRef.vieneD = "url";
+			}
+			
+			public function cerrarpopup(event:EventoIncidente):void{
+				this.PopUpRef.removeEventListener(EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE,cerrarpopup);
+				this.PopUpRef.visible = false;
+				this.PopUpRef = null;
+			}
+			
+			public function set regresarIncidenteTerminado(regresarA:String):void{
+				if(regresarA == null || regresarA ==""){
+					return;
+				}
+				this.salir();
+			}
+			
+			
+			/////////////////////////////////////////////////////////////////////  modificaciones de Osva para quitar eficacia	/////////////////////////////////////////////////////////////////////
+			[Bindable]
+			public var _incidenteEficacia:IncidentePonderacion = new IncidentePonderacion();
+			[Bindable]
+			public var promedioEficacia:Number = 0;
+			[Bindable]
+			public var ponderacion:Ponderacion;
+			private var pdfGuardado:Boolean;
+			public function set recibir_PonderacionIncidente(_ponderacion:Ponderacion):void{
+				this._incidenteEficacia = new IncidentePonderacion();
+				this._incidenteEficacia.set_Ponderacion(_ponderacion);
+				this.promedioEficacia = 0;
+				if(!(isNaN(this._incidenteEficacia.idPonderacion))){
+					if((this._incidenteEficacia.incidente != 0) || (this._incidenteEficacia.idIncidente != 0) ){
+						calcularpromedio();
+					}
+				}
+				this.ponderacion = new Ponderacion();
+				this.ponderacion = _ponderacion;
+				var indice:int = Util.indiceSeleccionadoComoObjetoEIdLlave(_listaEficacia , this.ponderacion.eficaciaGlobalReal );
+				if(isNaN(indice)   || indice == -1   || indice == -1 ){
+					indice = 0; 
+				}
+				this.cmbEficacia.selectedIndex = indice
+					
+				if( this.ponderacion.folio != null ){
+					this.lnkDocto.enabled = true;
+				}else{
+					this.lnkDocto.enabled = false;
+				}
+				pdfGuardado = true;
+			}
+			
+			private function calcularpromedio():void{
+				this.promedioEficacia = 0.0;
+				var temp:Number = 0.0;
+				for(var m:int = 0;m< this._incidenteEficacia.acciones.length;m++){
+					temp = temp + this._incidenteEficacia.acciones[m].eficaciaReal;
+				}
+				this.promedioEficacia = temp / this._incidenteEficacia.acciones.length;
+				cargarimplicados();
+			}
+			
+			private function cargarimplicados():void{
+				var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.TRAER_IMPLICADOS_PONDERACION);
+				evento._ponderacion = this._incidenteEficacia.get_Ponderacion();
+				this.dispatchEvent(evento);
+			} 
+			
+			[Bindable]
+			private var _file:File = null;
+			/**
+			 * En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			 * nativePath o ruta (donde se podra obtener el nombre sel archivo)  y el ByteArray)
+			 */ 
+			private function buscarArchivo():void{
+				_file = new File();
+				_file.addEventListener(Event.SELECT, selectHandler);
+				_file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				_file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				_file.addEventListener(Event.COMPLETE,completeHandler);
+				_file.browse();
+			}
+			
+			private function selectHandler(event:Event):void {
+				var files:FileReference = FileReference(event.target);
+				files.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void {
+				var files:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + files.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				creaDocto();
+			}
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 */ 
+			
+			/**
+			 * Metodo para crear un docto pdf en bytes
+			 */ 
+			private function creaDocto():void{
+				this.ponderacion.archivo = new Archivo();
+				this.ponderacion.archivo.cadenaDeBytes = this._file.data;
+				this.ponderacion.archivo.extension = this._file.extension;
+				this.ponderacion.archivo.folio =  this._file.name.substring( 0,this._file.name.length-4) ;
+				if( this.ponderacion.archivo != null ){
+					this.lnkDocto.enabled = true;
+				}else{
+					this.lnkDocto.enabled = false;
+				}
+				pdfGuardado = false;
+			}
+			
+			/**
+			 * valida cncReal vivible y editable
+			 */
+			/* private function validaLblCNC():void{
+				lblCNCFormato.visible= true;lblCNCFormato.width = 120;
+				CNCEditable.visible= false; 
+				if( CNCEditable.text == '' ){ this.CNCEditable.setFocus(); alertaSingleton.show("CNC obligatorio",catalogoAlertas.TIT_ADV_informacionIncompleta) } 
+				this.ponderacion.cncReal = parseFloat( CNCEditable.text );			
+			}
+			
+			public function switchAtextoEditableCNC():void{
+				lblCNCFormato.visible= false; lblCNCFormato.width = 0;
+				CNCEditable.visible= true; this.CNCEditable.setFocus();
+			} */
+			/**
+			 * funcion apra mostrar el pdf
+			 */ 
+			private function verPdf():void{
+				if(	pdfGuardado){
+					var url:URLRequest = new URLRequest( RutasPdF.GENERAL_RUTA + RutasPdF.IncPONDERACION_RUTA + ponderacion.folio + '.pdf');
+					navigateToURL( url );
+				}else{
+					var carpetaLocal:URLRequest = new URLRequest('file://' + this._file.nativePath);
+					navigateToURL( carpetaLocal );	
+				}	
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:VBox height="100%" width="100%">
+		<mx:HBox fontSize="30" paddingTop="10" paddingBottom="10" width="100%" fontWeight="normal">
+			<!--<mx:Label width="50%" text="Ponderación" fontWeight="bold" fontSize="40"/>-->
+			<label:labelTitulo_Otros width="50%" text="Ponderación"/>
+			<mx:Label width="50%" text="COMBO" textAlign="right" click="this.referencias('consultar')" visible="false"/>
+			<mx:Label text="{this._incidente.folio}" visible="false"/>
+			<mx:HBox id="contenedorCombo"/>
+		</mx:HBox>
+		
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<!--<mx:Label width="100%" fontSize="25" text="Datos generales" fontWeight="bold"/>-->
+		<label:labelSubtitulo text="Datos generales" width="100%"/>
+		<mx:HBox horizontalAlign="center" horizontalCenter="0" width="100%">
+			<mx:Form width="50%" >
+				<mx:FormItem fontWeight="bold" label="Fecha:">
+					<mx:Label fontWeight="normal" text="{this._incidente.fecha.getDate() + '/' + (this._incidente.fecha.getMonth() + 1).toString() + '/' + this._incidente.fecha.getFullYear() }" width="120"/>
+				</mx:FormItem>
+				<mx:FormItem  fontWeight="bold"  label="Gestión:">
+					<mx:Label fontWeight="normal" text="{parentApplication.datosUsuarioLogueado.usuario}" width="120"/>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:Form  width="50%">
+				<mx:FormItem fontWeight="bold"   label="Documento:" required="false">
+					<s:HGroup width="150">
+						<s:Button styleName="botonNegroOld" click="buscarArchivo()" id="btnAdjunto" label="Adjunto" width="80"/>
+					 	<mx:LinkButton label="Ver" id="lnkDocto" color="0x{catalogoColores.LABEL_VERDE_AZUL}" textDecoration="underline" click="verPdf()"/>
+					</s:HGroup>
+				</mx:FormItem>
+				<mx:FormItem fontWeight="bold"   label="Eficacia:" required="false">
+					<s:ComboBox width="110" dataProvider="{ _listaEficacia }" labelField="valor" id="cmbEficacia"/>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:Form  width="50%">
+				<mx:FormItem fontWeight="bold"   label="CNC Real: $ " required="false">
+					<s:HGroup verticalAlign="bottom">
+						<s:TextInput  fontWeight="normal" text=" { UtilsFormatosNumericos.precisionADosDecimalesConComas( this.ponderacion.realCNC )}" id="lblCNCFormato" restrict="0-9." />
+						<!--click="switchAtextoEditableCNC()"-->
+						<!--<s:TextInput  fontWeight="normal" text=" { ( this.ponderacion.cncReal )}" restrict="0-9." visible="false" id="CNCEditable"
+									 enter="validaLblCNC()" toolTip="Al finalizar presiona Enter"/>-->
+						<s:Label text="{ (this.ponderacion.realCNC == 1 ? 'peso':'pesos') }" id="lblPesos" />
+					</s:HGroup>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:HBox>
+		
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<componentesExtras:ImplicadosPonderacion id="vistaimplicados">
+			
+		</componentesExtras:ImplicadosPonderacion>
+		<!--<mx:ViewStack id="visorgrid" height="100%" width="100%" >
+			<componentesExtras:ImplicadosPonderacion id="vistaimplicados">
+			
+			</componentesExtras:ImplicadosPonderacion>
+			<componentesExtras:EficienciaPonderacion id="vistaeficiencia">
+				
+			</componentesExtras:EficienciaPonderacion>
+		</mx:ViewStack>	-->
+		
+		<mx:HRule width="100%"/>
+		
+		<mx:VBox width="100%">
+			<!--<mx:Label width="100%" text="Sobre indicente ponderado" fontSize="25" fontWeight="bold"/>-->
+			<label:labelSubtitulo width="100%" text="Sobre indicente ponderado" />
+			<mx:RadioButton id="rbconforme" width="100%"
+							label="DE ACUERDO: La eficacia global obtenida sobre las acciones del incidente NO amerita generar un incidente asociado"
+							groupName="rbgroup"/>
+			<mx:RadioButton id="rbnoconforme" width="100%"
+							label="DESACUERDO: La eficacia global obtenida sobre las acciones del incidente SI amerita generar un incidente asociado"
+							groupName="rbgroup"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%"/>
+			<mx:HBox width="100%">
+				<!--<mx:Button label="Salir" click="salir()" width="80"/>-->
+				<s:Button styleName="botonNegroOld" label="Salir" click="salir()" width="80"/>
+				<mx:HRule width="100%" strokeWidth="0"/>
+				<s:Button styleName="botonNegroOld" id="btnguardar" label="Guardar" horizontalCenter="0" click="actualizarPonderacion(event)" width="80"/>
+				<mx:HRule strokeWidth="0" width="100%"/>
+				<s:Button styleName="botonNegroOld" id="btnfinalizar" enabled="false" label="Finalizar" click="actualizarPonderacion(event)" width="80"/>
+			</mx:HBox>
+		</mx:VBox>
+		
+	</mx:VBox>
+</mx:Canvas>

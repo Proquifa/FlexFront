@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" paddingBottom="30" paddingTop="30" paddingLeft="40" paddingRight="40" creationComplete="bloqueMensajeEsac()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.skin.datagrid.pqNet.*" xmlns:salir="skins.botones.salir.*" xmlns:envia="skins.botones.envia.*" xmlns:guardar="skins.botones.guardar.*" xmlns:largo="skins.botones.largo.*" xmlns:rechazo="skins.botones.rechazo.*" xmlns:botonesToggle="skins.botonesToggle.*" xmlns:pqNet1="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProveedoresConPAC;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaContactoService;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RequisicionPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.alertPqNet.alertPqNet;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import spark.components.ButtonBarButton;
+			import spark.events.IndexChangeEvent;
+			private var _componenteStackInspector:StackInspector;
+			private var _idPartidaSeleccionada:int;
+			[Bindable]
+			public var _opcionSeleccionada:PartidaConfirmacion;
+			[Bindable]
+			private var _requisicion:RequisicionPhs;
+			[Bindable]
+			private var file:File = null;
+			private var _salir:Boolean;
+			private var _seDirigeA:String = "";
+			private var _rechazado:Boolean;
+			private var _bloqueBotonMensaje:Boolean;
+			[Bindable]
+			public var _datosBarraBoton:ArrayCollection = new ArrayCollection([{label:"ESAC", icono:"esac"},{label:"Precio",icono:"precio"},{label:"Disponibilidad",icono:"disponibilidad"},
+																				{label:"Manejo",icono:"manejo"},{label:"Adicionales",icono:"adicionales"}]);
+			/**
+			 * Funcion que inicia el componente cuando vienes de la vista de planificacion. $proveedor Seleccionado es el proveddor del cual se trabajaran las 
+			 * reuqisiciones y requisicion es la requisicion seleccionada en un nivel superior (planificacion ) 
+			 */ 
+			public function iniciaComponente($proveedorSeleccionado:Object, $requisicion:RequisicionPhs, $rechazado:Boolean):void{
+				this._rechazado = $rechazado;
+				_salir = false;
+				_seDirigeA = "";
+				reiniciaComponenteStackInspector();
+				this._requisicion = new RequisicionPhs;
+				this._requisicion = $requisicion;
+				this._opcionSeleccionada = new PartidaConfirmacion;
+				this._opcionSeleccionada = $proveedorSeleccionado as PartidaConfirmacion;
+				if(_rechazado == false){
+					this.lblProveedorsPAC.text = "[PROVEEDORES CON PAC]";
+				}else{
+					this.lblProveedorsPAC.text = "[PROVEEDORES CON PAC RECHAZADOS]";
+				}
+				if( _requisicion.medio == "Telefono"){
+					this.lblRequisicionyMedio.text = _requisicion.folio + " · Teléfono";
+				}else{
+					this.lblRequisicionyMedio.text = _requisicion.folio + " · E-Mail";
+				}
+				if(_requisicion.partidas.length > 0 ){
+					this.list.selectedIndex = 0;
+					this.list.setFocus();
+				}
+				actualizaDatosDelStack();
+				this.addEventListener( EventoProveedoresConPAC.CAMBIA_ESTATUS_PARTIDA, cambiaEstatus );
+				var btnBar:ButtonBarButton = btnBarra.dataGroup.getElementAt(0) as ButtonBarButton;
+				if(_bloqueBotonMensaje){
+					if( (this.list.selectedItem as PartidaConfirmacion).comentariosESAC != null && (this.list.selectedItem as PartidaConfirmacion).comentariosESAC != ""){
+						btnBar.enabled = true;
+					}else{
+						btnBar.enabled = false;
+					}
+				}
+				this.btnArgumentos.visible = _rechazado; 
+			}
+			/**
+			 * funcion para bloquear el boton mensajes del eSAc
+			 */ 
+			private function bloqueMensajeEsac():void{
+				var btnBar:ButtonBarButton = btnBarra.dataGroup.getElementAt(0) as ButtonBarButton;
+				if( (this.list.selectedItem as PartidaConfirmacion).comentariosESAC != null && (this.list.selectedItem as PartidaConfirmacion).comentariosESAC != ""){
+					btnBar.enabled = true;
+				}else{
+					btnBar.enabled = false;
+				}
+				_bloqueBotonMensaje = true;
+			}
+			
+			/**
+			 * funcion que cambia el status de la partida 
+			 */ 
+			private function cambiaEstatus(evento:EventoProveedoresConPAC):void{
+				for( var i:int = 0; i < this._requisicion.partidas.length; i++){
+					if( this._idPartidaSeleccionada == ( this._requisicion.partidas.getItemAt(i) as PartidaConfirmacion).idPCotPharma ){
+						if(evento.status){
+							this.btnBarra.enabled = false;
+							(this._requisicion.partidas[i] as PartidaConfirmacion).estatus = false;
+						}
+						else{
+							this.btnBarra.enabled = true;
+							(this._requisicion.partidas[i] as PartidaConfirmacion).estatus = true;
+						}
+						cambiaEtiqiuetaEsatus();
+					}
+				}
+			}
+			/**
+			 * Funcion privada que sete el componente del Stack como nuevo
+			 */ 
+			private function reiniciaComponenteStackInspector():void{
+				this.contenedorDetallesPartida.removeAllElements();
+				this._componenteStackInspector = new StackInspector();
+				this._componenteStackInspector.addEventListener( EventoProveedoresConPAC.REGRESA_DATOS_STACK, ObtenDatosStack ); 
+				this.contenedorDetallesPartida.addElement( _componenteStackInspector );
+			}
+			/**
+			 * funcion que cambia a la opcion seleccionada  del componente hijo stackPrecio.mxml
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				seleccionaOpcion( event.currentTarget.selectedIndex ); 
+			}
+			/**
+			 * funcion que cambia a la opcion seleccionada  del componente hijo stackPrecio.mxml
+			 */ 
+			private function seleccionaOpcion(index:int):void{
+				if(_componenteStackInspector != null){
+					this._componenteStackInspector.cambiaAIndexSeleccionado( index );
+				}
+			}
+			/**
+			 * funcion que cambia a rechazados
+			 */ 
+			private function seleccionaRechazo():void{
+				if(_componenteStackInspector != null){
+					this._componenteStackInspector.cambiaAIndexSeleccionado( 5 );
+					this.btnBarra.selectedIndex= -1;
+				}
+			}
+			private function actualizaDatosDelStack():void{
+				if( this.list.dataProvider.length > 0){
+					this._idPartidaSeleccionada = (this.list.selectedItem as PartidaConfirmacion).idPCotPharma
+					this._componenteStackInspector._partidaAModificar = this.list.selectedItem as PartidaConfirmacion;
+					this._componenteStackInspector._partidaAModificar.tipoProveedor = this._opcionSeleccionada.tipoProveedor;
+					cambiaEtiqiuetaEsatus();
+					if( (this.list.selectedItem as PartidaConfirmacion).comentariosESAC != null && (this.list.selectedItem as PartidaConfirmacion).comentariosESAC != ""){
+						this.btnBarra.selectedIndex = 0;
+						this._componenteStackInspector.selectedIndex = 0;
+					}else{
+						this.btnBarra.selectedIndex = 1;
+						this._componenteStackInspector.selectedIndex = 1;
+					}
+				}else{
+					this._componenteStackInspector = new StackInspector();
+					this._idPartidaSeleccionada = 0;
+				}
+			}
+			/**
+			 * funcion que cambia de color la etiueta de la pertida segun el estatus
+			 */ 
+			private function cambiaEtiqiuetaEsatus():void{
+				if( (this.list.selectedItem as PartidaConfirmacion).estatus == true ){
+					this.lblColorXEstatus.setStyle( "color","0x339933" );
+					this.lblColorXEstatus.text = "ACEPTADO";
+					this.imgAceptado.width = 24;
+					this.imgAceptado.visible = true;
+					this.imgRechazado.width = 0;
+					this.imgRechazado.visible = false;
+					this.btnBarra.enabled =  true;
+				}else{
+					this.lblColorXEstatus.setStyle( "color","0xCC3333" );
+					this.lblColorXEstatus.text = "RECHAZADO";
+					this.imgAceptado.width = 0;
+					this.imgAceptado.visible = false;
+					this.imgRechazado.width = 24;
+					this.imgRechazado.visible = true;
+					this.btnBarra.enabled = false;
+				}
+			}
+			/**
+			 * Funcion que va al componente hijo StackInspector.mxml y ejecuta una funcion publica para q regrese los datos de su 
+			 * propio contenido
+			 */ 
+			private function obtenDatosStackHijo():void{
+				this._componenteStackInspector.obtenDatos();
+			}
+			/**
+			 *Funcion que recibe los datos del componente Hijo stackInspector a traves del Listener. El q reibe dato es un oobjeto de tipo 
+			 * PartidaConfirmacion con nuevos valores, 
+			 */
+			private function ObtenDatosStack( evento:EventoProveedoresConPAC ):void{
+				actualizaDatosLista( evento.partidaAModificar );
+				reiniciaComponenteStackInspector();
+				actualizaDatosDelStack();
+				/* this.btnBarra.selectedIndex = 0; */
+				if( _seDirigeA == "Guardar" ){
+					//y despues se genera el evento
+					var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC(EventoProveedoresConPAC.ACTUALIZA_REQUISICION);
+					evento.requisicion = this._requisicion;
+					evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+					evento.modificaMedio = false;
+					dispatchEvent( evento );
+				}else if( _seDirigeA == "PopUpEnviar" ){
+					var eventoP:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+					eventoP.idOpcionSeleccionada = "popUpEnviar";	
+					eventoP.requisicion = ObjectUtil.copy( this._requisicion ) as RequisicionPhs ;	
+					eventoP.idFolioPartida = (this.list.selectedItem as PartidaConfirmacion).idPCotPharma;
+					dispatchEvent( eventoP );
+				}
+				_seDirigeA = "";
+			}
+			/**
+			 * funcion que actualiza los datos del arrayCollection de la lista 
+			 */
+			private function actualizaDatosLista( partida:PartidaConfirmacion ):void{
+				for( var i:int = 0; i < this._requisicion.partidas.length; i++){
+					if( this._idPartidaSeleccionada == ( this._requisicion.partidas.getItemAt(i) as PartidaConfirmacion).idPCotPharma ){
+						this._requisicion.partidas[i] = partida;
+						this.btnBarra.enabled =  partida.estatus;
+					}
+				}
+			}
+			/**
+			 * funcion privada que dispara el evento para guardar los cambios hechos a la requisicion al mapaProveedoresConPa.mxml.  
+			 * los datos son regresados en dos componentes. Este y en espacioPlanificacion en la funcion recibeConfirmacionRequisicionActualizada();
+			 */ 
+			private function guardaCambios():void{
+					//se obtiene los datos en pantalla
+					this._seDirigeA = "Guardar";
+					obtenDatosStackHijo();
+			}
+			/**
+			 * funcion que recibe del  mapaProveedoresConPa.mxml. la confirmacion de haber guardado correctamente los cambios  
+			 */ 
+			public function set recibeConfirmacionRequisicionActualizada(confirma:Boolean):void{
+				if( confirma == false ){
+					return;
+				}
+				if(_salir){
+					_salir = false;
+					regresaVistaPlanificacion();
+				}else{
+					alertaSingleton.show("Se guardaron los datos","Operación exitosa");
+					for( var i:int = 0; i < this._requisicion.partidas.length; i++ ){
+						(this._requisicion.partidas.getItemAt( i ) as PartidaConfirmacion).esGuardada = true;
+					}
+				}
+			}
+			/**
+			 * Funcion que determina si se guarda los avances modificados en la requisicion. Con el evento
+			 * se lanza 
+			 */ 
+			private function advertenciaGuardar():void{
+				alertaSingleton.show(catalogoAlertas.compradorPhs_guardaCambiosPartidaRequisicion,catalogoAlertas.TIT_ADV_atencion,"CompPhs_USA_EspacioInspector_method1","","","SI","NO");
+			}
+			/**
+			 * 
+			 */ 
+			public function set recibeRespuestaAlert( $dato:ResultAlert ):void{
+				if( $dato == null ){
+					return;
+				}
+				if( $dato.vieneD == "CompPhs_USA_EspacioInspector_method1" ){
+					method1( $dato );
+				}else if($dato.vieneD == "CompPhs_USA_EspacioInspector_method2" ){
+					method2( $dato );
+				}
+			}
+			
+			/**
+			 * Funcion privada q dispara el Evento Para guarda los avances modificados en la requisicion 
+			 */ 
+			 public function method1( $dato:ResultAlert ):void{
+				if( $dato.botonSeleccionado == "SI"){
+					guardaCambios();
+				}else{
+					return;
+				} 
+			} 
+			/**
+			 * Funcion que determina si se guarda los avances modificados en la requisicion  y salir del componente.
+			 */ 
+			private function advertenciaSalir():void{
+				alertaSingleton.show(catalogoAlertas.compradorPhs_guardaCambiosPartidaRequisicion,catalogoAlertas.TIT_ADV_atencion,"CompPhs_USA_EspacioInspector_method2","","","SI","NO");
+			}
+			/**
+			 * Funcion privada q dispara el Evento Para guarda los avances modificados en la requisicion  y sale del componente.
+			 */ 
+			public function method2( $dato:ResultAlert ):void{
+				if( $dato.botonSeleccionado == "SI"){
+					_salir = true;
+					guardaCambios();
+				}else{
+					regresaVistaPlanificacion();
+				} 
+			}
+			/**
+			 * funcion que regresa al la vista de planificacion.
+			 */ 
+			private function regresaVistaPlanificacion():void{
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs(EventoGeneralCompradorPhs.SELECCIONA_OPCION);
+				evento.idOpcionSeleccionada = "soloRegresaANivelPlanificacion";
+				evento.rechazado = this._rechazado;
+				dispatchEvent( evento );
+				this.btnBarra.selectedIndex = 0;
+			}
+			/**
+			 * funcion que sirve para llamar el popUpDe envio
+			 */ 
+			private function llamaPopUpEnvio():void{
+				this._seDirigeA = "PopUpEnviar";
+				obtenDatosStackHijo();
+			}
+			
+			/**
+			 * En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			 * nativePath o ruta (donde se podra obtener el nombre del archivo)  y el ByteArray)
+			 */ 
+			private function buscarArchivo():void{
+				file = new File();
+				//referencia = new Referencia();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				var docFilter:FileFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter]);
+			}
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				cargaPdfFile();
+			}
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 */ 
+			/**
+			 * funcion privada q carga de forma temporal un archivo a la requisicion
+			 */ 
+			private function cargaPdfFile():void{
+				this._requisicion.archivoAmparo =  this.file.data;
+			}
+			/**
+			 * funcion para mostrar el pdf 
+			 */ 
+			private function muestraPdf():void{
+				var _url:URLRequest = new URLRequest();
+				if( this._requisicion.archivoAmparo != null ){
+					_url.url = this.file.url;
+				}else{
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.REQUISICION_PHARMA + this._requisicion.folio + ".pdf";
+				}
+				navigateToURL(_url );
+			}
+			/**
+			 * Funcion que recibe del mapaProveedoresConPAc.xmml la confirmacion de envio de la o las partidas de forma exitosa
+			 * esta funcion a traves del inyector tambien se usa en el componente RquisicionAConfirmar.mxml.
+			 */ 
+			public function set eliminEnviados( $req:RequisicionPhs ):void{
+				if( $req == null){
+					return;
+				}
+				for( var $i:int = 0; $i < $req.partidas.length ; $i++ ){
+					if($req.partidas[$i].enviar == true){
+						for( var i:int = 0; i < this._requisicion.partidas.length ; i++	){
+							if( ($req.partidas.getItemAt($i) as PartidaConfirmacion).idPCotPharma == this._requisicion.partidas[i].idPCotPharma  ){
+								this._requisicion.partidas.removeItemAt( i );
+							}
+						}
+					}
+					
+				}
+				if(this._requisicion.partidas.length == 0){
+					/*se dispara un evento que recibe el padre EspacioPlanificacion.mxml en la funcion determinaPendientes() para 
+					saber si es necesario regresar a la pantalla principal*/ 
+					var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.RECTIFICA_PENDIENTES_EXISTENTES );
+					dispatchEvent( evento );
+					regresaVistaPlanificacion();
+				}else{
+					iniciaComponente( _opcionSeleccionada, _requisicion, _rechazado );
+				}
+			}
+			/**
+			 * funcion que invoca los contactos
+			 */ 
+			private function invocaContactos():void{
+				var evt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.HAS_VISIBLE_POPUP_CONTACTOS);
+				evt.busquedaPorEmpresa = this._opcionSeleccionada.nombreProveedor; 
+				/* evt.busquedaPorEmpresa = "Minitab Inc," */
+				if( _opcionSeleccionada.tipoProveedor == "Nuevo" ){
+					evt.obtenContacto = 1;
+					evt.consulta = "proveedorTemp";
+				}else{
+					evt.obtenContacto = 0;
+					evt.consulta = "proveedor";
+				}
+				evt.tipoBusqueda = 2;
+				dispatchEvent(evt);
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_inspector}" />
+		<label:labelSubtitulo text="INSPECTOR" fontSize="28"/>
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo fontSize="20" fontWeight="bold" color="#666666" id="lblProveedorsPAC"/>
+	</s:HGroup>
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="2"/>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:VGroup  >
+			<label:labelSubtitulo text="{ _opcionSeleccionada.nombreProveedor }" textAlign="left"/>
+			<label:labelSubtitulo text="{ _opcionSeleccionada.tipoProveedor }" fontSize="14" color="#666666" textAlign="left"/>
+		</s:VGroup>
+		<s:Spacer width="100%"/>
+		<pqNet1:botonPqNetLargo label="Contactos" icono="contactos" click="invocaContactos()"/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="2"/>
+	<s:HGroup width="100%">
+		<label:labelSubtitulo id="lblRequisicionyMedio" width="100%" textAlign="left"/>
+		<!--<s:Button label="Ver" click="muestraPdf()"/>
+		<s:Button label="Amparo" click="buscarArchivo()"/>-->
+		<pqNet1:botonPqNetLargo label="Amparo" click="muestraPdf()" icono="amparo"/>
+		<pqNet1:botonPqNetLargo label="Agregar" click="buscarArchivo()" icono="agregar"/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionGruesa width="100%"/>
+	<s:Spacer height="3"/>
+	<s:HGroup width="100%" height="100%" >
+		<s:List height="100%" itemRenderer="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.PartidaMiniatura" dataProvider="{_requisicion.partidas}"
+				borderVisible="false" id="list" change="obtenDatosStackHijo()"  width="20%"/>
+		<s:Spacer width="7"/>
+		<otros:VDivisionHueca height="100%"/>
+		<s:Spacer width="7"/>
+		<s:VGroup width="100%" height="100%" >
+			<s:HGroup width="100%">
+				<s:VGroup height="100%" horizontalAlign="left">
+					<s:Label text="#" fontSize="18" fontWeight="bold"/>
+					<s:Label text="{ (this.list.selectedItem as PartidaConfirmacion).numFila }" fontSize="18" fontWeight="bold"/>
+				</s:VGroup>
+				<s:Spacer width="4%"/>
+				<s:VGroup height="100%" width="100%" horizontalAlign="left">
+					<s:Label text="Concepto" fontSize="18" fontWeight="bold"/>
+					<s:Label width="100%" fontSize="13" fontStyle="normal" fontWeight="normal"
+							 text="{ (this.list.selectedItem as PartidaConfirmacion).descripcionProducto }"/>
+				</s:VGroup>
+				<s:HGroup  height="100%">
+					<s:Label text="{ (this.list.selectedItem as PartidaConfirmacion).noPiezas }" fontSize="32" height="100%" verticalAlign="bottom" />
+					<s:Label text="Pzs" fontWeight="bold" height="100%" verticalAlign="bottom"/>
+				</s:HGroup>
+				<s:Spacer width="4%"/>
+				<s:VGroup height="100%" horizontalAlign="left">
+					<s:Label text="Tipo" fontSize="18" fontWeight="bold"/>
+					<s:Label text="{ (this.list.selectedItem as PartidaConfirmacion).tipoProducto }" fontSize="18" width="100%"/>
+				</s:VGroup>
+				<s:Spacer width="4%"/>
+				<s:VGroup height="100%" horizontalAlign="left" width="13%">
+					<s:Label text="Estatus" fontSize="18" fontWeight="bold"/>
+					<s:HGroup gap="0" verticalAlign="middle" width="100%">
+						<s:Image source="{catalogoIconosGrid.getInstance().render_palomita}" width="0" visible="false" id="imgAceptado"/>
+						<s:Image source="{catalogoIconosGrid.getInstance().render_tache}" width="24"  id="imgRechazado"/>
+						<s:Spacer width="3%"/>
+						<s:Label id="lblColorXEstatus" fontSize="18" width="100%" text="RECHAZADO"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+			<otros:division width="100%"/>
+			<s:VGroup width="100%" height="100%" id="contenedorDetallesPartida"/>
+		</s:VGroup>
+		
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionGruesa width="100%"/>
+	<s:Spacer height="2"/>
+	<s:HGroup width="100%">
+		<salir:botonSalir click="advertenciaSalir(); this.btnArgumentos.selected=false"/>
+		<s:Spacer width="10%"/>
+		<rechazo:botonRechazo label="Rechazo" click="seleccionaRechazo();this.btnArgumentos.selected=false"/>
+		<botonesToggle:toggleGrisconLabelSolo icono="esac"  id="btnArgumentos" label="Argumentos" visible="true" click="seleccionaOpcion(6); this.btnBarra.selectedIndex=-1"/>
+		<s:Spacer width="25%"/>
+		<s:ButtonBar change="seleccionaBoton(event);this.btnArgumentos.selected=false" id="btnBarra" selectedIndex="0" dataProvider="{_datosBarraBoton}" skinClass="skins.botoneras.botoneraGrisconLabel.skinbotoneraGrisconLabel"/>
+		<s:Spacer width="25%"/>
+		<guardar:botonGuardar click="advertenciaGuardar();this.btnArgumentos.selected=false"/>
+		<envia:botonEnviar click="llamaPopUpEnvio();this.btnArgumentos.selected=false"/>
+	</s:HGroup>
+</s:VGroup>

@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								   xmlns:mx="library://ns.adobe.com/flex/mx" 
+								   xmlns:s="library://ns.adobe.com/flex/spark" 
+								   xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+								   xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+								   xmlns:panelCtaGenerales="skins.skin.comun.consultas.panelCtaGenerales.*"
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+								   xmlns:linkButton="skins.skin.linkButton.*" 
+								   xmlns:dateField="skins.skin.dateField.*" 
+								   xmlns:tabla="skins.botones.tabla.*" 
+								   xmlns:pqNet="skins.botones.pqNet.*" 
+								   xmlns:label="skins.skin.label.*" 
+								   xmlns:otros="skins.otros.*" 
+								   width="100%" height="100%"
+								   titulo="CONSULTA COTIZACIONES"
+								   creationComplete="inicia()" 
+								   >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.menu.EventoMenuContinuo;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.consultaCotizaciones.EventoConsultaCotizaciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.popUpCorreo;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.GraficaXCotizacionETvsFT;
+			import mx.core.IVisualElement;
+			import mx.managers.PopUpManager;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var urlreq:URLRequest;
+			private var ruta:String;
+			private var _clientes:ArrayCollection;
+			public var _comboEsac:String;
+			public var _esac:String;
+			public var _usuario:String;
+			private var _currenVista:String = "tablaGrid";
+			private var _actualizarVistaCurrent:Boolean = false;
+			[Bindable]
+			public var mostrarComboCotizo:Boolean = true;
+			[Bindable] private var _totalPiezas:int;
+			[Bindable] public var _cotizacionSeleccionada:Cotizacion;
+			[Bindable] private var MOSTRAR_OCULTAR_TAB_INFO_GRAFICAS:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1},{valor:'Rápida',llave:0}]);
+			private function inicia():void
+			{
+				btnGridToDetalle.addEventListener(MouseEvent.CLICK,btnRegresar_MouseEventClick,false,0,true);
+				
+				dtpFInicio.text  = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				dtpFInicio.selectedDate = new Date();
+				dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				dtpFFin.selectedDate = new Date();
+				vstBusqueda.selectedIndex = 1;
+				
+				var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.MOSTRAR_OCULTAR_TAB_INFO_GRAFICAS)
+				evt.tabGrafica = true;
+				dispatchEvent(evt);
+				
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new GraficaXCotizacionETvsFT());
+				_grafica.insertarGraficas(graficas);
+				agregarEspacioTrabajo(_grafica);
+				
+				realizarBusquedaInicial();
+			}
+			
+			public function set recibirListaClientes(clientes:ArrayCollection):void
+			{
+				if(clientes == null || clientes.length == 0 ) return ;
+				_clientes = new ArrayCollection();
+				
+				if(clientes[0].valor != "--TODOS--" )
+				{
+					var objeto:Object = new Object();
+					objeto.valor = "--TODOS--";
+					objeto.llave = 0;
+					_clientes.addItem(objeto)
+				}
+				
+				_clientes.addAll(clientes);
+				_clientes.refresh();
+				
+				cmbCliente.dataProvider = _clientes;
+				cmbCliente.selectedIndex = 0 ;
+			}
+			
+			public function set obtenerTotalPiezas(dato:int):void{
+				_totalPiezas = dato;
+			}
+			
+			private function regresaMenu():void
+			{
+				var evento:EventoMenuContinuo = new EventoMenuContinuo(EventoMenuContinuo.REGRESA_MENU);
+				dispatchEvent( evento );
+			}
+			
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var _grafica:ContenedorGraficas = new ContenedorGraficas();
+			public function cambiaIndex( $indice:int ):void
+			{
+				espacioInfoGenerales.selectedIndex = $indice;
+				
+				if($indice == 1)
+				{
+					btnGridToDetalle.visible = true;
+					
+					var eventoGrafica:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_INFO_GRAFICA_X_COTIZACION); 
+					eventoGrafica.ffin= null;
+					eventoGrafica.finicio = null;
+					
+					if (btnBarra.selectedIndex == 0 )
+					{
+						eventoGrafica.finicio = dtpFInicio.selectedDate;
+						eventoGrafica.ffin = dtpFFin.selectedDate;
+						eventoGrafica.objCotizacion.estado = cmbEstado.selectedItem.valor;
+						eventoGrafica.objCotizacion.nombreCliente = cmbCliente.selectedItem.valor;
+						eventoGrafica.objCotizacion.cotizo = cmbCotiza.selectedItem.valor;
+						eventoGrafica.objCotizacion.MSalida = cmbMedio.selectedItem.valor;
+					}
+					eventoGrafica.idEmpleado = 91;
+					eventoGrafica.objCotizacion.folioCotizacion = _cotizacionSeleccionada.folioCotizacion;
+					dispatchEvent(eventoGrafica);
+					
+				}
+				else
+					btnGridToDetalle.visible = false;
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void
+			{
+				if(espacio == null)
+				{
+					return;
+				}
+				graficos.addItem(espacio);
+				if(graficos.length == 1)
+				{
+					espacioSelectedGrafica.removeAllElements();
+					espacioSelectedGrafica.addElement(espacio);
+				}
+			}
+			
+			private function btnRegresar_MouseEventClick(e:MouseEvent):void
+			{
+				cambiaIndex( 0 );
+				var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones( EventoConsultaCotizaciones.CAMBIA_INDICE);
+				evento.indice = 0;
+				evento.vieneDe = "menu";
+				dispatchEvent( evento );
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar)
+								{
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar)
+								{
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			public function set recibirLaVistaSeleccionada($vista:String):void
+			{
+				if($vista == null) return;
+				_currenVista = $vista;	
+			}
+			
+			private function realizarBusquedaInicial():void
+			{
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("BUSCAR_COTIZACIONES_POR_FECHA");
+				dispatchEvent(eventEspera);
+				
+				var settearValores:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.SETTEAR_VALORES_DE_LA_BUSQUEDA_ACTUAL);
+				var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.BUSCAR_COTIZACIONES_POR_FECHA);
+				settearValores.finicio = evento.finicio = new Date();
+				settearValores.ffin = evento.ffin = new Date();
+				settearValores.objCotizacion.estado =  evento.objCotizacion.estado = '--TODOS--'; 
+				settearValores.objCotizacion.nombreCliente =  evento.objCotizacion.nombreCliente ='--TODOS--';
+				settearValores.objCotizacion.cotizo =  evento.objCotizacion.cotizo = '--TODOS--';
+				settearValores.objCotizacion.MSalida = evento.objCotizacion.MSalida = '--TODOS--';
+				settearValores.idEmpleado = evento.idEmpleado = 91;
+				dispatchEvent(evento);
+				dispatchEvent(settearValores);
+				
+				var eventoSetFiltro:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+				eventoSetFiltro.tipo =  "ET"; 
+				dispatchEvent(eventoSetFiltro);
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = settearValores.finicio;
+				currentFFin = settearValores.ffin;
+				currentEstado = settearValores.objCotizacion.estado;
+				currentCliente = settearValores.objCotizacion.nombreCliente;
+				currentCotizo= settearValores.objCotizacion.cotizo;
+				currentMSlaida = settearValores.objCotizacion.MSalida;
+				currentFolioCotiza = "";
+				
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			
+			public function realizarBusqueda():void
+			{
+				var eventEspera:EventoEsperar;
+				var settearValores:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.SETTEAR_VALORES_DE_LA_BUSQUEDA_ACTUAL);
+				
+				if(_currenVista == "tablaGrid")
+				{
+					//configurar Espera
+					eventEspera= new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.tipoEventos.push("BUSCAR_COTIZACIONES_POR_FECHA");
+					dispatchEvent(eventEspera);
+					
+					
+					var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.BUSCAR_COTIZACIONES_POR_FECHA);
+					settearValores.finicio = evento.finicio = dtpFInicio.selectedDate;
+					settearValores.ffin = evento.ffin = dtpFFin.selectedDate;
+					settearValores.objCotizacion.estado = evento.objCotizacion.estado = cmbEstado.selectedItem.valor;
+					settearValores.objCotizacion.nombreCliente = evento.objCotizacion.nombreCliente = cmbCliente.selectedItem.valor;
+					settearValores.objCotizacion.cotizo = evento.objCotizacion.cotizo = cmbCotiza.selectedItem.valor;
+					settearValores.objCotizacion.MSalida = evento.objCotizacion.MSalida = cmbMedio.selectedItem.valor;
+					settearValores.idEmpleado = evento.idEmpleado = 91;
+					dispatchEvent(evento);
+					dispatchEvent(settearValores);
+				}else{
+					//configurar Espera
+					eventEspera= new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.idButtons.push("btnTotales");
+					eventEspera.tipoEventos.push("OBTENER_RESUMEN_COTIZACION_GRAFICAS");
+					eventEspera.tipoEventos.push("OBTENER_CONSULTA_TOTALES");
+					eventEspera.tipoEventos.push("OBTENER_INFO_GRAFICAS_SECUNDARIAS");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_RESUMEN_COTIZACION_GRAFICAS);
+					var event:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CONSULTA_TOTALES);
+					var eventoGraficaETyFT:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_INFO_GRAFICAS_SECUNDARIAS); 
+					var eventoGraficaAltaProducto:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_INFO_GRAFICAS_ALTA_PRODUCTO);
+					eventoGraficaAltaProducto.finicio = eventoGraficaETyFT.finicio = event.finicio = evt.finicio = dtpFInicio.selectedDate;
+					eventoGraficaAltaProducto.ffin = eventoGraficaETyFT.ffin = event.ffin = evt.ffin = dtpFFin.selectedDate;
+					eventoGraficaAltaProducto.objCotizacion.estado = eventoGraficaETyFT.objCotizacion.estado = event.objCotizacion.estado = evt.objCotizacion.estado = cmbEstado.selectedItem.valor;
+					eventoGraficaAltaProducto.objCotizacion.nombreCliente = eventoGraficaETyFT.objCotizacion.nombreCliente = event.objCotizacion.nombreCliente = evt.objCotizacion.nombreCliente = cmbCliente.selectedItem.valor;
+					eventoGraficaAltaProducto.objCotizacion.cotizo = eventoGraficaETyFT.objCotizacion.cotizo = event.objCotizacion.cotizo = evt.objCotizacion.cotizo = cmbCotiza.selectedItem.valor;
+					eventoGraficaAltaProducto.objCotizacion.MSalida = eventoGraficaETyFT.objCotizacion.MSalida = event.objCotizacion.MSalida = evt.objCotizacion.MSalida = cmbMedio.selectedItem.valor;
+					eventoGraficaAltaProducto.idEmpleado = eventoGraficaETyFT.idEmpleado = event.idEmpleado = evt.idEmpleado = 91;
+					event.individual = false;
+					dispatchEvent(evt);
+					dispatchEvent(event);
+					dispatchEvent(eventoGraficaETyFT);
+					dispatchEvent(eventoGraficaAltaProducto);
+					
+					var eventos:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CONSULTA_TOTALES_PERIODO);
+					settearValores.finicio = eventos.finicio = dtpFInicio.selectedDate;
+					settearValores.ffin = eventos.ffin = dtpFFin.selectedDate;
+					settearValores.objCotizacion.estado = eventos.objCotizacion.estado = cmbEstado.selectedItem.valor; 
+					settearValores.objCotizacion.nombreCliente = eventos.objCotizacion.nombreCliente = cmbCliente.selectedItem.valor;
+					settearValores.objCotizacion.cotizo = eventos.objCotizacion.cotizo = cmbCotiza.selectedItem.valor;;
+					settearValores.objCotizacion.MSalida = eventos.objCotizacion.MSalida = cmbMedio.selectedItem.valor;
+					settearValores.idEmpleado = eventos.idEmpleado = 91;
+					eventos.individual = true;
+					dispatchEvent(eventos);
+					dispatchEvent(settearValores);
+				}
+				
+				var actualizarVistaCurrent:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.ACTUALIZAR_VISTA_ACTUAL);
+				actualizarVistaCurrent.actualizarVistaCurrent = true;
+				dispatchEvent(actualizarVistaCurrent);
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				
+				//Para verificar si los datos cambian
+				currentFInicio = settearValores.finicio;
+				currentFFin = settearValores.ffin;
+				currentEstado = settearValores.objCotizacion.estado;
+				currentCliente = settearValores.objCotizacion.nombreCliente;
+				currentCotizo= settearValores.objCotizacion.cotizo;
+				currentMSlaida = settearValores.objCotizacion.MSalida;
+				currentFolioCotiza = "";
+			}
+			
+			private function realizarBusquedaRapida():void{
+				if( StringUtil.trim(txtBuscaRapida.text).length >0)
+				{
+					//configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("BUSCAR_DOCUMENTOS_POR_FOLIO");
+					dispatchEvent(eventEspera);
+					
+					var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.BUSCAR_DOCUMENTOS_POR_FOLIO);
+					evento.ffin= null;
+					evento.finicio = null;	
+					evento.objCotizacion.folioCotizacion = txtBuscaRapida.text;
+					
+					currentFolioCotiza = txtBuscaRapida.text;
+					
+					evento.idEmpleado = 91;
+					dispatchEvent(evento);
+				}
+				else
+				{
+					dispatchEvent(new Event("LimpiarGridConsultaCotizaciones",true));
+				}
+			}
+			/**
+			 * funcion que cambia el indice del stack en el precio
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBar).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.MOSTRAR_OCULTAR_TAB_INFO_GRAFICAS)
+					event.currentTarget.selectedItem.llave == 0 ? evt.tabGrafica = false : evt.tabGrafica = true;
+					dispatchEvent(evt);
+					
+					if(((event.currentTarget as ButtonBar).selectedItem as Object).valor == 'Rápida')
+					{
+						realizarBusquedaRapida();
+					}
+					else
+					{
+						_currenVista = "tablaGrid"
+						realizarBusqueda();
+					}
+				}
+			} 
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentCliente:String;
+			private var currentCotizo:String;
+			private var currentMSlaida:String;
+			private var currentEstado:String;
+			private var currentFolioCotiza:String;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2)
+				{
+					if(!keyModificados.hasOwnProperty($currentFiltroModif))
+					{
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}
+				else
+				{
+					if(numFiltrosModificados==1)
+					{
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}
+					else
+					{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicio":{CompararYControlarBoton(event.newDate.time,currentFInicio.time,"dtpFInicio",btnBusqueda);break;}
+					case "dtpFFin":{CompararYControlarBoton(event.newDate.time,currentFFin.time,"dtpFFin",btnBusqueda);	break;}
+					case "cmbCliente":	{CompararYControlarBoton(cmbCliente.selectedItem.valor,currentCliente,"cmbCliente",btnBusqueda);break;}
+					case "cmbCotiza":{CompararYControlarBoton(cmbCotiza.selectedItem.valor,currentCotizo,"cmbCotiza",btnBusqueda);break;}
+					case "cmbMedio":{CompararYControlarBoton(cmbMedio.selectedItem.valor,currentMSlaida,"cmbMedio",btnBusqueda);break;}
+					case "cmbEstado":{CompararYControlarBoton(cmbEstado.selectedItem.valor,currentMSlaida,"cmbEstado",btnBusqueda);break;}
+				}
+			} 
+			
+			protected function txtBuscaRapida_keyUpHandler(event:KeyboardEvent):void
+			{
+				var tempFolio:String = StringUtil.trim(txtBuscaRapida.text);
+				if(tempFolio.length >0)
+				{
+					if(tempFolio != currentFolioCotiza)
+					{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(false);
+					}
+					else
+					{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+					}
+				}
+			}
+			
+			public function verFolioCotizacion():void
+			{
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.COTIZACIONES_RUTA + lnkFolio.label +".pdf";
+				urlreq = new URLRequest( ruta );
+				navigateToURL(urlreq);	
+			}
+			
+			public function verFolioRequisicion():void
+			{
+				if(lnkReferencia.label != "ND" || lnkReferencia.label != "NA" || lnkReferencia.label != "")
+				{
+					ruta = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + lnkReferencia.label +".pdf";
+					urlreq = new URLRequest( ruta );
+					navigateToURL(urlreq);	
+				}	
+				
+				
+			}
+			
+			public var popCorreo:popUpCorreo;
+			private function abrirPopUpComentarios(event:Event):void
+			{
+				if( popCorreo == null ){
+					popCorreo = popUpCorreo(PopUpManager.createPopUp( this, popUpCorreo, true ) );
+					
+					var array:Array = new Array();
+					if (this._cotizacionSeleccionada.nombreArchivos != null) 
+						array = this._cotizacionSeleccionada.nombreArchivos.split("|");
+					
+					var adjuntos: ArrayCollection = new ArrayCollection;
+					for (var i:int = 0; i < array.length; i++) 
+					{
+						var data:Object = new Object;
+						data.valor = array[i];
+						adjuntos.addItem(data);
+					}
+					
+					popCorreo.setCuerpoCorreo( _cotizacionSeleccionada.asunto,  _cotizacionSeleccionada.contenido,  _cotizacionSeleccionada.html,  _cotizacionSeleccionada.sender,  _cotizacionSeleccionada.fecha,  _cotizacionSeleccionada.totalAdj, _cotizacionSeleccionada.nombreCliente );
+					
+					popCorreo.dataProvider = adjuntos;
+					PopUpManager.centerPopUp( popCorreo );
+					
+					popCorreo.addEventListener("cerrarPopUp",cerrarPopCorreo);
+				}else{
+					PopUpManager.addPopUp( popCorreo , this, true );
+				}
+			}
+			
+			private function cerrarPopCorreo(event:Event):void
+			{
+				PopUpManager.removePopUp( popCorreo );
+				popCorreo = null;
+			}
+			
+			private function mostrarInfo(event:Event){
+				if( _cotizacionSeleccionada.asunto != null && _cotizacionSeleccionada.asunto != "" && _cotizacionSeleccionada.contenido != null && _cotizacionSeleccionada.contenido  != "" )
+					this.abrirPopUpComentarios(event);
+				else
+					this.verFolioRequisicion();
+				
+			}
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<pq:MobViewStack width="100%" id="espacioInfoGenerales" creationPolicy="all" >
+			<s:NavigatorContent >
+				<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+					<s:VGroup width="100%" gap="0">
+						<s:Spacer height="13"/>
+						<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this.MOSTRAR_OCULTAR_TAB_INFO_GRAFICAS}" width="100%" requireSelection="true"/>
+						<s:Spacer height="30"/>
+						<otros:divisionHueca width="100%"/>
+					</s:VGroup>
+					<pq:MobViewStack width="100%" height="37%" id="vstBusqueda">
+						<s:NavigatorContent >
+							<s:VGroup width="100%">
+								<s:Spacer height="15"/>
+								<label:Titulo_w100  text="Folio de cotización" paddingTop="0" />
+								<s:TextInput id="txtBuscaRapida" width="100%" fontStyle="normal" enter="realizarBusquedaRapida()" toolTip="Folio de cotización" keyUp="txtBuscaRapida_keyUpHandler(event)"/>
+								<s:Spacer height="15"/>
+								<pqNet:botonPqNetLargo id="btnBusquedaRapida"	width="100%" click="realizarBusquedaRapida()" botonRedondo="true" icono="ojomordor" />
+								<s:Spacer height="15"/>
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:NavigatorContent>
+						<s:NavigatorContent width="100%" height="100%">
+							<s:VGroup width="100%" height="100%" horizontalAlign="center">
+								<s:HGroup width="100%" >
+									<s:VGroup width="50%">
+										<label:Titulo_w100  text="Del" paddingTop="0" />
+										<dateField:DatePickerSpanish id="dtpFInicio" fontStyle="normal" change="filtros_changeEvent(event)"/>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<label:Titulo_w100  text="Al" paddingTop="0" />
+										<dateField:DatePickerSpanish id="dtpFFin" change="filtros_changeEvent(event)"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Cliente" paddingTop="0" />
+								<comboPqNet:ComboCatalogos id="cmbCliente"  width="100%"  creationComplete="cmbCliente.cargaClientes(_usuario,'--TODOS--')" change="filtros_changeEvent(event)"/>
+								<s:Spacer height="1" visible="{mostrarComboCotizo}" includeInLayout="{mostrarComboCotizo}"/>
+								<label:Titulo_w100 id="labCotizo" text="Cotizó" paddingTop="0" visible="{mostrarComboCotizo}" includeInLayout="{mostrarComboCotizo}"/>
+								<comboPqNet:ComboCatalogos id="cmbCotiza" creationComplete="cmbCotiza.cargarEmpleadosXTipoTablero('esac-esac_master','','--TODOS--')" width="100%" change="filtros_changeEvent(event)"  visible="{mostrarComboCotizo}" includeInLayout="{mostrarComboCotizo}"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Medio de envío" paddingTop="0" />
+								<comboPqNet:ComboCatalogos id="cmbMedio" creationComplete="cmbMedio.cargaMedio('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Estado" paddingTop="0" />
+								<comboPqNet:ComboCatalogos id="cmbEstado" creationComplete="cmbEstado.cargaEstado('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+								<s:Spacer height="15"/>
+								<pqNet:botonPqNetLargo id="btnBusqueda"	width="100%" click="realizarBusqueda()" botonRedondo="true" icono="iconoActualizarNormal"/>
+								<s:Spacer height="15"/>
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:NavigatorContent>
+					</pq:MobViewStack>
+				</s:VGroup>
+			</s:NavigatorContent>
+			<s:NavigatorContent >
+				<s:VGroup width="100%" height="100%">
+					<panelCtaGenerales:Titulo text="{this._cotizacionSeleccionada.nombreCliente	}"/>
+					<label:Titulo_w100  text="Folio:"  />
+					<linkButton:LinkButtonPQNet2 label="{this._cotizacionSeleccionada.folioCotizacion}" id="lnkFolio" click="verFolioCotizacion()"/>
+					<label:Titulo_w100  text="Referencia:"  />
+<!--					<linkButton:LinkButtonPQNet2 id="lnkReferencia" label="{this._cotizacionSeleccionada.requisicion}" click="verFolioRequisicion()"/>
+-->					<linkButton:LinkButtonPQNet2 id="lnkReferencia" label="{this._cotizacionSeleccionada.requisicion}" click="mostrarInfo(event)"/>
+
+					<label:Titulo_w100  text="Fecha de origen:"  />
+					<label:FechaYHora fecha="{this._cotizacionSeleccionada.fechaOrigen}"/>
+					<label:Titulo_w100  text="Fecha de registro:"  />
+					<label:FechaYHora fecha="{this._cotizacionSeleccionada.fechaRegistro }" />
+					<label:Titulo_w100  text="Pendiente origen:"  />
+					<label:Texto_w100 id="lblCondiciones" text="{this._cotizacionSeleccionada.pendienteOrigen}" />
+					<label:Titulo_w100  text="Condiciones de pago:"  />
+					<label:Texto_w100 id="lblMonto" text="{ this._cotizacionSeleccionada.cpago }" />
+					<label:Titulo_w100  text="Monto total de la cotización:"  />
+					<label:Texto_w100 id="lblMontoCotizacion" text="$ { UtilsFormatosNumericos.precisionADosDecimalesConComas(this._cotizacionSeleccionada.montoCotiza) + ' ' + this._cotizacionSeleccionada.moneda }" />
+					<label:Titulo_w100  text="Total de piezas:"  />
+					<label:Texto_w100 id="lblTotalPiezas" text="{this._totalPiezas}" />
+					<s:Spacer height="15"/>
+					<otros:divisionHueca width="100%"/>
+					<s:VGroup width="100%" horizontalAlign="right">
+						<!--<s:Image id="imgGrid" source="{catalogoIconosBotoneras.getInstance().gridgris}" click="cambiaIndices(0)"
+						mouseOver="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgrisover}"
+						mouseOut="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgris}"/>-->
+					</s:VGroup>
+					
+					<s:VGroup id="grpSelectedGrafica" height="100%" width="100%" gap="0" >
+						<s:Group height="100%" width="100%">
+							<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica" />
+						</s:Group>	
+					</s:VGroup>
+					
+				</s:VGroup>
+			</s:NavigatorContent>
+		</pq:MobViewStack>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

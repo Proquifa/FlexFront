@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" contentBackgroundColor="#eaeaea" gap="0" horizontalAlign="center"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:lista ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  width="100%" height="100%" xmlns:otros="skins.otros.*" xmlns:botonesToggle="skins.botonesToggle.*" xmlns:panelDosRteConcepto="skins.skin.comun.reportes.panelDosRteConcepto.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.globalization.DateTimeFormatter;
+			import flash.globalization.DateTimeStyle;
+			import flash.globalization.LocaleID;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.compras.prodAlmacen2012.EventoRepProAlmacen2012;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ProductoAlmacen;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.ListPq;
+			import mx.formatters.DateFormatter;
+			import mx.resources.ResourceBundle;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import spark.components.ButtonBar;
+			import spark.events.IndexChangeEvent;
+			
+			private var _listaPedidos:ArrayCollection;
+			private var _busqueda:Boolean = false;
+			private var _montoTotal:Number;
+			private var _piezasTotal:int;
+			private var _botonBar:String;
+			private var _valores:ArrayCollection;
+			private var _arrDisponible:ArrayCollection = new ArrayCollection();
+			private var _arrCaduco:ArrayCollection = new ArrayCollection();
+			private var proveedorStock:String;
+			
+			[Bindable]
+			private var titulo:String;
+			
+			[Bindable]	private var _arrButton:ArrayCollection = new ArrayCollection([{label:"Disponible"},
+				{label:"Caduco"}]);
+			
+			public var _btnBarra:ButtonBar;
+			
+			public function set recibeEtiquetaButonBar(boton:String):void{
+				_botonBar = boton;
+			}
+			
+			public function set recibeListaPedidosProdAlamacen( $evt:ArrayCollection):void{
+				_valores=ObjectUtil.copy($evt) as ArrayCollection;
+				if(_botonBar == 'Stock'){
+					if ($evt != null && $evt.length > 0){
+						proveedorStock = $evt[0].nombreProveedor;
+						titulo = $evt[0].nombreProveedor;
+					}
+					if (_btnBarra == null ){
+						habilitarDisponibleCaduco();
+					}
+					else if ( _btnBarra.selectedItem.valor != 'Rápida' ){
+						habilitarDisponibleCaduco();
+					}
+					else{
+						vbStock.visible = false;
+						vbStock.includeInLayout = false;
+						trabajaVista($evt);
+					}
+					
+				}
+				else{
+					vbStock.visible = false;
+					vbStock.includeInLayout = false;
+					trabajaVista($evt);
+				}
+			}
+			
+			private function habilitarDisponibleCaduco():void{
+				vbStock.visible = true;
+				vbStock.includeInLayout = true;
+				botoneraBarra.selectedIndex = 0;
+				filtroDisponibleCaduco();
+				trabajaVista(_arrDisponible);
+				lblNombreCliente.text = proveedorStock;
+			}
+			
+			private function trabajaVista($evt:ArrayCollection):void{
+				if( $evt == null ){
+					lblNombreCliente.text = "";
+					lstPartidas.dataProvider = new ArrayCollection();
+					return;
+				}
+				$evt = ObjectUtil.copy( $evt ) as ArrayCollection;
+				_listaPedidos = new ArrayCollection();
+				_listaPedidos =ObjectUtil.copy( $evt ) as ArrayCollection;
+				this.lstPartidas.dataProvider = new ArrayCollection();
+				//agrupar por pedido
+				if( $evt.length > 0 ){
+					lblNombreCliente.text = ( $evt[0] as ProductoAlmacen).nombreCliente;
+				}
+				var arregloFinal:ArrayCollection = new ArrayCollection();
+				for( var i:int = 0; i < $evt.length; i++ ){
+					if( i == 0){
+						($evt[0] as ProductoAlmacen).numeroDeFila = 1;
+						arregloFinal.addItem( $evt[0] );
+					}else{
+						var seAgrego:Boolean = false;
+						for( var f:int = 0; f < arregloFinal.length; f++ ){
+							if((arregloFinal[f] as ProductoAlmacen).piRelacionada == ($evt[i] as ProductoAlmacen).piRelacionada  ){
+								if((arregloFinal[f] as ProductoAlmacen).ttproducto == ($evt[i] as ProductoAlmacen).ttproducto){
+									
+									if( ($evt[i] as ProductoAlmacen).pcompra.fechaEstimadaEntrega != null ){
+										if( (arregloFinal[f] as ProductoAlmacen).pcompra.fechaEstimadaEntrega.getTime() <= ($evt[i] as ProductoAlmacen).pcompra.fechaEstimadaEntrega.getTime() ){
+											(arregloFinal[f] as ProductoAlmacen).pcompra.fechaEstimadaEntrega == (arregloFinal[f] as ProductoAlmacen).pcompra.fechaEstimadaEntrega;
+										}else{
+											(arregloFinal[f] as ProductoAlmacen).pcompra.fechaEstimadaEntrega = ($evt[i] as ProductoAlmacen).pcompra.fechaEstimadaEntrega;
+										}
+									}
+									if( ($evt[i] as ProductoAlmacen).pcompra.ACambio ){
+										(arregloFinal[f] as ProductoAlmacen).pcompra.ACambio = true;
+									}
+									(arregloFinal[f] as ProductoAlmacen).cantidad = (arregloFinal[f] as ProductoAlmacen).cantidad + ($evt[i] as ProductoAlmacen).cantidad;
+									(arregloFinal[f] as ProductoAlmacen).pcompra.montoTotal = (arregloFinal[f] as ProductoAlmacen).pcompra.montoTotal + ($evt[i] as ProductoAlmacen).pcompra.montoTotal;
+									seAgrego = true;
+									f=arregloFinal.length;
+								}
+							}	
+						}
+						if( !seAgrego){
+							($evt[i] as ProductoAlmacen).numeroDeFila = arregloFinal.length + 1;
+							arregloFinal.addItem( $evt[i] );
+						}
+						seAgrego = false;
+					}
+				}
+				
+				_montoTotal = 0;
+				_piezasTotal = 0;
+				for(var k:int = 0 ; k<arregloFinal.length ; k++){
+					_montoTotal += (arregloFinal[k] as ProductoAlmacen).pcompra.montoTotal;
+					_piezasTotal += (arregloFinal[k] as ProductoAlmacen).cantidad;
+				}
+				
+				var $ultimoProducto:ProductoAlmacen = new ProductoAlmacen();
+				$ultimoProducto.totalProductosLista =  arregloFinal.length;
+				$ultimoProducto.totalMonto = _montoTotal;
+				$ultimoProducto.totalPiezas =  _piezasTotal;
+				$ultimoProducto.info = false;
+				if(_botonBar == 'Stock') $ultimoProducto.destino = 'Total';
+				arregloFinal.addItem( $ultimoProducto );
+				
+				this.lstPartidas.dataProvider = ObjectUtil.copy( arregloFinal ) as ArrayCollection;
+				if( this.lstPartidas.dataProvider.length > 0 ){
+					this.lstPartidas.selectedIndex = 0;
+					if((this.lstPartidas.dataProvider[0] as ProductoAlmacen).destino == 'Stock'){
+						lblNombreCliente.text = (this.lstPartidas.dataProvider[0] as ProductoAlmacen).nombreProveedor;
+						_busqueda = false;
+						buscaStock();
+					}else{
+						lblNombreCliente.text = (this.lstPartidas.dataProvider[0] as ProductoAlmacen).nombreCliente;
+						_busqueda = true;
+						buscaPedido();
+					}
+				}
+			}
+			
+			private function dispobibleCaduco(event:IndexChangeEvent):void{
+				if(event.currentTarget.selectedItem == null ){
+					event.preventDefault();
+				}else{
+					if (botoneraBarra.selectedItem.label =='Disponible'){
+						trabajaVista(_arrDisponible);
+						lblNombreCliente.text = proveedorStock;
+					}else{
+						trabajaVista(_arrCaduco);
+						lblNombreCliente.text = proveedorStock;
+					}
+				}
+				//filtroDisponibleCaduco();
+			}
+			
+			private function filtroDisponibleCaduco():void{
+				_arrDisponible = new ArrayCollection();
+				_arrCaduco = new ArrayCollection();
+				var today:Date = new Date();
+				var meses:Object = {"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12};
+				var mes:int = today.month + 1;
+				for (var i:int = 0; i < _valores.length; i++ ){
+					var year:int = parseInt(trimWhitespace(_valores[i].pcompra.fcadPartida).replace(/[^0-9]/g, ""));
+					var month:int = meses[trimWhitespace(_valores[i].pcompra.fcadPartida).replace(/[^a-zA-Z]/g, "").toLocaleLowerCase()];
+					
+					if (_valores[i].pcompra.fcadPartida == null || _valores[i].pcompra.fcadPartida == "ND"){
+						_arrDisponible.addItem(_valores[i]);
+					}
+					else if(year == today.getFullYear()){
+						if( month >= mes ){
+							_arrDisponible.addItem(_valores[i]);
+						}
+						else{
+							_arrCaduco.addItem(_valores[i]);
+						}
+						
+					}
+					else if (year > today.getFullYear()){
+						_arrDisponible.addItem(_valores[i]);
+					}
+					else{
+						_arrCaduco.addItem(_valores[i]);
+					}
+				}
+			}
+			
+			private function buscaPedido(event:IndexChangeEvent = null):void{
+				if(event != null && lstPartidas.dataProvider.length > 0 ){
+					if( event.newIndex != -1 && this.lstPartidas.dataProvider[event.newIndex].info != true){
+						event.preventDefault();
+					}
+				}
+				
+				if(_busqueda == true && lstPartidas.selectedIndex != -1){
+					var evento:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.OBTENER_PARTIDAS_SIGUIENTE_VISTA);
+					evento.cpedido = lstPartidas.selectedItem.piRelacionada;
+					evento.folioD = null;
+					evento.tipoFlete = false;
+					dispatchEvent(evento);	
+				}else if(lstPartidas.selectedIndex != -1){
+					buscaStock();
+				}
+			}
+			
+			private function buscaStock():void{
+			    var listaTemp:ArrayCollection = ObjectUtil.copy( _listaPedidos ) as ArrayCollection;
+				var evt:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PARTIDAS_SIG_VISTA );
+				evt.listaPedidos = new ArrayCollection();
+				for( var i:int = 0; i < listaTemp.length; i++  ){
+					if( (this.lstPartidas.selectedItem as ProductoAlmacen).piRelacionada == (listaTemp[i] as ProductoAlmacen).piRelacionada ){
+						if( (this.lstPartidas.selectedItem as ProductoAlmacen).ttproducto == (listaTemp[i] as ProductoAlmacen).ttproducto ){
+							evt.listaPedidos.addItem( listaTemp[i] );	
+						}
+					}
+				}
+				dispatchEvent( evt );  
+			}
+			
+			public function set obtenerError($evt:Boolean):void{
+				if( $evt ){ 
+					lstPartidas.dataProvider = new ArrayCollection();
+					lblNombreCliente.text = "";
+					this.trabajaVista(lstPartidas.dataProvider as ArrayCollection);
+				}
+			}
+			
+			protected function caretChangeHandler(event:IndexChangeEvent):void
+			{
+				if(this.lstPartidas.selectedIndex != -1 && this.lstPartidas.selectedItem.vieneD != 'Stock' ){
+					if(event != null && lstPartidas.dataProvider.length > 0 ){
+						if( event.newIndex != -1 && this.lstPartidas.dataProvider[event.newIndex].info != true){
+							event.preventDefault();
+						}
+					}	
+				}
+			}
+			
+			protected function changingHandler(event:IndexChangeEvent):void
+			{
+				if(this.lstPartidas.selectedIndex != -1 && this.lstPartidas.selectedItem.vieneD != 'Stock' ){
+					if(event != null && lstPartidas.dataProvider.length > 0 ){
+						if( event.newIndex != -1 && this.lstPartidas.dataProvider[event.newIndex].info != true){
+							event.preventDefault();
+						}
+					}	
+				}
+			}
+			
+			private function trimWhitespace($string:String):String {
+				if ($string == null) {
+					return "";
+				}
+				return $string.replace(/^\s+|\s+$/g, "");
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<panelDosRteConcepto:HeaderPanelDos label="{titulo}" />
+	
+	<s:Label visible="false" includeInLayout="false" fontSize="20" width="100%" textAlign="center" id="lblNombreCliente"  height="60" paddingTop="5"
+			 verticalAlign="middle" maxDisplayedLines="2" color="0x{catalogoColores.TITULO_PANEL_GRIS_CLARO}" backgroundColor="#eaeaea" />  <!--text="{ (this.lstPartidas.dataProvider[0] as ProductoAlmacen).nombreCliente }"-->
+	<s:VGroup width="100%" id="vbStock" horizontalAlign="center">
+		<botonesToggle:ButtonBarColores width="93%" height="30" horizontalCenter="0" id="botoneraBarra" selectedIndex="0" dataProvider="{_arrButton}" changing="dispobibleCaduco(event)" color="0x{catalogoColores.LABEL_GRIS }" requireSelection="true" />
+	</s:VGroup>
+	
+	<otros:division width="100%"/>	
+	
+	<s:List id="lstPartidas" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.compras.ProductoAlmacen2012.itemRenderer.IRenderFechaSeleccionadaReporteProductoAlmacen" caretChange="caretChangeHandler(event)" changing="changingHandler(event)"
+			borderVisible="false"  horizontalScrollPolicy="off" height="100%" selectionColor="#eaeaea" width="100%" change="buscaPedido()"/>
+	
+	
+
+</s:VGroup>

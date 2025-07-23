@@ -1,0 +1,957 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.compras
+{
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.compras.ProductoAlmacen")]
+	[Bindable]
+	public dynamic class ProductoAlmacen
+	{
+		
+		public var propiedades:ArrayCollection = new ArrayCollection([
+			{propiedad:"fechaInicioInspeccionStr",formato:"fechaHora",tipo:"Date",newpropiedad:"fechainicioinspeccion"},
+			{propiedad:"fechaFinInspeccionStr",formato:"fechaHora",tipo:"Date",newpropiedad:"fechafininspeccion"}]);
+		
+		public var numeroDeFila:int;
+		
+		private var _folioFD:String;
+		private var _destino:String;
+		private var _inspector:String;
+		private var _loteInspeccion:String;
+		private var _packingList:String;
+		private var _folioOC:String;
+		private var _folioPI:String;
+		private var _ubicacion:String;
+		private var _tipo:String;
+		private var _estatus:String;
+		private var _idproveedor:String;
+		private var _anio:String;
+		private var _tipoeriodo:String;
+		private var _periodo:String;
+		private var _mes:String;
+		private var _tipoBusqueda:String;
+		private var _nombreCliente:String;
+		private var _estadoProquifaNet:String; //estado pedido
+		private var _estadoDespachable:String;
+		private var _edoPCompra:String;
+		private var _listaEmpaque:String;
+		private var _ocRelacionada:String;
+		private var _piRelacionada:String;
+		private var _nombreProveedor:String;
+		//////////////////////////////	propiedades de producto	//////////////////////////////
+		private var _descripcionProducto:String;
+		private var _manejoProducto:String;
+		private var _controlProducto:String;
+		private var _ubicacionProducto:String;
+		private var _tipoFlete:String;
+		private var _referencia:String;
+		private var _tipoProducto:String;
+		
+		private var _cliente:Cliente;
+		private var _producto:Producto;
+		private var _pcompra:PartidaCompra;
+		
+		private var _fechaInspeccion:Date;
+		private var _fechaInicioInspeccionStr:Date;
+		private var _fechaFinInspeccionStr:Date;
+		private var _fecha:Date;
+		private var _fechaReasignacionSTOCK:Date;
+		
+		private var _cantidad:int;
+		private var _totalPiezas:Number;
+		private var _mesInicio:Number;
+		private var _mesFin:Number;		
+		private var _diferencial:Number;
+		private var _totalMonto:Number;
+		private var _idPCompra:int;
+		private var _ttproducto:int;
+		private var _numeroPartidasPedido:int;
+		private var _numeroPartidasCompra:int;
+		private var _contador:int;
+		
+		private var _lotesPieza:String;
+		private var _fechasCaducidad:String;
+		private var _doctoR:String;
+		private var _ruta_Zona:String;
+		private var _origenStock:String;
+		private var _marcaProducto:String;
+		private var _ultimo:String;
+		private var _enfoque:String;
+		private var _vieneD:String;
+		
+		private var _parciales:Boolean;
+		private var _info:Boolean = true;
+		private var _esEnTiempo:String;
+		
+		
+		private var _etiqueta:String;
+		private var _diasFiltro:String;
+		
+		private var _esac:String;
+		private var _cpago:String;
+		private var _notificadoProductoAlmacen:ArrayCollection;
+		private var _ruta:String;
+		private var _zonaMensajeria:String;
+		
+		private var _pap:String;
+		private var _porFacturar:String;
+		private var _Oc:String;
+		private var _OCOriginal:String;
+		private var _Autorizacion:String;
+
+		
+		private var _totalProductosLista:Number; //al llenar esta variable se puede habilitar al final de una lista el total de partidas 
+		//////////////////////////////	variables usadas para agrupar //////////////////////////////
+		private var _arregloPedidos:ArrayCollection;//variable puesta por osv para crear una lista de numero de pedidos y quitar duplicados en RepoProdAlamcen2012
+		
+		public function ProductoAlmacen()
+		{
+			producto = new Producto();
+		}
+		
+		
+		public function get zonaMensajeria():String
+		{
+			return _zonaMensajeria;
+		}
+
+		public function set zonaMensajeria(value:String):void
+		{
+			_zonaMensajeria = value;
+		}
+
+		public function get ruta():String
+		{
+			return _ruta;
+		}
+
+		public function set ruta(value:String):void
+		{
+			_ruta = value;
+		}
+
+		public function get esEnTiempo():String
+		{
+			return _esEnTiempo;
+		}
+		
+		public function set esEnTiempo(value:String):void
+		{
+			_esEnTiempo = value;
+		}
+		
+		public function get referencia():String
+		{
+			return _referencia;
+		}
+		
+		public function set referencia(value:String):void
+		{
+			_referencia = value;
+		}
+		
+		public function get ttproducto():int
+		{
+			return _ttproducto;
+		}
+		
+		public function set ttproducto(value:int):void
+		{
+			_ttproducto = value;
+		}
+		
+		public function get lotesPieza():String
+		{
+			if(_lotesPieza == null || _lotesPieza == '') _lotesPieza = 'ND';
+			return _lotesPieza;
+		}
+		
+		public function set lotesPieza(value:String):void
+		{
+			_lotesPieza = value;
+		}
+		
+		public function get fechasCaducidad():String
+		{
+			if(_fechasCaducidad == null || _fechasCaducidad == '') _fechasCaducidad = 'ND';
+			return _fechasCaducidad;
+		}
+		
+		public function set fechasCaducidad(value:String):void
+		{
+			_fechasCaducidad = value;
+		}
+		
+		public function get totalProductosLista():Number
+		{
+			return _totalProductosLista;
+		}
+		
+		public function set totalProductosLista(value:Number):void
+		{
+			_totalProductosLista = value;
+		}
+		
+		public function get arregloPedidos():ArrayCollection
+		{
+			return _arregloPedidos;
+		}
+		
+		public function set arregloPedidos(value:ArrayCollection):void
+		{
+			_arregloPedidos = value;
+		}
+		
+		public function get controlProducto():String
+		{
+			return _controlProducto;
+		}
+		
+		public function set controlProducto(value:String):void
+		{
+			_controlProducto = value;
+		}
+		
+		public function get ubicacionProducto():String
+		{
+			return _ubicacionProducto;
+		}
+		
+		public function set ubicacionProducto(value:String):void
+		{
+			if(value == null){
+				_ubicacionProducto = "ND";
+			}
+			else
+			{
+				_ubicacionProducto = value;
+			}
+		}
+		
+		public function get manejoProducto():String
+		{
+			return _manejoProducto;
+		}
+		
+		public function set manejoProducto(value:String):void
+		{
+			if(value != null){
+				_manejoProducto = value;
+			}
+		}
+		
+		public function get descripcionProducto():String
+		{
+			return _descripcionProducto;
+		}
+		
+		public function set descripcionProducto(value:String):void
+		{
+			if(value != null){
+				if(value != ""){
+					_descripcionProducto = value;
+				}
+			}
+		}
+		
+		public function get folioFD():String
+		{
+			return _folioFD;
+		}
+		
+		public function set folioFD(value:String):void
+		{
+			if(value == null){
+				_folioFD = "Pendiente";
+			}else{
+				_folioFD = value;
+			}
+		}
+		
+		public function get destino():String
+		{
+			return _destino;
+		}
+		
+		public function set destino(value:String):void
+		{
+			if(value == null){
+				_destino = "Pendiente";
+			}else{
+				_destino = value;
+			}
+		}
+		
+		public function get fechaInspeccion():Date
+		{
+			return _fechaInspeccion;
+		}
+		
+		public function set fechaInspeccion(value:Date):void
+		{
+			_fechaInspeccion = value;
+		}
+		
+		public function get fechaInicioInspeccionStr():Date
+		{
+			return _fechaInicioInspeccionStr;
+		}
+		
+		public function set fechaInicioInspeccionStr(value:Date):void
+		{
+			_fechaInicioInspeccionStr = value;
+		}
+		
+		public function get fechaFinInspeccionStr():Date
+		{
+			return _fechaFinInspeccionStr;
+		}
+		
+		public function set fechaFinInspeccionStr(value:Date):void
+		{
+			_fechaFinInspeccionStr = value;
+		}
+		
+		public function get inspector():String
+		{
+			if(_inspector == null || _inspector == '') _inspector = 'ND';
+			return _inspector;
+		}
+		
+		public function set inspector(value:String):void
+		{			
+			_inspector = value;
+		}
+		
+		public function get loteInspeccion():String
+		{
+			return _loteInspeccion;
+		}
+		
+		public function set loteInspeccion(value:String):void
+		{
+			if(value == null){
+				_loteInspeccion = "Pendiente";
+			}else{
+				_loteInspeccion = value;
+			}
+		}
+		
+		public function get packingList():String
+		{
+			return _packingList;
+		}
+		
+		public function set packingList(value:String):void
+		{
+			_packingList = value;
+		}
+		
+		public function get folioOC():String
+		{
+			return _folioOC;
+		}
+		
+		public function set folioOC(value:String):void
+		{
+			_folioOC = value;
+		}
+		
+		public function get folioPI():String
+		{
+			return _folioPI;
+		}
+		
+		public function set folioPI(value:String):void
+		{
+			if(value == null){
+				_folioPI = "Pendiente";
+			}else{
+				_folioPI = value;
+			}
+		}
+		
+		public function get cliente():Cliente
+		{
+			return _cliente;
+		}
+		
+		public function set cliente(value:Cliente):void
+		{
+			_cliente = value;
+		}
+		
+		public function get producto():Producto
+		{
+			return _producto;
+		}
+		
+		public function set producto(value:Producto):void
+		{
+			_producto = value;
+			if(value != null){
+				this.descripcionProducto = _producto.descripcion;
+				this.manejoProducto = _producto.manejo;
+				this.controlProducto = _producto.control;
+				_tipoProducto = _producto.tipo;
+				
+			}
+		}
+		
+		public function get pcompra():PartidaCompra
+		{
+			return _pcompra;
+		}
+		
+		public function set pcompra(value:PartidaCompra):void
+		{
+			_pcompra = value;
+			if(value != null)
+			{
+				this.ubicacionProducto = _pcompra.ubicacion;
+			}
+			else{
+				this.ubicacionProducto = null;
+			}
+		}
+		
+		public function get ubicacion():String
+		{
+			return _ubicacion;
+		}
+		
+		public function set ubicacion(value:String):void
+		{
+			_ubicacion = value;	
+		}
+		
+		public function get tipo():String
+		{
+			return _tipo;
+		}
+		
+		public function set tipo(value:String):void
+		{
+			if(value == null){
+				_tipo = "Pendiente";
+			}else{
+				_tipo = value;
+			}
+		}
+		
+		public function get estatus():String
+		{
+			return _estatus;
+		}
+		
+		public function set estatus(value:String):void
+		{
+			_estatus = value;
+		}
+		
+		public function get cantidad():int
+		{
+			return _cantidad;
+		}
+		
+		public function set cantidad(value:int):void
+		{
+			_cantidad = value;
+		}
+		
+		public function get fecha():Date
+		{
+			return _fecha;
+		}
+		
+		public function set fecha(value:Date):void
+		{
+			_fecha = value;
+		}
+		
+		public function get idproveedor():String
+		{
+			return _idproveedor;
+		}
+		
+		public function set idproveedor(value:String):void
+		{
+			_idproveedor = value;
+		}
+		
+		public function get totalPiezas():Number
+		{
+			return _totalPiezas;
+		}
+		
+		public function set totalPiezas(value:Number):void
+		{
+			_totalPiezas = value;
+		}
+		
+		public function get mesInicio():Number
+		{
+			return _mesInicio;
+		}
+		
+		public function set mesInicio(value:Number):void
+		{
+			_mesInicio = value;
+		}
+		
+		public function get mesFin():Number
+		{
+			return _mesFin;
+		}
+		
+		public function set mesFin(value:Number):void
+		{
+			_mesFin = value;
+		}
+		
+		public function get anio():String
+		{
+			return _anio;
+		}
+		
+		public function set anio(value:String):void
+		{
+			_anio = value;
+		}
+		
+		public function get tipoeriodo():String
+		{
+			return _tipoeriodo;
+		}
+		
+		public function set tipoeriodo(value:String):void
+		{
+			_tipoeriodo = value;
+		}
+		
+		public function get periodo():String
+		{
+			return _periodo;
+		}
+		
+		public function set periodo(value:String):void
+		{
+			_periodo = value;
+		}
+		
+		public function get mes():String
+		{
+			return _mes;
+		}
+		
+		public function set mes(value:String):void
+		{
+			_mes = value;
+		}
+		
+		public function get tipoBusqueda():String
+		{
+			return _tipoBusqueda;
+		}
+		
+		public function set tipoBusqueda(value:String):void
+		{
+			_tipoBusqueda = value;
+		}
+		
+		public function get nombreCliente():String
+		{
+			return _nombreCliente;
+		}
+		
+		public function set nombreCliente(value:String):void
+		{
+			if(value == null){
+				_nombreCliente = "Pendiente";
+			}else{
+				_nombreCliente = value;
+			}
+		}
+		
+		public function get estadoProquifaNet():String
+		{
+			return _estadoProquifaNet;
+		}
+		
+		public function set estadoProquifaNet(value:String):void
+		{
+			if(value == null){
+				_estadoProquifaNet = "Pendiente";
+			}else{
+				_estadoProquifaNet = value;
+			}
+		}
+		
+		public function get estadoDespachable():String
+		{
+			return _estadoDespachable;
+		}
+		
+		public function set estadoDespachable(value:String):void
+		{
+			if(value == null){
+				_estadoDespachable = "Pendiente";
+			}else{
+				_estadoDespachable = value;
+			}
+		}
+		
+		public function get diferencial():Number
+		{
+			return _diferencial;
+		}
+		
+		public function set diferencial(value:Number):void
+		{
+			_diferencial = value;
+		}
+		
+		public function get idPCompra():int
+		{
+			return _idPCompra;
+		}
+		
+		public function set idPCompra(value:int):void
+		{
+			_idPCompra = value;
+		}
+		
+		public function get edoPCompra():String
+		{
+			return _edoPCompra;
+		}
+		
+		public function set edoPCompra(value:String):void
+		{
+			_edoPCompra = value;
+		}
+		
+		public function get listaEmpaque():String
+		{
+			return _listaEmpaque;
+		}
+		
+		public function set listaEmpaque(value:String):void
+		{
+			if(value == null){
+				_listaEmpaque = "Pendiente";
+			}else{
+				_listaEmpaque = value;
+			}
+		}
+		
+		public function get ocRelacionada():String
+		{
+			return _ocRelacionada;
+		}
+		
+		public function set ocRelacionada(value:String):void
+		{
+			if(value == null){
+				_ocRelacionada = "Pendiente";
+			}else{
+				_ocRelacionada = value;
+			}
+		}
+		
+		public function get piRelacionada():String
+		{
+			return _piRelacionada;
+		}
+		
+		public function set piRelacionada(value:String):void
+		{
+			if(value == null){
+				_piRelacionada = "Pendiente";
+			}else{
+				_piRelacionada = value;
+			}
+		}
+		
+		public function get nombreProveedor():String
+		{
+			return _nombreProveedor;
+		}
+		
+		public function set nombreProveedor(value:String):void
+		{
+			if(value == null){
+				_nombreProveedor = "Pendiente";
+			}else{
+				_nombreProveedor = value;
+			}
+		}
+		
+		public function get tipoFlete():String
+		{
+			return _tipoFlete;
+		}
+		
+		public function set tipoFlete(value:String):void
+		{
+			if(value == null){
+				_tipoFlete = "Pendiente";	
+			}else{
+				_tipoFlete = value;	
+			}
+		}		
+		
+		public function get doctoR():String
+		{
+			return _doctoR;
+		}
+		
+		public function set doctoR(value:String):void
+		{
+			_doctoR = value;
+		}
+		
+		public function get ruta_Zona():String
+		{
+			return _ruta_Zona;
+		}
+		
+		public function set ruta_Zona(value:String):void
+		{
+			_ruta_Zona = value;
+		}
+		
+		public function get origenStock():String
+		{
+			return _origenStock;
+		}
+		
+		public function set origenStock(value:String):void
+		{
+			_origenStock = value;
+		}
+		
+		public function get parciales():Boolean
+		{
+			return _parciales;
+		}
+		
+		public function set parciales(value:Boolean):void
+		{
+			_parciales = value;
+		}
+		
+		public function get marcaProducto():String
+		{
+			return _marcaProducto;
+		}
+		
+		public function set marcaProducto(value:String):void
+		{
+			_marcaProducto = value;
+		}
+		
+		public function get numeroPartidasPedido():int
+		{
+			return _numeroPartidasPedido;
+		}
+		
+		public function set numeroPartidasPedido(value:int):void
+		{
+			_numeroPartidasPedido = value;
+		}
+		
+		public function get numeroPartidasCompra():int
+		{
+			return _numeroPartidasCompra;
+		}
+		
+		public function set numeroPartidasCompra(value:int):void
+		{
+			_numeroPartidasCompra = value;
+		}
+		
+		public function get fechaReasignacionSTOCK():Date
+		{
+			return _fechaReasignacionSTOCK;
+		}
+		
+		public function set fechaReasignacionSTOCK(value:Date):void
+		{
+			_fechaReasignacionSTOCK = value;
+		}
+		
+		public function get ultimo():String
+		{
+			return _ultimo;
+		}
+		
+		public function set ultimo(value:String):void
+		{
+			_ultimo = value;
+		}
+		
+		public function get enfoque():String
+		{
+			return _enfoque;
+		}
+		
+		public function set enfoque(value:String):void
+		{
+			_enfoque = value;
+		}
+		
+		public function get contador():int
+		{
+			return _contador;
+		}
+		
+		public function set contador(value:int):void
+		{
+			_contador = value;
+		}
+		
+		public function get vieneD():String
+		{
+			return _vieneD;
+		}
+		
+		public function set vieneD(value:String):void
+		{
+			_vieneD = value;
+		}
+		
+		public function get totalMonto():Number
+		{
+			return _totalMonto;
+		}
+		
+		public function set totalMonto(value:Number):void
+		{
+			_totalMonto = value;
+		}
+		
+		public function get info():Boolean
+		{
+			return _info;
+		}
+		
+		public function set info(value:Boolean):void
+		{
+			_info = value;
+		}
+		
+		public function get tipoProducto():String
+		{
+			return _tipoProducto;
+		}
+		
+		public function set tipoProducto(value:String):void
+		{
+			_tipoProducto = value;
+		}
+
+		public function get etiqueta():String
+		{
+			return _etiqueta;
+		}
+
+		public function set etiqueta(value:String):void
+		{
+			_etiqueta = value;
+		}
+
+		public function get diasFiltro():String
+		{
+			return _diasFiltro;
+		}
+
+		public function set diasFiltro(value:String):void
+		{
+			_diasFiltro = value;
+		}
+
+		public function get esac():String
+		{
+			return _esac;
+		}
+
+		public function set esac(value:String):void
+		{
+			_esac = value;
+		}
+
+		public function get cpago():String
+		{
+			return _cpago;
+		}
+
+		public function set cpago(value:String):void
+		{
+			_cpago = value;
+		}
+
+		public function get notificadoProductoAlmacen():ArrayCollection
+		{
+			return _notificadoProductoAlmacen;
+		}
+
+		public function set notificadoProductoAlmacen(value:ArrayCollection):void
+		{
+			_notificadoProductoAlmacen = value;
+		}
+
+		public function get pap():String
+		{
+			return _pap;
+		}
+
+		public function set pap(value:String):void
+		{
+			_pap = value;
+		}
+
+		public function get porFacturar():String
+		{
+			return _porFacturar;
+		}
+
+		public function set porFacturar(value:String):void
+		{
+			_porFacturar = value;
+		}
+
+		public function get Oc():String
+		{
+			return _Oc;
+		}
+
+		public function set Oc(value:String):void
+		{
+			_Oc = value;
+		}
+
+		public function get OCOriginal():String
+		{
+			return _OCOriginal;
+		}
+
+		public function set OCOriginal(value:String):void
+		{
+			_OCOriginal = value;
+		}
+
+		public function get Autorizacion():String
+		{
+			return _Autorizacion;
+		}
+
+		public function set Autorizacion(value:String):void
+		{
+			_Autorizacion = value;
+		}
+
+
+	}
+}

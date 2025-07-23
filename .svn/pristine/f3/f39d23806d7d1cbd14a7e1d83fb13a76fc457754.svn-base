@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoRecibido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+
+			private var keys:Object;
+			public var _currentType:String;
+			private var _infoClienteET:ArrayCollection;
+			private var _infoClienteFT:ArrayCollection;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET")
+						myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoClienteET,null,'totalDocumentos');
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoClienteFT,null,'totalDocumentos');
+				}
+			}
+			
+			public function set recibirDocumentos($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoClienteET = new ArrayCollection();
+				_infoClienteFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				/**
+				 * Se elimina el último elemento del arreglo que trae el conteo de las filas.
+				 * */
+				if(arrayTemp.length>1)
+					arrayTemp.pop();
+				
+				/**
+				 * Se dividen todos los tipos de Documentos Recibidos que estan en tiempo vs las fuera de tiempo y se ordenan
+				 * */ 
+				var arrayClientesET:Array = new Array();
+				var arrayClientesFT:Array = new Array();
+				
+				arrayClientesET = arrayTemp.filter(ObtenerTodosLosTipoDoctoET);
+				arrayClientesFT = arrayTemp.filter(ObtenerTodosLosTipoDoctoFT);
+				arrayClientesET.sortOn("nombreEmpresa");
+				arrayClientesFT.sortOn("nombreEmpresa");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada  tipo de Documentos Recibidos
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalTipoDoctosET:Array = new Array();
+				arrayTotalTipoDoctosET = arrayClientesET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalTipoDoctosFT:Array = new Array();
+				arrayTotalTipoDoctosFT = arrayClientesFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Estatus y/o situación
+				 * */
+				
+				FormarLosClientes(arrayTotalTipoDoctosET,arrayClientesET,_infoClienteET);
+				FormarLosClientes(arrayTotalTipoDoctosFT,arrayClientesFT,_infoClienteFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoClienteET,null,'totalDocumentos');
+				else if(_currentType =="FT")
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoClienteFT,null,'totalDocumentos');
+				
+				//Para liberar memoria
+				arrayTotalTipoDoctosET = new Array();
+				arrayClientesET= new Array();
+				arrayTotalTipoDoctosFT= new Array();
+				arrayClientesFT= new Array();
+			}
+			private function FormarLosClientes(TotalClientes:Array,clientesInfo:Array,infoClientes:ArrayCollection):void
+			{
+				
+				var totalDoctoRecibido:int;
+				var currentDoctoRecibido:DocumentoRecibido; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalClientes.length; i++){
+					j=0;
+					totalDoctoRecibido =0;
+					
+					currentDoctoRecibido = clientesInfo[j] as DocumentoRecibido;
+					while( (TotalClientes[i] as DocumentoRecibido).nombreEmpresa == currentDoctoRecibido.nombreEmpresa ){
+						
+						totalDoctoRecibido++;
+						
+						clientesInfo.shift();
+						if(clientesInfo.length >0)
+							currentDoctoRecibido = clientesInfo[j] as DocumentoRecibido;
+						else
+							currentDoctoRecibido =new DocumentoRecibido();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalClientes[i] as DocumentoRecibido).nombreEmpresa.toLocaleUpperCase();
+					itemResumenConsulta.totalClientes = 1;
+					itemResumenConsulta.totalDocumentos = totalDoctoRecibido;
+					
+					infoClientes.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			public function quitaDuplicados(item:DocumentoRecibido, idx:uint, doctoRecibido:Array):Boolean{
+				if (keys.hasOwnProperty(item.nombreEmpresa)) {
+					return false;
+				} else {
+					keys[item.nombreEmpresa] = item.nombreEmpresa;
+					return true;
+				}
+			}
+			private function ObtenerTodosLosTipoDoctoET(item:DocumentoRecibido, id:uint, doctoRecibido:Array):Boolean
+			{
+				return item.enTiempo == "ET" ? true : false;
+			}
+			private function ObtenerTodosLosTipoDoctoFT(item:DocumentoRecibido, id:uint, array:Array):Boolean
+			{
+				return item.enTiempo == "FT" ? true : false;
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="totalDocumentos"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="CLIENTES" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

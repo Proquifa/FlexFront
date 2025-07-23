@@ -1,0 +1,853 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:toggleButton="skins.skin.botones.toggleButton.*" 
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoCatProOferta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.FormulaPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.CostoFactor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.core.IToolTip;
+			import mx.core.IVisualElement;
+			import mx.events.ToolTipEvent;
+			import mx.managers.ToolTipManager;
+			import mx.utils.StringUtil;
+			
+			import spark.components.supportClasses.GroupBase;
+			
+			import skins.skin.toolTip.toolTipDefaultPQNet;
+			
+			private var _currentConfPrecioProducto:ConfiguracionPrecioProducto;
+			private var _currentFormulaPrecio:FormulaPrecio;
+			
+			private var currentConfiguracionPrecio:ConfiguracionPrecio;
+			
+			[Bindable]
+			public var isProveedorNacional:Boolean;
+			
+			[Bindable]
+			private var currentCostoFactor:CostoFactor;
+			
+			[Bindable]
+			public var currentProducto:Producto;
+			
+			private var _currentNI:String = "AA+";
+			
+			private var _Tool_formula:String;
+			private var _currentNivel:String;
+			
+			[Bindable]
+			private var costoCompra:Number;
+			
+			public function get dataProvider():ConfiguracionPrecioProducto
+			{
+				return _currentConfPrecioProducto;
+			}
+			
+			public function set dataProvider(value:ConfiguracionPrecioProducto):void
+			{
+				if(value != null  )
+				{
+					if(value.idClienteConfiguracion == 0){
+						lblNivelIngreso.text = "No hay configuración";			
+					}else{
+						_currentConfPrecioProducto = value;
+						grpFactoresSinInfo.visible = grpFactoresSinInfo.includeInLayout = false;
+						grpFactoresConInformacion.visible = true;
+						currentCostoFactor = value.costoFactorProducto;
+						
+						armartextosParaBotonesNivelesIngreso(value); 
+						mostrarInfoEnElPanel();
+						
+						lblPrecioLista.text=UtilsFormatosNumericos.redondearNEAREST(_currentConfPrecioProducto.costoProducto) +' '+ currentProducto.monedaAbreviatura;
+						lblPrecioListaNeto.text=UtilsFormatosNumericos.precisionADosDecimalesConComas(_currentConfPrecioProducto.costoCompra) +' '+ currentProducto.monedaAbreviatura;
+					}
+				}
+				else
+				{
+					//limpiar panel
+					grpFactoresSinInfo.visible = grpFactoresSinInfo.includeInLayout = true;
+					grpFactoresConInformacion.visible = false;
+				}
+			}
+			
+			
+			public function mostrarInfoEnElPanel():void
+			{
+				limpiarSeleccionBtnNiveles();
+				/*btnAAplus.selected = true;*/ 
+				btnAAplus.selected = true; 
+				_currentNI = "AA+";
+				
+				currentCostoFactor =( _currentConfPrecioProducto as ConfiguracionPrecioProducto).costoFactorProducto;
+				/*currentProducto = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).producto;*/
+				costoCompra = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).costoCompra;
+				if(currentCostoFactor != null){
+					/* MODIFICACION FLETE EXPRES
+					btnFe.enabled = true; */
+					btnStock.enabled = true;
+					btnDist.enabled = true;
+					
+					//NA Stock y Flete
+					//if(currentConfiguracionPrecio){ //quitar despues
+					
+					/*if (currentCostoFactor.fleteExpressDisable || currentConfiguracionPrecio.restringirFExpress)*/
+					if (currentCostoFactor.fleteExpressDisable)
+					{
+						currentCostoFactor.precioUFExpress_String = "FE · NA";
+						
+						/* MODIFICACION FLETE EXPRES
+						btnFe.enabled = false; */
+					}
+					
+					/*if (currentCostoFactor.stockDisable || currentConfiguracionPrecio.restringirStock)*/ 
+					if (currentCostoFactor.stockDisable) 
+					{
+						currentCostoFactor.precioUStock_String = "Stock · NA";
+						btnStock.enabled = false;
+					}
+					
+					/*if(currentConfiguracionPrecio.restringirDistribuidor)
+					{
+					currentCostoFactor.precioUDistribuidor_String = "Dist. · NA";
+					btnDist.enabled = false;
+					}*/
+					//}
+					
+					lblLicencia.visible = lblLicencia.includeInLayout = false;
+					if(StringUtil.trim(currentProducto.licencia).length > 0)
+					{
+						lblLicencia.visible = lblLicencia.includeInLayout = true;
+						lblLicencia.text = currentProducto.licencia;
+					}
+					
+					vgOriginal.visible= vgOriginal.includeInLayout = true;
+					vgPublico.visible = vgPublico.includeInLayout = false;
+					
+					
+					if(_currentNivel != "Clasificacion")
+					{
+						var soliFormula:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_INFORMACION_DE_LA_FORMULA_PRECIO);
+						soliFormula.idProveedor = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idProveedor;
+						soliFormula.idConfigFamilia = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idConfiguracionFamilia;
+						soliFormula.idProducto = currentProducto.idProducto;
+						
+						if (currentProducto.industria == 'Gobierno' )
+						{
+							vgOriginal.visible= vgOriginal.includeInLayout = false;
+							vgPublico.visible = vgPublico.includeInLayout = true;
+							
+							btnPublico.selected = true; 
+							_currentNI = "PUBLICO";
+							soliFormula.nivel = 'PUBLICO';
+						}
+						else
+						{
+							soliFormula.nivel = "AAplus";
+						}
+						/*dispatchEvent(soliFormula);*/
+					}
+					else
+					{
+						var soliFormulaClasif:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_INFORMACION_DE_LA_FORMULA_PRECIO_CLASIFICACION);
+						soliFormulaClasif.idProveedor = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idProveedor;
+						soliFormulaClasif.idConfigClasificacion = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idConfiguracionClasificacion;
+						soliFormulaClasif.idProducto = currentProducto.idProducto;
+						
+						
+						if (currentProducto.industria == 'Gobierno' )
+						{
+							vgOriginal.visible= vgOriginal.includeInLayout = false;
+							vgPublico.visible = vgPublico.includeInLayout = true;
+							
+							btnPublico.selected = true; 
+							_currentNI = "PUBLICO";
+							soliFormulaClasif.nivel = 'PUBLICO';
+						}
+						else
+						{
+							soliFormulaClasif.nivel = "AAplus";
+						}
+						
+						/*dispatchEvent(soliFormulaClasif);*/
+					}
+				}
+				
+			}
+			
+			public function generarFormula(value:FormulaPrecio):void{
+				
+				if(value == null)
+					return;
+				
+				var _Tool_valorAduana:String = "";
+				var _Tool_numeroPiezas:String = "";
+				var _Tool_precioLista:String = "";
+				var _Tool_fletePC:String = "";
+				
+				_currentFormulaPrecio = value; 	
+				
+				
+				lblNivelIngreso.text = _currentNI;
+				
+				if(_currentFormulaPrecio.minimoOrdebCompra < 0)
+				{
+					lblMontoMinimo.text = "NA";
+				}
+				else
+				{
+					lblMontoMinimo.text = currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(_currentFormulaPrecio.minimoOrdebCompra);
+				}
+				
+				lblDescuento.text = _currentFormulaPrecio.descuento + "%";
+				_Tool_valorAduana = lblValorEnAduana.text = currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(_currentFormulaPrecio.valorAduana);
+				_Tool_numeroPiezas = _currentFormulaPrecio.numeroPiezas.toString();
+				_Tool_precioLista = "$"+UtilsFormatosNumericos.precisionASeisDecimalesConComas( _currentFormulaPrecio.precioLista);
+				_Tool_fletePC =  "$"+UtilsFormatosNumericos.precisionASeisDecimalesConComas( _currentFormulaPrecio.flete);
+				_Tool_formula = _Tool_valorAduana + " = (" + _Tool_numeroPiezas + "pzas * "+_Tool_precioLista+" ) + "+_Tool_fletePC;
+				
+				var importacion:Number = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valorAduana * (_currentFormulaPrecio.igi/100)),6) + 
+					UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valorAduana * (_currentFormulaPrecio.dta /100)),6) + _currentFormulaPrecio.honorariosAgenteA; 
+				
+				var importacionString:String = UtilsFormatosNumericos.precisionASeisDecimalesConComas(importacion);
+				lblImportacion.text = "(" + currentProducto.monedaSimbolo + _currentFormulaPrecio.valorAduanaString + " * " + 
+					_currentFormulaPrecio.igi + "%)" + " + ("+currentProducto.monedaSimbolo + _currentFormulaPrecio.valorAduanaString + " * " + 
+					_currentFormulaPrecio.dta + "%) + " + _currentFormulaPrecio.honorariosAgenteAString + " = " +
+					currentProducto.monedaSimbolo + importacionString;
+				
+				
+				var costoDeVenta:Number;
+				var costoDeVentaString:String;
+				if(isProveedorNacional)
+				{
+					costoDeVenta = (_currentFormulaPrecio.valorAduana + _currentFormulaPrecio.costoConsularizacion + _currentFormulaPrecio.fleteDocumentacion + _currentFormulaPrecio.permiso + _currentFormulaPrecio.fleteDestino);
+					costoDeVentaString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoDeVenta);
+					lblCostoVenta.text = currentProducto.monedaSimbolo + _currentFormulaPrecio.valorAduanaString + " + " +
+						currentProducto.monedaSimbolo +_currentFormulaPrecio.costoConsularizacionString + " + "+currentProducto.monedaSimbolo + _currentFormulaPrecio.fleteDocumentacionString + " + " +
+						currentProducto.monedaSimbolo + _currentFormulaPrecio.permisoString + " + " + currentProducto.monedaSimbolo + _currentFormulaPrecio.fleteDestinoString + " = " +
+						currentProducto.monedaSimbolo + costoDeVentaString;
+				}
+				else
+				{
+					costoDeVenta = (_currentFormulaPrecio.valorAduana + importacion + _currentFormulaPrecio.costoConsularizacion + _currentFormulaPrecio.fleteDocumentacion + _currentFormulaPrecio.permiso + _currentFormulaPrecio.fleteDestino);
+					costoDeVentaString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoDeVenta);
+					lblCostoVenta.text = currentProducto.monedaSimbolo + _currentFormulaPrecio.valorAduanaString + " + " +currentProducto.monedaSimbolo + importacionString + " + " +
+						currentProducto.monedaSimbolo +_currentFormulaPrecio.costoConsularizacionString + " + "+currentProducto.monedaSimbolo + _currentFormulaPrecio.fleteDocumentacionString + " + " +
+						currentProducto.monedaSimbolo + _currentFormulaPrecio.permisoString + " + " + currentProducto.monedaSimbolo + _currentFormulaPrecio.fleteDestinoString + " = " +
+						currentProducto.monedaSimbolo + costoDeVentaString;
+				}
+				
+				
+				/* var costoFijo:Number = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (_currentFormulaPrecio.costoFijo / 100)),2);
+				
+				var costoFijoString:String = UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoFijo);
+				lblCostoFijo.text = currentProducto.monedaSimbolo + costoDeVentaString +" * "+ _currentFormulaPrecio.costoFijo + "% = " + currentProducto.monedaSimbolo + costoFijoString;
+				
+				var utilidad:Number = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (_currentFormulaPrecio.utilidad /100)),2);
+				
+				var utilidadString:String = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+				
+				lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + _currentFormulaPrecio.utilidad + "% = " +  
+				currentProducto.monedaSimbolo + utilidadString; */
+				
+				var costoFijo:Number;
+				var costoFijoString:String;
+				var valorString:String = UtilsFormatosNumericos.precisionASeisDecimalesConComas(_currentFormulaPrecio.valor);
+				
+				if(_currentFormulaPrecio.compuestaCostoF)
+				{
+					costoFijo = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (_currentFormulaPrecio.costoFijo / 100)),6);
+					costoFijoString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoFijo);
+					lblCostoFijo.text = currentProducto.monedaSimbolo + costoDeVentaString +" * "+ _currentFormulaPrecio.costoFijo + "% = " + currentProducto.monedaSimbolo + costoFijoString;
+				}
+				else
+				{
+					costoFijo = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (_currentFormulaPrecio.costoFijo / 100)),6);
+					costoFijoString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoFijo);
+					lblCostoFijo.text =  currentProducto.monedaSimbolo + valorString +" * "+ _currentFormulaPrecio.costoFijo + "% = " + currentProducto.monedaSimbolo + costoFijoString;
+				}
+				
+				var utilidad:Number;
+				var utilidadString:String;
+				/*if(_currentFormulaPrecio.compuestaFactorU)
+				{
+				utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (_currentFormulaPrecio.utilidad /100)),6);
+				utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+				lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + _currentFormulaPrecio.utilidad + "% = " + currentProducto.monedaSimbolo + utilidadString;
+				}
+				else
+				{
+				utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (_currentFormulaPrecio.utilidad /100)),6);
+				utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+				lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + _currentFormulaPrecio.utilidad + "% = " + currentProducto.monedaSimbolo + utilidadString;
+				}*/
+				
+				if((_currentFormulaPrecio != null) && (currentCostoFactor != null)){
+					if(_currentNI=="AA+"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_AAplus /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_AAplus + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_AAplus /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_AAplus + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="AA"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_AA /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_AA + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_AA /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_AA + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						
+					}else if(_currentNI=="AM"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_AM /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_AM + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_AM /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_AM + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="AB"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_AB /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_AM + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_AB /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_AB + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="MA"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_MA /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_MA + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_MA /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_MA + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="MM"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_MM /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_MM + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_MM /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_MM + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="MB"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_MB /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_MB + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_MB /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_MB + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="Bajo"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_Bajo /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_Bajo + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_Bajo /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_Bajo + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="STOCK"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factor_Stock /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factor_Stock + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factor_Stock /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factor_Stock + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}else if(_currentNI=="DISTRIBUIDOR"){
+						if(_currentFormulaPrecio.compuestaFactorU)
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (currentCostoFactor.factorDistribuidor /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + currentCostoFactor.factorDistribuidor + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+						else
+						{
+							utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (currentCostoFactor.factorDistribuidor /100)),6);
+							utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+							lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + currentCostoFactor.factorDistribuidor + "% = " + currentProducto.monedaSimbolo + utilidadString;
+						}
+					}
+				}
+				
+				var precioTotal:Number = (costoDeVenta + costoFijo + utilidad);
+				var precioTotalString:String = UtilsFormatosNumericos.precisionASeisDecimalesConComas(precioTotal);
+				lblPrecioTotal.text = currentProducto.monedaSimbolo + costoDeVentaString +" + "+ currentProducto.monedaSimbolo + costoFijoString +" + " + currentProducto.monedaSimbolo + utilidadString + " = " + 
+					currentProducto.monedaSimbolo + precioTotalString;
+				/*var utilidad:Number;
+				var utilidadString:String;
+				if(_currentFormulaPrecio.compuestaFactorU)
+				{
+				utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta * (_currentFormulaPrecio.utilidad /100)),6);
+				utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+				lblUtilidad.text = currentProducto.monedaSimbolo + costoDeVentaString + " * " + _currentFormulaPrecio.utilidad + "% = " + currentProducto.monedaSimbolo + utilidadString;
+				}
+				else
+				{
+				utilidad = UtilsFormatosNumericos.truncarDecimalesFloor((_currentFormulaPrecio.valor * (_currentFormulaPrecio.utilidad /100)),6);
+				utilidadString = UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidad);
+				lblUtilidad.text =  currentProducto.monedaSimbolo + valorString + " * " + _currentFormulaPrecio.utilidad + "% = " + currentProducto.monedaSimbolo + utilidadString;
+				}
+				
+				var precioTotal:Number = (costoDeVenta + costoFijo + utilidad);
+				var precioTotalString:String = UtilsFormatosNumericos.precisionASeisDecimalesConComas(precioTotal);
+				lblPrecioTotal.text = currentProducto.monedaSimbolo + costoDeVentaString +" + "+ currentProducto.monedaSimbolo + costoFijoString +" + " + currentProducto.monedaSimbolo + utilidadString + " = " + 
+				currentProducto.monedaSimbolo + precioTotalString;*/
+				
+				
+				var costoVentaUni:Number;
+				var costoFijoUni:Number;
+				var utilidadUni:Number;
+				
+				if(_currentNI == "FEXPRESS")
+				{
+					lblNivelIngreso.text = "FE";
+				}
+				else if(_currentNI == "STOCK")
+				{
+					lblNivelIngreso.text = "Stock";
+				}
+				else if(_currentNI == "PUBLICO")
+				{
+					lblNivelIngreso.text = "PÚBLICO";
+				}
+				
+				costoVentaUni = UtilsFormatosNumericos.truncarDecimalesFloor((costoDeVenta / _currentFormulaPrecio.numeroPiezas),6);
+				lblCostoVentaUni.text = currentProducto.monedaSimbolo + costoDeVentaString +" / " +_currentFormulaPrecio.numeroPiezas + " = "+ currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoVentaUni);
+				
+				costoFijoUni = UtilsFormatosNumericos.truncarDecimalesFloor((costoFijo / _currentFormulaPrecio.numeroPiezas),6);
+				lblCostoFijoUni.text = currentProducto.monedaSimbolo + costoFijoString +" / " +_currentFormulaPrecio.numeroPiezas + " = "+ currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoFijoUni);
+				
+				utilidadUni = UtilsFormatosNumericos.truncarDecimalesFloor((utilidad / _currentFormulaPrecio.numeroPiezas),6);	
+				lblUtilidadUni.text = currentProducto.monedaSimbolo + utilidadString +" / " +_currentFormulaPrecio.numeroPiezas + " = "+ currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidadUni);
+				
+				var precioUni:Number = costoVentaUni + costoFijoUni + utilidadUni;
+				lblPrecioUni.text = currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoVentaUni) +" + " +
+					currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(costoFijoUni) + " + "+ 
+					currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(utilidadUni)+ " = ";
+				lblPrecioUniTotal.text = currentProducto.monedaSimbolo + UtilsFormatosNumericos.redondearNEAREST(precioUni)+".00";
+				
+			}
+			
+			private var infoFormula:FormulaPrecio;
+			public function set recibeInfoFormulaPrecio(value:FormulaPrecio):void
+			{
+				if(!value)
+					return;
+				
+				infoFormula = new FormulaPrecio();
+				infoFormula = value as FormulaPrecio;
+				setTimeout(inciaFormula,2000);
+			}
+			
+			private function inciaFormula():void
+			{
+				generarFormula(infoFormula);
+			}
+			
+			protected function limpiarSeleccionBtnNiveles():void
+			{
+				btnAAplus.selected = false;
+				btnAA.selected = false;
+				btnAM.selected = false;
+				btnAB.selected = false;
+				btnDist.selected = false;
+				btnMA.selected = false;
+				btnMM.selected = false;
+				btnMB.selected = false;
+				btnStock.selected = false;
+				btnPublico.selected = false;
+				btnBajo.selected = false;
+				
+				/* MODIFICACION FLETE EXPRES
+				btnFe.selected = false; */
+			} 
+			
+			protected function btn_NivelesIngreso_Control(event:MouseEvent,$nivel:String):void
+			{
+				_currentNI = $nivel;
+				limpiarSeleccionBtnNiveles();
+				if(event.currentTarget is buttonLeftTogglePQNetDefault)
+				{
+					event.currentTarget.selected = true;
+				}
+				
+				generarFormula(_currentFormulaPrecio);
+				/*if(_currentFormulaPrecio =! null){
+				lblMontoMinimo.text = currentProducto.monedaSimbolo + UtilsFormatosNumericos.precisionASeisDecimalesConComas(_currentFormulaPrecio.minimoOrdebCompra);
+				lblDescuento.text = _currentFormulaPrecio.descuento + "%";
+				}*/
+				/*
+				
+				if(_currentNivel != "Clasificacion")
+				{
+				var soliFormula:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_INFORMACION_DE_LA_FORMULA_PRECIO);
+				soliFormula.idProveedor = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idProveedor;
+				soliFormula.idConfigFamilia = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idConfiguracionFamilia;
+				soliFormula.idProducto = currentProducto.idProducto;
+				
+				if($nivel == "AA+")
+				soliFormula.nivel = "AAplus";
+				else
+				soliFormula.nivel = $nivel;
+				
+				dispatchEvent(soliFormula);
+				}
+				else
+				{
+				var soliFormulaClasif:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_INFORMACION_DE_LA_FORMULA_PRECIO_CLASIFICACION);
+				soliFormulaClasif.idProveedor = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idProveedor;
+				soliFormulaClasif.idConfigClasificacion = (_currentConfPrecioProducto as ConfiguracionPrecioProducto).idConfiguracionClasificacion;
+				soliFormulaClasif.idProducto = currentProducto.idProducto;
+				soliFormulaClasif.nivel = $nivel;
+				dispatchEvent(soliFormulaClasif);
+				}*/
+			}
+			
+			protected function hgroup1_toolTipShowHandler(event:ToolTipEvent):void
+			{
+				var myTip:IToolTip;
+				myTip = ToolTipManager.currentToolTip;
+				
+				var currentTarget:IVisualElement;
+				
+				if(event.currentTarget.id =="lblValorEnAduana")
+				{
+					currentTarget = grpValorEnAduana;
+				}
+				else
+				{
+					currentTarget = event.currentTarget as IVisualElement;
+				}
+				
+				var currentWidth:Number = currentTarget.width;
+				var point:Point = new Point(currentTarget.x,currentTarget.y);
+				var gPoint:Point = (currentTarget.parent as GroupBase).localToGlobal(point);
+				
+				
+				myTip.x = (gPoint.x);
+				myTip.y = (gPoint.y - (myTip.height + 5));
+				
+			}
+			
+			
+			protected function createCustomToolTip($text:String,eve:ToolTipEvent):void
+			{
+				if(_currentFormulaPrecio != null){
+					var customTolTip:toolTipDefaultPQNet = new toolTipDefaultPQNet;
+					
+					if(isProveedorNacional)
+					{
+						if(eve.currentTarget.id == "grpCostoVentaTotal")
+						{
+							customTolTip.bodyText = "Costo de venta total = Valor en aduana + Consularización + Envío de documentos + permiso + Almacén destino";
+						}
+						else
+						{
+							customTolTip.bodyText = $text;	
+						}
+					}
+					else
+					{
+						customTolTip.bodyText = $text;	
+					}
+					
+					if($text == "costoFijo")
+					{
+						if(_currentFormulaPrecio.compuestaCostoF)
+							customTolTip.bodyText = "Costo fijo total = \nCosto de venta * Factor de costo fijo";
+						else
+							customTolTip.bodyText = "Costo fijo total = \nVALOR * Factor de costo fijo";
+					}
+					
+					if($text == "utilidad")
+					{
+						if(_currentFormulaPrecio.compuestaFactorU)
+							customTolTip.bodyText = "Utilidad total = \nCosto de venta total * Factor de utilidad";
+						else
+							customTolTip.bodyText = "Utilidad total = \nVALOR * Factor de utilidad";
+					}
+					
+					eve.toolTip = customTolTip;
+				}
+			}
+			
+			
+			public function set recibeConfiguracionSeleccionada($config:ConfiguracionPrecio):void
+			{
+				if($config == null)
+				{
+					return;
+				}
+				
+				currentConfiguracionPrecio = $config;
+			}
+			
+			public function get currentNivel():String
+			{
+				return _currentNivel;
+			}
+			
+			public function set currentNivel(value:String):void
+			{
+				_currentNivel = value;
+			}
+			
+			
+			[Bindable] private var font12:Number;
+			[Bindable] private var font14:Number = 12;
+			[Bindable] private var font16:Number;
+			[Bindable] private var font22:Number = 13;
+			[Bindable] private var font25:Number = 14;
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				
+				super.updateDisplayList($width,$height);
+				/*font12 = (12 / 445) * ($width);
+				font14 = (14 / 445) * ($width);
+				font16 = (16 / 445) * ($width);
+				font22 = (22 / 445) * ($width);
+				font25 = (22 / 445) * ($width);
+				
+				font12 = font12 > 12 ? 12:font12;
+				font12 = font12 < 10 ? 10:font12;
+				font14 = font14 > 14 ? 14:font14;
+				font16 = font16 > 16 ? 16:font16;
+				font22 = font22 > 22 ? 22:font22;
+				font25 = font25 > 25 ? 25:font25;*/
+			}
+			
+			public function recibeProducto($producto:Producto):void{
+				if(!$producto) return ;
+				currentProducto = $producto
+			}
+			private function armartextosParaBotonesNivelesIngreso($currentItem:ConfiguracionPrecioProducto):void
+			{
+				if($currentItem.costoFactorProducto != null)
+				{
+					$currentItem.costoFactorProducto.precioUAAplus_String ="AA+ · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAAplus) + " · " + $currentItem.costoFactorProducto.diferencialAAplus + "%";
+					$currentItem.costoFactorProducto.precioUAA_String ="AA · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAA) + " · " + $currentItem.costoFactorProducto.diferencialAA + "%";
+					$currentItem.costoFactorProducto.precioUAM_String ="AM · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAM) + " · " + $currentItem.costoFactorProducto.diferencialAM + "%";
+					$currentItem.costoFactorProducto.precioUAB_String ="AB · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAB) + " · " + $currentItem.costoFactorProducto.diferencialAB + "%";
+					$currentItem.costoFactorProducto.precioUBajo_String ="BAJO · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUBajo) + " · " + $currentItem.costoFactorProducto.diferencialBajo + "%";
+					$currentItem.costoFactorProducto.precioUDistribuidor_String ="Dist · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUDistribuidor) + " · " + $currentItem.costoFactorProducto.diferencialDistribuidor + "%";
+					
+					$currentItem.costoFactorProducto.precioUMA_String ="MA · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUMA) + " · " + $currentItem.costoFactorProducto.diferencialMM + "%";
+					$currentItem.costoFactorProducto.precioUMM_String ="MM · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUMM) + " · " + $currentItem.costoFactorProducto.diferencialMM + "%";
+					$currentItem.costoFactorProducto.precioUMB_String ="MB · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUMB) + " · " + $currentItem.costoFactorProducto.diferencialMB + "%";
+					$currentItem.costoFactorProducto.precioUFExpress_String ="FE · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUFExpress) + " · " + $currentItem.costoFactorProducto.diferencialFExpress + "%";
+					$currentItem.costoFactorProducto.precioUStock_String ="Stock · "+ "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUStock) + " · " + $currentItem.costoFactorProducto.diferencialStock + "%";
+					/*$currentItem.costoFactorProducto.precioUPublico_String = "" + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUPublico) + " · " + $currentItem.costoFactorProducto.diferencialPublico + "%";*/
+				}
+				else if(currentCostoFactor == null){
+					currentCostoFactor = new CostoFactor();
+					$currentItem.costoFactorProducto = new CostoFactor();
+					$currentItem.costoFactorProducto.precioUAAplus_String ="AA+ · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUAA_String ="AA · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUAM_String ="AM · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUAB_String ="AB · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUBajo_String ="BAJO · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUDistribuidor_String ="Dist · "+ "$0 · 0%";
+					
+					$currentItem.costoFactorProducto.precioUMA_String ="MA · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUMM_String ="MM · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUMB_String ="MB · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUFExpress_String ="FE · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUStock_String ="Stock · "+ "$0 · 0%";
+					$currentItem.costoFactorProducto.precioUPublico_String = "0 · 0%";
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:Scroller width="100%" height="100%">
+		<s:VGroup width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" horizontalAlign="center"  paddingLeft="20">
+				
+				<s:VGroup id="grpFactoresConInformacion" width="100%" height="100%" horizontalAlign="left" gap="0">
+					<s:Group id="grpFactoresSinInfo" width="100%" height="100%">
+						<label:Titulo_22_pTop10 fontSize="{font22}" text="Sin productos" paddingTop="0" verticalCenter="0"/>
+					</s:Group>
+					
+					<s:VGroup height="100%" width="100%" horizontalAlign="left" gap="5" textAlign="left"  paddingLeft="12">
+						<label:Titulo_25_VerdeAzul_pTop10 fontSize="{font25}" text="PL USD:" paddingTop="0" color="0x008894" />
+						<label:Titulo_16_pTop10 fontSize="{font25}" id="lblPrecioLista"  paddingTop="0" textAlign="left" />
+						<s:Spacer height="15"/>
+					</s:VGroup>
+					
+					<s:Spacer height="100%"/>
+					<s:VGroup height="100%" width="100%" horizontalAlign="left" gap="5" id="vgOriginal" textAlign="left"  paddingLeft="12">
+						<label:Titulo_25_VerdeAzul_pTop10 fontSize="{font25}" text="PL Original:" paddingTop="0" color="0x008894" />
+						<label:Titulo_16_pTop10 fontSize="{font25}" id="lblPrecioListaNeto" paddingTop="0" textAlign="left"/>
+						<s:VGroup height="100%" width="100%" gap="8" horizontalAlign="left" textAlign="left" >
+							<s:Spacer height="15"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnAAplus" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" left="0" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUAAplus_String}" click="btn_NivelesIngreso_Control(event,'AA+')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnAA" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" left="0" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUAA_String}" click="btn_NivelesIngreso_Control(event,'AA')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnAM" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUAM_String}"  click="btn_NivelesIngreso_Control(event,'AM')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnAB" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUAB_String}"  click="btn_NivelesIngreso_Control(event,'AB')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnMA" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUMA_String}"  click="btn_NivelesIngreso_Control(event,'MA')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnMM" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUMM_String}"  click="btn_NivelesIngreso_Control(event,'MM')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnMB" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUMB_String}"  click="btn_NivelesIngreso_Control(event,'MB')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnBajo" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}"
+																	   textoParaCatProOferta="{currentCostoFactor.precioUBajo_String}"  click="btn_NivelesIngreso_Control(event,'Bajo')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnStock" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUStock_String}"  click="btn_NivelesIngreso_Control(event,'STOCK')"/>
+							<toggleButton:buttonLeftTogglePQNetDefault width="100%" id="btnDist" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText" sizeFont="{font14}" 
+																	   textoParaCatProOferta="{currentCostoFactor.precioUDistribuidor_String}"  click="btn_NivelesIngreso_Control(event,'DISTRIBUIDOR')"/>
+						</s:VGroup>  
+					</s:VGroup>
+				</s:VGroup>
+			</s:HGroup>
+			<s:VGroup height="100%" width="100%" horizontalAlign="left" gap="0" id="vgPublico" paddingLeft="12">
+				<label:Titulo_14_VerdeAzul_pTop10 fontSize="{font14}" text="Público" width="100%" textAlign="left" paddingTop="0" color="0x008894" />
+				<toggleButton:buttonLeftTogglePQNetDefault id="btnPublico" tipoButtonToggle="texto" tipoInteraccionEnTexto="itemRenderOfertaCatProHTMLText"
+														   textoParaCatProOferta="{currentCostoFactor.precioUPublico_String}" click="btn_NivelesIngreso_Control(event,'PUBLICO')"/>
+			</s:VGroup>
+			<label:TextoUperCaseRojo fontSize="{font14}" id="lblLicencia" width="100%" textAlign="left"/>
+			<s:Spacer height="15"/>
+			
+			<s:VGroup width="100%" paddingLeft="10" paddingRight="10" >
+				<otros:division width="100%" color="0x257d92" />
+				
+			</s:VGroup>  
+			<label:Titulo_25_VerdeAzul_pTop10 fontSize="{font25}" id="lblNivelIngreso" text="AA+" paddingBottom="10" paddingLeft="12"/>
+			<s:HGroup height="100%" width="100%" horizontalAlign="left" paddingBottom="15"  paddingLeft="13">
+				<s:Spacer height="20"/>
+				<s:VGroup horizontalAlign="left" gap="0">
+					<label:Titulo_14_VerdeAzul_pTop10 fontSize="{font14}" text="MONTO MÍNIMO OC:" paddingTop="0" color="0x008894" />
+					<label:Texto fontSize="{font14}" width="100%" id="lblMontoMinimo" color="0x424242"/>
+					<s:Spacer height="20"/>
+					<label:Titulo_14_VerdeAzul_pTop10 fontSize="{font14}" text="DESCUENTO:" paddingTop="0" color="0x008894" />
+					<label:Texto fontSize="{font14}"  width="100%" id="lblDescuento" color="0x424242"/>
+					<s:Spacer height="20"/>
+					<s:HGroup id="grpValorEnAduana" toolTip=" " toolTipCreate="createCustomToolTip('Valor en aduana = \n (Número de piezas * precio de lista con descuento) + \n flete PC\n'+_Tool_formula,event)" toolTipShow="hgroup1_toolTipShowHandler(event)">
+						<label:Titulo_14_VerdeAzul_pTop10 fontSize="{font14}" text="VALOR EN ADUANA:" paddingTop="0" color="0x008894" />
+					</s:HGroup>
+					<label:Texto fontSize="{font14}" color="0x424242" width="100%" id="lblValorEnAduana" toolTipShow="hgroup1_toolTipShowHandler(event)" toolTip=" " toolTipCreate="createCustomToolTip('Valor en aduana = \n (Número de piezas * precio de lista con descuento) + \n flete PC\n'+_Tool_formula,event)"/>
+				</s:VGroup>  
+				
+			</s:HGroup>
+			<s:VGroup width="100%" paddingLeft="10" paddingRight="10">
+				<otros:division width="100%" grueso="1" color="0x257d92" />	
+			</s:VGroup>  
+			<s:Spacer height="10"/>
+			<s:VGroup height="100%" width="100%" gap="5" horizontalAlign="left" textAlign="left"  paddingLeft="12" >
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('IMPORTACIÓN = (Valor en aduana * IGI) + (Valor en aduana * DTA) + Honorarios AA ',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="15" visible="{!isProveedorNacional}" includeInLayout="{!isProveedorNacional}">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="IMPORTACIÓN:" paddingTop="0" />
+					<label:Texto fontSize="{font14}" height="100%" width="100%" id="lblImportacion" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>  
+				<s:Spacer height="10" visible="{!isProveedorNacional}" includeInLayout="{!isProveedorNacional}"/>
+				<s:VGroup id="grpCostoVentaTotal" toolTip=" " width="100%" toolTipCreate="createCustomToolTip('Costo de venta total = Valor en aduana + Importación + Consularización + Envío de documentos + permiso + Almacén destino',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="COSTO DE VENTA TOTAL:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblCostoVenta" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>  
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('costoFijo',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="COSTO FIJO TOTAL:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblCostoFijo" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>  
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('unilidad',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="UNIDAD TOTAL:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblUtilidad" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('Precio total = Costo de venta total + Costo fijo total + Utilidad total',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="PRECIO TOTAL:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblPrecioTotal" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('Costo de venta unitario = Costo de venta total / Número de piezas',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="COSTO DE VENTA UNITARIO:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblCostoVentaUni" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('Costo fijo unitario = Costo fijo total / Número de piezas',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="COSTO FIJO UNITARIO:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblCostoFijoUni" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('Utilidad unitaria = Utilidad total / Número de piezas',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="UTILIDAD UNITARIA:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblUtilidadUni" maxDisplayedLines="5" color="0x424242"/>
+				</s:VGroup>
+				<s:Spacer height="10"/>
+				<s:VGroup toolTip=" " width="100%" toolTipCreate="createCustomToolTip('Precio unitario = Costo de venta unitario + Costo fijo unitario + Utilidad unitaria',event)" toolTipShow="hgroup1_toolTipShowHandler(event)" gap="10">
+					<label:Titulo_14_pTop10 fontSize="{font14}" text="PRECIO UNITARIO:" paddingTop="0"/>
+					<label:Texto fontSize="{font14}"  width="100%" id="lblPrecioUni" maxDisplayedLines="5" color="0x424242"/>
+					<s:HGroup >
+						<label:Texto fontSize="{font14}"  width="100%" id="lblPrecioUniTotal" fontWeight="bold"  maxDisplayedLines="5" color="0x008894"/>
+					</s:HGroup>  
+				</s:VGroup>
+			</s:VGroup>  
+		</s:VGroup> 
+	</s:Scroller>
+</s:Group>
+

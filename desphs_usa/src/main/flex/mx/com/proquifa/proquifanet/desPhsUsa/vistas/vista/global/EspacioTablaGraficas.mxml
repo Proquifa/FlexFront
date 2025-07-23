@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:flechasiguiente="skins.botones.flechasiguiente.*"
+		  xmlns:otros="skins.otros.*"
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  creationComplete="datagridpqnet1_resizeHandler()"
+		  width="100%" height="100%" xmlns:pqNet1="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.dns.SRVRecord;
+			
+			import flashx.textLayout.formats.Direction;
+			
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.desPhsUsa.vistas.eventos.EventoGenericoDespachoPhsUsa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.pieChartDinamico.PieDinamico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.pieChartDinamico.pqNetPiesChartDinamico;
+			import mx.events.ListEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			[Bindable]	public var tituloEstado:String;
+						
+			public function iniciarTabla($accion:Boolean = false):void{
+				if($accion){
+					var trivent:EventoGenericoDespachoPhsUsa = new EventoGenericoDespachoPhsUsa(EventoGenericoDespachoPhsUsa.PARTIDAS_A_DESPACHO);
+					//trivent.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+					dispatchEvent(trivent);
+				}
+			}
+			protected function tabla_itemClickHandler($event:ListEvent):void
+			{
+				if($event.columnIndex == 7){
+					var eventt:EventoGenericoDespachoPhsUsa = new EventoGenericoDespachoPhsUsa(EventoGenericoDespachoPhsUsa.SELECCIONA_OPCION);
+					eventt.idOpcionSeleccionada = "VistaPlan";
+					eventt.nombreCliente = ($event.currentTarget.selectedItem as PartidaASurtirPHS).nombreCliente;
+					eventt.paisCliente = ($event.currentTarget.selectedItem as PartidaASurtirPHS).paisCliente;
+					dispatchEvent(eventt);
+				}
+			}
+			[Bindable] private var _listaPartidaDesPhsUsaUniverso:ArrayCollection;
+			[Bindable] private var _listaPartidaDesPhsUsaTrabajo:ArrayCollection;
+			[Bindable]	private var _totalClientes:int= 0;
+			[Bindable]	private var _totalFacturas:int= 0;
+			[Bindable]	private var _totalET:int = 0;
+			[Bindable]	private var _totalFT:int = 0;
+			/**
+			 * recibo la lista del mapa MapaInspectorPhs
+			 */
+			public function set recibeListaPartidaDespacho($lista:ArrayCollection):void{
+				if($lista == null || $lista.length < 1){ this.grpGraficas.percentHeight = 0; return;}
+				this.grpGraficas.percentHeight = 60;
+				this._listaPartidaDesPhsUsaUniverso = new ArrayCollection();
+				this._listaPartidaDesPhsUsaUniverso = $lista;
+				this._totalFacturas = (UtilsGrid.queryQuitarRepetidos(this._listaPartidaDesPhsUsaUniverso, "factura") as ArrayCollection).length;
+				/** creo una lista con las facturas */
+					var arrTempo:ArrayCollection = UtilsGrid.queryQuitarRepetidos(this._listaPartidaDesPhsUsaUniverso, "factura");
+				for(var v:int= 0; v < arrTempo.length; v++){
+					/** tomo las q coinciden en el universo para hacer el conteo*/
+					var arrTres:ArrayCollection = UtilsGrid.queryCampoX(this._listaPartidaDesPhsUsaUniverso, "factura", (arrTempo[v] as PartidaASurtirPHS).factura.toString()  );
+					/** si la factura tiene una partida con diasDesdeFEE mayor a 0 entonces la factura ya esta fuera de tiempo
+					 * hago el conteo de las q tengan mas de 0 dias de recibidas */
+					(arrTempo[v] as PartidaASurtirPHS).numFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTres, "diasDesdeFIP", 0);
+					if( (arrTempo[v] as PartidaASurtirPHS).numFT > 0 ){
+						(arrTempo[v] as PartidaASurtirPHS).numET = 0;
+					}else{
+						/** si el conteo da 0 entonces la orden de compra esta en tiempo */
+						(arrTempo[v] as PartidaASurtirPHS).numET = 1;
+					}
+				}
+				this._totalET = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numET", 0);
+				this._totalFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numFT", 0);
+				this._listaPartidaDesPhsUsaTrabajo = UtilsGrid.queryQuitarRepetidos(this._listaPartidaDesPhsUsaUniverso, "nombreCliente");
+				datosPorCliente(this._listaPartidaDesPhsUsaTrabajo);
+			}
+			/**
+			 * genero el arreglo final de trabajo en base a los nombres diferentes de Cliente
+			 */
+			private function datosPorCliente($listaTrabajo:ArrayCollection):void{
+				var copiaUniverso:ArrayCollection = ObjectUtil.copy(this._listaPartidaDesPhsUsaUniverso) as ArrayCollection;
+				for(var k:int = 0; k < $listaTrabajo.length; k++){
+					var arrTempoCliente:ArrayCollection = UtilsGrid.queryCampoX(copiaUniverso, "nombreCliente", ($listaTrabajo[k] as PartidaASurtirPHS).nombreCliente);
+					($listaTrabajo[k] as PartidaASurtirPHS).numFila = k+1;
+					var fechaMasChica:Date = UtilsGrid.queryFechaMenor(arrTempoCliente, "fechaEstimadaEntrega");
+					($listaTrabajo[k] as PartidaASurtirPHS).fechaEstimadaEntrega = fechaMasChica;
+					($listaTrabajo[k] as PartidaASurtirPHS).FEEMasCercanaString = UtilsFecha.formatoFechaDDMMMYYYY( fechaMasChica );
+					($listaTrabajo[k] as PartidaASurtirPHS).numFacturas = (UtilsGrid.queryQuitarRepetidos(arrTempoCliente, "factura") as ArrayCollection).length;
+					($listaTrabajo[k] as PartidaASurtirPHS).numPartidas = arrTempoCliente.length;
+					//FLETE
+					($listaTrabajo[k] as PartidaASurtirPHS).numFR = UtilsGrid.conteoCampoX(arrTempoCliente, "tipoFlete", "Regular");
+					($listaTrabajo[k] as PartidaASurtirPHS).numFE = UtilsGrid.conteoCampoX(arrTempoCliente, "tipoFlete", "Flete Express");
+					($listaTrabajo[k] as PartidaASurtirPHS).numFP = UtilsGrid.conteoCampoX(arrTempoCliente, "tipoFlete", "Programado");
+					//MANEJO
+					($listaTrabajo[k] as PartidaASurtirPHS).numCG = UtilsGrid.conteoCampoX(arrTempoCliente, "manejo", "Congelación");
+					($listaTrabajo[k] as PartidaASurtirPHS).numRG = UtilsGrid.conteoCampoX(arrTempoCliente, "manejo", "Refrigeración");
+					($listaTrabajo[k] as PartidaASurtirPHS).numAB = UtilsGrid.conteoCampoX(arrTempoCliente, "manejo", "Ambiente");
+					($listaTrabajo[k] as PartidaASurtirPHS).numNA = UtilsGrid.conteoCampoX(arrTempoCliente, "manejo", "NA") + UtilsGrid.conteoCampoX(arrTempoCliente, "manejo", "ND");
+					/** creo una lista con las facturas */
+					var arrTempo:ArrayCollection = UtilsGrid.queryQuitarRepetidos(arrTempoCliente, "factura");
+					for(var v:int= 0; v < arrTempo.length; v++){
+						/** tomo las q coinciden en el universo para hacer el conteo*/
+						var arrTres:ArrayCollection = UtilsGrid.queryCampoX(arrTempoCliente, "factura", (arrTempo[v] as PartidaASurtirPHS).factura.toString()  );
+						/** si la factura tiene una partida con diasDesdeFEE mayor a 0 entonces la factura ya esta fuera de tiempo
+						 * hago el conteo de las q tengan mas de 0 dias de recibidas */
+						(arrTempo[v] as PartidaASurtirPHS).numFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTres, "diasDesdeFEE", 0);
+						if( (arrTempo[v] as PartidaASurtirPHS).numFT > 0 ){
+							(arrTempo[v] as PartidaASurtirPHS).numET = 0;
+						}else{
+							/** si el conteo da 0 entonces la orden de compra esta en tiempo */
+							(arrTempo[v] as PartidaASurtirPHS).numET = 1;
+						}
+					}
+					($listaTrabajo[k] as PartidaASurtirPHS).numET = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numET", 0);
+					($listaTrabajo[k] as PartidaASurtirPHS).numFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numFT", 0);
+					
+					($listaTrabajo[k] as PartidaASurtirPHS).numManET = UtilsGrid.conteoCampoX(arrTempoCliente, "enTiempo", "En tiempo");
+					($listaTrabajo[k] as PartidaASurtirPHS).numManUR = UtilsGrid.conteoCampoX(arrTempoCliente, "enTiempo", "Urgente");
+					($listaTrabajo[k] as PartidaASurtirPHS).numManFT = UtilsGrid.conteoCampoX(arrTempoCliente, "enTiempo", "Fuera de tiempo");
+				}
+				crearGraficas( ObjectUtil.copy(this._listaPartidaDesPhsUsaUniverso) as ArrayCollection);
+			}
+			////////		CREAR GRAFICAS
+			[Bindable]	private var _componenteArregloPies:pqNetPiesChartDinamico = null;
+			private var _listaGraficas:ArrayCollection;
+			private function crearGraficas($lista:ArrayCollection):void{
+				this._listaGraficas = new ArrayCollection();
+				// FLETE PARTIDAS 
+				var arrFletes:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista, "tipoFlete");
+				this._listaGraficas.addItem( setearGrafica("Flete\npartidas", arrFletes, 0) );
+				// SITUACION PARTIDAS
+				var arrSituacion:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista, "enTiempo");
+				this._listaGraficas.addItem( setearGrafica("Situación\npartidas", arrSituacion, 0) );
+				// MANEJO PARTIDAS
+				var arrManejo:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista,"manejo");
+				this._listaGraficas.addItem( setearGrafica("Manejo\npartidas", arrManejo, 0) );
+				// UBICACION PARTIDAS
+				var arrUbicacion:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo( $lista, "ubicacion");
+				this._listaGraficas.addItem( setearGrafica("Ubicación\npartidas", arrUbicacion, 0) );
+				// TIPOS PARTIDAS
+				var arrTipo:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista,"tipo");
+				this._listaGraficas.addItem( setearGrafica("Tipos\npartidas", arrTipo, 0) );
+				// CLIENTES
+				var arrClientes:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista, "nombreCliente" );
+				this._listaGraficas.addItem( setearGrafica("Clientes", arrClientes, 0) );
+				//AGREGAR PIES AL COMPONENTE
+				if(_componenteArregloPies == null){
+					_componenteArregloPies = new pqNetPiesChartDinamico();
+					this.grpGraficas.addElement(_componenteArregloPies);
+				}
+				_componenteArregloPies.iniciarGraficas( _listaGraficas );
+			}
+			private function setearGrafica(
+				$lblTitulo:String,
+				$arregloAlimentador:ArrayCollection = null,
+				$tipoPie:int=0, 
+				$fila:int=0, 
+				$orientacion:String="vertical", 
+				$filaMargenLeft:int=0, 
+				$filaMargenRight:int=0, 
+				$horizontalAlign:String="center", 
+				$verticalAlign:String="middle",
+				$margenLeft:int=0,
+				$margenRight:int=0,
+				$margenTop:int=0,
+				$tamañoLetra:int=15,
+				$margenBottom:int=0):PieDinamico
+			{
+				var pie:PieDinamico = new PieDinamico();
+				pie.lblTitulo = $lblTitulo;
+				pie.arregloAlimentador = limpiaNulosOVaciosEnArregloPie($arregloAlimentador);
+				pie.tipoPie = $tipoPie;
+				pie.fila = $fila;
+				pie.orientacion = $orientacion;
+				pie.filaMargenIzquierdo = $filaMargenLeft;
+				pie.filaMargenDerecho = $filaMargenRight;
+				pie.horizontalAlign = $horizontalAlign;
+				pie.verticalAlign = $verticalAlign;
+				pie.margenLeft = $margenLeft;
+				pie.margenRight = $margenRight;
+				pie.margenBottom = $margenBottom;
+				pie.margenTop = $margenTop;
+				pie.tituloSize = 15;
+				return pie;
+			}
+			private function limpiaNulosOVaciosEnArregloPie($lista:ArrayCollection):ArrayCollection{
+				var arrRegreso:ArrayCollection = new ArrayCollection();
+				for(var t:int = 0; t < $lista.length; t++){
+					if($lista[t].tipo != "null" && 
+						$lista[t].tipo != null && 
+						$lista[t].tipo != "unset" && 
+						$lista[t].tipo !=  "") arrRegreso.addItem($lista[t]);
+					if($lista[t].tipo == null){
+						$lista[t].tipo = "Pendiente";
+						arrRegreso.addItem($lista[t]);
+					}
+					if($lista[t].tipo == "ND"){
+						$lista[t].tipo = "No definido";
+						arrRegreso.addItem($lista[t]);
+					}
+				}
+				arrRegreso = UtilsGrid.queryQuitarRepetidos( arrRegreso, "tipo");
+				return arrRegreso;
+			}
+			///////////////////////////////////////////////////
+			protected function datagridpqnet1_resizeHandler():void
+			{
+				(this.tablaGrid.columns[0] as DataGridColumn).width = (this.tablaGrid.width * 0.05);//#
+				(this.tablaGrid.columns[1] as DataGridColumn).width = (this.tablaGrid.width * 0.24);//cliente
+				(this.tablaGrid.columns[2] as DataGridColumn).width = (this.tablaGrid.width * 0.13);//numero facturas a surtir
+				(this.tablaGrid.columns[3] as DataGridColumn).width = (this.tablaGrid.width * 0.13);///numero partidas a surtir
+				(this.tablaGrid.columns[4] as DataGridColumn).width = (this.tablaGrid.width * 0.15);//manejos
+				(this.tablaGrid.columns[5] as DataGridColumn).width = (this.tablaGrid.width * 0.13);//situacion
+				(this.tablaGrid.columns[6] as DataGridColumn).width = (this.tablaGrid.width * 0.10);//FEE mas proxima
+				(this.tablaGrid.columns[7] as DataGridColumn).width = (this.tablaGrid.width * 0.03);//botonflecha
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<label:labelTitulo width="100%" fontSize="25" fontWeight="normal" paddingTop="10"
+						   text="{this.tituloEstado}"/>
+	</s:HGroup>
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%" paddingTop="10">
+		<s:Label width="100%" fontFamily="Bank Gothic" fontSize="20" fontWeight="bold" text="LISTADO"/>
+		<s:Label fontFamily="Bank Gothic" fontSize="20" fontWeight="bold"
+				 text="{this._listaPartidaDesPhsUsaTrabajo.length} Clientes : {this._totalFacturas} Facturas · {this._totalET} ET  ·  {this._totalFT} FT" textAlign="right"/>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<!--<mx:DataGrid width="100%" height="100%" dataProvider="{this._listaPartidaDesPhsUsaUniverso}">
+		<mx:columns>
+			<mx:DataGridColumn headerText="_paisCliente" dataField="paisCliente"/>
+			<mx:DataGridColumn headerText="_nombreCliente" dataField="nombreCliente"/>
+			<mx:DataGridColumn headerText="_codigo" dataField="codigo"/>
+			<mx:DataGridColumn headerText="_idComplemento" dataField="idComplemento"/>
+			<mx:DataGridColumn headerText="_manejo" dataField="manejo"/>
+			<mx:DataGridColumn headerText="_fechaEstimadaEntrega" dataField="fechaEstimadaEntrega"/>
+			<mx:DataGridColumn headerText="_fechaInicioPendiente" dataField="fechaInicioPendiente"/>
+			
+			<mx:DataGridColumn headerText="_factura" dataField="factura"/>
+			<mx:DataGridColumn headerText="_factura" dataField="factura"/>
+		</mx:columns>
+	</mx:DataGrid>-->
+	<s:Scroller width="100%" height="100%">
+		<s:VGroup width="100%" height="100%">
+	<pqNet:dataGridPqNet id="tablaGrid" width="100%" height="100%"
+						 dataProvider="{this._listaPartidaDesPhsUsaTrabajo}" headerHeight="40"
+						 horizontalScrollPolicy="auto" itemClick="tabla_itemClickHandler(event)"
+						 resize="datagridpqnet1_resizeHandler()" variableRowHeight="false" rowHeight="66">
+		<pqNet:columns>
+			<mx:DataGridColumn width="110" dataField="numFila" headerText="#"/>
+			<mx:DataGridColumn headerText="Cliente">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{this.data.nombreCliente}" textAlign="center"
+										 color.selected="#FFFFFF"/>
+								<s:Label width="100%" color="#666666"
+										 text="{ this.data.paisCliente}" textAlign="center"
+										 color.selected="#FFFFFF"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="Número de facturas a surtir" headerWordWrap="true" headerRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.HeaderRendererCatorce">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{ (data as PartidaASurtirPHS).numFacturas}" textAlign="center"
+										 color.selected="#FFFFFF"/>
+								<s:Label width="100%" color="#666666" textAlign="center"
+										 text="{ (data as PartidaASurtirPHS).numET } ET · { (data as PartidaASurtirPHS).numFT } FT"
+										 color.selected="#FFFFFF"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="Número de partidas a surtir" headerWordWrap="true" headerRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.HeaderRendererCatorce">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{ (data as PartidaASurtirPHS).numPartidas}" textAlign="center"
+										 color.selected="#FFFFFF"/>
+								<s:Label width="100%" color="#666666" textAlign="center"
+										 text="{ (data as PartidaASurtirPHS).numFR} FR · { (data as PartidaASurtirPHS).numFE} FE · { (data as PartidaASurtirPHS).numFP} FP"
+										 color.selected="#FFFFFF"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="Manejos a partida" headerWordWrap="true" headerRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.HeaderRendererCatorce">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal" textAlign="center"
+										 text="{ (data as PartidaASurtirPHS).numPartidas}"
+										 color.selected="#FFFFFF"/>
+								<s:Label width="100%" color="#666666" textAlign="center"
+										 text="{ (this.data as PartidaASurtirPHS).numCG } CG · {(data as PartidaASurtirPHS).numRG} RG · {(data as PartidaASurtirPHS).numAB} AB  · {(data as PartidaASurtirPHS).numNA} NA"
+										 color.selected="#FFFFFF"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="Situación a partida" headerWordWrap="true" headerRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.HeaderRendererCatorce">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{ (data as PartidaASurtirPHS).numPartidas}"
+										 textAlign="center"
+										 color.selected="#FFFFFF"/>
+								<s:Label width="100%" color="#666666" text="{ (data as PartidaASurtirPHS).numManET} ET · { (data as PartidaASurtirPHS).numManUR} UR · { (data as PartidaASurtirPHS).numManFT} FT" textAlign="center"
+										 color.selected="#FFFFFF"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="FEE más próxima" headerWordWrap="true" headerRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.HeaderRendererCatorce">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" color="#d10c0c" color.selected="#FFFFFF" text="{ (this.data as PartidaASurtirPHS).FEEMasCercanaString }" textAlign="center" />
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn>
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoIconosGrid;
+								]]>
+							</fx:Script>
+						<mx:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" horizontalCenter="0"/>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+		</pqNet:columns>
+	</pqNet:dataGridPqNet>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup id="grpGraficas" width="100%" height="0" paddingTop="35" />
+			</s:VGroup>
+	</s:Scroller>
+</s:VGroup>

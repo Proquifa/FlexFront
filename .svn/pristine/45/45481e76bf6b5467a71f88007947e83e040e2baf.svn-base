@@ -1,0 +1,881 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos
+{
+	import flash.utils.ByteArray;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.despachos.Ruta")]
+	[Bindable]
+	public class Ruta
+	{
+		private var _numFila:int;
+		
+		private var _idEvento:String;
+		private var _idCliente:Number;
+		private var _nombreCliente:String;
+		private var _factura:String;
+		private var _FPor:String;
+		private var _chkDiferente:Boolean;
+		private var _mapa:String;
+		private var _destino:String;
+		private var _pais:String;
+		private var _estado:String;
+		private var _calle:String;
+		private var _delegacion:String;
+		private var _cp:String;
+		private var _rutaMensajeria:String;
+		private var _zona:String;
+		private var _zonaMensajeria:String;
+		private var _fecha:Date;
+		private var _prioridad:String;
+		private var _comentarios:String;
+		private var _idRuta:String;
+		private var _idSurtido:String;
+		private var _idEntrega:String;
+		private var _ambiente:int;
+		private var _refrigeracion:int;
+		private var _congelacion:int;
+		private var _sinManejo:int;
+		private var _colocoRefrigerados:int;
+		private var _colocoCongelados:int;
+		private var _doctoFactura:int;
+		private var _doctoPedido:int;
+		private var _doctoCantFactura:int;
+		private var _doctoCantPedido:int;
+		private var _doctoOtros:int;
+		private var _idDP:String;
+		private var _idFactura:Number;
+		private var _cpedido:String;
+		private var _conformidad:String;
+		private var _estadoRuta:String;
+		private var _OrdenPlan:int;
+		private var _entrega:String;
+		private var _razonesEntrega:String;
+		private var _doctosCierre:String;
+		private var _folioDoctos:String;
+		private var _folioDoctos2:String;
+		private var _folioDoctos3:String;
+		private var _frefacturacion:Date;
+		private var _entregayRevision:Boolean;
+		private var _comentariosAdicionales:Boolean;
+		private var _registroDEntrega:String;
+		private var _conforme:String;
+		private var _ffin:Date;
+		private var _longitud:Number;
+		private var _latitud:Number; 
+		private var _altitud:Number; 
+		private var _idDireccion:Number;
+		private var _tipoJustificacion:String
+		private var _responsable:String;
+		private var _fer:Date;
+		private var _fr:Date;
+		private var _fee:Date;
+		private var _tiempoRealizacion:String
+		private var _intentosEntrega:int;
+		private var _motivoClientes:Boolean;
+		private var _motivoSolicitante:Boolean;
+		private var _motivoMensajeros:Boolean;
+		private var _motivoND:Boolean;
+		private var _numeroPartidasRuta:int;
+		
+		private var _docto:ByteArray;
+		private var _docto2:ByteArray
+		private var _docto3:ByteArray;
+		
+		private var _formatofer:String;
+		private var _formatofr:String;
+		private var _formatofecha:String;
+		
+		private var _flujo:String;
+		
+		//////////solo para Vista 
+		private var _totalEntregas:Number;//usada para contar total en una lista
+		
+		public function get numeroPartidasRuta():int
+		{
+			return _numeroPartidasRuta;
+		}
+
+		public function set numeroPartidasRuta(value:int):void
+		{
+			_numeroPartidasRuta = value;
+		}
+
+		public function get motivoND():Boolean
+		{
+			return _motivoND;
+		}
+
+		public function set motivoND(value:Boolean):void
+		{
+			_motivoND = value;
+		}
+
+		public function get motivoMensajeros():Boolean
+		{
+			return _motivoMensajeros;
+		}
+
+		public function set motivoMensajeros(value:Boolean):void
+		{
+			_motivoMensajeros = value;
+		}
+
+		public function get motivoSolicitante():Boolean
+		{
+			return _motivoSolicitante;
+		}
+
+		public function set motivoSolicitante(value:Boolean):void
+		{
+			_motivoSolicitante = value;
+		}
+
+		public function get motivoClientes():Boolean
+		{
+			return _motivoClientes;
+		}
+
+		public function set motivoClientes(value:Boolean):void
+		{
+			_motivoClientes = value;
+		}
+
+		public function get intentosEntrega():int
+		{
+			return _intentosEntrega;
+		}
+
+		public function set intentosEntrega(value:int):void
+		{
+			_intentosEntrega = value;
+		}
+
+		public function get tiempoRealizacion():String
+		{
+			return _tiempoRealizacion;
+		}
+
+		public function set tiempoRealizacion(value:String):void
+		{
+			_tiempoRealizacion = value;
+		}
+
+		public function get fee():Date
+		{
+			return _fee;
+		}
+
+		public function set fee(value:Date):void
+		{
+			_fee = value;
+		}
+
+		public function get rutaMensajeria():String
+		{
+			return _rutaMensajeria;
+		}
+
+		public function set rutaMensajeria(value:String):void
+		{
+			_rutaMensajeria = value;
+		}
+
+		public function get numFila():int
+		{
+			return _numFila;
+		}
+
+		public function set numFila(value:int):void
+		{
+			_numFila = value;
+		}
+
+		public function get idEvento():String
+		{
+			return _idEvento;
+		}
+
+		public function set idEvento(value:String):void
+		{
+			_idEvento = value;
+		}
+
+		public function get idCliente():Number
+		{
+			return _idCliente;
+		}
+
+		public function set idCliente(value:Number):void
+		{
+			_idCliente = value;
+		}
+
+		public function get nombreCliente():String
+		{
+			return _nombreCliente;
+		}
+
+		public function set nombreCliente(value:String):void
+		{
+			_nombreCliente = value;
+		}
+
+		public function get factura():String
+		{
+			return _factura;
+		}
+
+		public function set factura(value:String):void
+		{
+			_factura = value;
+		}
+
+		public function get FPor():String
+		{
+			return _FPor;
+		}
+
+		public function set FPor(value:String):void
+		{
+			_FPor = value;
+		}
+
+		public function get chkDiferente():Boolean
+		{
+			return _chkDiferente;
+		}
+
+		public function set chkDiferente(value:Boolean):void
+		{
+			_chkDiferente = value;
+		}
+
+		public function get mapa():String
+		{
+			return _mapa;
+		}
+
+		public function set mapa(value:String):void
+		{
+			_mapa = value;
+		}
+
+		public function get destino():String
+		{
+			return _destino;
+		}
+
+		public function set destino(value:String):void
+		{
+			_destino = value;
+		}
+
+		public function get pais():String
+		{
+			return _pais;
+		}
+
+		public function set pais(value:String):void
+		{
+			_pais = value;
+		}
+
+		public function get estado():String
+		{
+			return _estado;
+		}
+
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+
+		public function get calle():String
+		{
+			return _calle;
+		}
+
+		public function set calle(value:String):void
+		{
+			_calle = value;
+		}
+
+		public function get delegacion():String
+		{
+			return _delegacion;
+		}
+
+		public function set delegacion(value:String):void
+		{
+			_delegacion = value;
+		}
+
+		public function get cp():String
+		{
+			return _cp;
+		}
+
+		public function set cp(value:String):void
+		{
+			_cp = value;
+		}
+
+		public function get zona():String
+		{
+			return _zona;
+		}
+
+		public function set zona(value:String):void
+		{
+			_zona = value;
+		}
+
+		public function get zonaMensajeria():String
+		{
+			return _zonaMensajeria;
+		}
+
+		public function set zonaMensajeria(value:String):void
+		{
+			_zonaMensajeria = value;
+		}
+
+		public function get fecha():Date
+		{
+			return _fecha;
+		}
+
+		public function set fecha(value:Date):void
+		{
+			_fecha = value;
+			if( value == null ){
+				_formatofecha = 'ND';
+			}else{
+				_formatofecha = UtilsFecha.formatoFechaDDMMMYYYY( value );
+			}
+		}
+
+		public function get prioridad():String
+		{
+			return _prioridad;
+		}
+
+		public function set prioridad(value:String):void
+		{
+			_prioridad = value;
+		}
+
+		public function get comentarios():String
+		{
+			return _comentarios;
+		}
+
+		public function set comentarios(value:String):void
+		{
+			_comentarios = value;
+		}
+
+		public function get idRuta():String
+		{
+			return _idRuta;
+		}
+
+		public function set idRuta(value:String):void
+		{
+			_idRuta = value;
+		}
+
+		public function get idSurtido():String
+		{
+			return _idSurtido;
+		}
+
+		public function set idSurtido(value:String):void
+		{
+			_idSurtido = value;
+		}
+
+		public function get idEntrega():String
+		{
+			return _idEntrega;
+		}
+
+		public function set idEntrega(value:String):void
+		{
+			_idEntrega = value;
+		}
+
+		public function get ambiente():int
+		{
+			return _ambiente;
+		}
+
+		public function set ambiente(value:int):void
+		{
+			_ambiente = value;
+		}
+
+		public function get refrigeracion():int
+		{
+			return _refrigeracion;
+		}
+
+		public function set refrigeracion(value:int):void
+		{
+			_refrigeracion = value;
+		}
+
+		public function get congelacion():int
+		{
+			return _congelacion;
+		}
+
+		public function set congelacion(value:int):void
+		{
+			_congelacion = value;
+		}
+
+		public function get sinManejo():int
+		{
+			return _sinManejo;
+		}
+
+		public function set sinManejo(value:int):void
+		{
+			_sinManejo = value;
+		}
+
+		public function get colocoRefrigerados():int
+		{
+			return _colocoRefrigerados;
+		}
+
+		public function set colocoRefrigerados(value:int):void
+		{
+			_colocoRefrigerados = value;
+		}
+
+		public function get colocoCongelados():int
+		{
+			return _colocoCongelados;
+		}
+
+		public function set colocoCongelados(value:int):void
+		{
+			_colocoCongelados = value;
+		}
+
+		public function get doctoFactura():int
+		{
+			return _doctoFactura;
+		}
+
+		public function set doctoFactura(value:int):void
+		{
+			_doctoFactura = value;
+		}
+
+		public function get doctoPedido():int
+		{
+			return _doctoPedido;
+		}
+
+		public function set doctoPedido(value:int):void
+		{
+			_doctoPedido = value;
+		}
+
+		public function get doctoCantFactura():int
+		{
+			return _doctoCantFactura;
+		}
+
+		public function set doctoCantFactura(value:int):void
+		{
+			_doctoCantFactura = value;
+		}
+
+		public function get doctoCantPedido():int
+		{
+			return _doctoCantPedido;
+		}
+
+		public function set doctoCantPedido(value:int):void
+		{
+			_doctoCantPedido = value;
+		}
+
+		public function get doctoOtros():int
+		{
+			return _doctoOtros;
+		}
+
+		public function set doctoOtros(value:int):void
+		{
+			_doctoOtros = value;
+		}
+
+		public function get idDP():String
+		{
+			return _idDP;
+		}
+
+		public function set idDP(value:String):void
+		{
+			_idDP = value;
+		}
+
+		public function get idFactura():Number
+		{
+			return _idFactura;
+		}
+
+		public function set idFactura(value:Number):void
+		{
+			_idFactura = value;
+		}
+
+		public function get cpedido():String
+		{
+			return _cpedido;
+		}
+
+		public function set cpedido(value:String):void
+		{
+			_cpedido = value;
+		}
+
+		public function get conformidad():String
+		{
+			return _conformidad;
+		}
+
+		public function set conformidad(value:String):void
+		{
+			_conformidad = value;
+		}
+
+		public function get estadoRuta():String
+		{
+			return _estadoRuta;
+		}
+
+		public function set estadoRuta(value:String):void
+		{
+			_estadoRuta = value;
+		}
+
+		public function get OrdenPlan():int
+		{
+			return _OrdenPlan;
+		}
+
+		public function set OrdenPlan(value:int):void
+		{
+			_OrdenPlan = value;
+		}
+
+		public function get entrega():String
+		{
+			return _entrega;
+		}
+
+		public function set entrega(value:String):void
+		{
+			_entrega = value;
+		}
+
+		public function get razonesEntrega():String
+		{
+			return _razonesEntrega;
+		}
+
+		public function set razonesEntrega(value:String):void
+		{
+			_razonesEntrega = value;
+		}
+
+		public function get doctosCierre():String
+		{
+			return _doctosCierre;
+		}
+
+		public function set doctosCierre(value:String):void
+		{
+			_doctosCierre = value;
+		}
+
+		public function get folioDoctos():String
+		{
+			return _folioDoctos;
+		}
+
+		public function set folioDoctos(value:String):void
+		{
+			_folioDoctos = value;
+		}
+
+		public function get folioDoctos2():String
+		{
+			return _folioDoctos2;
+		}
+
+		public function set folioDoctos2(value:String):void
+		{
+			_folioDoctos2 = value;
+		}
+
+		public function get folioDoctos3():String
+		{
+			return _folioDoctos3;
+		}
+
+		public function set folioDoctos3(value:String):void
+		{
+			_folioDoctos3 = value;
+		}
+
+		public function get frefacturacion():Date
+		{
+			return _frefacturacion;
+		}
+
+		public function set frefacturacion(value:Date):void
+		{
+			_frefacturacion = value;
+		}
+
+		public function get entregayRevision():Boolean
+		{
+			return _entregayRevision;
+		}
+
+		public function set entregayRevision(value:Boolean):void
+		{
+			_entregayRevision = value;
+		}
+
+		public function get comentariosAdicionales():Boolean
+		{
+			return _comentariosAdicionales;
+		}
+
+		public function set comentariosAdicionales(value:Boolean):void
+		{
+			_comentariosAdicionales = value;
+		}
+
+		public function get registroDEntrega():String
+		{
+			return _registroDEntrega;
+		}
+
+		public function set registroDEntrega(value:String):void
+		{
+			_registroDEntrega = value;
+		}
+
+		public function get conforme():String
+		{
+			return _conforme;
+		}
+
+		public function set conforme(value:String):void
+		{
+			_conforme = value;
+		}
+
+		public function get ffin():Date
+		{
+			return _ffin;
+		}
+
+		public function set ffin(value:Date):void
+		{
+			_ffin = value;
+		}
+
+		public function get longitud():Number
+		{
+			return _longitud;
+		}
+
+		public function set longitud(value:Number):void
+		{
+			_longitud = value;
+		}
+
+		public function get latitud():Number
+		{
+			return _latitud;
+		}
+
+		public function set latitud(value:Number):void
+		{
+			_latitud = value;
+		}
+
+		public function get altitud():Number
+		{
+			return _altitud;
+		}
+
+		public function set altitud(value:Number):void
+		{
+			_altitud = value;
+		}
+
+		public function get idDireccion():Number
+		{
+			return _idDireccion;
+		}
+
+		public function set idDireccion(value:Number):void
+		{
+			_idDireccion = value;
+		}
+
+		public function get tipoJustificacion():String
+		{
+			return _tipoJustificacion;
+		}
+
+		public function set tipoJustificacion(value:String):void
+		{
+			_tipoJustificacion = value;
+		}
+
+		public function get responsable():String
+		{
+			return _responsable;
+		}
+
+		public function set responsable(value:String):void
+		{
+			_responsable = value;
+		}
+		public function get fer():Date
+		{
+			return _fer;
+		}
+		
+		public function set fer(value:Date):void
+		{
+			_fer = value;
+			if( value == null ){
+				_formatofer = 'ND';
+			}else{
+				_formatofer = UtilsFecha.formatoFechaDDMMMYYYY( value );
+			}
+		}
+		
+		public function get fr():Date
+		{
+			return _fr;
+		}
+		
+		public function set fr(value:Date):void
+		{
+			if( value == null ){
+				_formatofr = 'ND';
+			}else{
+				_formatofr = UtilsFecha.formatoFechaDDMMMYYYY( value );
+			}
+			_fr = value;
+		}
+		public function get formatofr():String
+		{
+			return _formatofr;
+		}
+		
+		public function set formatofr(value:String):void
+		{
+			_formatofr = value;
+			if(value == null ){
+				_formatofr = "PEndiente;"
+			}
+		}
+		
+		public function get formatofer():String
+		{
+			return _formatofer;
+		}
+		
+		public function set formatofer(value:String):void
+		{
+			_formatofer = value;
+			if(value == null ){
+				_formatofer = "PEndiente;"
+			}
+		}
+		public function get totalEntregas():Number
+		{
+			return _totalEntregas;
+		}
+		
+		public function set totalEntregas(value:Number):void
+		{
+			_totalEntregas = value;
+		}
+
+		public function get formatofecha():String
+		{
+			return _formatofecha;
+		}
+
+		public function set formatofecha(value:String):void
+		{
+			_formatofecha = value;
+		}
+
+		public function get docto():ByteArray
+		{
+			return _docto;
+		}
+
+		public function set docto(value:ByteArray):void
+		{
+			_docto = value;
+		}
+
+		public function get docto2():ByteArray
+		{
+			return _docto2;
+		}
+
+		public function set docto2(value:ByteArray):void
+		{
+			_docto2 = value;
+		}
+
+		public function get docto3():ByteArray
+		{
+			return _docto3;
+		}
+
+		public function set docto3(value:ByteArray):void
+		{
+			_docto3 = value;
+		}
+
+		public function get flujo():String
+		{
+			return _flujo;
+		}
+
+		public function set flujo(value:String):void
+		{
+			_flujo = value;
+		}
+		
+		
+		
+	
+
+		public function Ruta()
+		{
+		}
+	}
+}

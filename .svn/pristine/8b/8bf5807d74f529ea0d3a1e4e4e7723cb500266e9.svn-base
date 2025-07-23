@@ -1,0 +1,272 @@
+package mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq
+{
+	import flash.events.Event;
+	
+	import mx.core.IVisualElement;
+	import mx.core.UIComponent;
+	import mx.events.EffectEvent;
+	import mx.events.IndexChangedEvent;
+	import mx.graphics.SolidColor;
+	
+	import spark.components.Group;
+	
+	[Event(name="change", type="flash.events.Event")]
+	
+	public class MobViewStack extends Group
+	{
+		private var _proposedIndex:int = -1;
+		private var _selectedIndex:int = 0;
+		private var _oldIndex:int = -1;
+		
+		private var _backgroundColor:uint = 0xFFFFFF1;
+		//private var _fondo:Rect = null;
+		private var _fillColor:SolidColor = null;
+		public var paddingBottom:int = 0;
+		public var paddingTop:int = 0;
+		public var paddingLeft:int = 0;
+		public var paddingRight:int = 0;
+		
+		private var needToInstantiateSelectedChild:Boolean = false;
+		/**
+		 *  @private
+		 *  Whether a change event has to be dispatched in commitProperties()
+		 */
+		private var dispatchChangeEventPending:Boolean = false;
+		
+		//					COLOR FONDO
+		public function get backgroundColor():uint
+		{
+			return _backgroundColor;
+		}
+		
+		public function set backgroundColor(value:uint):void
+		{
+			_backgroundColor = value;
+		}
+		//					/COLOR FONDO
+		//					 CHILD
+		public function get selectedChild():IVisualElement
+		{
+			//return _selectedChild;
+			return getElementAt( selectedIndex );
+		}
+		public function set selectedChild(value:IVisualElement):void
+		{
+			var newIndex:int = getElementIndex( value );
+			if (newIndex >= 0 && newIndex < numChildren)
+				selectedIndex = newIndex;
+		}
+		//					/CHILD
+		//					INDEX
+		[Bindable(event="change")]
+		public function get selectedIndex():int
+		{
+			return _selectedIndex;
+		}
+		public function set selectedIndex(value:int):void
+		{
+			if( value == selectedIndex )
+				return;
+			
+			
+			_proposedIndex = value;
+			invalidateProperties();
+			invalidateSize();
+			invalidateDisplayList();
+		}
+		//					/INDEX
+		public function set creationPolicy(value:String):void{}
+		
+		override protected function measure():void{
+			super.measure();
+			var minWidth:Number = 0;
+			var minHeight:Number = 0;
+			var preferredWidth:Number = 0;
+			var preferredHeight:Number = 0;
+			if ( numElements > 0 && selectedIndex != -1)
+			{
+				var child:UIComponent =
+					UIComponent(getChildAt(selectedIndex));
+				
+				minWidth = child.minWidth;
+				preferredWidth = child.getExplicitOrMeasuredWidth();
+				
+				minHeight = child.minHeight;
+				preferredHeight = child.getExplicitOrMeasuredHeight();
+			}
+		
+			measuredMinWidth = minWidth;
+			measuredMinHeight = minHeight;
+			measuredWidth = preferredWidth;
+			measuredHeight = preferredHeight;
+		}
+		
+		override protected function createChildren():void{
+			super.createChildren();
+			for( var f:int=0; f < numElements; f++){
+				getElementAt( f ).visible = getElementAt( f ).includeInLayout = false;
+			}
+			invalidateProperties();
+			invalidateSize();
+			invalidateDisplayList();
+		}
+		override protected function commitProperties():void{
+			super.commitProperties();
+			if( _proposedIndex != -1 ){
+				commitSelectedIndex( _proposedIndex );
+				_proposedIndex = -1;
+			}
+			
+			if (needToInstantiateSelectedChild)
+			{
+				instantiateSelectedChild();
+				needToInstantiateSelectedChild = false;
+			}
+			if( dispatchChangeEventPending ){
+				dispatchChangeEvent( _oldIndex, selectedIndex);
+				dispatchChangeEventPending = false;
+			}
+			
+		}
+		protected function commitSelectedIndex( newIndex:int ):void{
+			if( numElements == 0 ){
+				_selectedIndex = -1;
+				return;
+			}
+			if( newIndex < 0 )
+				newIndex = 0;
+			else if( newIndex > numElements -1 )
+				newIndex = numElements - 1;
+			if( _oldIndex != -1 && _oldIndex < numElements )
+					UIComponent( getElementAt( _oldIndex) ).endEffectsStarted();
+			if( _selectedIndex != -1 )
+				( selectedChild as UIComponent).endEffectsStarted();
+			
+			/*if( _oldIndex != -1 )
+				UIComponent( getElementAt( _oldIndex) ).includeInLayout = false;*/
+			_oldIndex = _selectedIndex;
+			
+			if( newIndex == _oldIndex )
+				return;
+			
+			_selectedIndex = newIndex;
+			
+			if ( _oldIndex != -1 && newIndex != -1)
+				dispatchChangeEventPending = true;
+			
+			var listenForEffectEnd:Boolean = false;
+			
+			if( _oldIndex != -1 && _oldIndex < numElements ){
+					var currentElement:UIComponent = UIComponent( getElementAt( _oldIndex) );
+					currentElement.visible = currentElement.includeInLayout = false;
+					/*if( currentElement.getStyle("hideEffect") ){
+						var hideEffect:Effect = EffectManager( currentElement.getStyle("hideEffect") );
+						if( hideEffect ){
+							 hideEffect.addEventListener( EffectEvent.EFFECT_END, hideEffectEndHandler);
+							 listenForEffectEnd = true;
+						}
+					}*/
+			}
+			
+			if( !listenForEffectEnd )
+				hideEffectEndHandler(null);
+			
+		}
+		
+		private function instantiateSelectedChild():void
+		{
+			if (!selectedChild)
+				return;
+			
+			// Performance optimization: don't call createComponents if we know
+			// that createComponents has already been called.
+		/*	if (selectedChild && selectedChild.deferredContentCreated == false)
+			{
+				if (initialized)  // Only listen if the ViewStack has already been initialized.
+					selectedChild.addEventListener(FlexEvent.CREATION_COMPLETE, childCreationCompleteHandler);
+				selectedChild.createDeferredContent();
+			}
+			*/
+			// Do the initial measurement/layout pass for the
+			// newly-instantiated descendants.
+			
+			/*if (selectedChild is IInvalidating)
+				IInvalidating(selectedChild).invalidateSize();*/
+			
+			/*invalidateSize();
+			invalidateDisplayList();*/
+		}
+		
+		private function hideEffectEndHandler(event:EffectEvent):void
+		{
+			if (event)
+				event.currentTarget.removeEventListener(EffectEvent.EFFECT_END, hideEffectEndHandler);
+			
+			// Give any change handlers a chance to act before we
+			// instantiate our pane (which eats up all the processing cycles)
+			//needToInstantiateSelectedChild = true;
+			invalidateProperties();
+			
+			/*if (bSaveState)
+			{
+				HistoryManager.save();
+				bSaveState = false;
+			}*/
+		}
+		
+		override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
+			super.updateDisplayList(unscaledWidth, unscaledHeight );
+			if( numElements > 0 ){
+					var newWidth:Number = unscaledWidth - paddingLeft - paddingRight;
+					var newHeight:Number = unscaledHeight - paddingTop - paddingBottom;
+					/*for( var f:int = 0; f < numElements; f++ ){
+						if( f != selectedIndex){
+							var noshows:UIComponent = UIComponent( getElementAt( f) );
+							noshows.setActualSize( newWidth, newHeight );
+							noshows.move( paddingLeft, paddingTop );
+						}
+					}*/
+					var currentElement:UIComponent = UIComponent( getElementAt( selectedIndex) );
+					currentElement.setActualSize( newWidth, newHeight );
+					currentElement.move( paddingLeft, paddingTop );
+					//currentElement.percentWidth = percentWidth = 100;
+					
+					/*currentElement.left = paddingLeft;
+					currentElement.right = paddingRight;
+					currentElement.top = paddingTop;
+					currentElement.bottom = paddingBottom;*/
+					//currentElement.visible = currentElement.includeInLayout = true;
+					currentElement.includeInLayout = true;
+					currentElement.setVisible( true );
+			}
+		}
+		/**
+		 *  @private
+		 */
+		private function dispatchChangeEvent(oldIndex:int, newIndex:int):void
+		{
+			var event:IndexChangedEvent =
+				new IndexChangedEvent(IndexChangedEvent.CHANGE);
+			event.oldIndex = oldIndex;
+			event.newIndex = newIndex;
+			event.relatedObject = getChildAt(newIndex);
+			dispatchEvent(event);
+		}
+		override public function addElement(element:IVisualElement):IVisualElement{
+			element.width = element.height = 10;
+			element.visible = element.includeInLayout = false;
+			invalidateSize();
+			return super.addElement( element );
+		}
+		override public function addElementAt(element:IVisualElement, index:int):IVisualElement{
+			element.width = element.height = 10;
+			element.visible = element.includeInLayout = false;
+			invalidateSize();
+			return super.addElementAt( element, index);
+		}
+		public function MobViewStack()
+		{
+				super();
+		}
+	}
+}

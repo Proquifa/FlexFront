@@ -1,0 +1,632 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.finanzas.facturacion
+{
+	import com.asfusion.mate.actions.builders.RemoteObjectInvoker;
+	
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.mysuite.RequestTransactionResponse;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.ObjectUtil;
+	import mx.utils.StringUtil;
+	
+	import skins.catalogos.catalogoAlertas;
+	
+	public class ModeloConsultaFacturacion2013 extends EventDispatcher
+	{
+		private function validarTextosXFechaFin(_texto:String,FFin:Date):String
+		{
+			if(FFin == null){
+				if(_texto == null || StringUtil.trim(_texto).length<=0)
+					return 'Pendiente';
+				else
+					return _texto;
+			}else if(FFin != null){
+				if(_texto == null || StringUtil.trim(_texto).length<=0)
+					return 'ND';
+				else
+					return _texto;
+			}
+			return '';
+		}
+		
+		/**
+		 ************************************************************** lista de compras ********************************************************
+		 */
+		private var _facturacion:ArrayCollection;
+		public function setListaFacturas(facturas:ArrayCollection):void{
+			
+			this._facturacion = facturas;
+
+			dispatchEvent(new Event ("listaFacturasModeloConsultaFacturacion2013"));
+			if(_facturacion!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"listaFacturasModeloConsultaFacturacion2013");
+				}
+			}
+		}
+		
+		[Bindable(event="listaFacturasModeloConsultaFacturacion2013")]
+		public function get listaFacturas():ArrayCollection{
+			return this._facturacion;
+		}
+		
+		/**
+		 ************************************************************** Busqueda de Facturas ********************************************************
+		 */
+		private var _busquedaFacturacion:ArrayCollection;
+		public function setListaBusquedaFacturas(facturas:ArrayCollection):void{			
+			this._busquedaFacturacion = facturas;
+
+			dispatchEvent(new Event ("listaBusquedaFacturasModeloConsultaFacturacion2013"));
+			if(_busquedaFacturacion!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"listaBusquedaFacturasModeloConsultaFacturacion2013");
+				}
+			}
+		}
+		
+		[Bindable(event="listaBusquedaFacturasModeloConsultaFacturacion2013")]
+		public function get listaBusquedaFacturas():ArrayCollection{
+			return this._busquedaFacturacion;
+		}
+		
+		/**
+		 ************************************************************** Busqueda de Facturas fuera de linea ********************************************************
+		 */
+		private var _busquedaFacturacionFueraLinea:ArrayCollection;
+		public function setListaBusquedaFacturasFueraLinea(facturas:ArrayCollection):void{			
+			this._busquedaFacturacionFueraLinea = facturas;
+			
+			dispatchEvent(new Event ("listaBusquedaFacturasFueraLineaModeloConsultaFacturacion2013"));
+			if(_busquedaFacturacionFueraLinea!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"listaBusquedaFacturasFueraLineaModeloConsultaFacturacion2013");
+				}
+			}
+		}
+		
+		[Bindable(event="listaBusquedaFacturasFueraLineaModeloConsultaFacturacion2013")]
+		public function get listaBusquedaFacturasFueraLinea():ArrayCollection{
+			return this._busquedaFacturacionFueraLinea;
+		}
+		
+		/**
+		 ************************************************************** Mostra ENTREGA ********************************************************
+		 */
+		private var _facturaEntrega:ArrayCollection;
+		public function setMostrarFacturasEntrega(facturas:ArrayCollection):void{
+					
+			this._facturaEntrega = facturas;
+			
+			dispatchEvent(new Event ("facturaEntregaModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="facturaEntregaModeloConsultaFacturacion2013")]
+		public function get listaFacturasEntrega():ArrayCollection{
+			return this._facturaEntrega;
+		}
+		
+		/**
+		 ************************************************************** Mostra ENTREGA PEDIDOS ********************************************************
+		 */
+		private var _facturaEntregaPedido:ArrayCollection;
+		public function setMostrarFacturasEntregaPedidos(facturasPedido:ArrayCollection):void{
+				
+			this._facturaEntregaPedido = facturasPedido;
+
+			dispatchEvent(new Event ("facturaEntregaPedidoModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="facturaEntregaPedidoModeloConsultaFacturacion2013")]
+		public function get listaFacturasEntregaPedido():ArrayCollection{
+			return this._facturaEntregaPedido;
+		}
+		
+		/**
+		 ************************************************************** Mostra LINEA DE TIEMPO ********************************************************
+		 */
+		private var _lineaTiempo:ArrayCollection = new ArrayCollection();
+		public function setMostrarLineaTiempoEntrega(facturas:ArrayCollection):void{
+			
+			if(facturas == null) return;
+			
+			var _temp:ArrayCollection = new ArrayCollection();
+			var _facc:ArrayCollection = new ArrayCollection();
+			
+			for(var i:int=0; i<facturas.length; i++){
+				if ((facturas[i] as TiempoProceso).etapa == 'FACTURACION' 		|| (facturas[i] as TiempoProceso).etapa == 'ENTREGA' ||
+					(facturas[i] as TiempoProceso).etapa == 'REVISION' 			|| (facturas[i] as TiempoProceso).etapa == 'COBRO' || 
+					(facturas[i] as TiempoProceso).etapa == 'FACTURA REMISION' 	|| (facturas[i] as TiempoProceso).etapa == 'REFACTURACION' ||
+					(facturas[i] as TiempoProceso).etapa == 'CANCELACION' || (facturas[i] as TiempoProceso).etapa == 'FACTURA' )	{
+					
+					_temp.addItem( facturas[i] );
+				}
+			}
+			
+			_facc = _temp;
+			
+			var _arrTemp:ArrayCollection = new ArrayCollection();
+			var currenItem:TiempoProceso ;
+			for(var j:int = 0; j<_facc.length ; j++){
+				currenItem = (_facc[j] as TiempoProceso);
+				if(currenItem.etapa == 'COBRO' && currenItem.etapaPadre == '1'){ // 1 es sin credito
+					_arrTemp.addItem(currenItem);
+				}else if(currenItem.etapa == 'ENTREGA'){
+					if(currenItem.fechaFin == null){
+						if(currenItem.conforme == "NO DISPONIBLE")
+							currenItem.conforme = "Pendiente";
+					}else{
+						if(currenItem.conforme == "NO DISPONIBLE")
+							currenItem.conforme = "ND";
+					}
+				}
+			}
+			for(var k:int = 0; k<_facc.length ; k++){
+				if(_facc[k].etapaPadre != '1'){
+					_arrTemp.addItem(_facc[k]);
+				}
+			}
+			
+			if(_arrTemp.length>0)
+				_arrTemp[_arrTemp.length-1].finLista = true;
+			
+			_lineaTiempo = _arrTemp;
+			
+			dispatchEvent(new Event ("facturaLineaTiempoModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="facturaLineaTiempoModeloConsultaFacturacion2013")]
+		public function get listaLineaTiempoEntrega():ArrayCollection{
+			return this._lineaTiempo;
+		}
+		/**
+		 ************************************************************** Mostra LINEA DE TIEMPO ********************************************************
+		 */
+		public function setMostrarLineaTiempoPrepago( $lista:ArrayCollection):void{
+			_lineaTiempo = new ArrayCollection();
+			_lineaTiempo = ObjectUtil.copy( $lista ) as ArrayCollection;
+			if( _lineaTiempo.length>0)
+				_lineaTiempo[ _lineaTiempo.length-1 ].finLista = true;
+			dispatchEvent(new Event ( "facturaLineaTiempoModeloConsultaFacturacion2013" ) );
+		}
+		/**
+		 ************************************************************** MOSTRAR DETALLES FACTURACION ********************************************************
+		 */
+		private var _detallesFacturacion:TiempoProceso;
+		private var cont:uint=0;
+		public function setDetallesFacturacion($facturas:ArrayCollection):void{
+			
+			var _punteros:ArrayCollection = new ArrayCollection();
+			
+			for(var i:int=0; i<$facturas.length; i++){
+				if (($facturas[i] as TiempoProceso).etapa == 'FACTURACION'){
+					($facturas[i] as TiempoProceso).etapa = 'FACTURACIÓN';
+					_punteros.addItem($facturas[i]);
+				}	
+			}
+			
+			if (_punteros.length>0){
+				this._detallesFacturacion = _punteros[0] as TiempoProceso;
+				dispatchEvent(new Event ("detallesFacturacionModeloConsultaFacturacion2013"));
+			}
+		}
+		
+		[Bindable(event="detallesFacturacionModeloConsultaFacturacion2013")]
+		public function get listaDetallesFacturacion():TiempoProceso{
+			return this._detallesFacturacion;
+		}
+		
+		
+		/**
+		 ************************************************************** MOSTRAR DETALLES REFACTURACION ********************************************************
+		 */
+		
+/*		
+		private var _detallesRefacturacion:ArrayCollection;
+		public function setDetallesRefacturacion(facturas:ArrayCollection):void{
+			
+			var _refa:ArrayCollection = new ArrayCollection();
+			
+			for(var i:int=0; i<facturas.length; i++){			
+				if ((facturas[i] as TiempoProceso).etapa == 'REFACTURACION'){
+					_refa.addItem(facturas[i]);
+				}
+			}
+			if (_refa.length>0){
+				this._detallesRefacturacion = _refa;
+				dispatchEvent(new Event ("detallesRefacturacionInfoModeloConsultaFacturacion2013"));
+			}
+		}*/
+		
+/*		[Bindable(event="detallesRefacturacionInfoModeloConsultaFacturacion2013")]
+		public function get listaDetallesRefacturacion():ArrayCollection{
+			return this._detallesRefacturacion;
+		}*/
+		
+		
+		/**
+		 ************************************************************** MOSTRAR INFO REVISION ********************************************************
+		 */
+		private var _detallesRevison:TiempoProceso;
+		public function setInfoRevision(facturas:ArrayCollection):void{
+			
+			var _punteros:ArrayCollection = new ArrayCollection();
+			
+			for(var i:int=0; i<facturas.length; i++){
+				if ((facturas[i] as TiempoProceso).etapa == 'REVISION'){
+					_punteros.addItem(facturas[i]);
+				}	
+			}
+			
+			if (_punteros.length>0){
+				this._detallesRevison = _punteros[0] as TiempoProceso;
+				dispatchEvent(new Event ("detallesRevisionModeloConsultaFacturacion2013"));
+			}
+		}
+		
+		
+		[Bindable(event="detallesRevisionModeloConsultaFacturacion2013")]
+		public function get listaInfoRevision():TiempoProceso{
+			return this._detallesRevison;
+		}
+		
+		
+		/**
+		 ************************************************************** MOSTRAR DETALLES ENTREGA ********************************************************
+		 */
+		private var _lineaTiempoEntrega:ArrayCollection;
+		public function setDetallesEntrega($entregas:ArrayCollection):void{
+			
+			this._lineaTiempoEntrega = $entregas;
+			dispatchEvent(new Event ("detallesEntregaModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="detallesEntregaModeloConsultaFacturacion2013")]
+		public function get listaDetallesEntrega():ArrayCollection{
+			return this._lineaTiempoEntrega;
+		}
+		
+		/**
+		 ************************************************************** MOSTRAR DETALLES REVISION ********************************************************
+		 */
+		private var _lineaTiempoRevision:ArrayCollection;
+		public function setDetallesRevision($revision:ArrayCollection):void{
+			
+			this._lineaTiempoRevision = $revision;
+			dispatchEvent(new Event ("detallesRevisionModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="detallesRevisionModeloConsultaFacturacion2013")]
+		public function get listaDetallesRevision():ArrayCollection{
+			return this._lineaTiempoRevision;
+		}
+		
+		/**
+		 ************************************************************** MOSTRAR DETALLES FACTURAR REMISION ********************************************************
+		 */
+		private var _remision:Facturacion;
+		private var _lineaFacturarRemision:ArrayCollection;
+		public function setDetallesRemision($remEncontradas:ArrayCollection):void{
+			
+			var ultimaRemision:Facturacion;
+			ultimaRemision = ObjectUtil.copy($remEncontradas[0]) as Facturacion; 
+			
+			if($remEncontradas.length > 0){
+				ultimaRemision.remisiones = new ArrayCollection;
+				for(var i:int = 0 ; i<$remEncontradas.length ; i++){
+					ultimaRemision.remisiones.addItem($remEncontradas[i].remision);
+				}
+			}
+			
+			this._remision = ultimaRemision;
+			
+			dispatchEvent(new Event ("detallesRemisionModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="detallesRemisionModeloConsultaFacturacion2013")]
+		public function get listaDetallesRemision():Facturacion{
+			return this._remision;
+		}
+		
+		/**
+		 ************************************************************** MOSTRAR DETALLES REFACTURAR ********************************************************
+		 */
+		private var _refacturacion:Facturacion;
+		public function setDetallesRefacturar($refac:ArrayCollection):void{	
+			
+/*			var currentItem:Facturacion;
+			currentItem = $refac[0] as Facturacion;*/
+			
+			if($refac != null)
+				this._refacturacion =$refac[0];
+			
+			dispatchEvent(new Event ("detallesRefacturacionModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="detallesRefacturacionModeloConsultaFacturacion2013")]
+		public function get listaDetallesRefacturar():Facturacion{
+			return this._refacturacion;
+		}
+		
+		/**
+		 ************************************************************** MOSTRAR DETALLES CANCELACION ********************************************************
+		 */
+		private var _cancelacion:Facturacion;
+		public function setDetallesCancelacion($cancelacion:ArrayCollection):void{	
+			
+			var currentItem:Facturacion;
+			currentItem = $cancelacion[0] as Facturacion;
+			this._cancelacion =currentItem;
+			
+			dispatchEvent(new Event ("detallesCancelacionModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="detallesCancelacionModeloConsultaFacturacion2013")]
+		public function get listaDetallesCancelacion():Facturacion{
+			return this._cancelacion;
+		}
+		
+		/**
+		 ************************************************************** MOSTRAR RESUMEN ********************************************************
+		 */
+		private var _resumen:ArrayCollection;
+		public function setResumen($datos:ArrayCollection):void{	
+			_resumen = new ArrayCollection();
+			_resumen = $datos;
+			dispatchEvent(new Event ("resumenModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="resumenModeloConsultaFacturacion2013")]
+		public function get Resumen():ArrayCollection{
+			return this._resumen;
+		}
+		
+		/**
+		 ************************************************************** MOSTRAR PREPAGO ********************************************************
+		 */
+		private var evtPrepago:EventoConsultaFacturacion2013;
+		public function setPrepago( $lista:ArrayCollection, $dato:EventoConsultaFacturacion2013 ):void{	
+			evtPrepago = $dato;
+			evtPrepago.listaPrepago = new ArrayCollection();
+			evtPrepago.listaPrepago = $lista;
+			dispatchEvent(new Event ("prepagoModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="prepagoModeloConsultaFacturacion2013")]
+		public function get Prepago():EventoConsultaFacturacion2013{
+			return this.evtPrepago;
+		}
+		/**
+		 ************************************************************** MOSTRAR DETALLES COBRO ********************************************************
+		 */
+		private var _lineaTiempoCobro:ArrayCollection = new ArrayCollection();
+		public function setDetallesCobro(facturas:ArrayCollection):void{
+						
+			_lineaTiempoCobro = facturas;
+			
+			dispatchEvent(new Event ("detallesCobroModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="detallesCobroModeloConsultaFacturacion2013")]
+		public function get listaDetallesCobro():ArrayCollection{
+			return this._lineaTiempoCobro;
+		}
+		
+		/**
+		 ******************************************************* FUNCION QUE OBTIENE FACURA Y FPOR ************************************************************
+		 */ 
+		private var _dataRes:Object= new Object();
+		public function setObtenerFacturaFpor($factura:String, $fpor:String):void{
+			 
+			var _data:Object= new Object(); 
+			
+			_data["factura"] = $factura;
+			_data["fpor"] = $fpor;
+			
+			_dataRes=_data;
+
+			dispatchEvent(new Event("obtenInfoFacturaFporModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="obtenInfoFacturaFporModeloConsultaFacturacion2013")]
+		public function get obtenerFacturaFpor():Object{
+			return this._dataRes;
+		}
+				
+		/**
+		 ******************************************************* FUNCION QUE OBTIENE INFO FFIN Y FINICIO DE ENTREGAS ************************************************************
+		 */ 
+		private var _infoEntrega:TiempoProceso;
+		public function setObtenerInfoEntregas(entrega:TiempoProceso):void{
+			_infoEntrega = entrega;
+			dispatchEvent(new Event("obtenInfoEntregasCobroModeloConsultaFacturacion2013"));
+		}
+		
+		[Bindable(event="obtenInfoEntregasCobroModeloConsultaFacturacion2013")]
+		public function get obtenerInfoEntregas():TiempoProceso{
+			return this._infoEntrega;
+		}
+		
+		/**
+		 ******************************************************* FUNCION QUE OBTIENE INFO FFIN Y FINICIO DE COBROS ************************************************************
+		 */ 
+		
+		public var _cobrada:TiempoProceso;
+		public function setObtenerInspectorCobrada(cobrada:TiempoProceso):void{
+			_cobrada = cobrada;
+			dispatchEvent(new Event("obtenerInspectorCobrada"));
+		}
+		
+		[Bindable(event="obtenerInspectorCobrada")]
+		public function get obtnerInspectorCobrada():TiempoProceso{
+			return this._cobrada;
+		}
+		
+		
+		/**
+		 **************************************************************  Funcion que muestra tab garficas false- ocultar , true - muestra **************************************************************
+		 */ 
+		private var _tab:Boolean;
+		public function setMostrarOcultaTabGrafica(tab:Boolean):void{
+			_tab = tab;
+			dispatchEvent(new Event ("muestraOcultaTabGraficaModeloConsultaCompras"));
+		}
+		
+		[Bindable(event="muestraOcultaTabGraficaModeloConsultaCompras")]
+		public function get mostrarOcultaTabGrafica():Boolean{
+			return this._tab;
+		}
+		
+		
+		
+		/**
+		 **************************************************************  Estado de la Factura emitida directamente desde SAT **************************************************************
+		 */ 
+		
+		public var _estadoFactura:String;
+		public function setObtenerEstadoFactura(data:String):void{
+			_estadoFactura = data;
+			dispatchEvent(new Event("obtenerEstadoDeLaFacturaModeloConsultaFacturas"));
+			
+			//setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerEstadoDeLaFacturaModeloConsultaFacturas");
+		}
+		
+		[Bindable(event="obtenerEstadoDeLaFacturaModeloConsultaFacturas")]
+		public function get enviarEstadoFactura():String{
+			return this._estadoFactura;
+		}
+		
+		
+		/**
+		 ************************************************************** BLOQUEO **************************************************************
+		 */ 
+		
+		private function verificarSiElExistenLosTiposDeEvento($tiposEventos:Array):Boolean
+		{
+			for (var i:int = 0; i < $tiposEventos.length; i++) 
+			{
+				if((EventoConsultaFacturacion2013[$tiposEventos[i]])== null){
+					return false;
+				}
+			}
+			return true;
+		}
+		
+		private var currentEnEspera:Boolean;
+		private var actualizarEspera:Object = new Object;
+		private var numServices:uint;
+		private var numServicioCompletos:uint;
+		private var serviciosCompletosDifKey:Object = new Object;
+		public function setControlDeBloqueoPantalla(mensaje:String,$tiposEvento:Array,$idCurrentBottons:Array,$errorOrWhoFinish:Object):void
+		{
+			if(mensaje == "iniciarEspera"){
+				if(Boolean(verificarSiElExistenLosTiposDeEvento($tiposEvento))){
+					numServicioCompletos=0;
+					numServices = 0;
+					actualizarEspera = new Object();
+					serviciosCompletosDifKey = new Object();
+					numServices = $tiposEvento.length;
+					currentEnEspera = true;
+					actualizarEspera.isBusy = true;
+					actualizarEspera["idCurrentButtons"] = $idCurrentBottons;
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+				}
+			}else if (mensaje =="terminaEspera"){
+				if(!serviciosCompletosDifKey.hasOwnProperty($errorOrWhoFinish as String)){
+					numServicioCompletos++;
+					serviciosCompletosDifKey[($errorOrWhoFinish as String)] = ($errorOrWhoFinish as String);
+				}
+				if(numServicioCompletos == numServices){
+					alertaSingleton.remove(true);
+					actualizarEspera.isBusy=false;
+					currentEnEspera = false;
+					numServices = 0;
+				}
+			}else if(mensaje =="error"){
+				alertaSingleton.remove(true);
+				currentEnEspera = false;
+				trace(RemoteObjectInvoker.eventTypeLocal);
+				alertaSingleton.showReintentar( $errorOrWhoFinish.toString(), catalogoAlertas.TIT_ERR);
+				actualizarEspera.isBusy=false;
+			}
+			
+			dispatchEvent( new Event("actualizaEsperaYBloqueoModeloConsultaFacturacion") );
+		}
+		[Bindable(event="actualizaEsperaYBloqueoModeloConsultaFacturacion")]
+		public function get actualizarEstadoDeEsperaYBloqueo():Object
+		{
+			return actualizarEspera;
+		}
+		/**
+		 ************************************************************** error **************************************************************
+		 */
+		public function error(objeto:Object):void{
+			alertaSingleton.showReintentar( objeto.toString() );
+		}
+		
+
+		/*/****************************************************** se envia la lista de folios *************************************************************
+		 */
+		private var _listaFacturas:ArrayCollection;
+		public function setObtenFacturas( $lista:ArrayCollection ):void{
+			_listaFacturas = new ArrayCollection();
+			_listaFacturas = $lista;
+			dispatchEvent( new Event("evnviaListaFacturasModeloConsultaFacturacion") );
+			
+			setControlDeBloqueoPantalla("terminaEspera",null,null,"evnviaListaFacturasModeloConsultaFacturacion");
+		}
+		[Bindable(Event="evnviaListaFacturasModeloConsultaFacturacion")]
+		public function get ObtenFacturas():ArrayCollection{
+			return this._listaFacturas;
+		}
+		
+		/**
+		 ***************************************************** se confirma la cancelacion de la factura *************************************************************
+		 */
+		private var _confirmacionFactura:RequestTransactionResponse;
+		public function setCancelaFactura( $dato:RequestTransactionResponse ):void{
+			_confirmacionFactura = $dato;
+			dispatchEvent( new Event("cancelaFacturaModeloFacturacion") );
+		}
+		[Bindable(Event="cancelaFacturaModeloFacturacion")]
+		public function get CancelaFactura():RequestTransactionResponse{
+			return this._confirmacionFactura;
+		}
+		/**
+		 ***************************************************** se genera error en la cancelacion de la factura *************************************************************
+		 */
+		private var _errorCancelar:Boolean;
+		public function setErrorCancelarFactura(objeto:Object):void{
+			_errorCancelar = true;
+			dispatchEvent( new Event("errorCancelaFacturaModeloFacturacion") );
+		}
+		[Bindable(Event="errorCancelaFacturaModeloFacturacion")]
+		public function get ErrorCancelarFactura():Boolean{
+			return this._errorCancelar;
+		}
+		
+		/*public function error(objeto:Object):void{
+			Alert.show( objeto.toString() );
+		}*/
+		
+		public function ModeloConsultaFacturacion2013(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+		/*********/
+		
+		
+		
+		
+		
+		
+		
+		
+	}
+}

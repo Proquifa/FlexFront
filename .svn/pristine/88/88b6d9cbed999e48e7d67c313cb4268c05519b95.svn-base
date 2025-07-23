@@ -1,0 +1,485 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:columna = "mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*"
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+									  xmlns:s="library://ns.adobe.com/flex/spark" 
+									  xmlns:mx="library://ns.adobe.com/flex/mx"   
+									  xmlns:otros="skins.otros.*"
+									  xmlns:linkButton="skins.skin.linkButton.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:label="skins.skin.label.*" 
+									  width="100%" height="100%"
+									  creationComplete="completeHandler()" 
+									  >
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.notaCredito.EventoConsultaNotaDeCredito;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.NotaCredito;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.notaCredito.componentesGraficas.GraficaClienteConsultaNotaDeCredito;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.notaCredito.componentesGraficas.GraficaEstadoConsultaNotaDeCredito;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.notaCredito.componentesGraficas.GraficaFPorConsultaNotaDeCredito;
+			import mx.core.IVisualElement;
+			import mx.utils.ObjectUtil;
+			
+			private var _listaNotaDeCredito:ArrayCollection;
+			private var _listaRapidaNotaDeCredito:ArrayCollection;
+			private var graficas1erNivel:ContenedorGraficas = new ContenedorGraficas;
+			private var graficos:ArrayCollection = new ArrayCollection();
+			private var isGrafica:Boolean;
+			private var _cambios:Boolean;
+			private var arrayTemp:ArrayCollection;
+			
+			protected function completeHandler():void
+			{
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK, solicitarInfoGraficas, false, 0, true);
+				
+				var graficas:ArrayCollection = new ArrayCollection;
+				graficas.addItem(new GraficaClienteConsultaNotaDeCredito());
+				graficas.addItem(new GraficaFPorConsultaNotaDeCredito());
+				graficas.addItem(new GraficaEstadoConsultaNotaDeCredito());
+				graficas1erNivel.insertarGraficas(graficas);
+				agregarEspacioTrabajo(graficas1erNivel);
+				isGrafica = false; 
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void
+			{
+				if(espacio == null)
+				{
+					return;
+				}
+				graficos.addItem(espacio);
+				
+				if(graficos.length == 1)
+				{
+					espacioGraficas.removeAllElements();
+					espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			[Bindable] public var actualizarVistaActual:Boolean;
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible)
+				{
+					compararVistas();
+				}
+				var evt:EventoConsultaNotaDeCredito = new EventoConsultaNotaDeCredito(EventoConsultaNotaDeCredito.SET_INDICE_GRAFICA);
+				dispatchEvent(evt);
+				if(!isGrafica)
+				{
+					var eventos:EventoConsultaNotaDeCredito = new EventoConsultaNotaDeCredito(EventoConsultaNotaDeCredito.GET_CAMBIOS_GRID);
+					dispatchEvent(eventos);
+					isGrafica = true;
+					if(_cambios)
+					{
+						var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEsperar.mensaje = "iniciarEspera";
+						eventEsperar.idButtons = [];
+						eventEsperar.tipoEventos  = [];
+						eventEsperar.idButtons.push("btnGraficaTabla");
+						eventEsperar.tipoEventos.push("GENERAR_GRAFICAS_NOTA_CREDITO");
+						dispatchEvent(eventEsperar);
+						var evento:EventoConsultaNotaDeCredito = new EventoConsultaNotaDeCredito(EventoConsultaNotaDeCredito.GENERAR_GRAFICAS_NOTA_CREDITO);
+						dispatchEvent(evento);
+						timer.addEventListener(TimerEvent.TIMER, onTimer);
+						timer.start();
+					}
+				}
+				else
+				{
+					isGrafica = false;
+				}
+			}
+			
+			private var timer:Timer = new Timer(5000);
+			private function onTimer(evt:TimerEvent):void 
+			{
+				var eventEsperar1:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEsperar1.idButtons = [];
+				eventEsperar1.tipoEventos = [];
+				eventEsperar1.mensaje = "terminaEspera";
+				eventEsperar1.idButtons.push("generarGraficas");
+				dispatchEvent(eventEsperar1); 
+				timer.stop();
+			} 
+			
+			public function set recibirCambios($cambios:Boolean):void
+			{
+				_cambios = $cambios;
+			}
+			
+			public function set obtenerListaNotaDeCredito($nota:ArrayCollection):void{
+				if ($nota != null)
+				{
+					_listaNotaDeCredito = new ArrayCollection();
+					_listaNotaDeCredito = ObjectUtil.copy($nota) as ArrayCollection;
+					gridNotaCredito.dataProvider = _listaNotaDeCredito;
+					
+					mostrarBotonesHeader();
+				}
+			}
+			
+			public function set obtenerListaRapida($nota:ArrayCollection):void
+			{
+				if ($nota != null)
+				{
+					_listaRapidaNotaDeCredito = new ArrayCollection();
+					_listaRapidaNotaDeCredito = ObjectUtil.copy($nota) as ArrayCollection;
+					gridNotaCredito.dataProvider = _listaRapidaNotaDeCredito;
+					
+					mostrarBotonesHeader();
+				}
+			}
+			
+			private function mostrarBotonesHeader():void
+			{
+				if(gridNotaCredito.dataProvider != null && (gridNotaCredito.dataProvider as ArrayCollection).length > 0)
+				{
+					hderGrid.btnExportar.enabled = true;
+				}else{
+					hderGrid.btnExportar.enabled = false;
+				}
+			}
+			
+			private function compareFunction_HeaderFecha(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fecha,item2.fecha); 
+			}
+			
+			private function compareFunction_HeaderNotaCredito($item:Object,$item2:Object):int
+			{
+				return ObjectUtil.numericCompare(NotaCredito($item).akFolio,NotaCredito($item2).akFolio);
+			}
+
+			private function compareFunction_HeaderFactura($item:Object,$item2:Object):int
+			{
+				return ObjectUtil.numericCompare(NotaCredito($item).factura,NotaCredito($item2).factura);
+			}
+
+			private function compareFunction_HeaderPedidoInterno($item:Object,$item2:Object):int
+			{
+				return ObjectUtil.stringCompare(NotaCredito($item).cpedido,NotaCredito($item2).cpedido);
+			}
+			
+			private function compareFunction_HeaderFacturaDestino($item:Object,$item2:Object):int
+			{
+				return ObjectUtil.numericCompare(NotaCredito($item).facturaDestino,NotaCredito($item2).facturaDestino);
+			}
+			
+			private function compareFunction_HeaderMonto(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.importe,item2.importe); 
+			}
+			
+			public function set setListaGrid($tipo:String):void
+			{
+				if ($tipo != null )
+				{
+					if ($tipo == "Rapida")
+					{
+						if (_listaRapidaNotaDeCredito != null ){
+							gridNotaCredito.dataProvider = _listaRapidaNotaDeCredito;
+						}
+						else{
+							gridNotaCredito.dataProvider = new ArrayCollection();
+						}
+					}
+					else
+					{
+						gridNotaCredito.dataProvider = _listaNotaDeCredito;
+					}
+					
+					if (isGrafica == true )
+					{
+						var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEsperar.mensaje = "iniciarEspera";
+						eventEsperar.idButtons = [];
+						eventEsperar.tipoEventos  = [];
+						eventEsperar.idButtons.push("btnGraficaTabla");
+						eventEsperar.tipoEventos.push("GENERAR_GRAFICAS");
+						dispatchEvent(eventEsperar);
+						
+						timer.addEventListener(TimerEvent.TIMER, onTimer);
+						timer.start();
+					}
+				}
+			}
+			
+			private function csvExportarListado():void
+			{
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Fecha");
+				fila1[2] = hoja.addItem("Cliente");
+				fila1[3] = hoja.addItem("Cobrador");
+				fila1[4] = hoja.addItem("Nota de crédito");
+				fila1[5] = hoja.addItem("Facturó");
+				fila1[6] = hoja.addItem("Monto");
+				fila1[7] = hoja.addItem("Factura");
+				fila1[8] = hoja.addItem("Pedido Interno");
+				fila1[9] = hoja.addItem("Estado");
+				
+				arrayTemp = new ArrayCollection();
+				
+				arrayTemp = ObjectUtil.copy( gridNotaCredito.dataProvider ) as ArrayCollection; 
+				
+				
+				for(var i:int = 0 ; i< arrayTemp.length ; i++ )
+				{
+					fila1 = new Array();	
+					var pedidoI:String=( arrayTemp[i] as NotaCredito ).cpedido==null?'Pendiente':( arrayTemp[i] as NotaCredito ).cpedido;
+					fila1[0] = 	   ( arrayTemp[i] ).numFila;
+					fila1[1] = '"'+( arrayTemp[i] as NotaCredito ).fechaFormato+'"';
+					fila1[2] = '"'+( arrayTemp[i] as NotaCredito ).nombreCliente+'"';
+					fila1[3] = '"'+( arrayTemp[i] as NotaCredito ).cobrador+'"';
+					fila1[4] = '"'+( arrayTemp[i] as NotaCredito ).akFolio+'"';
+					fila1[5] = '"'+( arrayTemp[i] as NotaCredito ).fpor+'"';
+					fila1[6] = '"$'+ UtilsFormatosNumericos.precisionADosDecimales( ( arrayTemp[i] as NotaCredito ).importe )+'"';
+					fila1[7] = '"'+( arrayTemp[i] as NotaCredito ).factura+'"';
+					fila1[8] = '"'+pedidoI+'"';
+					fila1[9] = '"'+( arrayTemp[i] as NotaCredito ).estado+'"';
+					hoja.addItem('\r' + fila1 );
+				} 
+				file2.save( hoja, 'ConsultaNotasCredito-'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date() )+'.csv');
+			}
+		]]>
+	</fx:Script>
+	
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" id="gridConsultaNotaCredito" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<consultas:HeaderParaGridConsultas id="hderGrid" mostrarBtnExportar="true" clickExportar="csvExportarListado();"/>
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridNotaCredito" width="100%" height="100%" anchoColumnas="{['45','=','30%','=','=','=','=','=','=','=','=','=']}" tipoDeConsulta="Notas de credito"  
+									 disableDragableColumns="{[0]}" disableResizableColumns="{[0]}" enableHeaderWordWrap="11" disableSortableColumns="{[5]}">
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+					<mx:AdvancedDataGridColumn headerText="Fecha" dataField="fechaFormato" sortCompareFunction="{compareFunction_HeaderFecha}"/>
+					<mx:AdvancedDataGridColumn headerText="Cliente" dataField="nombreCliente"  />
+					<mx:AdvancedDataGridColumn headerText="Cobrador" dataField="cobrador"  />
+					<mx:AdvancedDataGridColumn headerText="Nota de crédito" sortCompareFunction="{compareFunction_HeaderNotaCredito}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+									<fx:Script>
+										<![CDATA[
+											import flash.net.navigateToURL;
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.NotaCredito;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											
+											public function verNota():void{
+												ver(RutasPdF.GENERAL_RUTA + RutasPdF.NOTA_CREDITO + ((data as NotaCredito).fpor + "/" + (data as NotaCredito).akFolio ) + ".pdf" );
+											}
+											public function ver($ruta:String):void{
+												var request:URLRequest = new URLRequest(encodeURI($ruta));
+												navigateToURL(request);
+											}
+										]]>
+									</fx:Script>
+									<s:HGroup horizontalAlign="center" width="100%" >
+										<label:Texto_12 text="Pendiente" id="lblPendiente" visible="{(data as NotaCredito).akFolio == 0 ? true : false}" includeInLayout="{(data as NotaCredito).akFolio == 0 ? true : false}"/>
+										<linkButton:LinkButtonPQNet label="{(data as NotaCredito).akFolio}" click="verNota()" id="lnkNota" visible="{(data as NotaCredito).akFolio == 0 ? false : true}" includeInLayout="{(data as NotaCredito).akFolio == 0 ? false : true}" />
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="XML">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" >
+									<fx:Script>
+										<![CDATA[
+											import flash.filesystem.File;
+											import flash.net.navigateToURL;
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.NotaCredito;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											
+											import skins.catalogos.catalogoAlertas;
+											
+											private	var file:File = new File();
+											private function verXML():void{
+												file = new File();
+												file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+												var urlGeenral:String = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA;
+												var request:URLRequest = new URLRequest();
+												var variables:URLLoader = new URLLoader();
+												variables.dataFormat = URLLoaderDataFormat.BINARY;
+												request = new URLRequest( RutasPdF.GENERAL_RUTA + RutasPdF.NOTA_CREDITO + ((data as NotaCredito).fpor + "/" + (data as NotaCredito).akFolio ) + ".xml" ); 
+												variables.addEventListener(Event.COMPLETE, completeHandler);
+												variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+												try{
+													variables.load(request);
+												} 
+												catch (error:Error){
+													trace("Unable to load URL: " + error);
+												}
+											}
+											
+											private function completeHandler(event:Event):void{
+												var loader:URLLoader = URLLoader(event.target);
+												var bytes:ByteArray = new ByteArray();
+												try{
+													bytes = (event.target as URLLoader).data;
+												}
+												catch (error:*){
+													alertaSingleton.show("No se encontro archivo");
+												}
+												file.save( bytes, (data as NotaCredito).akFolio +'.xml' );	
+											}
+											
+											private function avisaGuardadoArchivos(event:Event):void{
+												file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+												alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+											}
+											
+										]]>
+									</fx:Script>
+									<s:HGroup horizontalAlign="center" width="100%" >
+										<label:Texto_12 text="NA" id="lblPendiente" visible="{(data as NotaCredito).akFolio == 0 ? true : false}" includeInLayout="{(data as NotaCredito).akFolio == 0 ? true : false}" />
+										<linkButton:LinkButtonPQNet textAlign="right" label="VER" click="verXML()" id="lnkXML" visible="{(data as NotaCredito).akFolio == 0 ? false : true}" includeInLayout="{(data as NotaCredito).akFolio == 0 ? false : true}" />
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="Facturó" dataField="fpor" />
+					<mx:AdvancedDataGridColumn headerText="Monto" dataField="montoFormato" sortCompareFunction="{compareFunction_HeaderMonto}" />
+					<mx:AdvancedDataGridColumn headerText="Factura" sortCompareFunction="{compareFunction_HeaderFactura}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+									<fx:Script>
+										<![CDATA[
+											import flash.net.navigateToURL;
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.NotaCredito;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											
+											public function verFactura():void{
+												ver(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + ((data as NotaCredito).fpor + "/" + (data as NotaCredito).factura) + ".pdf" );
+											}
+											public function ver($ruta:String):void{
+												var request:URLRequest = new URLRequest(encodeURI($ruta));
+												navigateToURL(request);
+											}
+											
+										]]>
+									</fx:Script>
+									<s:HGroup horizontalAlign="center" width="100%" >
+										<label:Texto_12 text="NA" id="lblPendiente" visible="{(data as NotaCredito).factura == 0 ? true : false}" includeInLayout="{(data as NotaCredito).factura == 0 ? true : false}" />
+										<linkButton:LinkButtonPQNet textAlign="right" label="{(data as NotaCredito).factura}" click="verFactura()" id="lnkFactura" visible="{(data as NotaCredito).factura == 0 ? false : true}" includeInLayout="{(data as NotaCredito).factura == 0 ? false : true}" />
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="Pedido Interno" sortCompareFunction="{compareFunction_HeaderPedidoInterno}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import flash.net.navigateToURL;
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.NotaCredito;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											
+											public function verCPedido():void{
+												ver(RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + (data).cpedido + ".pdf" );
+											}
+											public function ver($ruta:String):void{
+												var request:URLRequest = new URLRequest(encodeURI($ruta));
+												navigateToURL(request);
+											}
+										]]>
+									</fx:Script>
+									<s:HGroup horizontalAlign="center" width="100%" >
+										<label:Texto_12 text="NA" id="lblPendiente" visible="{(data as NotaCredito).cpedido == null ? true : false}" includeInLayout="{(data as NotaCredito).cpedido == null ? true : false}" />
+										<linkButton:LinkButtonPQNet textAlign="right" label="{(data as NotaCredito).cpedido}" click="verCPedido()" id="lnkCPedido" visible="{(data as NotaCredito).cpedido == null ? false : true}" includeInLayout="{(data as NotaCredito).cpedido == null ? false : true}" />
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="Estado" dataField="estado" />
+					<mx:AdvancedDataGridColumn headerText="Factura destino" dataField="facturaDestino" sortCompareFunction="{compareFunction_HeaderFacturaDestino}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+									<fx:Script>
+										<![CDATA[
+											import flash.net.navigateToURL;
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.NotaCredito;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											
+											override public function set data(value:Object):void
+											{
+												super.data = value;
+												
+												if(data)
+												{
+													if(NotaCredito(data).facturaDestino == 0)
+													{
+														lblPendiente.visible = lblPendiente.includeInLayout = true;
+														lnkFactura.visible = lnkFactura.includeInLayout = false;
+														
+														
+													}
+													else
+													{
+														lblPendiente.visible = lblPendiente.includeInLayout = false;
+														lnkFactura.visible = lnkFactura.includeInLayout = true;
+														lnkFactura.label  = NotaCredito(data).facturaDestino.toString();
+													}
+												}
+											}
+											
+											public function verFacturaDestino():void
+											{
+												ver(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + ((data as NotaCredito).fpor + "/" + (data as NotaCredito).facturaDestino) + ".pdf" );
+											}
+											public function ver($ruta:String):void{
+												var request:URLRequest = new URLRequest(encodeURI($ruta));
+												navigateToURL(request);
+											}
+											
+										]]>
+									</fx:Script>
+									<s:HGroup horizontalAlign="center" width="100%" >
+										<label:Texto_12 text="NA" id="lblPendiente" />
+										<linkButton:LinkButtonPQNet id="lnkFactura" textAlign="right" click="verFacturaDestino()"/>
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>
+	</comun:espacioA>
+	<comun:espacioB>
+		<s:VGroup id="grpGraficas" height="100%" gap="0">
+			<s:HGroup width="100%" height="100%" gap="0">
+				<s:HGroup width="100%" height="100%" id="espacioGraficas" />
+			</s:HGroup>
+		</s:VGroup>
+	</comun:espacioB>
+	
+</comun:ContenedorComparacionConsultas>

@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:pqNet="skins.botones.pqNet.*" xmlns:otros="skins.otros.*"
+		>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.seguimiento.EventoReporteSeguimiento;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.SeguimientoCotizacionAgrupada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.reportes.seguimientos.PartidaCotizacionEnSeguimiento;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]	public var _partidas:ArrayCollection = new ArrayCollection();
+			[Bindable]	public var _partidasEnfocado:ArrayCollection = new ArrayCollection();
+			
+			public function set recibirPartidas($partidas:ArrayCollection):void{
+					_partidas = new ArrayCollection();
+					_enfocarBool = true;
+					btnEnfoque.rendererPq = !_enfocarBool ? "enfoquedown": "enfoque";
+					_partidasEnfocado = new ArrayCollection();
+					titulo.text = "";
+					if($partidas.length > 1){
+							 _partidas = $partidas;
+							titulo.text = _partidas[0].folioCotizacion;
+							listaPartidas.selectedIndex = 0;
+							var totalMonto:Number = 0;
+							var totalPiezas:int = 0;
+							var totalMontoEnfoque:Number = 0;
+							var totalPiezasEnfoque:int = 0;
+							for( var c:int = 0; c < _partidas.length; c++ ){
+								if( _partidas[c] is PartidaCotizacionEnSeguimiento ){
+										var currentFila:PartidaCotizacionEnSeguimiento = _partidas[c] as PartidaCotizacionEnSeguimiento;
+												totalMonto += currentFila.monto;
+												totalPiezas += currentFila.cantidad;
+										if( currentFila.estado == "Seguimiento"	|| currentFila.estado == "Confirmación"	|| currentFila.estado == "Cancelable" || currentFila.estado == "Cotización" ){
+												if( currentFila.enfocado ){
+														totalMontoEnfoque += currentFila.monto;
+														totalPiezasEnfoque += currentFila.cantidad;
+														_partidasEnfocado.addItem( currentFila );
+												}
+										}
+								}
+							}
+							var ultimoItem:SeguimientoCotizacionAgrupada;
+							if( _partidas[ _partidas.length - 1] is SeguimientoCotizacionAgrupada ){
+								ultimoItem = _partidas[ _partidas.length - 1] as SeguimientoCotizacionAgrupada;
+								ultimoItem.monto = totalMonto;
+								ultimoItem.monedaCotizacionPartida = "Dólares"; //_partidas[0].monedaCotiza;
+								ultimoItem.piezas = totalPiezas;
+							} 
+							var ultimoEnfoque:SeguimientoCotizacionAgrupada = new SeguimientoCotizacionAgrupada();
+							ultimoEnfoque.monto = totalMontoEnfoque;
+							ultimoEnfoque.piezas = totalPiezasEnfoque;
+							ultimoEnfoque.monedaCotizacionPartida = "Dólares"; //_partidas[0].monedaCotiza;
+							ultimoEnfoque.ultimo = _partidasEnfocado.length.toString();
+							_partidasEnfocado.addItem( ultimoEnfoque );
+							cambioPartida( listaPartidas.selectedItem as PartidaCotizacionEnSeguimiento ); 
+						
+					}else{
+							cambioPartida( new PartidaCotizacionEnSeguimiento() );
+					}
+					validaLinea();
+			}
+			protected function cambioPartida($partida:PartidaCotizacionEnSeguimiento):void
+			{
+				if( $partida != null  && $partida.ultimo != null && $partida.ultimo == "" ){
+					var evento:EventoReporteSeguimiento = new EventoReporteSeguimiento(EventoReporteSeguimiento.HISTORIAL_PARTIDAS_POR_COTIZACION);
+					evento.partidaSeleccionada = $partida;//lista.selectedItem as PartidaCotizacionEnSeguimiento;
+					dispatchEvent(evento);
+				}
+			}
+			public function set recibirClean( $do:Boolean ):void{
+				if( $do ) _partidas = new ArrayCollection();
+				titulo.text = '';
+			}
+			private var _enfocarBool:Boolean = true;
+			
+			protected function enfoqueHandler(event:MouseEvent):void
+			{
+					if( _enfocarBool ){
+							_enfocarBool = false;
+							listaPartidas.dataProvider = _partidasEnfocado;
+							if( _partidasEnfocado.length > 1 ){
+									listaPartidas.selectedIndex = 0;
+									cambioPartida( listaPartidas.selectedItem as PartidaCotizacionEnSeguimiento);
+							}
+					}else{
+							_enfocarBool = true;
+							listaPartidas.dataProvider = _partidas;
+							if( _partidas.length > 1 ){
+									listaPartidas.selectedIndex = 0;
+									cambioPartida( listaPartidas.selectedItem as PartidaCotizacionEnSeguimiento);
+							}
+					}
+					btnEnfoque.rendererPq = !_enfocarBool ? "enfoquedown": "enfoque";
+					validaLinea();
+			}
+			private function validaLinea():void{
+				var conEnfoque:Boolean = false;
+				for( var i:int = 0; i < listaPartidas.dataProvider.length; i++){
+					if( listaPartidas.dataProvider[i]  is PartidaCotizacionEnSeguimiento ){
+						if( (listaPartidas.dataProvider[i] as PartidaCotizacionEnSeguimiento).enfocado ){
+							conEnfoque = true;
+							if( i == (listaPartidas.dataProvider.length - 2) ){
+								(listaPartidas.dataProvider[i] as PartidaCotizacionEnSeguimiento).ultimoEnEnfoque = true;
+							}
+						}else{
+							if( i > 0 &&  (listaPartidas.dataProvider[i-1] as PartidaCotizacionEnSeguimiento).enfocado ){
+								(listaPartidas.dataProvider[i-1] as PartidaCotizacionEnSeguimiento).ultimoEnEnfoque = true;
+							}
+							i = listaPartidas.dataProvider.length;
+							lineaEnfoque.visible = false;
+							lineaEnfoque.includeInLayout = false;
+						}
+					}
+				}
+				if( conEnfoque ){
+					lineaEnfoque.visible = true;
+					lineaEnfoque.includeInLayout = true;
+					divisionGris.visible = false
+					divisionGris.includeInLayout = false;
+				}else{
+					lineaEnfoque.visible = false;
+					lineaEnfoque.includeInLayout = false;
+					divisionGris.visible = true
+					divisionGris.includeInLayout = true;
+				}
+			}
+			[Bindable] 
+			private var _color:uint = 0xFFFFFF;
+		]]>
+	</fx:Script>
+	
+	<s:Rect height="100%" width="100%" right="0" left="0">
+		<s:fill>
+			<s:SolidColor color="0xf8f8f8"/>
+		</s:fill>
+	</s:Rect>
+	<s:VGroup width="100%" height="100%"  gap="0"  top="20" paddingLeft="17" paddingRight="17">
+	
+		
+		<s:HGroup width="100%" height="45" verticalAlign="middle" paddingRight="15">
+					<s:Label width="100%" fontSize="20" maxDisplayedLines="2" textAlign="center" 
+							 	id="titulo" color="0x{catalogoColores.TITULO_PANEL_GRIS_CLARO}"/>
+					<pqNet:botonPqNetLargo id="btnEnfoque"  rendererPq="enfoque" click="enfoqueHandler(event)" />
+		</s:HGroup>
+		<s:Group width="100%" height="1" id="lineaEnfoque" visible="false" includeInLayout="false">
+			<s:BorderContainer creationPolicy="all" width="100%" height="1" id="borderSuperior" borderColor="{this._color}"
+							   backgroundColor="0xeaeaea" >
+				<s:filters>
+					<s:DropShadowFilter alpha="1" angle="90" blurX="0" blurY="4" id="filtroSuperior"
+										color="#424242" distance="0" hideObject="false" inner="false" knockout="false" 
+										quality="4" strength="2.5"/>
+				</s:filters>
+			</s:BorderContainer >
+			<otros:division width="100%" id="divisionSuperior"/>
+		</s:Group>	
+		<otros:division  id="divisionGris" width="100%"/>
+		<pq:ListPq id="listaPartidas" dataProvider="{ this._partidas }" contentBackgroundAlpha="0" 
+				change="cambioPartida(this.listaPartidas.selectedItem as PartidaCotizacionEnSeguimiento)"
+				itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.ventas.seguimiento.renders.itemRendererPartidaSeguimiento" />
+	</s:VGroup>
+</s:Group>

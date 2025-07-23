@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"  xmlns:combo="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:email="mx.com.adobe.flex.extras.controls.*"  creationComplete="inicia()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="800" height="424" xmlns:popUp="skins.popUp.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.adobe.flex.extras.controls.eventotextinputemail.EventoTextInputEmail;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProforma;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.ProformaMiniatura;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComboCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.Proforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable]
+			private var _opcionSeleccionada:PartidaProforma;
+			[Bindable]
+			private var _proformaGeneral:Proforma;
+			[Bindable]
+			private var bloqueaBoton:Boolean
+			/**
+			 * funcion privada que genera wl listener para el combo
+			 */ 
+			private function inicia():void{
+				this.addEventListener( EventoComboCatalogos.AVISA_LLEGADA_CONTACTOS, avisoCambiaCorreo );
+			}
+			/**
+			 * funcion para iniciaiar el componente
+			 */ 
+			public function init($opcionSeleccionada:PartidaProforma,$total:int, $proforma:Proforma):void{
+				_proformaGeneral = new Proforma();
+				_proformaGeneral = $proforma;
+				this.rdbOtro.selected = false;
+				this.rdbCorreoPrincipal.selected = false;
+				_opcionSeleccionada = $opcionSeleccionada;
+				if( _opcionSeleccionada.paisProveedor != "Mexico"){
+					lblCantidadMoneda.text = $total+ ' ' + _opcionSeleccionada.monedaProveedor +  ' : NO APLICAN IMPUESTOS';
+				}
+				this.cmbCatalogos.cargarContactosPorProveedor( _opcionSeleccionada.nombreProveedor,2,0);
+				var evento:EventoProforma = new EventoProforma( EventoProforma.CONSULTAR_GENERAL_PROFRMA );
+				evento.idProforma = this._opcionSeleccionada.idProforma;
+				dispatchEvent( evento ); 
+				if( this._proformaGeneral.otroCorreo != null && this._proformaGeneral.otroCorreo != ""){
+					this.txtCorreos.text = this._proformaGeneral.otroCorreo;
+					this.rdbOtro.selected = true;
+				}else{
+					this.txtCorreos.text = "";
+					this.rdbCorreoPrincipal.selected = true;
+				}
+				seleccionaContacto();
+			}
+			/**
+			 * funcion para cerrar el popUp sin modificar los cambios
+			 */ 
+			private function cierraPopUp( $bloquea:Boolean ):void{
+				txtCorreos.text = "";
+				txtComentarios.text = "";
+				rdbAlmacenPhs.selected = false;
+				rdbCorreoPrincipal.selected = false;
+				rdbMatriz.selected = false;
+				rdbOtro.selected = false;
+				rdbPHS.selected = false;
+				rdbPQF.selected = false;
+				rdbPRO.selected = false;
+				var evento:EventoProforma = new EventoProforma( EventoProforma.SALIR_PROFORMA_GENERAL );
+				evento.proforma = this._proformaGeneral;
+				evento.bloqueaBoton = $bloquea;
+				dispatchEvent( evento );
+			}
+			private function validaCorreo():void{
+				if(rdbCorreoPrincipal.selected){
+					guardaCambiosProforma();
+				}else{
+					if ( txtCorreos.text != "" ){
+						this.txtCorreos.addEventListener( EventoTextInputEmail.VALIDADO_EMAILS, recibeValidacion );
+						this.txtCorreos.addEventListener( EventoTextInputEmail.ERROR_EMAILS, recibeErroValidacion );
+						var vieneD:String = "Otro Correo";
+						this.txtCorreos.validarEmails( vieneD );
+					}else{
+						alertaSingleton.show(catalogoAlertas.ADV_debeIndicarUnaDirecciónDeEmail,catalogoAlertas.TIT_ADV_informacionIncompleta );
+						return;
+					}	
+				}
+			}
+			/**
+			 * funcion que recibe la validacion del correo  
+			 */ 
+			private function recibeValidacion( evento:EventoTextInputEmail ):void{
+				if ( evento.type == "EventoValidadoEmails"){
+					guardaCambiosProforma();
+				}
+			}
+			private function recibeErroValidacion( evento:EventoTextInputEmail ):void{
+				alertaSingleton.show(catalogoAlertas.ADV_laDireccionEmailIncorrecta, catalogoAlertas.TIT_ADV_atencion );
+			}
+			/**
+			 * Evento para guardar cambios en los datoa genreales de la proforma
+			 */ 
+			private function guardaCambiosProforma():void{
+				this.rdbMatriz.selected ? _proformaGeneral.almacenEntrega = this.rdbMatriz.label : null;
+				this.rdbAlmacenPhs.selected ? _proformaGeneral.almacenEntrega = this.rdbAlmacenPhs.label : null;
+				this.rdbPQF.selected ? _proformaGeneral.quienCompra = this.rdbPQF.label : null;
+				this.rdbPRO.selected ?_proformaGeneral.quienCompra = this.rdbPRO.label : null;
+				this.rdbPHS.selected ? _proformaGeneral.quienCompra = this.rdbPHS.label : null;
+				this.txtComentarios.text != "" ? _proformaGeneral.comentarios = this.txtComentarios.text : null ;
+				this.txtCorreos.text != "" ? _proformaGeneral.otroCorreo = this.txtCorreos.text : null ;
+				_proformaGeneral.idContacto = (this.cmbCatalogos.selectedItem as Contacto).idContacto;
+				cierraPopUp( true );
+			}
+			/**
+			 * funcion que cambia el correo del contacto selecionadoe
+			 */
+			private function avisoCambiaCorreo(evento:EventoComboCatalogos):void{
+				if(evento.aviso){
+					cambiaCorreo()
+					seleccionaContacto();
+				}
+			}
+			/**
+			 * funcion que cambia el correo del contacto selecionado
+			 */
+			private function cambiaCorreo():void{
+				if( this.cmbCatalogos.dataProvider != null &&  this.cmbCatalogos.dataProvider.length > 0 ){
+					this.rdbCorreoPrincipal.label = (this.cmbCatalogos.selectedItem as Contacto).EMail ;
+					this.rdbOtro.selected = false;
+					this.rdbCorreoPrincipal.selected = true;
+				}
+				if( (this.cmbCatalogos.selectedItem as Contacto).EMail != "" ){
+					this.rdbOtro.selected = true;
+					this.rdbCorreoPrincipal.selected = false;
+				}
+				bloqueaTexto();
+			}
+			
+			private function seleccionaContacto():void{
+				if( _proformaGeneral == null ){return;}
+				if( isNaN( _proformaGeneral.idContacto) ){_proformaGeneral.idContacto = 0};
+				this.cmbCatalogos.selectedIndex = Util.indiceSeleccionadoComoObjetoEIdLlave( this.cmbCatalogos.dataProvider as ArrayCollection, _proformaGeneral.idContacto );
+			}
+			/**
+			 * funcion que bloque el campo de texto
+			 */ 
+			private function bloqueaTexto():void{
+				if( rdbOtro.selected){ this.txtCorreos.enabled = true; }
+				if( rdbCorreoPrincipal.selected){ this.txtCorreos.enabled = false; }
+			}
+		]]>
+	</fx:Script>
+	<popUp:PopUpBlanco  width="100%" height="100%"/>
+	<s:VGroup width="100%" height="100%" paddingTop="30" paddingBottom="30" paddingLeft="30" paddingRight="30">
+		<label:labelSubtitulo text="GENERALES PROFORMA" />
+		<otros:divisionGruesa width="100%" />
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:RadioButton groupName="almacen" label="Matriz" fontWeight="bold" fontSize="16" selected="{ _proformaGeneral.almacenEntrega == 'Matriz' }" id="rdbMatriz"/>
+			<s:RadioButton groupName="almacen" label="PHS" fontWeight="bold" fontSize="16" selected="{ _proformaGeneral.almacenEntrega == 'PHS' }" id="rdbAlmacenPhs" />
+			<s:Spacer width="100%"/>
+			<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_proveedores }"/>
+		</s:HGroup>
+		<otros:division width="100%"/>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:RadioButton groupName="proquifa" label="PQF" fontWeight="bold" fontSize="16" selected="{ _proformaGeneral.quienCompra == 'PQF' }" id="rdbPQF" />
+			<s:RadioButton groupName="proquifa" label="PRO" fontWeight="bold" fontSize="16" selected="{ _proformaGeneral.quienCompra == 'PRO' }" id="rdbPRO" />
+			<s:RadioButton groupName="proquifa" label="PHS" fontWeight="bold" fontSize="16" selected="{ _proformaGeneral.quienCompra == 'PHS' }" id="rdbPHS" />
+			<s:Spacer width="100%"/>
+			<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_hoja }"/>
+		</s:HGroup>
+		<otros:division width="100%"/>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<combo:ComboCatalogos id="cmbCatalogos" change="cambiaCorreo()"/>
+			<s:Spacer width="100%"/>
+			<s:Image  source="{ catalogoIconosEtiquetas.getInstance().etiquetas_contacto }"/>
+		</s:HGroup>
+		<otros:division width="100%"/>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:RadioButton groupName="correo" id="rdbCorreoPrincipal" click="bloqueaTexto()"/>
+			<s:RadioButton groupName="correo" label="Otro" id="rdbOtro" click="bloqueaTexto()"/>
+			<!--<email:TextInputEmail width="100%" id="txtCorreos" text="{ (this.cmbCatalogos.selectedItem as Contacto).EMail }" />-->
+			<email:TextInputEmail width="100%" id="txtCorreos" text="{ _proformaGeneral.otroCorreo }" />
+			<s:Spacer width="5%"/>
+			<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_mensaje }"/>
+		</s:HGroup>
+		<otros:division width="100%"/>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label fontSize="16" id="lblCantidadMoneda" text="00.00 Moneda : NO APLICAN IMPUESTOS" />
+			<s:Spacer width="100%"/>
+			<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_dinero }" />
+		</s:HGroup>
+		<otros:division width="100%"/>
+		<!--	<s:Label width="100%" height="100%" fontSize="13" color="#666666" id="lblComentarios" text="{ _proformaGeneral.comentarios  }"/>	-->
+		<s:HGroup width="100%" verticalAlign="middle" height="100%">
+			<s:RichEditableText width="100%" height="100%"  fontFamily="Helvetica" fontSize="13" text="{ _proformaGeneral.comentarios  }" id="txtComentarios"/>
+			<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_globoNota }" />
+		</s:HGroup>
+		<otros:divisionGruesa width="100%"/>
+		<s:HGroup width="100%" verticalAlign="middle">
+			<pqNet:botonPqNetLargo label="Salir" click="cierraPopUp(false)"/>
+			<s:Spacer width="100%"/>
+			<pqNet:botonPqNetLargo label="Guardar" click="validaCorreo()"/>
+		</s:HGroup>
+	</s:VGroup>
+</s:Group>

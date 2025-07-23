@@ -1,0 +1,485 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"   
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:formato ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" 
+		  xmlns:label="skins.skin.label.*"  xmlns:otros="skins.otros.*" creationComplete="incia()" 
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		  xmlns:tabla="skins.botones.tabla.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:grafica="skins.botones.grafica.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15">
+	<fx:Script>
+		<![CDATA[
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="600"/>
+		<mx:SolidColorStroke id = "sA" color="0x3b98af" weight="2"/>
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="3"/>
+		<mx:SolidColorStroke id = "s2" color="0x{catalogoColores.LABEL_AMARILLO}" weight="2"/>
+		<mx:SolidColorStroke id = "s3" color="0x{catalogoColores.LABEL_ROJO}" weight="2"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+		
+		<s:LinearGradient id="sc1" rotation="90">
+			<s:GradientEntry alpha="1.0" color="#b4c871" ratio="0"/>
+			<s:GradientEntry alpha="1.0" color="#8da741" ratio="1"/>
+		</s:LinearGradient>
+		<s:LinearGradient id="sc2" rotation="90">
+			<s:GradientEntry alpha="1.0" color="#990429" ratio="0"/>
+			<s:GradientEntry alpha="1.0" color="#910824" ratio="1"/>
+		</s:LinearGradient>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.charts.ChartItem;
+			import mx.charts.chartClasses.Series;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.proveedor.BalanceDeCredito;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+
+			
+			[Bindable]
+			private var _ocComprasGrafica:ArrayCollection;
+			[Bindable]
+			private var _lCreditoTab:ArrayCollection;
+			[Bindable] public var _etiquetaPeriodo:String = "";
+			private var monto:Number = 0;
+			private var idprove:int;
+			private var anio:int;
+			private var tipoConsulta:String;
+			
+			private var _sql:Query;
+			
+			private function incia():void{
+				iniciarGrafica(_ocComprasGrafica);
+			}
+			
+			private function maxConfirmacionCanceladas():void{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			} 
+			
+			public function set recibeFiltros(datos:Object):void{
+				idprove = datos.idProveedor;
+				anio = datos.anioInt;
+				tipoConsulta = datos.estado;
+				_ocComprasGrafica = new ArrayCollection();
+				if (tipoConsulta == 'COLABORADOR' || tipoConsulta == 'UNIVERSO'  ){
+					this.montoLimite.visible = this.montoLinea.visible = false;
+					this.labeLimiteCredito.visible = this.labeLineaCredito.visible = false;
+				}else{
+					this.montoLimite.visible = this.montoLinea.visible = true;
+					this.labeLimiteCredito.visible = this.labeLineaCredito.visible = true;
+				}
+			}
+			
+			
+			public function set vista(tipoVista:String):void{
+				if (tipoVista == "tabla"){
+					this.stackGeneral.selectedChild = vistaTabla;
+				}else{
+					this.stackGeneral.selectedChild = vistaGrafico;
+				}
+			}
+
+			public function set resumenComparativaLineaDeCredito($comparativa:ArrayCollection):void{
+				if($comparativa == null) return;
+				var cont:int = 1;
+				var _dat:ArrayCollection = new ArrayCollection();
+				
+				//Para el Grid
+				for( var m:int = 0; m < $comparativa.length;m++ )
+				{
+					if((($comparativa[m] as BalanceDeCredito).etiqueta == "COMPRA_0") || (($comparativa[m] as BalanceDeCredito).etiqueta == "PAGO_0") ){
+						
+						($comparativa[m] as BalanceDeCredito).numFila = cont;
+						cont++;
+						
+						if(($comparativa[m] as BalanceDeCredito).etiqueta == "COMPRA_0"){
+							($comparativa[m] as BalanceDeCredito).etiquetaGrid = "CARGO";
+						}else{
+							($comparativa[m] as BalanceDeCredito).etiquetaGrid = "ABONO";
+						}
+						_dat.addItem($comparativa[m]);
+					}
+				}
+				this._lCreditoTab = _dat;
+				setValoresFooter(_dat);
+				
+				//Para la Gráfica
+				_ocComprasGrafica = new ArrayCollection();
+				_ocComprasGrafica = $comparativa;
+				this.myChart.dataProvider = iniciarGrafica(_ocComprasGrafica);
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection{
+				var m:int = 0;
+				var inicio:int = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var monto:Number = 0;
+				
+				
+				arrReturn.addItem(new Object());
+				
+				for( m = 0; m < $lista.length;m++ ){
+					objeto = new Object();
+					objeto.tipo = ""
+					objeto.montoUSDMAX = 0;
+					objeto.montoLimite_0 = 0;
+					objeto.montoLinea_0 = 0;
+					objeto.dinero = 0;
+					objeto.dia = '';
+					objeto.fecha = null;
+					objeto.inicio_0 = 0; 
+					if((($lista[m] as BalanceDeCredito).etiqueta == "COMPRA_0") || (($lista[m] as BalanceDeCredito).etiqueta == "PAGO_0") ){
+						
+						if(!isNaN(($lista[m] as BalanceDeCredito).monto))
+						{
+							monto = monto + ($lista[m] as BalanceDeCredito).monto;
+						}
+						
+						objeto.inicio_0 = inicio == 0 ? monto:null;
+						inicio++;
+						objeto.tipo = ($lista[m] as BalanceDeCredito).etiqueta;
+						objeto.dinero = ($lista[m] as BalanceDeCredito).monto ;
+						objeto.montoUSDMAX = monto;	
+						objeto.montoLimite_0 = ($lista[m] as BalanceDeCredito).limiteCredito ;
+						objeto.montoLinea_0 = ($lista[m] as BalanceDeCredito).lineaCredito ;
+						objeto.dia = UtilsFecha.formatoFechaDDMMMYY(($lista[m] as BalanceDeCredito).fecha);
+						objeto.fecha = ($lista[m] as BalanceDeCredito).fecha;
+						arrReturn.addItem(objeto);
+					}
+				}
+				arrReturn.addItem(new Object());
+				return arrReturn;	
+			}
+			
+			private function generaArchivo():void{ 
+				var file2:File = new File();
+				
+				var dato0:Number = new Number;
+				var dato1:String = new String;
+				var dato2:String = new String;
+				var dato3:String = new String;
+				var dato4:String = new String;
+				var dato5:String = new String;
+				
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				var longitud:int =  new int ;
+				longitud = this._lCreditoTab.length;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Proveedor");
+				fila1[2] = hoja.addItem("Monto");
+				fila1[3] = hoja.addItem("Fecha");
+				fila1[4] = hoja.addItem("Límite de crédito");
+				fila1[5] = hoja.addItem("Línea de crédito");
+				
+				for(var i:int = 0 ; i<longitud ; i++ ){
+					fila1 = new Array();	
+					
+					dato0 = (this.gridCompras.dataProvider[i] ).numFila;
+					dato1 = '"'+ (this.gridCompras.dataProvider[i] as BalanceDeCredito ).nombreProvee +'"';
+					dato2 = '"'+ (this.gridCompras.dataProvider[i] ).formatoMonto +'"';
+					dato3 = '"'+ (this.gridCompras.dataProvider[i] ).formatoFecha +'"';
+					dato4 = '"'+ (this.gridCompras.dataProvider[i] ).formatoLimite +'"'; /* this.aplicarFormato((this.gridPedidos.dataProvider[i] ).monto); */
+					dato5 = '"'+ (this.gridCompras.dataProvider[i] ).formatoLinea +'"';
+					
+					fila1[0] = dato0;
+					fila1[1] = dato1;
+					fila1[2] = dato2;
+					fila1[3] = dato3;
+					fila1[4] = dato4;
+					fila1[5] = dato5;
+					
+					hoja.addItem('\r' + fila1 );
+					fila1 = null;
+					
+				}
+				
+				file2.save( hoja, "MaxLímiteDeCrédito.csv");
+				
+			}
+			
+			protected function tablaGrid_resizeHandler():void
+			{
+				(this.gridCompras.columns[0] as AdvancedDataGridColumn).width = (this.gridCompras.width * 0.10);//#
+				(this.gridCompras.columns[1] as AdvancedDataGridColumn).width = (this.gridCompras.width * 0.20);//proveedor
+				(this.gridCompras.columns[2] as AdvancedDataGridColumn).width = (this.gridCompras.width * 0.15);//monto
+				(this.gridCompras.columns[3] as AdvancedDataGridColumn).width = (this.gridCompras.width * 0.15);//fecha
+				(this.gridCompras.columns[4] as AdvancedDataGridColumn).width = (this.gridCompras.width * 0.15);//limite
+			}
+			
+			public function seleccionaTabla():void{
+				this.stackGeneral.selectedChild = this.vistaTabla;
+			}
+			public function seleccionarGrafica():void{
+				this.stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			
+			
+			private var _event:EventoTabProveedores;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _keyAnterior:String = "";
+			
+			public function set recibirFiltrosTableroProveedores(etiqueta:EventoTabProveedores):void{
+				if(etiqueta == null) return;
+				
+				_event = etiqueta;
+				_minimoMeses = _event.parametros.mesInicio;
+				_maximoMeses = _event.parametros.mesFin;
+				
+				myChart.dataProvider = iniciarGrafica( _ocComprasGrafica );
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso =  '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			public function set recibeEtiquetaPeriodo(etiqueta:String):void{
+				this._etiquetaPeriodo = etiqueta;
+			}
+			
+			private function formatoCantidadCancelada(dato:ChartItem,serie:Series):String{
+				return dato.item.cantidadesFT;
+			}
+			private function formatoCantidadConfirmada(dato:ChartItem,serie:Series):String{
+				return dato.item.cantidadesT;
+			}
+			private function lblFunction( $value:Object, $etiqueta:Object ):String{
+				return _listaMensual[ int($etiqueta) -1 ].toUpperCase();
+			}
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["nombreProvee","etiquetaGrid"]);
+				
+				var _noProveedores:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("nombreProvee").length;
+				var _monto :Number = _sql.getSumarCampo("monto",[],"",true);
+				var _noTipo:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("etiquetaGrid").length;
+				
+				lbl1_nototal.text ="";
+				lbl2_noProveedores.text=_noProveedores == 1 ? "1 Proveedor":_noProveedores.toString()+" Proveedores";
+				lbl3_monto.text = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_monto);
+				lbl4_fecha.text= "";
+				lbl5_noTipo.text= _noTipo == 1 ? "1 Tipo":_noTipo.toString()+" Tipos";
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup>
+		<componentes:TituloChartMaxTablero width="100%" text="LÍNEA DE CRÉDITO"/>
+	</s:HGroup>
+	
+	<mx:ViewStack  id="stackGeneral" width="100%" height="100%">	
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="0" gap="0">
+				<s:VGroup width="100%" height="100%" paddingBottom="0" >
+					<otros:divisionGruesa width="100%" />
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridCompras" width="100%" rowHeight="40" height="100%" dataProvider="{this._lCreditoTab}" tipoDeConsulta="vacio" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																 anchoColumnas="{['5%','70%','10%','=','=']}">
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"  />
+							<mx:AdvancedDataGridColumn headerText="Proveedor">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<label:Texto text="{data.nombreProvee}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Monto" dataField="formatoMonto" />
+							<mx:AdvancedDataGridColumn headerText="Fecha" dataField="formatoFecha"/>
+							<mx:AdvancedDataGridColumn headerText="Tipo" dataField="etiquetaGrid"/>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+					
+				</s:VGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="5%" textAlign="center" />
+					<label:Titulo id="lbl2_noProveedores" paddingTop="0" width="70%" textAlign="center"/>
+					<label:Titulo id="lbl3_monto" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl4_fecha" paddingTop="0" width="7.5%" textAlign="center" />
+					<label:Titulo id="lbl5_noTipo" paddingTop="0" width="7.5%" textAlign="center" />
+				</s:HGroup>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="maxConfirmacionCanceladas()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+			
+			
+			<!--<s:VGroup width="100%" height="100%" gap="0" horizontalAlign="center">
+				<otros:divisionGruesa width="100%"/>
+				
+				<pqNet1:dataGridPqNet id="gridCompras" dataProvider="{this._lCreditoTab}" textAlign="center" width="100%" height="100%"
+									  porcentajesColumnasPq="{[10,20,17,17,26]}" variableRowHeight="true">
+					<pqNet1:columns>
+						<mx:DataGridColumn headerText="#" dataField="numFila"/>
+						<mx:DataGridColumn headerText="Proveedor" dataField="nombreProvee"  />
+						<mx:DataGridColumn headerText="Monto" dataField="formatoMonto" />
+						<mx:DataGridColumn headerText="Fecha" dataField="formatoFecha" />
+						<mx:DataGridColumn headerText="Tipo" dataField="etiquetaGrid" />
+					</pqNet1:columns>
+				</pqNet1:dataGridPqNet>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="maxConfirmacionCanceladas()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>	
+			</s:VGroup>	-->
+			
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<s:HGroup  id="labeLineaCredito" visible="true" includeInLayout="true" paddingLeft="10" paddingTop="15" >
+						<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+							<s:fill>
+								<s:SolidColor color="0xd10c0c"/>
+							</s:fill>		
+						</s:Ellipse>
+						<componentes:TituloChartMaxTablero text="LÍNEA DE CRÉDITO" paddingRight="15"/>
+					</s:HGroup>
+					<s:HGroup id="labeLimiteCredito" visible="true" includeInLayout="true" paddingLeft="10" paddingTop="15" >
+						<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+							<s:fill>
+								<s:SolidColor color="0xe49b08"/>
+							</s:fill>		
+						</s:Ellipse>
+						<componentes:TituloChartMaxTablero id="lblPer1" text="LÍMITE DE CRÉDITO" paddingRight="15"/>
+					</s:HGroup>
+					<mx:LineChart height="100%" width="100%" id="myChart"
+								  showDataTips="true" 
+								  mouseSensitivity="5" 
+								  dataTipRenderer="{DataToolTipLineaDeCredito}" 
+								  showDataTipTargets="false"  
+								  dataTipMode="single" 
+								  paddingRight="30" paddingLeft="20" paddingTop="40"
+								  paddingBottom="40"
+								  seriesFilters="[]">
+						<mx:series>
+							<mx:LineSeries yField="montoUSDMAX"  xField="dia" form="segment"  lineStroke="{s1}" showDataEffect="{fxInterpolateIn}" />
+							<mx:PlotSeries yField="inicio_0" xField="dia" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXItemRenderer>
+											<fx:Script>
+												<![CDATA[
+													import skins.catalogos.catalogoColores;
+												]]>
+											</fx:Script>
+											<s:Ellipse width="30" height="30" horizontalCenter="0" verticalCenter="0" depth="50" alpha=".4" visible="{data.inicio_0 == 'inicio' ? true:false}" >
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+												</s:fill>		
+											</s:Ellipse>
+										</s:MXItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:PlotSeries>
+							<mx:PlotSeries yField="montoUSDMAX" xField="dia" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXItemRenderer>
+											<fx:Script>
+												<![CDATA[
+													import skins.catalogos.catalogoColores;
+												]]>
+											</fx:Script>
+											<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+												</s:fill>		
+											</s:Ellipse>
+										</s:MXItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:PlotSeries>
+							<!--linea de credito-->
+							<mx:PlotSeries id="montoLimite" yField="montoLimite_0" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXItemRenderer>
+											<fx:Script>
+												<![CDATA[
+													import skins.catalogos.catalogoColores;
+												]]>
+											</fx:Script>
+											<s:Ellipse width="8" height="2" horizontalCenter="0" verticalCenter="0">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_AMARILLO}"/>
+												</s:fill>		
+											</s:Ellipse>
+										</s:MXItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:PlotSeries>
+							<!--Limite de credito-->
+							<mx:LineSeries id="montoLinea" yField="montoLinea_0"  form="segment"  lineStroke="{s3}" showDataEffect="{fxInterpolateIn}" />
+						</mx:series>
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="vDia"  categoryField="dia" />
+						</mx:horizontalAxis>
+						<mx:verticalAxis>
+							<mx:LinearAxis id="vCantidad" labelFunction="formateoEje" />
+						</mx:verticalAxis>
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{vCantidad}" showLine="false" showLabels="{true}" tickPlacement="none" styleName="axisVerticalLabels"/>
+						</mx:verticalAxisRenderers>
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{vDia}" showLabels="false" showLine="false" />
+						</mx:horizontalAxisRenderers>
+						<mx:backgroundElements>
+							<mx:GridLines visible="{true}">
+								<mx:horizontalStroke>
+									<s:SolidColorStroke weight="0.5" color="0xeeeeee" />
+								</mx:horizontalStroke>
+							</mx:GridLines>
+						</mx:backgroundElements>
+					</mx:LineChart>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren  a costo de Compra</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()"/>
+						<pqNet:botonPqNetLargo label="Inicio" click="maxConfirmacionCanceladas()" />
+					</s:HGroup>	
+				</s:VGroup>
+				<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_PROVEEDORES_LINEA_DE_CREDITO}"/>
+			</s:HGroup>	
+		</s:NavigatorContent>	
+	</mx:ViewStack>
+</s:VGroup>

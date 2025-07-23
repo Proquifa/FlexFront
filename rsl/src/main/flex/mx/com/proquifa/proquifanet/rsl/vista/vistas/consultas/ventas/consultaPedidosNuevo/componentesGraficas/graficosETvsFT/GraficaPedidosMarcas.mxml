@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" width="100%" height="100%" 
+		 xmlns:graficas="skins.skin.graficas.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pedido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object ;
+			public var _currentType:String;
+			private  var _infoMarcaET:ArrayCollection;
+			private  var _infoMarcaFT:ArrayCollection;
+			private var _totalClie: int;
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+						if(_currentType =="ET")
+							myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoMarcaET,null,"totalPedidos");
+						else if(_currentType =="FT")
+							myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoMarcaFT,null,"totalPedidos");
+					}
+			}
+			
+			public function set obtenerInfopedidoGrafica($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoMarcaET = new ArrayCollection();
+				_infoMarcaFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				_totalClie = 0;
+				var arrayTemp:Array =  new Array();
+				arrayTemp = $infoGrafica.source; 
+				
+				/**
+				 * Se dividen todos las marcas que estan en tiempo vs las fuera de tiempo y se ordenan
+				 * */ 
+				var arrayMarcaET:Array = new Array();
+				var arrayMarcaFT:Array = new Array();
+				
+				arrayMarcaET = arrayTemp.filter(ObtenerTodasLasMarcasET);
+				arrayMarcaFT = arrayTemp.filter(ObtenerTodasLasMarcasFT);
+				arrayMarcaET.sortOn("marca");
+				arrayMarcaFT.sortOn("marca");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Marca,
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalMarcasET:Array = new Array();
+				arrayTotalMarcasET = arrayMarcaET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalMarcasFT:Array = new Array();
+				arrayTotalMarcasFT = arrayMarcaFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Marca
+				 * */
+				
+				FormarLasMarcas(arrayTotalMarcasET,arrayMarcaET,"MARCA_ET",_infoMarcaET);
+				FormarLasMarcas(arrayTotalMarcasFT,arrayMarcaFT,"MARCA_FT",_infoMarcaFT);
+				
+				//myChart.dataProvider = myChart.aplicarFormatoConsultaCotizaciones(new ArrayCollection());
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoMarcaET,null,"totalPedidos", true, 0, _totalClie);
+				else
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoMarcaFT,null,"totalPedidos", true, 0, _totalClie);
+				
+				//Para liberar memoria
+				arrayTotalMarcasET = new Array();
+				arrayMarcaET= new Array();
+				arrayTotalMarcasFT= new Array();
+				arrayMarcaFT= new Array();
+			}
+			
+			private function FormarLasMarcas(TotalMarcas:Array,marcasInfo:Array,etiqueta:String,infoMarca:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPedidos:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysMarca:Object;
+				
+				var currentPartidaPedido:Pedido; 
+				var j:int;
+				var keysC:Object = new Object();
+				//var currentCotizacion:String;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalMarcas.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPedidos =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaPedido = marcasInfo[j] as Pedido;
+					while( (TotalMarcas[i] as Pedido).marca == currentPartidaPedido.marca ){
+						totalPartidas += currentPartidaPedido.totalPartidas;
+						totalPiezas += currentPartidaPedido.totalPiezas;
+						totalMonto += currentPartidaPedido.montoDolares;
+						
+						if(!keys.hasOwnProperty(currentPartidaPedido.cpedido)){
+							keys[currentPartidaPedido.cpedido] = currentPartidaPedido.cpedido;
+							totalPedidos++;
+						}
+						
+						if(!keysC.hasOwnProperty(currentPartidaPedido.nombreCliente)){
+							keysC[currentPartidaPedido.nombreCliente] = currentPartidaPedido.nombreCliente;
+							_totalClie++;
+							trace("--CLIENTE--")
+							trace(currentPartidaPedido.nombreCliente)
+						}
+						//Para el conteo de clientes en cada marca
+						if(!keysMarca.hasOwnProperty(currentPartidaPedido.nombreCliente)){
+							keysMarca[currentPartidaPedido.nombreCliente] = currentPartidaPedido.nombreCliente;
+							totalClientes++;
+						}
+						
+						marcasInfo.shift();
+						if(marcasInfo.length >0)
+							currentPartidaPedido = marcasInfo[j] as Pedido;
+						else
+							currentPartidaPedido =new Pedido();
+						
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalMarcas[i] as Pedido).marca.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalPedidos = totalPedidos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoMarca.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function quitaDuplicados(item:Pedido, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.marca)){
+					return false;
+				}else{
+					keys[item.marca] = item.marca;
+					return true;
+				}
+			}
+			
+			private function ObtenerTodasLasMarcasET(item:Pedido, id:uint, array:Array):Boolean
+			{
+				return item.enTiempo == "ET" ? true : false;
+			}
+			
+			private function ObtenerTodasLasMarcasFT(item:Pedido, id:uint, array:Array):Boolean
+			{
+				return item.enTiempo == "FT" ? true : false;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="piezasTotal"/>  <!--piezasTotal-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="MARCAS" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

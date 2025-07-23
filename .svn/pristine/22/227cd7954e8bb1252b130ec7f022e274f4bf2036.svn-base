@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		  width="100%" height="100%" horizontalAlign="center"
+		  xmlns:graficas="skins.skin.graficas.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ProductoAlmacen;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _botonBar:String;
+			private var _infoRuta:ArrayCollection;
+			
+			public function set recibeLabelButonBar(boton:String):void{
+				_botonBar = boton;
+			}
+			
+			public function set recibirProductoPorFechaGrafico($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				_infoRuta = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				/**
+				 * Filtrar la lista deacuerdo a lo seleccionado en el button bar
+				 * */
+				var arrayFiltrado:Array = new Array();
+				arrayFiltrado = arrayTemp.filter(filtrarPorBotonBar);
+				arrayFiltrado.sortOn("ruta_Zona");
+				// Limpiar Memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Marca
+				 * quitando las duplicados
+				 * */
+				keys = new Object();
+				var arrayTotalRutas:Array = new Array();
+				arrayTotalRutas = arrayFiltrado.filter(quitarDuplicados);
+				
+				FormarLasRutas(arrayTotalRutas,arrayFiltrado,_infoRuta);
+				myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoRuta,null,"totalPedidos");
+				
+				//Limpiar Memoria
+				arrayFiltrado = null;
+				arrayTotalRutas = null;
+				
+			}
+			private function FormarLasRutas(TotalRutas:Array,rutasInfo:Array,infoRutas:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPedidos:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClienteProveedor:Object;
+				
+				var currentPartidaProducto:ProductoAlmacen; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalRutas.length; i++){
+					j=0;
+					keys = new Object();
+					keysClienteProveedor = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPedidos =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaProducto = rutasInfo[j] as ProductoAlmacen;
+					while( (TotalRutas[i] as ProductoAlmacen).ruta_Zona == currentPartidaProducto.ruta_Zona ){
+						totalPartidas ++;
+						totalPiezas += currentPartidaProducto.cantidad;
+						totalMonto += currentPartidaProducto.pcompra.montoTotal;
+						
+						if(!keys.hasOwnProperty(currentPartidaProducto.piRelacionada)){
+							keys[currentPartidaProducto.piRelacionada] = currentPartidaProducto.piRelacionada;
+							totalPedidos++;
+						}
+						
+						//Para el conteo de clientes en cada marca
+						if(!keysClienteProveedor.hasOwnProperty(currentPartidaProducto.nombreCliente)){
+							keysClienteProveedor[currentPartidaProducto.nombreCliente] = currentPartidaProducto.nombreCliente;
+							totalClientes++;
+						}
+						
+						rutasInfo.shift();
+						if(rutasInfo.length >0)
+							currentPartidaProducto = rutasInfo[j] as ProductoAlmacen;
+						else
+							currentPartidaProducto =new ProductoAlmacen();
+						
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado =  (TotalRutas[i] as ProductoAlmacen).ruta_Zona.toLocaleUpperCase();
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalPedidos = totalPedidos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoRutas.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function filtrarPorBotonBar(item:ProductoAlmacen, id:uint, array:Array):Boolean
+			{
+				if(_botonBar == 'Programado'){
+					if((item.tipoFlete == 'Flete Express') || (item.tipoFlete == 'Regular') || (item.destino == 'Stock'))
+						return false;
+					else
+						return true;
+				}
+				return false;
+			} 
+			
+			private function quitarDuplicados(item:ProductoAlmacen, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.ruta_Zona)){
+					return false;
+				}else{
+					keys[item.ruta_Zona] = item.ruta_Zona;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:Spacer height="27.5%"/>
+	<s:VGroup width="100%" height="45%" >
+		<s:VGroup height="100%" width="100%">
+			<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+									 dataProvider="{null}"
+									 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+									 showDataTips="false"  innerRadius=".5">   
+				<graficas:series>
+					<graficas:pieSeriesPqNet field="piezasTotal"/>  <!--piezasTotal-->
+				</graficas:series>
+			</graficas:PieChartPqGris>
+		</s:VGroup>
+		<s:VGroup width="100%">
+			<componentes:tituloChartTablero width="100%" text="RUTAS" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup> 
+	<s:Spacer height="27.5%"/>
+</s:VGroup>

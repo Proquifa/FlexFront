@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.registrarVisita.componentes.*"
+		 xmlns:txtInputContacto="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.*"
+		 resize="calc(event)" creationComplete="ini(event)">
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTxtinputContacto;
+			import mx.com.proquifa.vista.eventos.EventoGuardiaSeguridad;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosBotones;
+			
+			[Bindable]private var fontSize14:Number;
+			[Bindable]private var fontSize18:Number = 20;
+			[Bindable]public var nuevoMensajero:Boolean;
+			[Bindable]private var gapGeneral:Number = 12;
+			[Bindable]private var _fechaArriboString:String;
+			[Bindable]public var fletera:String;
+			[Bindable]public var currentContacto:Contacto = new Contacto();
+			private var _idAgenteAduanal:int;
+			public var tipoContacto:String;
+			public var idAgente:Number;
+			
+			
+			
+			[Bindable]
+			public function get idAgenteAduanal():int
+			{
+				return _idAgenteAduanal;
+			}
+			
+			public function set idAgenteAduanal(value:int):void
+			{
+				_idAgenteAduanal = value;
+			}
+			
+			[Bindable] //NO SE UTILIZA
+			public function get fechaArriboString():Date
+			{
+				return new Date();
+			}
+			
+			public function set fechaArriboString(value:Date):void
+			{
+				if(value != null){
+					_fechaArriboString = UtilsFecha.formatoFechaDDMMMYYYY(value)+" · "+UtilsFecha.formatoFechaHHNN(value)+" hrs";
+				}
+				else
+					_fechaArriboString = "Pendiente"
+			}
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				fontSize18 = (20/1391) * (unscaledWidth); 
+				fontSize18 = fontSize18 > 20 ? 20:fontSize18;
+				fontSize18 = fontSize18 < 15 ? 15:fontSize18;
+				
+				fontSize14 = (18/1391) * (unscaledWidth); 
+				fontSize14 = fontSize14 > 18 ? 18:fontSize14;
+				fontSize14 = fontSize14 < 14 ? 14:fontSize14;
+			}
+			
+			protected function ini(event:FlexEvent):void
+			{
+				currentState = "editar"; //Para que se cree el componente
+				currentState = "sinInfo";
+				(cmbVisitante.skin as skinTxtinputContacto).addEventListener("cambioTexto",verificarNombre);
+				cmbVisitante.addEventListener(FlexEvent.ENTER,verificarEnterCombo);
+			}
+			
+			private function verificarEnterCombo(event:FlexEvent):void
+			{
+				
+			}
+			public function verificarNombre(eve:Event):void
+			{
+				if((eve.currentTarget.textInput.text == "") || (cmbVisitante.selectedIndex < 0)){
+					if(currentState == "conInfo"){
+						currentState = "sinInfo";
+						cmbVisitante.selectedIndex = -1
+							currentContacto = new Contacto();
+							dispatchEvent(new Event("verificarInfoMensajero"));
+					}
+				}
+				
+			}
+			
+			protected function editarInfo(event:MouseEvent):void
+			{
+				currentState = "editar";
+				txtTelefono.text = currentContacto.telefono;
+				txtExt.text = currentContacto.extension1;
+				txtEmail.text = currentContacto.EMail;
+				txtDondeViene.text = fletera.toUpperCase();
+				txtCelular.text = currentContacto.celular;
+				txtNombreMensajero.text = currentContacto.nombre;
+				foto.editar = true;
+				
+			}
+			
+			protected function cancelarInfo(event:MouseEvent):void
+			{
+				if(foto.currentState == "tomarFoto"){
+					foto.cancelarFoto();
+				}
+				verificarTxtInput();
+				/*foto.editar = false;*/
+				
+				if(nuevoMensajero){
+					currentState = "sinInfo";
+					foto.currentState = "sinFoto";
+					/*
+					foto.activo = false;*/
+					nuevoMensajero = false;
+				}
+				else{
+					currentState = "conInfo";
+					/*foto.currentState = "conFoto";*/
+				}
+			}
+			
+			protected function aceptarInfo(event:MouseEvent):void
+			{
+				var permitido:Boolean;
+			    verificarTxtInput();
+				if(nuevoMensajero){
+					nuevoMensajero = false;
+					permitido = guardarContactoMensajeroFletera(true);
+				}
+				else
+					permitido = guardarContactoMensajeroFletera(false);
+				
+				
+				if(permitido){
+					if(foto.currentState == "tomarFoto"){
+						foto.cancelarFoto();
+					}
+					currentState = "conInfo";
+				}
+			}
+			private function guardarContactoMensajeroFletera(nuevo:Boolean = false):Boolean
+			{
+				
+				if(nuevo)
+				{
+				var evtAgrega:EventoGuardiaSeguridad = new EventoGuardiaSeguridad(EventoGuardiaSeguridad.GUARDAR_CONTACTO_MENSAJERO);
+				evtAgrega.tipoContacto = 'inserta';
+				
+				evtAgrega.contacto = new Contacto();	
+				
+				
+				evtAgrega.contacto.tipo = tipoContacto;
+				
+				if (tipoContacto == "AgenteAduanal")
+				{
+					evtAgrega.contacto.idAgenteAduanal = idAgente;
+					
+				}
+				
+				if( txtNombreMensajero.text != '' ){
+					
+					if( txtTelefono.text != '' ||txtEmail.text != "" || txtCelular.text != ""){
+						evtAgrega.empresa = txtDondeViene.text;
+						evtAgrega.contacto.habilitado = true;
+						evtAgrega.contacto.empresa = txtDondeViene.text;
+						evtAgrega.contacto.nombre = txtNombreMensajero.text.toUpperCase();
+						evtAgrega.contacto.EMail = txtEmail.text;
+						evtAgrega.contacto.telefono = txtTelefono.text.toUpperCase();
+						evtAgrega.contacto.extension1 = txtExt.text.toUpperCase();
+						evtAgrega.contacto.celular = txtCelular.text.toUpperCase();
+						
+						dispatchEvent(evtAgrega);
+						return true;
+					}
+					else 
+					{
+						alertaSingleton.show( 'Debe establecer Por lo menos alguno de estos datos: Telefono,Celular o Email', catalogoAlertas.TIT_ADV_informacionIncompleta );
+						return false;
+					}
+				}
+				else{
+				    
+					alertaSingleton.show( 'Debe establecer el nombre del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return false;
+				  }
+				
+				
+			
+				}
+					
+				
+				else
+				{
+				var evtActualiza:EventoGuardiaSeguridad = new EventoGuardiaSeguridad(EventoGuardiaSeguridad.ACTUALIZAR_CONTACTO);       
+				evtActualiza.tipoContacto = 'modifica';
+				
+				evtActualiza.contacto = new Contacto();	
+				
+				
+				evtActualiza.contacto.tipo = tipoContacto;
+				
+				if (tipoContacto == "AgenteAduanal")
+				{
+					evtActualiza.contacto.idAgenteAduanal = 6;
+					evtActualiza.contacto.idContacto = cmbVisitante.selectedItem.idContacto;
+				}
+				if( txtNombreMensajero.text != '' ){
+					
+					if( txtTelefono.text != '' ||txtEmail.text != "" || txtCelular.text != ""){
+						evtActualiza.empresa = txtDondeViene.text;
+						evtActualiza.contacto.habilitado = true;
+						evtActualiza.contacto.empresa = txtDondeViene.text;
+						evtActualiza.contacto.nombre = txtNombreMensajero.text.toUpperCase();
+						evtActualiza.contacto.EMail = txtEmail.text;
+						evtActualiza.contacto.telefono = txtTelefono.text.toUpperCase();
+						evtActualiza.contacto.extension1 = txtExt.text.toUpperCase();
+						evtActualiza.contacto.celular = txtCelular.text.toUpperCase();
+						
+						dispatchEvent(evtActualiza);
+						return true;
+					}
+					else 
+					{
+						alertaSingleton.show( 'Debe establecer Por lo menos alguno de estos datos: Telefono,Celular o Email', catalogoAlertas.TIT_ADV_informacionIncompleta );
+						return false;
+					}
+				}
+				else{
+					
+					alertaSingleton.show( 'Debe establecer el nombre del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return false;
+				}
+			
+				
+				}
+			
+		}
+			
+			public function checarValidacionCompleta():Boolean
+			{
+				var completo:Boolean = false;
+				if(currentContacto == null)
+					return completo;
+				
+				if(currentContacto.telefono != null || currentContacto.EMail != null || currentContacto.celular != null )
+				{
+					if(currentContacto.nombre != "" || currentContacto.nombre != null)
+					{
+						completo = true;
+					}
+						return completo;
+				}
+			     else
+					 return completo; 
+				
+				
+				
+			}
+			public function reset():void
+			{
+				cmbVisitante.selectedIndex = -1;
+				txtTelefono.text = "";
+				txtExt.text = "";
+				txtEmail.text = "";
+				//txtDondeViene.text = "";
+				txtCelular.text = "";
+				txtNombreMensajero.text = "";
+				foto.resetFoto();
+				nuevoMensajero = false;
+			}
+			
+			protected function verificarTxtInput():void
+			{
+				dispatchEvent(new Event("verificarInfoMensajero"));
+			}
+			
+			public function set obtenerContactosFletera(value:ArrayCollection):void
+			{
+				cmbVisitante.dataProvider = value;
+			}
+			
+			protected function elegirContacto(event:IndexChangeEvent):void
+			{
+				if(cmbVisitante.selectedItem != null){
+					if(event.newIndex >= 0){
+						currentContacto = ObjectUtil.copy(cmbVisitante.selectedItem) as Contacto;
+						currentState = "conInfo";
+						foto.currentState = "conFoto";
+						/*foto.activo = true;*/
+						/*foto.editar = false;*/
+					}else{
+						currentState = "sinInfo";
+						foto.currentState = "sinFoto";
+					}
+				}
+				dispatchEvent(new Event("verificarInfoMensajero"));
+				
+			}
+			
+			protected function agregarVisitante(event:MouseEvent):void
+			{
+				reset();
+				currentContacto = new Contacto()
+				currentState = "editar";
+				foto.currentState = "conFoto";
+			    nuevoMensajero = true;
+			}
+			
+			private var indiceCargar:int
+			public function esperarData(indice:int):void
+			{
+				indiceCargar = indice;
+				setTimeout(seleccionarIndice,300);
+			}
+			private function seleccionarIndice():void
+			{
+				cmbVisitante.selectedIndex = indiceCargar;
+			}
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="sinInfo"/>
+		<s:State name="conInfo"/>
+		<s:State name="editar"/>
+	</s:states>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle">
+		<componentes:TituloConLinea width="100%" titulo="MENSAJERO" />
+		
+		<s:HGroup width="100%" height="5%" verticalAlign="middle" horizontalAlign="right" visible.conInfo="true" visible="false">
+			<s:Group width="160" height="30" click="editarInfo(event)">
+				<s:Rect width="100%" height="100%">
+					<s:fill >
+						<s:SolidColor color="#0b8692" />
+					</s:fill>
+				</s:Rect>
+				<s:Label text="EDITAR" fontFamily="Novecento" fontSize="18" fontWeight="bold" width="100%" height="100%" textAlign="center" verticalAlign="middle" color="#FFFFFF"/>
+			</s:Group>
+		</s:HGroup>
+		<!--INFO-->
+		<s:HGroup width="100%" height="100%" verticalAlign="middle">
+		
+			<s:HGroup width="25%" height="100%" >
+				<componentes:CapturarFoto id="foto" height="100%" width="100%" maxHeight="404" editar="{currentState == 'editar' ? true:false}"/>
+			</s:HGroup>  
+			<!--FORMULARIO-->
+			<s:Spacer width="5%" />
+			<s:VGroup width="35%" height="100%" verticalAlign="middle">
+				<s:VGroup width="100%" height="100%"  verticalAlign="middle">
+					<s:Label text="Nombre completo del visitante" fontSize="{fontSize14}" width="100%" />
+					<s:HGroup width="100%" height="100%" gap="15">
+						<txtInputContacto:textInputContacto id="cmbVisitante" width="100%" height="100%" maxHeight="30" change="elegirContacto(event)"  fontWeight="bold" fontSize="{fontSize18}" includeIn="conInfo,sinInfo" />
+						
+						<s:TextInput id="txtNombreMensajero"  width="100%" height="100%" skinClass="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTextInputBordeGris" maxHeight="30" includeIn="editar"
+									 fontSize="{fontSize18}" fontWeight="bold" text="{currentContacto.nombreCompleto}"/>
+						<!--<s:TextInput id="txtNombreMensajero"  width="100%" height="100%" skinClass="mx.com.proquifa.vista.vistas.skin.textInput.skinTextInputBordeGris" maxHeight="30" includeIn="editar" visible="{nuevoMensajero}" includeInLayout="{nuevoMensajero}"
+						fontSize="{fontSize18}" fontWeight="bold" text="{currentContacto.nombreCompleto}"/>-->
+						<s:HGroup includeIn="conInfo,sinInfo">
+							<mx:Image id="btnAgregar" source="{catalogoIconosBotones.getInstance().agregar_visitante}" click="agregarVisitante(event)" />
+						</s:HGroup>  
+					</s:HGroup>  
+				</s:VGroup>  
+				<s:HGroup width="100%" height="100%" verticalAlign="middle">
+					<s:VGroup width="100%" height="100%"  verticalAlign="middle">
+						<s:Label text="Teléfono" fontSize="{fontSize14}" width="100%" />
+						<s:TextInput id="txtTelefono"  width="100%" height="100%" skinClass="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTextInputBordeGris" maxHeight="30" includeIn="editar" 
+									 fontSize="{fontSize18}" fontWeight="bold"/>
+						<s:Label id="lblTelefono" text.sinInfo="ND" fontSize="{fontSize18}" width="100%" fontWeight="bold" includeIn="conInfo,sinInfo"
+								 text.conInfo="{currentContacto.telefono}"/>
+					</s:VGroup>  
+					<s:VGroup width="100%" height="100%"  verticalAlign="middle">
+						<s:Label text="Ext." fontSize="{fontSize14}" width="100%" />
+						<s:TextInput id="txtExt"  width="100%" height="100%" skinClass="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTextInputBordeGris" maxHeight="30" includeIn="editar"
+									 fontSize="{fontSize18}" fontWeight="bold"/>
+						<s:Label id="lblExt" text.sinInfo="ND" fontSize="{fontSize18}" width="100%" fontWeight="bold" includeIn="conInfo,sinInfo"
+								 text.conInfo="{currentContacto.extension1}"/>
+					</s:VGroup>  
+				</s:HGroup>
+				<s:VGroup width="100%" height="100%"  verticalAlign="middle">
+					<s:Label text="E-mail" fontSize="{fontSize14}" width="100%" />
+					<s:TextInput id="txtEmail"  width="100%" height="100%" skinClass="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTextInputBordeGris" maxHeight="30" includeIn="editar"
+								 fontSize="{fontSize18}" fontWeight="bold"/>
+					<s:Label id="lblEmail" text.sinInfo="ND" fontSize="{fontSize18}" width="100%" fontWeight="bold" includeIn="conInfo,sinInfo"
+							 text.conInfo="{currentContacto.EMail}"/>
+				</s:VGroup> 
+			</s:VGroup>  
+			<s:Spacer width="5%" />
+			<s:VGroup width="35%" height="100%" verticalAlign="middle">
+				<s:VGroup width="100%" height="100%" >
+					<s:Label text="De donde viene" fontSize="{fontSize14}" width="100%" />
+					<s:TextInput id="txtDondeViene"  width="100%" height="100%" skinClass="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTextInputBordeGris" maxHeight="30" includeIn="editar"
+								 fontSize="{fontSize18}" fontWeight="bold" text="{fletera.toUpperCase()}" enabled="false"/>
+					<s:Label id="lblDondeViene" fontSize="{fontSize18}" width="100%" fontWeight="bold" includeIn="conInfo,sinInfo"
+							 text="{fletera.toUpperCase()}"/>
+				</s:VGroup> 
+				<s:VGroup width="100%" height="100%"  verticalAlign="middle">
+					<s:Label text="Celular" fontSize="{fontSize14}" width="100%" />
+					<s:TextInput id="txtCelular"  width="100%" height="100%" skinClass="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.txtInputContacto.skinTextInputBordeGris" maxHeight="30" includeIn="editar"
+								 fontSize="{fontSize18}" fontWeight="bold"/>
+					<s:Label id="lblCelular" text.sinInfo="ND" fontSize="{fontSize18}" width="100%" fontWeight="bold" includeIn="conInfo,sinInfo"
+							 text.conInfo="{currentContacto.celular}"/>
+				</s:VGroup> 
+				<s:VGroup width="100%" height="100%"  verticalAlign="middle">
+					<s:Label text="Fecha y hora aproximada de arribo" fontSize="{fontSize14}" width="100%" />
+					<!--<s:TextInput id="txtFechaHora"  width="100%" height="100%" skinClass="mx.com.proquifa.vista.vistas.skin.textInput.skinTextInputBordeGris" maxHeight="30" includeIn="editar"/>-->
+					<s:Label fontSize="{fontSize18}" width="100%" fontWeight="bold" text="{_fechaArriboString}" id="fechaArribo" />
+				</s:VGroup> 
+			</s:VGroup>  
+			<!--</s:Group>-->  
+		</s:HGroup>  
+		<!--BOTONES PONER PORCENTAJES Y MAX-->
+		<s:HGroup width="100%" height="10%" verticalAlign="middle" >
+			<!--<s:Group width="100%" height="100%" >
+			<s:Rect width="100%" height="100%">
+			<s:stroke>
+			<s:SolidColorStroke color="#000000" weight="1"/>
+			</s:stroke>
+			</s:Rect>-->
+			
+			<s:HGroup width="100%" height="100%" includeIn="editar" verticalAlign="middle">
+				
+				<s:Group width="160" height="30" click="cancelarInfo(event)">
+					<s:Rect width="100%" height="100%">
+						<s:fill >
+							<s:SolidColor color="#0b8692" />
+						</s:fill>
+					</s:Rect>
+					<s:Label text="CANCELAR" fontFamily="Novecento" fontSize="18" fontWeight="bold" width="100%" height="100%" textAlign="center" verticalAlign="middle" color="#FFFFFF"/>
+				</s:Group>
+				
+				<s:Spacer width="100%" />
+				<s:Group width="160" height="30" click="aceptarInfo(event)">
+					<s:Rect width="100%" height="100%">
+						<s:fill >
+							<s:SolidColor color="#0b8692" />
+						</s:fill>
+					</s:Rect>
+					<s:Label text="ACEPTAR" fontFamily="Novecento" fontSize="18" fontWeight="bold" width="100%" height="100%" textAlign="center" verticalAlign="middle" color="#FFFFFF" />
+				</s:Group>  
+				
+			</s:HGroup>  
+			<!--</s:Group>-->  
+			
+		</s:HGroup>  
+	</s:VGroup>
+</s:Group>

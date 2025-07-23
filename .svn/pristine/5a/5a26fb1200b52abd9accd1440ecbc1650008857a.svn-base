@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" 
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			[Bindable] private var _infoEstado:ArrayCollection;
+			
+			private var _pedidoEstado:ArrayCollection;
+			private var _cotizadoEstado:ArrayCollection;
+			private var _recotizadoEstado:ArrayCollection;
+			private var _canceladoEstado:ArrayCollection;
+			
+			private var estado:Object;
+			
+			public function set obtenerInfoGrafico($infoGrafica:ArrayCollection):void
+			{
+				if($infoGrafica == null) return;
+				
+				_infoEstado = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				arrayTemp.sortOn("estadoSituacion");
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Estatus y/o situación,
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalEstatus:Array = new Array();
+				arrayTotalEstatus = arrayTemp.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Estatus y/o situación
+				 * */
+				
+				estado = new Object();
+				
+				FormarLosEstatus(arrayTotalEstatus,arrayTemp,"ESTATUS",_infoEstado);
+				
+				myChart.dataProvider = myChart.aplicarFormatoConsultasGraficas(_infoEstado,null,"cotizacionesTotal");
+				
+				//Para liberar memoria
+				arrayTotalEstatus = new Array();
+				arrayTemp = new Array();
+			}
+			
+			private function FormarLosEstatus(TotalEstatus:Array,estatusInfo:Array,etiqueta:String,infoEstatus:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCotizaciones:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysMarca:Object;
+				
+				var currentPartidaCoti:PartidaCotizacion; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalEstatus.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalCotizaciones =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCoti = estatusInfo[j] as PartidaCotizacion;
+					while( (TotalEstatus[i] as PartidaCotizacion).estadoSituacion == currentPartidaCoti.estadoSituacion ){
+						totalPartidas += currentPartidaCoti.partida;
+						totalPiezas += currentPartidaCoti.cantidad;
+						totalMonto += currentPartidaCoti.precio;
+						
+						if(!keys.hasOwnProperty(currentPartidaCoti.cotizacion)){
+							keys[currentPartidaCoti.cotizacion]= currentPartidaCoti.cotizacion;
+							totalCotizaciones++;
+						}
+						
+						if(!keysMarca.hasOwnProperty(currentPartidaCoti.cliente)){
+							keysMarca[currentPartidaCoti.cliente] = currentPartidaCoti.cliente;
+							totalClientes++;
+						}
+						
+						estatusInfo.shift();
+						if(estatusInfo.length >0)
+							currentPartidaCoti = estatusInfo[j] as PartidaCotizacion;
+						else
+							currentPartidaCoti =new PartidaCotizacion();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalEstatus[i] as PartidaCotizacion).estadoSituacion.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = (TotalEstatus[i] as PartidaCotizacion).estadoSituacion.toLocaleUpperCase();
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.cotizacionesTotal = totalCotizaciones;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoEstatus.addItem(ObjectUtil.copy(itemResumenConsulta));
+					
+				}
+				
+			}
+			private function quitaDuplicados(item:PartidaCotizacion, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.estadoSituacion)){
+					return false;
+				}else{
+					keys[item.estadoSituacion] = item.estadoSituacion;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="PEDIDO" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+	
+	<s:VGroup width="100%" verticalAlign="top" gap="0" >
+		<graficas:PieChartPqGris id="myChart" lineasHabilitadas="true"
+								 etiquetasHabilitadas="true" habilitarResumen="true"
+								 fondoCircular="true" fondoCircularRadius="7"
+								 showDataTips="false"  innerRadius=".5" 
+								 width="100%" height="100%" 
+								 dataProvider="{null}"
+								 >   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> <!--piezasTotal-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+	</s:VGroup>
+</s:Group>

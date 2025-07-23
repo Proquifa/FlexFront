@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:contenedores="skins.skin.contenedores.*"
+		 xmlns:textarea="skins.skin.textarea.*"
+		 xmlns:linkButton="skins.skin.linkButton.*"
+		 xmlns:input="skins.skin.textinput.*"
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%"  
+		 creationComplete="producerInit()"
+		 ><!-- -->
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.financieros.EventoCatClientesFinancieros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.VistaTodosLosClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.financieros.popUp.verNotasDeCreditoPopUp;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable]
+			private var _cliente:Cliente;
+			private var _clienteRespaldo:Cliente;
+			
+			private var activaCambios:Boolean;
+			private var seEstaEditando:Boolean = false;
+			
+			private var productorActualiza:Producer = new Producer();
+			private var productorBloquea:Producer = new Producer();
+			private var productorActualizaFacturacion:Producer = new Producer(); //Responsable Cobros y Pagos 
+			
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet;
+			
+			protected function producerInit():void
+			{
+				productorActualiza.destination = "catalogoClienteActualizaSecciones";
+				productorBloquea.destination = "catalogoClienteBloqueaSecciones";
+				productorActualizaFacturacion.destination = "actualizarFacturacion";
+				
+				this.canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAsociado = new ChannelSet();
+				this.canalesAsociado.addChannel(canalAsociado);
+				productorActualiza.channelSet = this.canalesAsociado;
+				productorBloquea.channelSet = this.canalesAsociado;
+				productorActualizaFacturacion.channelSet = this.canalesAsociado;
+				
+			}
+			
+			
+			public function set recibeClienteSeleccionado($cliente:Cliente):void{
+				if ($cliente == null ) {
+					return;
+				}
+				_clienteRespaldo = ObjectUtil.copy( $cliente ) as Cliente;
+				inicializaClienteSeleccionado($cliente);
+				
+				var obtenerTotalEnNotasCredito:EventoCatClientesFinancieros = new EventoCatClientesFinancieros(EventoCatClientesFinancieros.OBTENER_EL_TOTAL_DE_NOTAS_DE_CREDITO_POR_CLIENTE);
+				obtenerTotalEnNotasCredito.idCliente = $cliente.idCliente;
+				dispatchEvent(obtenerTotalEnNotasCredito);
+			}
+			
+			private function inicializaClienteSeleccionado($cliente:Cliente):void{
+				_cliente = ObjectUtil.copy($cliente) as Cliente;
+				habilitaTextos(false);
+				activaCambios = false;
+				grpGuardarCancelar.visible = false;
+				grpBotonEditar.visible = true;
+				grpBotones.visible = this.grpBotones.includeInLayout = true;
+				cargaCondicionesPago();
+				cargaFormaPago();
+				
+			}
+			
+			private function habilitaTextos($seHabilita:Boolean):void{
+				//txtComentariosAdicionales.editable = $seHabilita;
+				txtLimiteCredito.editable = $seHabilita;
+				txtLineaCredito.editable = $seHabilita;
+				cmbCondicionesCobro.openButton.enabled = $seHabilita;
+				cmbCondicionesCobro.focusEnabled = $seHabilita;
+				cmbCondicionesCobro.textInput.enabled = $seHabilita;
+				
+				cmbFormaPago.openButton.enabled = $seHabilita;
+				cmbFormaPago.focusEnabled = $seHabilita;
+				cmbFormaPago.textInput.enabled = $seHabilita;
+			}
+			
+			private function guardaCambios( vieneDe:String = '' ):void{
+				
+				activaCambios = false;
+				var seGuarda:Boolean = true;
+				var event:EventoCatClientesFinancieros = new EventoCatClientesFinancieros(EventoCatClientesFinancieros.ACTUALIZAR_CREDITO_CLIENTES);
+				if (seGuarda){
+					_cliente.limiteCredito = parseInt(txtLimiteCredito.text);
+					_cliente.lineaCredito = parseInt(txtLineaCredito.text);
+					_cliente.condicionesPago = cmbCondicionesCobro.selectedItem.valor;
+					_cliente.medioPago = cmbFormaPago.selectedItem.valor;
+					//_cliente.comentariosCredito = txtComentariosAdicionales.text;
+					event.clienteSeleccionado = this._cliente;
+					event.ventana = "CatClientes_Credito ( idCliente:"+_cliente.idCliente+" )";
+					dispatchEvent(event);
+					producerMessage();
+					producerMessageFacturacion();
+				}
+				
+			}
+			
+			protected function producerMessage():void{
+				var object:Object = new Object();
+				object.body = 'actualizaSecciones';
+				object.cliente = _cliente.idCliente;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorActualiza.send(mensaje);
+			}
+			
+			protected function producerMessageFacturacion():void{
+				var object:Object = new Object();
+				object.body = 'actualizaFacturacion';
+				object.cliente = _cliente.idCliente;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorActualizaFacturacion.send(mensaje);
+			}
+			
+			protected function editarInfo($vieneDe:String = '' ):void{
+				if (seEstaEditando ) {
+					if ($vieneDe == 'cancelar' ){
+						setTimeout( acomadaTiempo, 400 );
+					}else{
+						grpGuardarCancelar.visible = false;
+						this.grpBotonEditar.visible = true;
+						habilitaTextos(false);
+					}
+				}else{
+					setTimeout(muestraBotonCancelar, 250 );
+				}
+			}
+			
+			private function muestraBotonCancelar():void{
+				grpGuardarCancelar.visible = true;
+				this.grpBotonEditar.visible = false;
+				habilitaTextos(true);
+			}
+			
+			private function acomadaTiempo():void{
+				grpGuardarCancelar.visible = false;
+				this.grpBotonEditar.visible = true;
+				habilitaTextos(false);
+			}
+			
+			public function cancelaGuardado():void{
+				inicializaClienteSeleccionado(_clienteRespaldo);
+			}
+			
+			private function cargaCondicionesPago():void{
+				if (cmbCondicionesCobro.dataProvider != null && cmbCondicionesCobro.dataProvider.length > 0 ){
+					this.cmbCondicionesCobro.selectedIndex = cmbCondicionesCobro.seleccionarValor(_cliente.condicionesPago);
+				}
+				else{
+					setTimeout( cargaCondicionesPago, 500 );
+				}
+			}
+			
+			private function cargaFormaPago():void{
+				if (cmbFormaPago.dataProvider != null && cmbFormaPago.dataProvider.length > 0 ){
+					this.cmbFormaPago.selectedIndex = cmbFormaPago.seleccionarValor(_cliente.medioPago);
+				}
+				else{
+					setTimeout( cargaFormaPago, 500 );
+				}
+			}
+			
+			public function set confirmaActualizacion($actualizado:Boolean):void{
+				if ($actualizado == true ){
+					_clienteRespaldo = ObjectUtil.copy(_cliente) as Cliente;
+					var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.REFRESCAR_CLIENTES);
+					evt.clienteSeleccionado = _cliente;
+					evt.habilitado = _cliente.habilitado == true ? 1 : 0;
+					seEstaEditando = true;editarInfo('cancelar');
+					dispatchEvent( evt );
+				}
+			}
+			
+			private var popUpVerNotasCredito:verNotasDeCreditoPopUp;
+			protected function lnkbtnCredito_clickHandler(event:MouseEvent):void
+			{
+				var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+				if(popUpVerNotasCredito == null)
+				{
+					popUpVerNotasCredito = verNotasDeCreditoPopUp(PopUpManager.createPopUp(app,verNotasDeCreditoPopUp,true));
+					popUpVerNotasCredito.addEventListener("CerrarElPopUpVerNotasDeCredito_CatClientesCredito",escucharCerrarPopUPVerNotasCredito,false,0,true);
+				}
+				PopUpManager.centerPopUp(popUpVerNotasCredito);
+				
+				
+				var obtenerNotasDeCredito:EventoCatClientesFinancieros = new EventoCatClientesFinancieros(EventoCatClientesFinancieros.OBTENER_NOTAS_CREDITO_POR_CLIENTE);
+				obtenerNotasDeCredito.idCliente = _cliente.idCliente; 
+				//obtenerNotasDeCredito.idCliente = "2223";
+				dispatchEvent(obtenerNotasDeCredito);
+				
+			}
+			
+			private function escucharCerrarPopUPVerNotasCredito(event:Event):void
+			{
+				PopUpManager.removePopUp(popUpVerNotasCredito);
+				popUpVerNotasCredito = null;
+			}
+			
+			
+			public function set recibeTotalEnNotasCreditoPorCliente($totalNC:Number):void
+			{
+				
+				lnkbtnCredito.visible  = lnkbtnCredito.includeInLayout = false;
+				lblCeroCredito.visible = lblCeroCredito.includeInLayout = false;
+				
+				if($totalNC > 0)
+				{
+					lnkbtnCredito.visible  = lnkbtnCredito.includeInLayout = true;
+					lnkbtnCredito.label = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas($totalNC)+ " DLS";
+					
+				}
+				else
+				{
+					lblCeroCredito.visible = lblCeroCredito.includeInLayout = true;
+				}
+			}
+			
+			protected function btnEditar_clickHandler(event:MouseEvent):void
+			{
+				if (producerBlock() ){
+					alertaSingleton.show("Esta sección se encuentra en modificación por otro usuario",catalogoAlertas.TIT_ADV_atencion);
+				}
+				else{
+					VistaTodosLosClientes.bloqueo = true;
+					seEstaEditando = false; 
+					editarInfo();
+				}
+			}
+			
+			public function inicia():void{
+				seEstaEditando = true; 
+				editarInfo('cancelar'); 
+				cancelaGuardado();
+			}
+			
+			protected function btnCancelar_clickHandler(event:MouseEvent):void
+			{
+				cancelarBlock();
+				inicia();
+			}
+			
+			protected function producerBlock():Boolean{
+				
+				var object:Object = new Object();
+				object.body = 'bloqueaSecciones';
+				object.nuevo = false;
+				object.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				
+				var block:Object = new Object();
+				block.cliente = _cliente.idCliente;
+				
+				if (VistaTodosLosClientes.arrayEditables != null && VistaTodosLosClientes.arrayEditables.length > 0 ){
+					var index:int = Util.searchInArrayCollection(VistaTodosLosClientes.arrayEditables,_cliente.idCliente,"cliente");
+					if (index >= 0){
+						return true;
+					}
+					else{
+						VistaTodosLosClientes.arrayEditables.addItem(block);
+						object.block = VistaTodosLosClientes.arrayEditables;
+					}
+				}
+				else{
+					VistaTodosLosClientes.arrayEditables = new ArrayCollection();
+					VistaTodosLosClientes.arrayEditables.addItem(block);
+					object.block = VistaTodosLosClientes.arrayEditables;
+				}
+				
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorBloquea.send(mensaje);
+				
+				return false;
+			}
+			
+			protected function cancelarBlock():void{
+				VistaTodosLosClientes.bloqueo = false;
+				var object:Object = new Object();
+				object.body = 'bloqueaSecciones';
+				object.nuevo = false;
+				object.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				
+				var index:int = Util.searchInArrayCollection(VistaTodosLosClientes.arrayEditables,_cliente.idCliente,"cliente");
+				if (index >= 0 ){
+					VistaTodosLosClientes.arrayEditables.removeItemAt(index);
+					object.block = VistaTodosLosClientes.arrayEditables;
+					
+					var mensaje:AsyncMessage = new AsyncMessage();
+					mensaje.body = object;
+					productorBloquea.send(mensaje);
+				}
+				
+			}
+			
+			protected function btnGuardar_clickHandler(event:MouseEvent):void
+			{
+				cancelarBlock();
+				seEstaEditando = true; 
+				editarInfo('guardar'); 
+				guardaCambios();
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" height="100%" gap="0" id="grpContenedorPrincipal">
+		
+		<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpInfo">
+			<s:BorderContainer borderVisible="false" width="100%" height="100%" backgroundColor="white" backgroundAlpha="0" >
+				
+				<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+					<s:HGroup width="100%" verticalAlign="bottom" >
+						<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_creditoGris}" />
+						<label:TituloBankGothic_30 text="CRÉDITO" />
+						<s:Spacer width="100%" />
+						<s:HGroup>
+							<label:Texto_13_VerdeAzul text="Última actualización: " />
+							<label:Fecha_13_VerdeAzul fecha="{_cliente.fechaActualizacion}" />
+						</s:HGroup>
+					</s:HGroup>
+					<otros:divisionGruesa width="100%" />
+					
+					<s:Scroller id="sclGeneral" maxWidth="1050" width="100%" height="100%" minWidth="340">
+						<s:VGroup width="100%" height="100%" id="grpGeneral" paddingLeft="3" paddingRight="3" gap="10" verticalAlign="middle">
+							<label:Titulo_16_pTop10 width="100%" text="GENERALES" textAlign="right" />
+							<otros:division width="100%" />
+							<s:VGroup width="100%" horizontalAlign="center" >
+								<s:HGroup width="100%" horizontalAlign="center">
+									<s:VGroup height="100%"  width="20%" gap="10">
+										<label:Titulo text="Condiciones de cobro: " />
+										<cmbCat:ComboCatalogos change="activaCambios = true;" fontSize="14" width="160" height="28" id="cmbCondicionesCobro" creationComplete="{cmbCondicionesCobro.cargaCreditoPago('--NINGUNO--')}" />
+										<label:Titulo text="Forma de Pago: " />
+										<cmbCat:ComboCatalogos change="activaCambios = true;" fontSize="14" width="160" height="28" id="cmbFormaPago" creationComplete="{cmbFormaPago.cargaMedioPago('--NINGUNO--')}" />
+									</s:VGroup>
+									<s:Spacer width="15%"/>
+									<s:VGroup height="100%"  width="20%" gap="10">
+										<label:Titulo text="Límite de línea de crédito: " />
+										<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.limiteCredito}" change="activaCambios = true;" id="txtLimiteCredito" />
+										<label:Titulo text="Línea de crédito: " />
+										<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.lineaCredito}" change="activaCambios = true;" id="txtLineaCredito" />
+									</s:VGroup>
+								</s:HGroup>
+								<s:VGroup width="100%" gap="10" paddingTop="10" horizontalAlign="center">
+									<label:Titulo_16_pTop10 width="100%" text="CRÉDITO" textAlign="right"/>
+									<otros:division width="100%" />
+									<s:HGroup paddingTop="10"> 
+										<label:Titulo paddingTop="0" text="Monto total de crédito: "/>
+										<label:Texto text=""/>
+										<linkButton:LinkButtonPQNet2 id="lnkbtnCredito" click="lnkbtnCredito_clickHandler(event)" visible="false" includeInLayout="false"/>
+										<label:Texto id="lblCeroCredito" text="$0 DLS" visible="false" includeInLayout="false"/>
+									</s:HGroup>  
+								</s:VGroup>
+								<!--<s:VGroup width="100%" gap="10" paddingTop="10">
+								<label:Titulo_16_pTop10 width="100%" text="COMENTARIOS ADICIONALES" textAlign="right" />
+								<otros:division width="100%" />
+								<textarea:txtAreaBlancoDefaultPQNet width="100%" height="100%" minHeight="70" text="{_cliente.comentariosCredito}" change="activaCambios = true" id="txtComentariosAdicionales" />
+								</s:VGroup>-->
+								
+							</s:VGroup>
+						</s:VGroup>
+					</s:Scroller>
+					
+					<s:VGroup width="100%" gap="10">
+						<otros:divisionGruesa width="100%" />
+						<s:Group width="100%" id="grpBotones" >
+							
+							<s:HGroup width="100%" horizontalAlign="right" verticalAlign="middle" id="grpBotonEditar" >
+								<pqNet:botonPqNetLargo label="Editar" id="btnEditar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="btnEditar_clickHandler(event)" />
+							</s:HGroup>
+							
+							<s:HGroup width="100%" id="grpGuardarCancelar" visible="false">
+								<pqNet:botonPqNetLargo label="Guardar" id="btnGuardar" click="btnGuardar_clickHandler(event)" />
+								<s:Spacer width="100%" />
+								<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO}" click="btnCancelar_clickHandler(event)" id="btnCancelar" />
+							</s:HGroup>
+							
+						</s:Group>
+						
+					</s:VGroup> 
+					
+				</s:VGroup>
+				
+			</s:BorderContainer>
+		</contenedores:VGroupConPaddingStandardPqNet>
+	</s:HGroup>
+</s:Group>

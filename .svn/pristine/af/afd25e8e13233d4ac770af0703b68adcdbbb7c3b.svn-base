@@ -1,0 +1,957 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" horizontalAlign="center" 
+		 xmlns:incidente="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.*" creationComplete="init()" xmlns:label="skins.skin.label.*" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:otros="skins.otros.*" >
+	<mx:Script>
+		<![CDATA[
+			import flash.text.engine.ElementFormat;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAdministrador;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteProgramarAccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoVerificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Accion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.componentesExtras.ListaVerificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.Mejoras;
+			import mx.controls.Alert;
+			import mx.controls.LinkButton;
+			import mx.events.CloseEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.skins.Border;
+			import mx.utils.ObjectUtil;
+			
+			
+			public var _gestion:Gestion;
+			public var _empleado:Empleado;
+			private var _componenteVerificacion:ListaVerificacion = null;
+			private var _dirigidoPor:String;
+			private var _accion:Accion;
+			private var _listaAcciones:ArrayCollection;
+			private var _listaVereificacion:ArrayCollection;
+			private var _abrirPopUpReferencias:ReferenciasIncidente = null;			
+			private var _cmbSeleccionador:seleccionador = null;
+			private var _validarModoLectura:Boolean = false;
+			[Bindable]
+			private var _verificacionAccion:Accion;
+			[Bindable]
+			private var _listaReferencias:ArrayCollection;
+			[Bindable]
+			public var _incidente:Incidente;
+			[Bindable]
+			private var _listaUsuarios:ArrayCollection;
+			[Bindable]
+			private var _listaTipo:Array = [{id:0, tipo:"--NINGUNO--"},
+				{id:2, tipo:"Correctiva"},
+				{id:3, tipo:"Preventiva"}];
+			[Bindable]
+			private var _listaEficacia:Array = [{id:0, eficacia:"--NINGUNO--"},
+				{id:99, eficacia:"99% (Muy Alta)"},
+				{id:80, eficacia:"80% (Alta)"},
+				{id:60, eficacia:"60% (Media)"},
+				{id:40, eficacia:"40% (Baja)"},
+				{id:20, eficacia:"20% (Muy baja)"}];
+			[Bindable]
+			private var listaAcciones:ArrayCollection = new ArrayCollection();
+			/**
+			 * Metodo que inicia el componente
+			 */ 
+			private var estadoVentana:String = "";
+			private var productorProgramacion:Producer = new Producer();
+			private var canalProgramacion:AMFChannel;
+			private var canalesProgramacion:ChannelSet;
+			
+			
+			private function init():void{
+				this.productorProgramacion.destination = "actualizacionService";
+				this.productorProgramacion.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalProgramacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesProgramacion = new ChannelSet();
+				this.canalesProgramacion.addChannel(canalProgramacion);
+				this.productorProgramacion.channelSet = this.canalesProgramacion;
+			}
+			/**
+			 * Metodo usado para actualizar referencias desde un flujo conmtinuo que viene de Decision del Incidente
+			 */
+			public function actualizaReferenciasInicio():void{
+				var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.ACTUALIZA_REFERENCIAS );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento );
+			}
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de programación de acción","Error");
+			}
+			
+			public function inicia():void{
+				this.lblAccion.text = "Programación de la acción";
+				this.lblIncidente.text = this._incidente.folio;
+				if(this._listaUsuarios == null){
+					this._listaUsuarios = new ArrayCollection();
+				}
+				if(this._listaAcciones == null){
+					this._listaAcciones = new ArrayCollection();
+				}
+				if(this._accion == null){
+					this._accion = new Accion();
+				}
+				if( this._listaReferencias == null){
+					this._listaReferencias = new ArrayCollection();
+				}
+				/* if( this._gestion.referencias != null && this._gestion.referencias.length > 0 ){
+				this._listaReferencias = this._gestion.referencias;
+				} */ 
+				if( this._incidente.referencias != null && this._incidente.referencias.length > 0 ){
+					this._listaReferencias = this._incidente.referencias;
+				}
+				this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( this._incidente.fecha );
+				this.lblPrograma.text = this._empleado.usuario;
+				//evento para mandar a llamar a los usuarios del sistema habilitados. Los regresa en el mapa a la funcion recibeUsuarios();
+				this.llamarEmpleados();
+				consultaListaAccioes();
+				cargarComboNavegacion();
+				estadoVentana = "";
+			} 
+			
+			public function creaElListener( mejoras:Mejoras):void{
+				mejoras.addEventListener (EventoIncidenteProgramarAccion.REGRESAR_LISTA_REFRENCIA, recibeListaDeReferencias ); 
+			}
+			/**
+			 * Metodo para manda a llamar a los usuarios. Va al mapa MapaIncidenteProgramarAccion.
+			 */ 
+			public function llamarEmpleados():void{
+				var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.CONSULTA_USUARIOS );
+				evento.valorAdicional = "--NINGUNO--";
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				if( this._listaReferencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+						( this._listaReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaReferencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaReferencias ) as ArrayCollection;
+				}
+				this.parent.addEventListener( EventoIncidenteProgramarAccion.REGRESAR_LISTA_REFRENCIA, recibeListaDeReferencias );
+				this._cmbSeleccionador.empleadoLogueado = this._empleado;
+				this._cmbSeleccionador.idIncidente = this._incidente.idIncidente;
+				this._cmbSeleccionador.folioIncidente = this._incidente.folio;
+				this._cmbSeleccionador.vieneDe = "programacionAccion";				
+				this._cmbSeleccionador.origen =  "accion";
+				this.contenedorCombo.addChild( this._cmbSeleccionador );
+				this.parent.stage.addEventListener( EventoIncidenteProgramarAccion.REGRESAR_LISTA_REFRENCIA, recibeListaDeReferencias );
+			}
+			/**
+			 * Metodo que recibe las Lsita de la Referencias del PopUp. Las referencias Precargadoas no podran ser eliminadas
+			 */ 
+			private function recibeListaDeReferencias(evento:EventoIncidenteProgramarAccion):void{
+				this._listaReferencias = evento.listaReferencias;	
+				//if( this._listaReferencias.source.length > 0 ){
+				for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+					( this._listaReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+					( this._listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaReferencias.getItemAt( i ) as Referencia ).folio;
+				}
+				if(this._cmbSeleccionador != null ){
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaReferencias ) as ArrayCollection;
+				}
+				//}			
+			}
+			/**
+			 * Metodo qur recibe a los Usuarios del Mapa
+			 */ 
+			public function set recibeUsuarios(datos:ArrayCollection):void{
+				if( datos == null ){
+					return;
+				}
+				this._listaUsuarios = datos;
+			}
+			/**
+			 * Este Metodo permite el registro de nuevas Acciones con el Boton Agregar ACC
+			 */
+			private function agregarAccion():void{
+				limpiarVentana();
+				var accion:Accion = new Accion();
+				if( this._listaAcciones == null ){
+					this._listaAcciones = new ArrayCollection();
+				} 
+				accion = obtenerInformacionAccion();
+				if( this._listaAcciones != null && this._listaAcciones.length > -1 && this._listaAcciones.length < 10 ){
+					accion.folio  = "ACC" + this._incidente.folio.substring(3,this._incidente.folio.length) + "-0"+ (this._listaAcciones.length + 1 );					
+				}else if(this._listaAcciones != null && this._listaAcciones.length > 9 ){
+					accion.folio = "ACC" + this._incidente.folio.substring(3,this._incidente.folio.length) + "-"+ (this._listaAcciones.length + 1);				
+				}
+				accion.fechaEstimadaRealizacion = new Date();
+				this.dtfFER.selectedDate = accion.fechaEstimadaRealizacion;
+				this.lblIdaccionSeleccionada.text = accion.folio;				
+				this._listaAcciones.addItem( accion );
+				muestraAcciones();
+			}
+			/**
+			 * Metodo que edita el estado de la Accion (se ejecuta a traves del focusOut de varios elementos)
+			 */ 
+			private function actualizaDatosEditados():void{
+				if( this.lblIdaccionSeleccionada.text != "" ){			 		
+					var accion:Accion = new Accion();
+					for( var i:int = 0; i < this._listaAcciones.length; i++){
+						if( (this._listaAcciones.getItemAt( i ) as Accion).folio == this.lblIdaccionSeleccionada.text ){
+							accion = this._listaAcciones.getItemAt( i ) as Accion;
+							accion = obtenerInformacionAccion(); //se le asigna su nueva informacion
+							accion.folio = this.lblIdaccionSeleccionada.text; // si no tiene folio se le asigna.
+							this._listaAcciones[i] = accion;
+						}
+					}
+				}
+				if( validarInfo() ){
+					this.btnFinalizar.enabled = true;
+				}else{
+					this.btnFinalizar.enabled = false;
+				}		
+			}
+			/**
+			 * Metodo que nos permite obtener obtener la infomracion para unaccion. Toma los datos de la Pantalla y edita una Accion existente.
+			 */ 
+			private function obtenerInformacionAccion():Accion{
+				var accion:Accion = new Accion();
+				accion.descripcion = this.txtDescripcion.text;
+				accion.fecha = this._incidente.fecha;
+				accion.fechaEstimadaRealizacion = this.dtfFER.selectedDate;				
+				accion.incidente = this._incidente.idIncidente;
+				accion.eficacia = this.cmbEficacia.selectedItem.id;
+				accion.responsable = this.cmbRealizacion.selectedItem.llave;
+				accion.nombreResponsable = this.cmbRealizacion.selectedItem.valor;
+				accion.tipo = this.cmbTipo.text;
+				accion.incidenteFolio = this._incidente.folio;
+				accion.nombreProgramo = this._empleado.usuario;
+				accion.programo = this._empleado.clave;
+				return accion;
+			}
+			/**
+			 * Metodo que manda a llamar del mapa la lista de Aciones asociadas al Incidente.Los datos que regresa el Mapa se reciben en la funcion recibeListaAcciones()
+			 */ 
+			public function consultaListaAccioes():void{
+				var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.CONSULTAR_ACIONES );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que manda a llamar del mapa la lista de Aciones asociadas al Incidente.Los datos que regresa el Mapa se reciben en la funcion recibeListaAccionesLectura()
+			 */ 
+			/* public function consultaListaAccioesLectura():void{
+			var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.CONSULTAR_ACIONES_LECTURA );
+			evento.idIncidente = this._incidente.idIncidente;
+			dispatchEvent( evento );
+			} */
+			/**
+			 * Metodo que recibe del mapa La Lista de Acciones asociadas al Incidente. Ademas manda a llamar la funcion para 
+			 */ 
+			public function set recibeListaAcciones( datos:ArrayCollection ):void{
+				if( datos == null ){
+					return;
+				}
+				this._listaAcciones = datos;
+				if ( estadoVentana != "enModificacion"){
+					if( _validarModoLectura ){
+						var evento:EventoVerificacion = new EventoVerificacion(EventoVerificacion.TRAER_VERIFICACION_MODO_LECTURA);
+						evento._usuario	 = this._empleado.usuario;
+						dispatchEvent( evento );		
+						muestraAccionesLectura();	
+						this.estadoVentana = "modoLectura";
+					}else{
+						muestraAcciones();
+						this.estadoVentana = "enModificacion";
+					}
+				}
+			}
+			/**
+			 * Metodo que recibe del mapa La Lista de Acciones asociadas al Incidente. Ademas manda a llamar la funcion para 
+			 */ 
+			/* public function set recibeListaAccionesLectura( datos:ArrayCollection ):void{
+			if( datos == null ){
+			return;
+			}
+			this._listaAcciones = datos;
+			if ( estadoVentana != "enModificacion"){
+			if( _validarModoLectura ){
+			var evento:EventoVerificacion = new EventoVerificacion(EventoVerificacion.TRAER_VERIFICACION_MODO_LECTURA);
+			evento._usuario	 = this._empleado.usuario;
+			dispatchEvent( evento );		
+			muestraAccionesLectura();	
+			this.estadoVentana = "modoLectura";
+			}else{
+			muestraAcciones();
+			this.estadoVentana = "enModificacion";
+			}
+			}
+			} */
+			/**
+			 * Metodo que recibe las acciones por usuario usadas en el modo lectura para la Verificacion
+			 */ 
+			public function set obtenAccionesVerificacion( datos:ArrayCollection ):void{
+				if( datos == null || datos.length == 0 ){
+					return;
+				}
+				if( this.estadoVentana == "modoLectura" ){
+					this._listaVereificacion = datos;
+					muestraAccionesLectura();
+				}
+			}
+			/**
+			 * Metodo que hace visible la Lista de Acciones como Links en la Pantalla.Determina si se hace visible o se oculta la seccion de Lista de Acciones. 
+			 */ 
+			private function muestraAcciones():void{
+				if(this._listaAcciones.length > 0 ){//validamos que en la lista exista mas de un valor						
+					if( this.contenedorAcciones != null ){
+						this.listaAcciones = new ArrayCollection();				
+					}
+					this.listaAcciones = new ArrayCollection();
+					for(var i:int = 0 ; i < this._listaAcciones.length ; i++ ){ //creamos e ciclo para obtener cada uno de los identificadores de las Acciones
+						var linkAccion:LinkButton = new LinkButton();
+						linkAccion.label = (this._listaAcciones.getItemAt( i ) as Accion).folio;
+						linkAccion.id = "Archivo" + (i+1);
+						linkAccion.addEventListener("click",verAccion);
+						/* linkAccion.toolTip = "Ver Accion"
+						linkAccion.setStyle("color","#0C4AFC");
+						linkAccion.setStyle("fontSize","15"); */
+						listaAcciones.addItem( linkAccion );
+					}
+					/* this.contenedorAcciones.dataProvider = listaPrueba; */
+					//this.contenedorAcciones.addChild( linkAccion as DisplayObject);
+					this.vbxListaAcciones.percentWidth = 10;
+					this.vbxListaAcciones.visible = true;
+				}else{
+					if( this.contenedorAcciones != null ){
+						//this.contenedorAcciones.removeAllChildren();				
+					}
+				}
+			}
+			/**
+			 * Este Metodo se activa cuando le damos Click a alguna Accion de la Lsita de Acciones
+			 */ 
+			private function verAccion(  ):void{
+				var accion:Accion = new Accion();
+				/* evet.target.label */
+				if( this.contenedorAcciones.selectedItem.label == "Verificación" ){
+					this.vbxAccion.height = 0;
+					this.vbxVerificacion.percentHeight = 100;
+					this.lblAccion.text = "Verificación";
+					this.vbxDatosGeneralesAccion.height = 0;
+					this.vbxDatosGeneralesVerificacion.percentHeight = 100;
+					if( this._componenteVerificacion == null ){
+						this._componenteVerificacion = new ListaVerificacion;
+						this.vbxVerificacion.addChild( this._componenteVerificacion );
+					}
+					for( var x:int = 0; x < this._listaAcciones.length; x++){
+						/* evet.target.id  */
+						/*if( (this._listaVereificacion.getItemAt( x ) as Accion ).folio == this.contenedorAcciones.selectedItem.label ){
+						accion = this._listaVereificacion.getItemAt( x) as Accion;
+						this._verificacionAccion = new Accion();
+						this._verificacionAccion = accion = this._listaVereificacion.getItemAt( x) as Accion
+						}*/
+						if( (this._listaAcciones.getItemAt( x ) as Accion ).folio == this.contenedorAcciones.selectedItem.id ){
+							accion = this._listaAcciones.getItemAt( x) as Accion;
+							this._verificacionAccion = new Accion();
+							this._verificacionAccion = accion = this._listaAcciones.getItemAt( x) as Accion
+						}
+					}
+					this._componenteVerificacion.pasar( accion );
+				}else{
+					this.vbxAccion.percentHeight = 100;
+					this.vbxVerificacion.height = 0;	
+					this.lblAccion.text = "Programación de la acción";
+					this.vbxDatosGeneralesAccion.percentHeight = 100;
+					this.vbxDatosGeneralesVerificacion.height = 0;
+					for(var i:int = 0 ; i < this._listaAcciones.length ; i++ ){
+						/*  (this._listaAcciones.getItemAt( i ) as Accion).folio == evet.target.label */ 
+						if( (this._listaAcciones.getItemAt( i ) as Accion).folio == this.contenedorAcciones.selectedItem.label ){
+							accion = this._listaAcciones.getItemAt( i ) as Accion;
+						}
+					}
+					this.lblIdaccionSeleccionada.text = accion.folio;
+					if( UtilsFecha.formatoFechaDDMMMYYYY( accion.fechaEstimadaRealizacion ) == ""){
+						this.dtfFER.text = "";					
+					}else{
+						this.dtfFER.text = UtilsFecha.formatoFechaDDMMMYYYY( accion.fechaEstimadaRealizacion );
+						this.dtfFER.selectedDate = accion.fechaEstimadaRealizacion;
+					}
+					this.cmbRealizacion.selectedIndex = Util.indiceSeleccionado( this.cmbRealizacion.dataProvider as ArrayCollection, accion.responsable);
+					this.cmbEficacia.selectedIndex = Util.indiceSeleccionadoComoObjeto( this.cmbEficacia.dataProvider as ArrayCollection,  accion.eficacia);
+					this.cmbTipo.text = accion.tipo;
+					this.txtDescripcion.text = accion.descripcion; 
+				}
+			}
+			/**
+			 * Metodo para Eliminar una Acción. Dispara el evento al mapa y se recibe en la funcion recibeAccionEliminada()
+			 */ 
+			private function eliminaAccion():void{
+				if( this.lblIdaccionSeleccionada.text != "" ){
+					for( var i:int= 0; i < this._listaAcciones.length; i++){
+						if( (this._listaAcciones.getItemAt( i ) as Accion).folio == this.lblIdaccionSeleccionada.text ){
+							this._listaAcciones.removeItemAt( i );
+						}
+					}
+				}else{
+					Alert.show("Debe seleccionar una acción para poder eliminarla","Operación imposible");
+					return;
+				}
+				this.lblIdaccionSeleccionada.text = "";
+				for( var x:int= 0; x < this._listaAcciones.length; x++){ //asignamos un nuevo folio a todos
+					if( this._listaAcciones != null && x < 10 ){
+						(this._listaAcciones.getItemAt( x ) as Accion).folio = "ACC" + this._incidente.folio.substring(3,this._incidente.folio.length) + "-0"+ (x+1);					
+					}else if(this._listaAcciones != null && x > 9 ){
+						(this._listaAcciones.getItemAt( x ) as Accion).folio = "ACC" + this._incidente.folio.substring(3,this._incidente.folio.length) + "-"+ (x+1);				
+					}
+				}
+				//this.contenedorAcciones.removeAllChildren();
+				muestraAcciones();
+				limpiarVentana();
+				this.contenedorAcciones.selectedIndex = this._listaAcciones.length;
+				verAccion();
+			}
+			
+			/**
+			 * Metodo de prueba para seleccionar la ultima accion
+			 */ 
+			private function prueba(evet:Event):void{
+				evet.target.id ;
+			}
+			
+			/**
+			 * Metodo que limpia las ociones seleccionadas de los Combos y textos Escritos en Pantalla
+			 */ 
+			private function limpiarVentana():void{
+				this.dtfFER.text = "";
+				this.dtfFER.selectedDate = null;
+				this.cmbRealizacion.selectedIndex = 0;
+				this.cmbEficacia.selectedIndex = 0;
+				this.cmbTipo.selectedIndex = 0;
+				this.txtDescripcion.text = "";
+				this.lblIdaccionSeleccionada.text = "";
+			}
+			/**
+			 * Metodo que guardara los avances o el total
+			 */ 
+			private function guardar():void{				
+				if( validarInfo()){
+					this.btnFinalizar.enabled = true;
+				}else{
+					this.btnFinalizar.enabled = false;
+				}
+				creaEventoDeGuardado();
+			}
+			/**
+			 * Aqui se crea el evento par guardar  y llega a la funcion recibeConfirmacion();
+			 */
+			private function creaEventoDeGuardado():void{
+				if( this._listaAcciones.length > 0 ){
+					var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.GUARDAR_ACCIONES );
+					evento.acciones = new ArrayCollection();						
+					evento.acciones = this._listaAcciones;
+					dispatchEvent( evento );
+					var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.INICIA_ESPERA );
+					dispatchEvent( eventoAnimacion );
+				}else{
+					Alert.show("No existe acciones por guardar","Operación imposible");
+				}
+			} 
+			/**
+			 * Metodo que recibe la confirmacion del guardado de la acción 
+			 */ 
+			public function set recibeConfirmacion(dato:Boolean):void{
+				if( dato == false ){
+					return;
+				}
+				actualizaReferencias();
+			}
+			/**
+			 * Metodo que manda a actualizar las Referencias de la Gestion. La Gestion (la clase) se arrastra desde el Analisis por lo que no debe modificarse ningun Valor
+			 * de la Gestion. Se actualizan las referencias.
+			 */ 
+			private function actualizaReferencias():void{
+				var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.ACTUALIZA_ANALISIS_INCIDENTE );
+				evento.nueva = new Gestion();
+				for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+					( this._listaReferencias.getItemAt( i ) as Referencia ).idIncidente = this._gestion.incidente; 
+				}
+				this._gestion.referencias = this._listaReferencias;
+				evento.nueva = this._gestion;
+				evento.nueva.enviarCorreo = "";
+				evento.nueva.aceptadoString = "verdadero";
+				dispatchEvent(evento)
+			}
+			/**
+			 * Metodo que recibe la confirmacion de que se actualizaron las referencias desde el mapa
+			 */ 
+			public function set confirmaReferencias( dato:Boolean ):void{
+				if( dato == false ){
+					return;
+				}
+				if( this._dirigidoPor == "salir" ){
+					regresaAListadoIncidentes();
+				}else if( this._dirigidoPor == "finAccion" ){
+					finalizaAccion();
+				}else{
+					//solo se hizo guardado parcial entonces se vuelve a consultar la gestion para actualizar solo las referencias la funcion es recibida en recibeReferenciasActualizadas()
+					var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.ACTUALIZA_REFERENCIAS );
+					evento.idIncidente = this._incidente.idIncidente;
+					dispatchEvent( evento );
+					Alert.show("Se guardaron las cambios del incidente " + this.lblIncidente.text ," ¡ ATENCION ! ");
+				}
+				var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.TERMINA_ESPERA );
+				dispatchEvent( eventoAnimacion );
+			}
+			/** 
+			 * Metodo que recibe del mapa las refercias ya actualizadas con su id y las actualiza directamente al combo
+			 */ 
+			public function set recibeReferenciasActualizadas(datos:Gestion):void{
+				if( datos == null ){
+					return;
+				}
+				if( datos.referencias.source.length > 0 ){
+					this._gestion.referencias = datos.referencias;
+					this._listaReferencias = this._gestion.referencias;
+					this._cmbSeleccionador.listaReferencias = this._gestion.referencias
+				}
+			}
+			/**
+			 * Metodo que finaliza laAccion. Utiliza el mapa para finalizar la Accion. recibe su confirmacion en el metodo ConfirmaFinalizarAccion().
+			 */ 
+			private function finalizaAccion():void{
+				var evento:EventoIncidenteProgramarAccion = new EventoIncidenteProgramarAccion( EventoIncidenteProgramarAccion.FINALIZAR_ACCION );
+				evento.incidente = this._incidente;
+				evento.incidente.acciones = new ArrayCollection();
+				evento.incidente.acciones = this._listaAcciones;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que recibe del Mapa la confirmacion de FinalizarAccion.
+			 */ 
+			public function set confirmacionFinalizarAccion( dato:Incidente ):void{
+				
+				if(isNaN(dato.idIncidente) || dato.idIncidente == 0 ){
+					return;
+				}
+				Alert.show("Se ha concluido con la gestión del incidente","Operación exitosa");
+				if(dato.acciones != null){
+					for(var m:int =0; m<dato.acciones.length;m++){
+						var mensaje:AsyncMessage = new AsyncMessage();
+						mensaje.headers["Destino"] = "Accion"
+						mensaje.headers["Usuario"] = dato.acciones[m].nombreResponsable;
+						mensaje.headers["Nivel"] = "Colaborador";
+						mensaje.body = "Mensaje";
+						this.productorProgramacion.send(mensaje);
+					}
+				}
+				regresaAListadoIncidentes();
+			}
+			/**
+			 * Metodo para validar los datos
+			 */ 
+			private function validarInfo():Boolean{
+				var validado:Boolean = false;
+				for( var i:int = 0; i < this._listaAcciones.length; i++ ){
+					if( (this._listaAcciones.getItemAt( i ) as Accion).fechaEstimadaRealizacion != null ){
+						if( (this._listaAcciones.getItemAt( i ) as Accion).responsable.toString() != "NaN" && (this._listaAcciones.getItemAt( i ) as Accion).responsable > 0 ){
+							if( (this._listaAcciones.getItemAt( i ) as Accion).tipo!= null && (this._listaAcciones.getItemAt( i ) as Accion).tipo != "" ){
+								if( (this._listaAcciones.getItemAt( i ) as Accion).eficacia.toString() != "NaN" && (this._listaAcciones.getItemAt( i ) as Accion).eficacia > 0 ){
+									if( (this._listaAcciones.getItemAt( i ) as Accion).descripcion != null && (this._listaAcciones.getItemAt( i ) as Accion).descripcion != "" ){
+										validado = true;
+									}else{
+										validado = false;
+										return validado;
+									}
+								}else{
+									validado = false;
+									return validado;
+								}
+							}else{
+								validado = false;
+								return validado;
+							}
+						}else{
+							validado = false;
+							return validado;
+						}
+					}else{
+						validado = false;
+						return validado;
+					}
+				}
+				return validado;
+			}
+			/**
+			 * Warning para regresar al Listado. Siempre se regresara al Listado.La diferencia es que Guarda o no Guarda
+			 */ 
+			private function advertenciaListado():void{
+				Alert.yesLabel = "SI";
+				Alert.noLabel = "NO";
+				Alert.show("Está por abandonar la VISTA ACCIÓN, ¿desea guardar los cambios antes de salir?","¡Atención!", Alert.NO|Alert.YES, this,  ejecutaSeleccion );
+				this._dirigidoPor = "salir";
+			}
+			/**
+			 * Metodo que ejecuta la opcion seleccionada en el Warning para regresar al Listado
+			 */ 
+			private function ejecutaSeleccion(event:CloseEvent):void{
+				if(event.detail == Alert.YES){
+					guardar();
+				}else{        			
+					regresaAListadoIncidentes();
+				}		
+			}
+			/**
+			 * Warning para guardar las Acciones y no poder modificar posteriormente. Tambien regresa al Listado Acciones.
+			 */ 
+			private function advertenciaFinAcciones():void{
+				Alert.yesLabel = "SI";
+				Alert.noLabel = "NO";
+				Alert.show("Una vez confirmada su 'ACCIÓN' no podrá modificarla posteriormente, ¿Desea continuar?","¡Atención!", Alert.NO|Alert.YES, this, ejecutaFinAccion );
+				this._dirigidoPor = "finAccion";
+			}
+			/**
+			 * Metodo que ejecuta la opcion seleccionada en el Warnig para regresar Finalizar la Accion y regresar al Listado o regresar a Programar una Accion.
+			 */ 
+			private function ejecutaFinAccion( event:CloseEvent ):void{
+				if( event.detail == Alert.YES ){
+					guardar();
+				}else{        			
+					//no hace nada
+				}		
+			}
+			/**
+			 * Metodo que recibe la confirmacion de la accion guardada para que ya no se pueda modidicar
+			 */
+			public function set recibeConfirmacionDeEstadoAccion( dato:Boolean ):void{
+				if( dato == false){
+					return;
+				}
+				regresaAListadoIncidentes();
+			}
+			
+			//////////////////////////////////////////////////////////// funciones para Salir //////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo para aplicar el Reset
+			 */ 
+			private function reset():void{
+				this.txtDescripcion.text = "";
+				this.dtfFER.text = "";
+				this.cmbEficacia.selectedIndex = 0;
+				this.cmbRealizacion.selectedIndex = 0;
+				this.cmbTipo.selectedIndex = 0;
+				this._listaUsuarios = null;
+				this._dirigidoPor = "";
+				this._listaAcciones = null;
+				this._accion = null;
+				//				this.conteedorAcciones.removeAllChildren();
+				this.listaAcciones.removeAll();
+				this.lblIdaccionSeleccionada.text = "";
+				this.btnFinalizar.enabled = true;
+				this._listaReferencias = null;
+				this._validarModoLectura = false;
+				this._listaVereificacion = new ArrayCollection();
+				this._verificacionAccion = new Accion;
+				this.vbxAccion.percentHeight = 100;
+				this.vbxVerificacion.height = 0;	
+				this.lblAccion.text = "Programación de la acción";
+				this.vbxDatosGeneralesAccion.percentHeight = 100;
+				this.vbxDatosGeneralesVerificacion.height = 0;
+				this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+				this.btnFinalizar.enabled = false;
+			}
+			/**
+			 * Metodo que nos regresa a la Ventana Listado de incidentes donde se encuentra la lista de Incidentes a Gestionar el evento q dispara ya no va al Mapa
+			 * solo es cachado por el Padre que contiene el addEventListener VstkGestionDelIncidente();
+			 */ 
+			private function regresaAListadoIncidentes():void{
+				/* var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.REGRESA_A_LISTADO_INCIDENTES );
+				dispatchEvent( evento ); */
+				//reset();
+				
+				var evt:EventoIncidente = new EventoIncidente(EventoIncidente.CERRAR_COMPONENTE);
+				dispatchEvent(evt);
+				
+				reset();
+			}
+			//////////////////////////////////////////////////////////// funciones para Iniciar el Modo Lectura //////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo que inicia el Modo de Lectura 
+			 */
+			public function iniciaModoLectura( datos:Object ):void{
+				this._empleado = datos.empleadoLogueado;
+				if( this._incidente == null){
+					this._incidente = new Incidente();
+				}
+				this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY(datos.fecha);
+				this._incidente.idIncidente = datos.idIncidente;
+				this._incidente.folio = datos.folio;
+				this._incidente.idGestiono = datos.idGestiono;
+				
+				this._empleado = datos.empleadoLogueado;
+				llamarEmpleados();
+				consultaListaAccioes();
+				this.lblIncidente.text = this._incidente.folio;
+				this.lblPrograma.text = this._empleado.usuario;
+				this.hbxBotonesNormales.height = 0;
+				this.hbxBotonesNavegacion.height = 23;
+				this._validarModoLectura = true;
+				this.dtfFER.enabled = false;
+				this.btnEliminar.enabled = false;
+				this.btnAgregarACC.enabled = false;
+				this.txtDescripcion.editable = false;
+				this.cmbEficacia.enabled = false;
+				this.cmbRealizacion.enabled = false;
+				this.cmbTipo.enabled = false;
+				this.estadoVentana = "modoLectura";
+			}
+			/**
+			 * Metodo que hace visible la Lista de Acciones como Links en la Pantalla.Determina si se hace visible o se oculta la seccion de Lista de Acciones. 
+			 */ 
+			private function muestraAccionesLectura():void{
+				if(this._listaAcciones.length > 0 ){//validamos que en la lista exista mas de un valor						
+					if( this.contenedorAcciones != null ){
+						//this.contenedorAcciones.removeAllChildren();				
+					}
+					var validaVerificacion:Boolean = new Boolean;
+					if( this.contenedorAcciones != null ){
+						this.listaAcciones = new ArrayCollection();				
+					}
+					for(var i:int = 0 ; i < this._listaAcciones.length ; i++ ){ //creamos el ciclo para obtener cada una de las etiquetas de las Acciones.
+						var linkAccion:LinkButton = new LinkButton();
+						linkAccion.label = (this._listaAcciones.getItemAt( i ) as Accion).folio;
+						linkAccion.id = "Archivo" + (i+1);
+						linkAccion.addEventListener("click",verAccion);
+						linkAccion.toolTip = "Ver Accion"
+						linkAccion.setStyle("color","#0C4AFC");
+						linkAccion.setStyle("fontSize","15");
+						this.contenedorAcciones.addChild( linkAccion );
+						
+						this._listaReferencias = (this._listaAcciones.getItemAt(i) as Accion).referencias;
+						//linea de prueba
+						this.listaAcciones.addItem(linkAccion);
+						if( _listaVereificacion == null ){
+							this._listaVereificacion = new ArrayCollection();
+						}
+						for( var c:int = 0; c < this._listaVereificacion.length ; c++ ){
+							if( (this._listaVereificacion.getItemAt( c ) as Accion).folio == (this._listaAcciones.getItemAt( i ) as Accion).folio ){
+								if( (this._listaVereificacion.getItemAt( c ) as Accion).descripcionVerificacion != null &&
+									(this._listaVereificacion.getItemAt( c ) as Accion).descripcionVerificacion != "" && 
+									(this._listaVereificacion.getItemAt( c ) as Accion).horasInvertidas > 0 &&
+									(this._listaVereificacion.getItemAt( c ) as Accion).eficaciaVerificacion.toString() != "NaN" &&
+									(this._listaVereificacion.getItemAt( c ) as Accion).eficaciaVerificacion > 0	){
+									var linkVerificacion:LinkButton = new LinkButton();
+									linkVerificacion.label = "Verificación";
+									linkVerificacion.id = (this._listaAcciones.getItemAt( i ) as Accion).folio;
+									linkVerificacion.addEventListener("click",verAccion);
+									linkVerificacion.toolTip = "Ver Accion"; 
+									linkVerificacion.setStyle("color","#0C4AFC");
+									linkAccion.setStyle("fontSize","13");
+									this.contenedorAcciones.addChild( linkVerificacion );
+									//linea de prueba
+									this.listaAcciones.addItem(linkVerificacion);
+									validaVerificacion = true;
+								} 
+							}
+						}
+						if( validaVerificacion == false ){
+							var etiqueta:LinkButton = new LinkButton();
+							etiqueta.label = "Verificación"
+							etiqueta.id = (this._listaAcciones.getItemAt( i ) as Accion).folio;
+							etiqueta.setStyle("color","#9E9898");
+							linkAccion.setStyle("fontSize","13");
+							linkAccion.setStyle("decoration","none");
+							this.contenedorAcciones.addChild( etiqueta );
+							//linea de prueba
+							this.listaAcciones.addItem(etiqueta);
+						}
+						validaVerificacion = false;
+					}
+					cargarComboNavegacion();
+					this.vbxListaAcciones.percentWidth = 10;
+					this.vbxListaAcciones.visible = true;
+				}else{
+					if( this.contenedorAcciones != null ){
+						//this.contenedorAcciones.removeAllChildren();				
+					}
+				}
+			}
+			/**
+			 * Metodo que permitira regresar  a la ventana donde nos encontrabamos.  
+			 */ 
+			private function regresarAIndexOriginal():void{
+				reset();
+				llamarEmpleados();
+				//consultaListaAccioes();				
+				this.hbxBotonesNormales.height = 0;
+				this.hbxBotonesNavegacion.height = 23;				
+				this._validarModoLectura = false;
+				this.dtfFER.enabled = true;
+				this.btnEliminar.enabled = true;
+				this.btnAgregarACC.enabled = true;
+				this.txtDescripcion.editable = true;
+				this.cmbEficacia.enabled = true;
+				this.cmbRealizacion.enabled = true;
+				this.cmbTipo.enabled = true;
+				this.hbxBotonesNormales.height = 23;
+				this.hbxBotonesNavegacion.height = 0;
+				var evento:EventoAdministrador = new EventoAdministrador( EventoAdministrador.REGRESA_ORIGEN );
+				dispatchEvent( evento );
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:HBox width="100%">
+		<!--<mx:Label text="Programación de la acción" fontSize="40" fontWeight="bold" id="lblAccion"/>-->
+		<label:labelTitulo_Otros text="Programación de la acción"  id="lblAccion"/>
+		<mx:Spacer width="100%"/>
+		<mx:Label id="lblIncidente" fontWeight="bold" fontSize="40" color="red" visible="false"/>
+		<mx:HBox id="contenedorCombo"/>
+	</mx:HBox>
+	<mx:Spacer height="2"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="2"/>
+	<mx:VBox width="100%" verticalGap="0">
+		<mx:VBox width="100%" height="100%" id="vbxDatosGeneralesAccion">
+			<!--<mx:Label fontSize="24" fontWeight="bold" text="Datos generales" width="100%"/>-->
+			<label:labelSubtitulo text="Datos generales" width="100%"/>
+			<mx:Form width="100%">
+				<mx:FormItem label="Fecha: " fontSize="13" fontWeight="bold">
+					<mx:Label id="lblFecha" fontWeight="normal"/>
+				</mx:FormItem>
+				<mx:FormItem label="Programa: " fontSize="13" fontWeight="bold">
+					<mx:Label id="lblPrograma" fontWeight="normal"/>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:VBox>
+		<mx:VBox height="0" id="vbxDatosGeneralesVerificacion" width="100%">
+			<mx:Label fontSize="24" fontWeight="bold" text="Datos generales" width="100%"/>
+			<mx:HBox horizontalAlign="center" horizontalCenter="0" width="100%">
+				<mx:Form width="25%">
+					<mx:FormItem label="Fecha:">
+						<mx:Label text="{this._verificacionAccion.fecha.getDate() + '/' + (this._verificacionAccion.fecha.getMonth() + 1).toString() + '/' + this._verificacionAccion.fecha.getFullYear()}"/>
+					</mx:FormItem>
+					<mx:FormItem label="ACC">
+						<mx:Label text="{this._verificacionAccion.folio}"/>
+					</mx:FormItem>
+				</mx:Form>
+				<mx:Form width="25%">
+					<mx:FormItem label="FER:">
+						<mx:Label text="{this._verificacionAccion.fechaEstimadaRealizacion.getDate() + '/' + (this._verificacionAccion.fechaEstimadaRealizacion.getMonth() + 1).toString() + '/' + this._verificacionAccion.fechaEstimadaRealizacion.getFullYear()}"/>
+					</mx:FormItem>
+					<mx:FormItem label="FR:">
+						<mx:Label text="{this._verificacionAccion.fechaRealizacion.getDate() + '/' + (this._verificacionAccion.fechaRealizacion.getMonth() + 1).toString() + '/' + this._verificacionAccion.fechaRealizacion.getFullYear()}"/>
+					</mx:FormItem>
+				</mx:Form>
+				<mx:Form width="25%">
+					<mx:FormItem label="Programó:">
+						<mx:Label text="{this._verificacionAccion.nombreProgramo}"/>
+					</mx:FormItem>
+					<mx:FormItem label="Realizó:">
+						<mx:Label text="{this._verificacionAccion.nombreResponsable}"/>
+					</mx:FormItem>
+				</mx:Form>
+				<mx:Form width="25%">
+					<mx:FormItem label="Tipo:">
+						<mx:Label text="{this._verificacionAccion.tipo}"/>
+					</mx:FormItem>
+					<mx:FormItem label="Eficacia Esperada">
+						<mx:Label text="{this._verificacionAccion.eficacia + '%'}"/>
+					</mx:FormItem>
+				</mx:Form>
+			</mx:HBox>
+		</mx:VBox>
+	</mx:VBox>
+	<mx:Spacer height="2"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="2"/>
+	<mx:HBox width="100%" height="100%" horizontalGap="0">
+		<mx:HBox width="10%" height="100%" id="vbxListaAcciones">
+			<mx:VBox height="100%" width="100%" id="vbxPrueba">
+				<mx:List width="100%" id="contenedorAcciones" height="100%" dataProvider="{this.listaAcciones}" borderStyle="none" itemClick="verAccion()">
+					<mx:itemRenderer>
+						<mx:Component>
+							<mx:LinkButton color="#0C4AFC" label="{data.label}" fontSize="12"/>
+						</mx:Component>
+					</mx:itemRenderer>
+				</mx:List>
+				<!--<mx:Spacer height="100%"/>-->
+				<!--<mx:Button label="Agregar ACC" fontSize="13" fontWeight="bold" width="100%" id="btnAgregarACC" click="agregarAccion()"/>-->
+				<s:Button styleName="botonNegroOld" label="Agregar ACC" fontSize="13" fontWeight="bold" width="100%" id="btnAgregarACC" click="agregarAccion()"/>
+			</mx:VBox>
+			<mx:VRule height="100%"/>
+			<mx:Spacer width="1%"/>
+		</mx:HBox>
+		<mx:VBox width="100%" height="100%" verticalGap="0" id="vbxContenedor">
+			<mx:VBox width="100%" height="100%" id="vbxAccion">
+				<mx:HBox width="100%">
+					<mx:Label fontSize="24" fontWeight="bold" id="lblIdaccionSeleccionada" />
+					<mx:Spacer width="100%"/>
+					<mx:LinkButton textDecoration="underline" color="#0C4AFC" label="Referencias" visible="false"/>
+					<!--<mx:Button width="80" label="Eliminar" id="btnEliminar" click="eliminaAccion()"/>-->
+					<s:Button styleName="botonNegroOld" width="80" label="Eliminar" id="btnEliminar" click="eliminaAccion()"/>
+				</mx:HBox>
+				<mx:HBox width="100%">
+					<mx:FormItem label="FER: " fontWeight="bold" fontSize="13" width="12%">
+						<mx:DateField formatString="YYYYMMDD" id="dtfFER" width="120" focusOut="actualizaDatosEditados()"/>
+					</mx:FormItem>
+					<mx:FormItem label="Realización: " fontWeight="bold" fontSize="13" width="30%">
+						<mx:ComboBox id="cmbRealizacion" width="100%" dataProvider="{this._listaUsuarios}" labelField="valor" focusOut="actualizaDatosEditados()"/>
+					</mx:FormItem>
+					<mx:FormItem label="Tipo: " fontWeight="bold" fontSize="13" width="29%">
+						<mx:ComboBox id="cmbTipo" width="100%" dataProvider="{this._listaTipo}" labelField="tipo" focusOut="actualizaDatosEditados()"/>
+					</mx:FormItem>
+					<mx:FormItem label="Eficacia Esperada: " fontWeight="bold" fontSize="13" width="29%">
+						<mx:ComboBox id="cmbEficacia" width="100%" dataProvider="{this._listaEficacia}" labelField="eficacia" focusOut="actualizaDatosEditados()"/>
+					</mx:FormItem>
+				</mx:HBox>	
+				<mx:Spacer height="1"/>
+				<mx:VBox width="100%" height="100%" verticalGap="0">
+					<mx:Panel height="32" width="100%" title="Descripción" fontWeight="bold" dropShadowVisible="false"/>	
+					<mx:TextArea width="100%" height="100%" id="txtDescripcion" focusOut="actualizaDatosEditados()" borderStyle="solid" />			
+				</mx:VBox>
+			</mx:VBox>
+			<mx:VBox width="100%" id="vbxVerificacion" height="0">
+				<!--en tiempo de ejecucion se agrega el componente de detalle Verificacion en la funcion muestra acción-->
+			</mx:VBox>
+		</mx:VBox>
+	</mx:HBox>
+	<mx:Spacer height="2"/>
+	<otros:division width="100%"/>
+	<mx:VBox width="100%" verticalGap="0">
+		<mx:HBox width="100%" height="23" id="hbxBotonesNormales">
+			<!--<mx:Button width="80" label="SALIR" click="advertenciaListado()"/>-->
+			<s:Button styleName="botonNegroOld" width="80" label="SALIR" click="advertenciaListado()"/>
+			<mx:Spacer width="100%"/>
+			<mx:Button width="80" label="Guardar" click="guardar()"/>
+			<mx:Spacer width="100%"/>
+			<!--<mx:Button width="80" label="Finalizar" enabled="false" click="advertenciaFinAcciones()" id="btnFinalizar"/>-->
+			<s:Button styleName="botonNegroOld" width="80" label="Finalizar" enabled="false" click="advertenciaFinAcciones()" id="btnFinalizar"/>
+		</mx:HBox>
+		<mx:HBox width="100%" height="0" id="hbxBotonesNavegacion">
+			<!--<mx:Button fontSize="13" label="SALIR" visible="false"/>-->
+			<s:Button styleName="botonNegroOld" fontSize="13" label="SALIR" visible="false"/>
+			<mx:Spacer width="100%"/>
+			<s:Button styleName="botonNegroOld" fontSize="13" label="Regresar"  click="regresarAIndexOriginal()"/>
+			<!--<mx:Button fontSize="13" label="Regresar"  click="regresarAIndexOriginal()"/>-->
+		</mx:HBox>
+	</mx:VBox>
+</mx:VBox>

@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:documentacion="mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.documentacion.*"
+		  xmlns:busqueda="mx.com.proquifa.vista.vistas.skin.busqueda.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  paddingTop="20" gap="20" 
+		  verticalAlign="middle" 
+		  width="100%" height="100%"
+		  creationComplete="init(event)" 
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			private var _sql:Query;
+			private var setDocEdita:Boolean = false;
+			private var respaldoDocumentos:ArrayCollection;
+			
+			public function resetAll():void
+			{
+				_sql = null;
+				recibeDocumentos( new ArrayCollection());
+				grpVista.dataProvider = new ArrayCollection();
+				respaldoDocumentos = new ArrayCollection();
+				lstDocumentos.resetAll();
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener(EventoGestorCompras.ENVIAR_ARCHIVO_ADICIONAL,recibeAdicional,false,0,true);
+				addEventListener(EventoGestorCompras.ENVIO_DOCUMENTO_SELECT_PIE,cambioSeleccion,false,0,true);
+				addEventListener("borrarItemAdicional",borrarItem,false,0,true);
+				addEventListener("resetFiltrosPieGestor",resetFiltros,false,0,true);
+			}
+			
+			private function recibeAdicional(evt:EventoGestorCompras):void
+			{
+				respaldoDocumentos.addItem(evt.documentoDespacho);
+				lstDocumentos.seleccionaAdicional = true;
+				recibeDocumentos( respaldoDocumentos );
+			}
+			
+			private function cambioSeleccion(event:EventoGestorCompras):void
+			{
+				var tipo:String = event.seleccionado;
+				
+				if(event.seleccionado == "carta de uso")
+					tipo = "cartauso";
+				
+				if(event.seleccionado == "packing list")
+					tipo = "pakinglist";
+				
+				lstDocumentos.resetBotonera();
+				
+				var extra:ArrayCollection = _sql.armarLista(_sql.getPunteros([null,null,null,null,tipo,null,true]));
+				var cargados:ArrayCollection = _sql.armarLista(_sql.getPunteros([false,null,null,null,tipo]));
+				
+				if(extra.length > 0)
+				{
+					for (var i:int = 0; i < extra.length; i++) 
+					{
+						cargados.addItem(extra[i]);
+					}
+				}
+				
+				lstDocumentos.dataProvider = _sql.armarLista(_sql.getPunteros([null,null,null,null,tipo]));
+				lstDocumentos.cargados = cargados;
+				lstDocumentos.faltantes = _sql.armarLista(_sql.getPunteros([true,null,null,null,tipo,null,false]));
+			}
+			
+			private function resetFiltros(evet:Event):void
+			{
+				setRespaldoDatos();
+				lstDocumentos.resetBotonera();
+			}
+			
+			private function setRespaldoDatos():void
+			{
+				var cargado:ArrayCollection = _sql.armarLista(_sql.getPunteros([false])); 
+				var extra:ArrayCollection = _sql.armarLista(_sql.getPunteros([null,null,null,null,null,null,true]));
+				
+				if(extra.length > 0)
+				{
+					for (var i:int = 0; i < extra.length; i++) 
+					{
+						cargado.addItem(extra[i]);
+					}
+				}
+				
+				grpVista.dataProvider = new ArrayCollection();
+				lstDocumentos.dataProvider = respaldoDocumentos;
+				lstDocumentos.cargados = cargado;
+				lstDocumentos.faltantes = _sql.armarLista(_sql.getPunteros([true]));
+				grpVista.dataProvider = respaldoDocumentos;
+			}
+			
+			public function recibeDocumentos($documentos:ArrayCollection):void
+			{				
+				respaldoDocumentos = new ArrayCollection();
+				
+				$documentos = agrupacionCartasUso(ObjectUtil.copy($documentos) as ArrayCollection);
+				
+				respaldoDocumentos = ObjectUtil.copy($documentos) as ArrayCollection;
+				
+				/*agrupacionCartasUso(ObjectUtil.copy($documentos) as ArrayCollection);*/
+				for (var i:int = 0; i < $documentos.length; i++) 
+				{
+					if($documentos[i].tipo.toLowerCase() == 'facturafaltante'){
+						$documentos[i].faltante = true;
+					}
+				}
+				
+				
+				_sql = new Query($documentos,["faltante","folio","codigoLA","nombreProducto","tipo","recargado","cargado"],true);
+				lstDocumentos.dataProvider = $documentos;
+				lstDocumentos.cargados = _sql.armarLista(_sql.getPunteros([false]));
+				lstDocumentos.faltantes = _sql.armarLista(_sql.getPunteros([true,null,null,null,null,false,false]));
+				grpVista.dataProvider = $documentos;
+				
+				var tipos:Array = _sql.getPunteros([null,null,null,null,"tipo"]);
+				
+				EventoGestorCompras.alertaoDocumentacion = false;
+				if(tipos.length > 0)
+				{
+					for (var p:int = 0; p < tipos.length; p++) 
+					{
+						var current:String = tipos[p] as String;
+						if(current.toLowerCase() == 'facturafaltante')
+						{
+							EventoGestorCompras.alertaoDocumentacion = true;
+							break;
+						}
+					}
+				}
+				
+				
+				//////////////// SE USABA
+				/*var otros:ArrayCollection = _sql.armarLista(_sql.getPunteros([null,null,null,null,null,null,true]));
+				if (otros.length > 0)
+				{
+					for (var r:int = 0; r < otros.length; r++) 
+					{
+						lstDocumentos.cargados.addItem(otros[r]);
+					}
+				}*/
+				
+			}
+			private function agrupacionCartasUso(value:ArrayCollection):ArrayCollection
+			{
+				var listaCartas:ArrayCollection = new ArrayCollection();
+				var listaTodos:ArrayCollection = new ArrayCollection();
+				var incompleta:Boolean;
+				
+				var punteros:Array = new Array();
+				var _sql:Query;
+				for (var i:int = 0; i < value.length; i++) 
+				{
+					if(value[i].tipo.toLowerCase() != "cartauso"){
+						listaTodos.addItem(value[i]);
+					}/*else{
+						listaTodos.addItem(value[i]);
+					}*/
+				}
+				
+				var sqlTemp:Query = new Query(value,["noFactura","tipo"],true);
+				punteros = sqlTemp.getPunteros(["noFactura","cartaUso"]);
+				for (var j:int = 0; j < punteros.length; j++) 
+				{
+					var punterosFactura:Array = new Array();
+					punterosFactura = sqlTemp.getPunteros([punteros[j],"cartauso"]);
+					var listaTemp:ArrayCollection = new ArrayCollection();
+					var docTemp:DocumentoOrdenDespacho;
+					
+					for (var k:int = 0; k < punterosFactura.length; k++) 
+					{
+						var docGuardar:DocumentoOrdenDespacho = sqlTemp.universo.getItemAt(punterosFactura[k]) as DocumentoOrdenDespacho;
+						
+						if( (docGuardar.caracteristicasFisicas != null ) && 
+							(docGuardar.formulaQuimica != null ) && 
+							(docGuardar.composicion != null ) &&
+							(docGuardar.peligrosidad != null ) ){
+							docGuardar.faltante = false;
+						}else{
+							docGuardar.faltante = true;
+						}
+						if(!incompleta && docGuardar.faltante)
+							incompleta = true;
+							
+						listaTemp.addItem(sqlTemp.universo.getItemAt(punterosFactura[k]));
+					}
+					
+					if(punterosFactura.length > 0){
+						docTemp = sqlTemp.universo.getItemAt(punterosFactura[0]) as DocumentoOrdenDespacho;
+						docTemp.documentos = ObjectUtil.copy(listaTemp) as ArrayCollection;
+						docTemp.faltante = incompleta;
+						
+						listaCartas.addItem(docTemp);
+					}
+				}
+				listaTodos.addAllAt(listaCartas,0);
+				return listaTodos;
+			}
+			
+			private function borrarItem(evt:Event):void
+			{
+				var tmpAdicional:DocumentoOrdenDespacho = lstDocumentos.getDocumentSelect();
+				for (var i:int = 0; i < respaldoDocumentos.length; i++) 
+				{
+					var curr:DocumentoOrdenDespacho = respaldoDocumentos[i] as DocumentoOrdenDespacho;
+					if(curr.tipo == tmpAdicional.tipo && curr.nombreDocumento == tmpAdicional.nombreDocumento)
+					{
+						respaldoDocumentos.removeItemAt(i);
+						setRespaldoDatos();
+						break;
+					}
+				}
+				
+				dispatchEvent(new Event("EnviarDocumentosConArchivosCargados",true));
+			}
+			
+			
+			public function get documentos():ArrayCollection
+			{
+				return lstDocumentos.docs;
+			}
+			
+			public function get documentosResumen():ArrayCollection
+			{
+				return respaldoDocumentos;
+			}
+			
+			
+			public function setOrdenDespacho($orden:OrdenDespacho):void
+			{
+				if($orden.documentos && $orden.documentos.length > 0)
+				{
+					recibeDocumentos( $orden.documentos );
+					grpVista.dataProvider = $orden.documentos;
+				}
+				else
+				{
+					recibeDocumentos( new ArrayCollection() );
+					grpVista.dataProvider = new ArrayCollection();
+				}
+			}
+			
+			
+		]]>	
+	</fx:Script>
+	
+	
+	
+	<!--	ESTA ES LA GRAFICA	  -->
+	<s:VGroup width="35%" height="100%" >
+		<documentacion:DocumentacionOrdenDespacho_Grafica id="grpVista" width="100%" height="100%" />
+	</s:VGroup>  
+	
+	
+	<!-- 	ESTA ES LA PARTE DE LA LISTA Y VISUALIZADOR -->
+	<s:VGroup width="65%" height="100%" horizontalAlign="center" paddingTop="20" paddingBottom="10" >
+		<documentacion:DocumentacionOrdenDespacho_ListaDocumentos id="lstDocumentos" width="100%" height="100%" /> 
+	</s:VGroup>  
+	
+	
+	
+	
+	
+</s:HGroup>

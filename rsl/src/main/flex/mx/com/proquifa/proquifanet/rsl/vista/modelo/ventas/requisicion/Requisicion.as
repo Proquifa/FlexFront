@@ -1,0 +1,195 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion
+{
+	import mx.collections.ArrayCollection;
+
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.ventas.requisicion.Requisicion")]
+	[Bindable]
+	public class Requisicion
+	{
+		//para el empleado EV
+		private var _idEmpleadoEv:int;
+		private var _nombreEmpleadoEv:String;
+		
+		//Para el empleado ESAC
+		private var _idEmpleadoEsac:int;
+		private var _nombreEsac:String;
+		
+		//Para el cliente
+		private var _idCliente:Number;
+		private var _nombreCliente:String;
+		
+		//para el contacto
+		private var _idContacto:int;
+		private var _nombreContacto:String;
+		//private String direccionCompletaContacto;
+		
+		//para el doctoR
+		private var _idDoctoR:int;
+		
+		//para la requisici—n
+		private var _idRequi:int;
+		private var _idVisita:int;
+		private var _comentarios:String;
+		private var _importe:Number;
+		private var _fecha:Date;
+		
+		private var _partidaRequisicion:ArrayCollection;
+		
+		
+		public function Requisicion()
+		{
+		}
+
+		public function get idEmpleadoEv():int
+		{
+			return _idEmpleadoEv;
+		}
+
+		public function set idEmpleadoEv(value:int):void
+		{
+			_idEmpleadoEv = value;
+		}
+
+		public function get nombreEmpleadoEv():String
+		{
+			return _nombreEmpleadoEv;
+		}
+
+		public function set nombreEmpleadoEv(value:String):void
+		{
+			_nombreEmpleadoEv = value;
+		}
+
+		public function get idEmpleadoEsac():int
+		{
+			return _idEmpleadoEsac;
+		}
+
+		public function set idEmpleadoEsac(value:int):void
+		{
+			_idEmpleadoEsac = value;
+		}
+
+		public function get nombreEsac():String
+		{
+			return _nombreEsac;
+		}
+
+		public function set nombreEsac(value:String):void
+		{
+			_nombreEsac = value;
+		}
+
+		public function get idCliente():Number
+		{
+			return _idCliente;
+		}
+
+		public function set idCliente(value:Number):void
+		{
+			_idCliente = value;
+		}
+
+		public function get nombreCliente():String
+		{
+			return _nombreCliente;
+		}
+
+		public function set nombreCliente(value:String):void
+		{
+			_nombreCliente = value;
+		}
+
+		public function get idContacto():int
+		{
+			return _idContacto;
+		}
+
+		public function set idContacto(value:int):void
+		{
+			_idContacto = value;
+		}
+
+		public function get nombreContacto():String
+		{
+			return _nombreContacto;
+		}
+
+		public function set nombreContacto(value:String):void
+		{
+			_nombreContacto = value;
+		}
+
+		public function get idDoctoR():int
+		{
+			return _idDoctoR;
+		}
+
+		public function set idDoctoR(value:int):void
+		{
+			_idDoctoR = value;
+		}
+
+		public function get idRequi():int
+		{
+			return _idRequi;
+		}
+
+		public function set idRequi(value:int):void
+		{
+			_idRequi = value;
+		}
+
+		public function get comentarios():String
+		{
+			return _comentarios;
+		}
+
+		public function set comentarios(value:String):void
+		{
+			_comentarios = value;
+		}
+
+		public function get importe():Number
+		{
+			return _importe;
+		}
+
+		public function set importe(value:Number):void
+		{
+			_importe = value;
+		}
+
+		public function get fecha():Date
+		{
+			return _fecha;
+		}
+
+		public function set fecha(value:Date):void
+		{
+			_fecha = value;
+		}
+
+		public function get partidaRequisicion():ArrayCollection
+		{
+			return _partidaRequisicion;
+		}
+
+		public function set partidaRequisicion(value:ArrayCollection):void
+		{
+			_partidaRequisicion = value;
+		}
+
+		public function get idVisita():int
+		{
+			return _idVisita;
+		}
+
+		public function set idVisita(value:int):void
+		{
+			_idVisita = value;
+		}
+
+
+	}
+}

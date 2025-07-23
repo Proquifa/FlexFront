@@ -1,0 +1,713 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" 
+		   xmlns:maps="mx.com.proquifa.proquifanet.admonComunicacion.vistas.mapas.*" 
+		   width="100%" height="100%" initialize="init()" creationPolicy="all" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:otros="skins.otros.*" xmlns:label="skins.skin.label.*">
+
+<mx:Script>
+	<![CDATA[
+		import mx.collections.ArrayCollection;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.Componentes.Autorizaciones;
+		import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+		import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaCatalogoService;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoRecibido;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+		import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+		import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+		import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.contacto.BusquedaContactos;
+		import mx.controls.Alert;
+		import mx.effects.Fade;
+		import mx.events.CloseEvent;
+		import mx.events.ResizeEvent;
+		import mx.events.ValidationResultEvent;
+		import mx.formatters.DateFormatter;
+		import mx.managers.PopUpManager;
+		import mx.messaging.channels.StreamingAMFChannel;
+		import mx.rpc.events.ResultEvent;
+		import mx.utils.StringUtil;
+		import mx.validators.DateValidator;
+		import mx.validators.NumberValidator;
+		import mx.validators.StringValidator;
+		import mx.validators.ValidationResult;
+		import mx.validators.Validator;
+			private var pdfByteArray:ByteArray = null;
+			private var contacto:BusquedaContactos = null;
+			private var autoriza:Autorizaciones = new Autorizaciones();
+			/* private var archivo:File = new File();
+			private var fileFilter:FileFilter =new FileFilter("Pdf", "*.pdf;*.PDF"); */
+			private var pdf:HTMLLoader = new HTMLLoader();
+			private var datosDelContacto:BContactos = null;
+			[Bindable]
+			private var ComboMedio:Array =[{id:0, medio:"--NINGUNO--"},
+										   {id:1, medio:"Mail"},
+										   {id:2, medio:"Fax"},
+										   {id:3, medio:"Mensajero Interno"},
+										   {id:4, medio:"Mensajero Externo"},
+										   {id:5, medio:"EV"},
+										   {id:6, medio:"Cliente"}];
+			[Bindable]
+			private var ComboTipo:Array =[{id:0, tipo:"--NINGUNO--"},
+										  {id:1, tipo:"Otros"},
+										  {id:2, tipo:"Pago"},
+										  {id:3, tipo:"Pedido"},
+										  {id:4, tipo:"Requisición"}];
+
+		    private var validardireccionArchivo:StringValidator;
+		    private var validarOrigen:StringValidator;
+		    private var validarempresa:StringValidator;
+		    private var ValidarFecha:StringValidator;
+		    private var validarMedio:NumberValidator;
+		    private var validarTipo:NumberValidator;
+		    private var ValidarDestino:NumberValidator;
+		    private var ValidarHora:NumberValidator;
+		    private var ValidarMinuto:NumberValidator;
+		    private var vendedorEncontrado:XML;
+		    /* private var documentoEncontrado:XML; */
+		    private var formatter:DateFormatter = new DateFormatter(); 
+	  	    private var quienIngreso:String;
+			private var fechaEncontrada:String;
+			private var origenEnontrado:String;
+			private var empresaEncontrada:String;
+			private var medioEncontrado:String;
+			private var tipoEncontrado:String;
+			private var referenciaEncontrado:String;
+			private var destinoEncontrado:String;
+			private var ComentariosEncontrados:String;
+			private var rutaArchivoOrigen:String;
+			private var rutaArchivosModificados:String;
+			private var date:Date;
+			private var urlRequest:URLRequest;
+			private var DocumentoEncontrado:String = new String;
+		   
+		   [Bindable]
+		   private var fechaOrigenObtenidaDeConsultaBD:Date;
+		   [Bindable]
+		   private var manejo:String;	
+		   [Bindable]
+		   private var guardarFecha:String;
+		   [Bindable]
+		   public var Usuario:String = new String;
+		   [Bindable]
+		   private var documentoOriginal:String;
+		   [Bindable]
+		   private var idEmpresa:Number;
+		   [Bindable]
+		   private var idContacto:Number;
+		   [Bindable]
+		   public var folioDocumento:String;		   
+		   [Bindable]
+		   private var _usuarios:ArrayCollection;
+		   [Bindable]		 
+		   public var _empleados:ArrayCollection = new ArrayCollection();
+		   [Bindable]
+		   private var _documento:DocumentoRecibido;
+		   
+		   
+		   /* [Bindable]
+		   [Embed(source="iconos/error2.png")]
+		   private var iconDenegado:Class; */
+		   
+		   /* [Bindable]		   
+		   [Embed(source="iconos/error.png")]
+		   private var noAcceso:Class; */
+		   
+		   public function init():void{    
+				//inicializando
+				folioDocumento = new String();
+				date = new Date();
+				idEmpresa = new Number();
+				documentoOriginal = new String();
+				quienIngreso = new String();
+				//Hora del sistema
+				obtenerFechas();
+				//validar documento
+				validardireccionArchivo = new StringValidator();				
+				validardireccionArchivo.source = this.txtRutaDoc;
+				validardireccionArchivo.property = "text";
+				validardireccionArchivo.requiredFieldError = "Debe seleccionar un archivo";
+	  			//validar Origen
+				validarOrigen = new StringValidator();
+				validarOrigen.source = this.lblOrigen;
+				validarOrigen.property = "text";
+				validarOrigen.requiredFieldError = "Debe seleccionar un origen";
+				//validar empresa
+				validarempresa = new StringValidator();
+				validarempresa.source = this.lblEmpresa;
+				validarempresa.property = "text";
+				validarempresa.requiredFieldError = "Debe seleccionar una empresa";  
+				//validar contacto
+				validarempresa = new StringValidator();
+				validarempresa.source = this.lblContacto;
+				validarempresa.property = "text";
+				validarempresa.requiredFieldError = "Debe seleccionar un contacto";  
+				//validar medio
+				validarMedio = new NumberValidator();
+				validarMedio.source = this.cmbMedio;
+				validarMedio.property = "selectedIndex";
+				validarMedio.minValue = 1;
+				validarMedio.lowerThanMinError = "Debe seleccionar un medio";
+				//validar tipo
+				validarTipo = new NumberValidator();
+				validarTipo.source = this.cmbTipo;
+				validarTipo.property = "selectedIndex";
+				validarTipo.minValue = 1;
+				validarTipo.lowerThanMinError = "Debe seleccionar un tipo";
+				//validar destino
+				ValidarDestino = new NumberValidator();
+				ValidarDestino.source = this.cmbEmpleados;
+				ValidarDestino.property = "selectedIndex";
+				ValidarDestino.minValue = 1;
+				ValidarDestino.lowerThanMinError = "Debe seleccionar un destino";
+				//validar fecha
+				ValidarFecha = new StringValidator;
+				ValidarFecha.source = this.dtpFOrigenDoc;
+				ValidarFecha.property = "text";
+				ValidarFecha.requiredFieldError = "Debe seleccionar una fecha";  
+				
+				var evento:EventoPendientesPorEnviar = null;			
+			    evento = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.OBTNER_USUARIOS);
+			    evento.tipo = "esac";	
+			    evento.valorAdicional = "--NINGUNO--";		
+			    dispatchEvent( evento );
+			    
+			    var evento2:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.OBTENER_EMPLEADOS_DESTINOS_DOCUMENTOS );
+			    evento2.valorAdicional = "--NINGUNO--";
+			    dispatchEvent( evento2 );
+			    obtenerFechas();
+		   }
+
+		   public function obtenerFechas():void{
+			  this.horaSelect.value = date.getHours();
+			  this.minutoSelect.value = date.getMinutes(); 
+		   }
+		   
+		   /**
+		    * Funcion asociada a un EventListener. Recibe Datos del PopUp Contactos  
+		    */ 
+		   private function guardarContacto(event:Event):void{
+		   		this.lblContacto.text = contacto.contactoSelect;
+				this.lblEmpresa.text = contacto.empresaSelect;
+				this.lblOrigen.text = contacto.origenSelect;
+				idEmpresa = contacto.idEmpresaSelect;
+				idContacto = contacto.idContactoSelect;				
+				var eventoC:EventoParaCatalogoService = null;		   		
+		   		eventoC = new EventoParaCatalogoService( EventoParaCatalogoService.OBTENER_EMPLEADOS_POR_EMPRESA );		   
+		   		eventoC.nombreEmpresa = this.lblEmpresa.text;
+		   		dispatchEvent( eventoC );
+		   		/* PopUpManager.removePopUp(contacto);
+		   		this.contacto.removeEventListener( "guardarContacto", guardarContacto);
+		   		PopUpManager.removePopUp( contacto ); */
+		   }
+		
+		   private function consultaContactos():void{ 
+				  if( contacto == null ){
+				  	 contacto = BusquedaContactos(PopUpManager.createPopUp( this, BusquedaContactos, true ));	
+				  	 contacto.addEventListener("guardarContacto",guardarContacto);
+				  	 contacto.addEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS,  cierraContactos );
+				  	 PopUpManager.centerPopUp(contacto);	
+				  }else{
+				  	contacto.addEventListener("guardarContacto",guardarContacto);
+				  	PopUpManager.addPopUp(contacto,this,true);
+				  	contacto.addEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS,  cierraContactos );
+				  	PopUpManager.centerPopUp(contacto);	
+				  }
+		  	}
+		   
+		    public function cierraContactos(event:Event):void{
+		  		contacto.removeEventListener( "guardarContacto", guardarContacto);
+		  		contacto.removeEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS, cierraContactos );
+		  		PopUpManager.removePopUp( contacto ); 
+		    }
+		
+		  public function validarIfo():Boolean {
+				var archivo_valido:ValidationResultEvent = this.validardireccionArchivo.validate();
+		 		var origen_validado:ValidationResultEvent = this.validarOrigen.validate();
+				var empresa_validada:ValidationResultEvent = this.validarempresa.validate();
+				var medio_validado:ValidationResultEvent = this.validarMedio.validate();
+				var tipo_validado:ValidationResultEvent = this.validarTipo.validate(); 
+				var destino_validado:ValidationResultEvent = this.ValidarDestino.validate();
+				var fecha_validado:ValidationResultEvent = this.ValidarFecha.validate();	
+				var validacionCompleta:Boolean = new Boolean();
+				if (archivo_valido.type == ValidationResultEvent.VALID && origen_validado.type == ValidationResultEvent.VALID && empresa_validada.type == ValidationResultEvent.VALID && 
+				     medio_validado.type == ValidationResultEvent.VALID && tipo_validado.type == ValidationResultEvent.VALID && destino_validado.type == ValidationResultEvent.VALID &&  
+				     fecha_validado.type == ValidationResultEvent.VALID ) {
+						 return validacionCompleta = true;
+					}else{
+						 return validacionCompleta = false;
+					}
+		    }		  
+
+           /* private function redimencionar():void{
+				pdf.width = this.canvas1.width - 20;
+  		   } */
+		
+		   private function doubleDigit():String{
+			     var numHora:String;
+			     var numMinuto:String;
+			     formatter.formatString = "YYYYMMDD"; 
+			     if(this.horaSelect.value < 10){
+			     	numHora = "0" + String(this.horaSelect.value);
+			     }else{
+			     	numHora = String(this.horaSelect.value);
+			     }
+			   	 if(this.minutoSelect.value < 10){
+			   	 	numMinuto = "0" + String(this.minutoSelect.value);
+			   	 }else{
+			   	 	numMinuto = String(this.minutoSelect.value);
+			   	 }		   	 
+			   	 return formatter.format(this.dtpFOrigenDoc.text);
+			   	 /* + " " + numHora + ":" + numMinuto + ":00.000" */
+		   }
+		   
+		   private function abrirAutorizacion(accionValidacion:Boolean):void{
+		   		autoriza.validarDocumentacion = accionValidacion;	   		   				   			
+		   		autoriza.folioModificado = parseInt( folioDocumento );
+		   		autoriza.manejoModificado = this.manejo;
+		   		autoriza.empresaModificado = lblEmpresa.text;
+				autoriza.destinoModificado = this.cmbEmpleados.text;
+				autoriza.medioModifcado = this.cmbMedio.text;
+				autoriza.tipoModificado = this.cmbTipo.text; //tipo  En la base es el docto
+				autoriza.referenciaModificado = this.txtReferencia.text; //numero
+				autoriza.ComentariosModificados = this.txtComentarios.text; //observaciones
+				autoriza.fechaOrigen = fechaOrigenObtenidaDeConsultaBD; //hasta aqui los datos son los que usa el servicio de modificado				
+				autoriza.rutaArchivosModificados = this.txtRutaDoc.text;
+				autoriza.idContacto = this.idContacto;
+				autoriza.nombreUsuario = this.Usuario;				
+				PopUpManager.addPopUp(autoriza, this, true);
+				PopUpManager.centerPopUp(autoriza);
+		   }
+		   
+  		   private function saveChange():void{
+ 			  guardarFecha = new String();
+ 			  if(this.btnGuarMod.label == "Guardar"){
+    		  	  if(validarIfo()){
+    		  	  	  guardarFecha = this.doubleDigit();
+    		  	  	  var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.GUARDAR_DOCUMENTACION);
+    		  	  	  var documento:DocumentoRecibido = new DocumentoRecibido(); 
+    		  	  	  		documento.partida = 0;
+    		  	  	  		/* documento.fecha = new Date;  */   	 //en el DocumentoRecibidoDAO se le asigna un newDate
+    		  	  	  		documento.manejo = "Entrante";	  	  	  		
+	    		  	  	  	documento.origen = "Cliente";
+	    		  	  	  	documento.nombreEmpresa = lblEmpresa.text ;
+	    		  	  	  	documento.RPor = this.cmbEmpleados.text;
+	    		  	  	  	documento.medio = this.cmbMedio.text;
+	    		  	  	  	documento.docto = this.cmbTipo.text;
+	    		  	  	  	documento.numero = this.txtReferencia.text;	    		  	  	  	
+	    		  	  	  	documento.observaciones = this.txtComentarios.text;
+	    		  	  	  	documento.ingreso = DatosGlobales.getInstance()._usuario.usuario;
+	    		  	  	  	documento.FOrigen = 0 ;
+	    		  	  	  	var fechaDTP:Date = dtpFOrigenDoc.selectedDate ;   		  	  	  	
+	    		  	  	  	var textoHoras:String = new String;
+	    		  	  	  	var minutosTexto:String = new String;
+	    		  	  	  	if(horaSelect.value < 10 ){
+	    		  	  	  		textoHoras = "0" + horaSelect.value
+	    		  	  	  	}else{
+	    		  	  	  		textoHoras = horaSelect.value.toString();
+	    		  	  	  	}
+	    		  	  	  	if(minutoSelect.value < 10 ){
+	    		  	  	  		minutosTexto = "0" + minutoSelect.value
+	    		  	  	  	}else{
+	    		  	  	  		minutosTexto = minutoSelect.value.toString();
+	    		  	  	  	}
+	    		  	  	  	fechaDTP.hours = parseInt( textoHoras );
+	    		  	  	  	fechaDTP.minutes = parseInt( minutosTexto );
+	    		  	  	  	documento.fechaOrigen = fechaDTP;
+	    		  	  	  	documento.idContacto = this.idContacto;
+	    		  	  	  	documento.tipo = "Pedido por tramitar"
+    		  	  	  evento.documentoRecibido = documento;
+    		  	  	  dispatchEvent( evento );
+    		  	  	  this.limpiarCampos();
+    		  	  	  /* this.limpiarPDF(); */
+    		  	   }else{
+    		  	  	 Alert.show("Información incompleta","Información incompleta",Alert.OK,this,null); 
+    		  	  	/* ,iconDenegado */
+    		  	  }
+    		  }else{
+	    		  abrirAutorizacion(true);
+	    		  this.limpiarCampos();
+    		  	 /*  this.limpiarPDF(); */
+	    	   }
+			}
+
+     	  public function limpiarCampos():void{
+		  	 this.lblOrigen.text = "";
+		  	 this.lblEmpresa.text = "";
+		  	 this.lblContacto.text = "";
+		  	 this.cmbMedio.selectedIndex = 0;
+		  	 this.cmbTipo.selectedIndex = 0;
+		  	 this.txtReferencia.text = "";
+		  	 this.cmbEmpleados.selectedIndex = 0;
+		  	 this.txtRutaDoc.text = "";
+		  	 this.txtComentarios.text = "";
+		  	 this.txtModificacion.text = "";
+		  	 this.dtpFOrigenDoc.text = "";
+		  }
+		  
+		/*   public function limpiarPDF():void{
+		  	this.ContenerdorPDF.removeChild(pdf);
+		  } */
+		  
+		  private function regresarCambio():void{
+		  	 this.btnGuarMod.label = "Guardar";
+		  	 this.btnCancelarModificacion.visible = false;
+		  	 this.dtpFOrigenDoc.enabled = true;		
+		  	 this.horaSelect.enabled = true;
+		  	 this.minutoSelect.enabled = true;  
+		  	 this.txtReferencia.enabled = false;	 
+		  	 obtenerFechas();
+		  	 limpiarCampos();
+		  	 /* limpiarPDF(); */
+		  	 this.dtpFOrigenDoc.text = "";
+			 this.pdfByteArray = null;
+		  }
+ 		
+		  
+		  /**
+		   * Metodo usado para buscar los documentos por el folio 
+		   */ 
+		  public function solicitarDocumento():void{
+		  	  /* this.buscarDocumento.send(); */
+			  var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.BUSCAR_DOCUMENTO_POR_FOLIO);
+			  evento.folioNumerico = parseInt( folioDocumento );
+			  dispatchEvent( evento );			  
+		  }
+		  
+		  private function ModificacionDoc():void{
+				this.btnCancelarModificacion.visible = true;
+				this.btnGuarMod.label = "Modificar";
+				this.folioDocumento = this.txtModificacion.text;
+				this.limpiarCampos();
+				this.solicitarDocumento();
+		  }
+		  
+		  /**
+		   * Metodo que recibe a los usarios del mapa
+		   */
+		  public function set usuariosParaCombo(datos:ArrayCollection):void{
+			if(datos == null){
+					return;
+				}
+			this._usuarios = datos; 
+		  }
+		  /**
+	   	   *Metodo que recibe a los Empleados del mapa
+	   	   */
+		  public function set empleadosParaCombo(datos:ArrayCollection):void{
+		  	if(datos == null){
+				return;
+			}
+			this._empleados = datos;
+		  }
+		  /**
+		   * Metodo que recibe el DocumentoRecibido
+		   */
+		  public function set documenntosRecibidosPorBusuqeda(datos:DocumentoRecibido):void{
+				 if( datos.folio.toString() == "NaN" ){
+				 		return;
+				 }
+				 this._documento = datos; 
+				 if(this._documento.folio.toString() == "NaN"){				 	
+				 		
+				 }else{
+				 	if(this._documento.folio != 0 ){
+				 		this.txtRutaDoc.text = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + this._documento.folio + ".pdf";
+				 	}
+				 }	
+				 if (this.txtRutaDoc.text == "") {
+				  	  	limpiarCampos();
+				  	  	/* limpiarPDF(); */
+			  	  }else{
+						this.lblOrigen.text = this._documento.origen;
+						this.lblEmpresa.text = this._documento.nombreEmpresa;
+						this.lblContacto.text = this._documento.nombreContacto;
+						this.cmbMedio.text = this._documento.medio;
+						this.cmbTipo.text = this._documento.docto;		
+						this.cmbEmpleados.text = this._documento.RPor;	
+						if( this.cmbMedio.text != "" && this.cmbTipo.text != "" && this.cmbEmpleados.text ) {
+							this.cmbEmpleados.selectedIndex = 1;
+							this.cmbMedio.selectedIndex = 1 ;
+							this.cmbTipo.selectedIndex	= 1 ;
+						}									
+						this.txtReferencia.text = this._documento.numero;
+						this.txtComentarios.text = this._documento.observaciones;
+						this.idEmpresa = this._documento.empresa;
+						this.quienIngreso = this._documento.ingreso; 
+						this.dtpFOrigenDoc.text = formatoFechaATexto.format( this._documento.fechaOrigen );	
+						this.horaSelect.value =  this._documento.fechaOrigen.getHours();
+						this.minutoSelect.value = this._documento.fechaOrigen.getMinutes();
+						fechaOrigenObtenidaDeConsultaBD = this._documento.fechaOrigen;
+						documentoOriginal = this.txtRutaDoc.text;
+						origenEnontrado = this.lblOrigen.text;
+						empresaEncontrada = this.lblEmpresa.text;
+						medioEncontrado = this.cmbMedio.text;
+						tipoEncontrado = this.cmbTipo.text;
+						referenciaEncontrado = this.txtReferencia.text;
+						destinoEncontrado = this.cmbEmpleados.text;
+						ComentariosEncontrados = this.txtComentarios.text;
+						empresaEncontrada = idEmpresa.toString();
+						mostrarDocumentoEncontrado(this.txtRutaDoc.text); 
+						manejo = this._documento.manejo;
+						idContacto = this._documento.idContacto;
+						this.dtpFOrigenDoc.enabled = false;
+						this.horaSelect.enabled = false;
+						this.minutoSelect.enabled = false;
+						if(this._documento.docto == "Otros" || this._documento.docto == "Requisición"){
+							this.txtReferencia.enabled = false;
+						}else{
+							this.txtReferencia.enabled = true;
+						}
+			  	  }	  	  		
+		  }
+		 /**
+		  * Recibe la inyeccion q trae todos los datos de la Documento GUARDADA
+		  */
+		  public function set recibeDocumentosGuardadas ( datos:Number ):void{
+				if(datos.toString() == "NaN" || datos == 0){
+					return;
+				}
+				var evento:EventoGenerico = new EventoGenerico( EventoGenerico.SUBIR_DOCUMENTO_PDF );
+				evento.bytes = this.pdfByteArray;
+				evento.tipoArchivo = "documentorecibido";
+				evento.folioDocumento = datos.toString();
+				dispatchEvent( evento );
+				Alert.show("Se registró el documento recibido con el folio: " + datos.toString(), "Operación exitosa");
+		  }	
+		  
+		  /**
+		   * Recibe la inyeccion q trae todos al Vendedor buscado por la empresa
+		   */
+		  public function set recibeVendedorDeLaEmpresa( datos:CatalogoItem ):void{
+				if(datos.llave.toString() == "NaN"){
+					return;
+				}
+				this.cmbEmpleados.selectedIndex = Util.indiceSeleccionado( this.cmbEmpleados.dataProvider as ArrayCollection,  datos.llave );
+		  }	
+			
+		 /**
+		  * Recibe la inyeccion q trae todos los datos de la llamada GUARDADA
+		  */
+		  public function set recibeDocumentosModificado ( datos:Boolean ):void{
+				if(datos == false){
+					return;
+				}
+				if(datos == true){					
+					if(this.pdfByteArray != null ){
+						var evento:EventoGenerico = new EventoGenerico( EventoGenerico.MODIFICAR_DOCUMENTO_PDF );
+						evento.bytes = this.pdfByteArray;
+						evento.tipoArchivo = "documentorecibido";
+						evento.folioDocumento = this.folioDocumento;
+						dispatchEvent( evento );
+					}
+					Alert.show("Documento modificado", "Operación exitosa");					
+					this.dtpFOrigenDoc.enabled = true;
+					obtenerFechas();
+					this.horaSelect.enabled = true;
+					this.minutoSelect.enabled = true;
+					this.btnCancelarModificacion.visible = false;
+					this.limpiarCampos();
+					this.pdfByteArray = null;
+				}
+		  }	
+		  /**
+		   * Recibe la inyeccion q confirma que el documento se subio correctamente
+		   */
+		  public function set recibeDocumentosGuardadasUP ( datos:Boolean ):void{
+			  if(datos == false){
+			   	  return;
+			  }
+			  if(datos == true){
+				this.pdfByteArray = null;					
+				  //Alert.show("El documento se subio correctamente al servidor", "Aviso");
+			  }
+		  }	
+		
+			
+			import flash.net.FileReference;
+            import mx.controls.Alert;
+            private var archivo:File = new File();
+			private var fileFilter:FileFilter =new FileFilter("Pdf", "*.pdf;*.PDF");
+			
+			[Bindable]
+			public var file:File = new File();
+			
+		    private function file_select(evt:Event):void {	
+		   		this.browseFileSystem(); 
+            }
+             			
+  		   private function mostrarDocumento(ruta:String):void{
+  			 if(HTMLLoader.pdfCapability == HTMLPDFCapability.STATUS_OK)  
+              {             	
+            	var request:URLRequest = new URLRequest("file://"+ ruta);
+				/* pdf.width = this.ContenerdorPDF.width;
+                pdf.height = this.ContenerdorPDF.height;
+                pdf.load(request); 
+                ContenerdorPDF.addChild(pdf); */ // Add the HTMLLoader to my HTML component
+                navigateToURL(request);
+              } else { 
+                	Alert.show("PDF cannot be displayed. Error code:" + HTMLLoader.pdfCapability);
+              }
+  		   }
+  			
+  		   private function mostrarDocumentoEncontrado(ruta:String):void{
+  			 if(HTMLLoader.pdfCapability == HTMLPDFCapability.STATUS_OK)  
+              {             	
+	            	var request:URLRequest = new URLRequest(ruta);
+					/* pdf.width = this.ContenerdorPDF.width;
+	                pdf.height = this.ContenerdorPDF.height;
+	                pdf.load(request); 
+	                ContenerdorPDF.addChild(pdf); */ // Add the HTMLLoader to my HTML component
+	                navigateToURL(request);
+              } else { 
+                	Alert.show("PDF cannot be displayed. Error code:" + HTMLLoader.pdfCapability);
+              }
+  		   }
+
+            public function browseFileSystem():void {
+                file = new File();
+                file.addEventListener(Event.SELECT, selectHandler);
+                file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+                file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+                file.addEventListener(Event.COMPLETE,completeHandler);
+                file.browse(); 
+            }
+   			
+            private function selectHandler(event:Event):void {
+                var file:FileReference = FileReference(event.target);
+                file.load();
+            }
+            
+            private function ioErrorHandler(event:IOErrorEvent):void {
+                trace("ioErrorHandler: " + event);
+            }
+   
+            private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+            }
+   
+            private function completeHandler(event:Event):void {
+                trace("completeHandler: " + event);
+                /*  Alert.show((file.data is ByteArray).toString()); */ 
+                this.pdfByteArray = this.file.data;
+                this.txtRutaDoc.text = file.nativePath;
+	            mostrarDocumento(this.txtRutaDoc.text);
+            }
+            
+            private function validaReferencia():void{
+            	if(this.cmbTipo.text != "Requisición" && this.cmbTipo.text != "Otros"){
+            		this.txtReferencia.enabled = true;
+            	} else {
+            		this.txtReferencia.enabled = false;
+            		this.txtReferencia.text = "";
+            	}
+            }
+           
+	]]>
+</mx:Script>
+	
+	<mx:DateFormatter id="formatoFechaATexto" formatString="MM/DD/YYYY" />
+	<mx:DateFormatter id="formatotextoAFormatoFechaTipoSQL" formatString="YYYYMMDD" />
+	<mx:DateFormatter id="formatoHorasMinTipoSQL" formatString="yyyyMMdd HH:mm"/>
+	
+	<maps:MapaDocumentos/>
+	
+	<mx:Metadata>
+	  [Event(name="doc")]
+	</mx:Metadata>
+	
+	
+	<mx:VBox width="100%" height="100%" paddingLeft="10" paddingRight="10" paddingBottom="10">	
+		<mx:VBox width="100%" verticalGap="0">
+			<mx:Panel width="100%" backgroundColor="#D2D2D2" layout="horizontal" title="ENTRADA DE MODIFICACION"  horizontalAlign="left" height="32" dropShadowVisible="false"/>
+			<mx:HBox width="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15" borderStyle="solid">
+				<s:TextInput width="100%"  id="txtModificacion" enter="ModificacionDoc()"/>
+				<s:Button label="Buscar" width="80" click="ModificacionDoc()" id="btnDocModificable"/>
+			</mx:HBox>
+		</mx:VBox>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="1"/>
+       	<mx:VBox width="100%" height="100%" paddingLeft="15" paddingTop="15" paddingBottom="15" paddingRight="15" borderStyle="solid">
+	       	<!--<mx:Label text="Registro de Documento" fontWeight="bold" fontSize="30" width="100%"/>-->
+			<label:labelSubtitulo text="Registro de Documento"  width="100%"/>
+	       	<mx:Spacer width="15"/>
+	       	<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%"/>
+	       	<mx:Spacer width="15"/>
+	       	<mx:HBox width="100%">
+	       		<mx:Label text="Archivo del documento: *"/>
+	       		<s:TextInput width="100%" id="txtRutaDoc" editable="false"/>
+	       		<s:Button label="Examinar" width="80" click="this.browseFileSystem()"/>
+	       	</mx:HBox>
+	        <mx:Spacer width="15"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%"/>
+			<mx:Spacer width="15"/>
+			<mx:Form width="100%">
+				<mx:FormItem label="Fecha Origen: *" >
+					<mx:DateField id="dtpFOrigenDoc" width="150"/>
+				</mx:FormItem>
+				<mx:FormItem label="Hora origen: *" horizontalAlign="right">							
+					<mx:HBox width="100%">
+						<mx:NumericStepper id="horaSelect" minimum="0" maximum="24" stepSize="1"/>		
+						<mx:Label text=":"/>
+						<mx:NumericStepper id="minutoSelect" minimum="0" maximum="60" stepSize="1"/>
+					</mx:HBox>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:Spacer width="15"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%"/>
+			<mx:Spacer width="15"/>
+			<mx:HBox width="100%" verticalAlign="middle">
+				<mx:Form width="100%">
+					<mx:FormItem label=" Origen: *" width="100%" paddingLeft="45">
+						<mx:Label id="lblOrigen" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="Empresa: *" width="100%" paddingLeft="45">
+						<mx:Label id="lblEmpresa" width="100%"/>								
+					</mx:FormItem>
+					<mx:FormItem label="Contacto: *" width="100%" paddingLeft="45">
+						<mx:Label id="lblContacto" width="100%"/>
+					</mx:FormItem>
+				</mx:Form>
+				<mx:Spacer width="100%"/>
+				<mx:Button fontFamily="Webdings" fontSize="60" click="consultaContactos()" width="80" height="95" icon="@Embed('assets/IcoUsuario.png')"/>
+			</mx:HBox>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%"/>
+			<mx:Spacer width="15"/>				
+			<mx:Form width="100%">
+				<mx:FormItem label=" Medio: *" >
+					<mx:ComboBox dataProvider="{this.ComboMedio}" labelField="medio" id="cmbMedio" width="160"/>
+				</mx:FormItem>
+				<mx:FormItem label="Tipo: *" >
+					<mx:ComboBox dataProvider="{this.ComboTipo}" labelField="tipo" id="cmbTipo" change="validaReferencia();" width="160"/>
+				</mx:FormItem>
+				<mx:FormItem label="REF:">
+					<mx:TextInput id="txtReferencia" enabled="false" width="160" />
+				</mx:FormItem>
+				<mx:FormItem label="Destino: *">						
+					<mx:ComboBox id="cmbEmpleados" dataProvider="{this._empleados}"  labelField="valor" data="llave"  textAlign="left" width="160"/>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:Spacer width="15"/>	
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%"/>
+			<mx:Spacer width="15"/>
+			<mx:Label text="Comentarios adicionales:"/>   
+			<s:TextArea width="100%" height="100%" contentBackgroundColor="#FAFFC0" contentBackgroundAlpha="1.0" id="txtComentarios"/>
+			
+		</mx:VBox>
+		<mx:Spacer width="15"/>
+       	<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+       	<mx:Spacer width="15"/>
+		<mx:HBox width="100%" >
+			<s:Button label="Cancelar" width="80" id="btnCancelarModificacion" visible="false" click="regresarCambio()"/>
+			<mx:Spacer width="100%"/>
+			<s:Button width="80" label="Guardar" id="btnGuarMod" click="saveChange()"/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:Canvas>

@@ -1,0 +1,2271 @@
+<s:ComboBox xmlns:fx="http://ns.adobe.com/mxml/2009" dataProvider="{this._datos}" height="28" fontSize="14" focusColor="0x257d92"
+			xmlns:s="library://ns.adobe.com/flex/spark" labelField="valor" contentBackgroundAlpha="1" contentBackgroundColor="white"
+			xmlns:mapa ="mx.com.proquifa.proquifanet.rsl.vista.mapas.mapasComponentes.*"
+			xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<mapa:MapaComboCatalogos dispatcher="{this}"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.IList;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComboCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.LugarConcepto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Procedimiento;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.core.mx_internal;
+			import mx.utils.StringUtil;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			private var _datoExtra_BUSQUEDA_PROCESOS:String;
+			[Bindable]
+			private var _datos:ArrayCollection;
+			public var _isInfoProveedorPorTipoComplete:Boolean;
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Clientes.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--".
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los clientes en la funcion recibirListaClientes();
+			 */ 
+			public function cargaClientes(valorAdicional:String, $primerItem:String = "" ):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CLIENTES);
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			private var _primerItem:String;
+			
+			public function set recibirListaClientes(datos:ArrayCollection):void
+			{
+				if(datos == null)
+					return;
+				
+				_datos = new ArrayCollection();
+				_datos = datos;
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					firstItem.llave = 0;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				selectedIndex = 0;
+			}
+			
+			public function cargaClientesUsuarioLogueado($primerItem:String = "",$idUser:Number=0 ):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CLIENTES_USUARIO_LOGUEADO);
+				evento.idUsuario = $idUser.toString();
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaClientesUsuarioLogueado(datos:ArrayCollection):void
+			{
+				if(datos == null)
+					return;
+				
+				/* if(datos == null || datos.length == 0){
+				return;
+				} */
+				_datos = new ArrayCollection();
+				_datos = datos;
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				selectedIndex = 0;
+				var evvt:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.INICIA_CONSULTA );
+				dispatchEvent( evvt );
+			}
+			
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Catalogo Productos.
+			 * El primer argumento Corresponde al Id de un Proveedor específico, puede ir null, para el caso que regrese todos los productos
+			 * El segundo argumento que se recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--".
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los productos en la funcion recibirListaDeProductos();
+			 */ 
+			
+			public function cargaCatalogoProductos($idProveedor:int, $primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_PRODUCTOS );
+				evento.idProveedorString =$idProveedor == -1? null : $idProveedor.toString();
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaDeProductos($listaProductos:ArrayCollection):void
+			{
+				if($listaProductos == null || $listaProductos.length ==0)
+					return;
+				this._datos = $listaProductos;
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				this.selectedIndex = 0;
+			}
+			
+			public function cargaFamilias($idProveedor:int, $idAgenteAduanal:int, $tipo:int, $primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_FAMILIAS );
+				evento.idProveedor = $idProveedor;
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaDeFamilias($listaProductos:ArrayCollection):void
+			{
+				if($listaProductos == null || $listaProductos.length ==0)
+					return;
+				this._datos = $listaProductos;
+				if($listaProductos[0].valor==null){
+					$listaProductos.removeItemAt(0);
+				}
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					firstItem.llave = 0;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				this.selectedIndex = 0;
+			}
+			
+			
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Proveedores.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--".
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los proveedores en la funcion recibirListaProveedores();
+			 */  
+			
+			public function cargaProveedores(valorAdicional:String, $primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PROVEEDORES);
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			public function set recibirListaProveedores(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+				var evt:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.INICIALIZA_COMPONENTE);
+				evt.listaProveedores = _datos;
+				dispatchEvent(evt);
+			}
+			
+			public function cargaProveedoresXroles(idLogueado:Number, $primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PROVEEDORES_POR_ROL);
+				evento.idUsuario = idLogueado.toString();
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			public function set recibirListaProveedoresPorRol(datos:ArrayCollection):void
+			{
+				if(datos == null)
+					return;
+				
+				_datos = new ArrayCollection();
+				 _datos = datos;
+				 if( _primerItem != "" ){
+					 var firstItem:CatalogoItem = new CatalogoItem();
+					 firstItem.valor = _primerItem;
+					 _datos.addItemAt( firstItem, 0 );
+					 _primerItem = "";
+				 }
+				
+				this.selectedIndex = 0;
+				var evt:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.INICIALIZA_COMPONENTE);
+				evt.listaProveedores = _datos;
+				dispatchEvent(evt);
+			}
+			
+			public function cargaProveedoresPorTipo(valorAdicional:String, $tipo:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PROVEEDORES_POR_TIPO);
+				evento.valorAdicional = valorAdicional;
+				evento.valor = $tipo;
+				dispatchEvent( evento );
+				_isInfoProveedorPorTipoComplete = false;
+			}
+			
+			public function set recibirListaProveedoresPorTipo(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				_isInfoProveedorPorTipoComplete = true;	
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Productos.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--" y el id del Proovedor
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los productos en la funcion recibirListaProductos();
+			 */ 
+			public function cargaProductos(valorAdicional:String , id:Number):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PRODUCTOS);
+				evento.valorAdicional = valorAdicional;
+				evento.idProveedor = id;
+				dispatchEvent( evento );
+			}
+			public function set recibirListaProductos(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Procesos.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--" en este caso el declarar el combo 
+			 * su labelField debera ser 'nombre' a diferencia de los demas q no se especifica.
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los Procesos en la funcion recibirProcesos();
+			 */ 
+			public function cargarProcesos(valorAdicional:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PROCESOS );
+				dispatchEvent( evento );
+				this._datoExtra_BUSQUEDA_PROCESOS = valorAdicional;
+			}
+			public function set recibirProcesos(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				/*funcion que determina si se necesita agregar un Todos o un Ninguno*/
+				if(this._datoExtra_BUSQUEDA_PROCESOS != null && this._datoExtra_BUSQUEDA_PROCESOS != ""){
+					var temporal:Procedimiento = new Procedimiento();
+					temporal = datos.getItemAt(0) as Procedimiento;
+					var procedimientoConValorAdicional:Procedimiento = new Procedimiento();
+					procedimientoConValorAdicional.nombre = this._datoExtra_BUSQUEDA_PROCESOS;
+					procedimientoConValorAdicional.idProcedimiento = 0;
+					datos.addItemAt( procedimientoConValorAdicional, 0 );
+					datos.addItem( temporal );
+				}
+				this._datos = datos;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de SubProcesos.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--"
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los subProcesos en la funcion recibirSubProcesos();
+			 */ 
+			public function cargarSubProcesos(valorAdicional:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_SUBPROCESOS );
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			public function set recibirSubProcesos(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				this.selectedIndex = 0;
+				var evento:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.AVISA_LLEGADA_DATOS);
+				evento.aviso = true;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Empleados Activos.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--"
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los Empleados en la funcion recibirEmpleados();
+			 */ 
+			public function cargarEmpleadosActivos(valorAdicional:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_EMPLEADOS_ACTIVOS);
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			public function set recibirEmpleadosActivos(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default los Empleados por Funcion
+			 * * El argumento que recibe debe ser la funcion, de no recibir nada se regresan todos
+			 */ 
+			/* public function cargaEmpleadosPorFuncion($funcion:Number = 0,$valorAdicional:String = ""):void{
+			var listaTemp:ArrayCollection = DatosGlobales.getInstance()._empleadosHabilitados;
+			var lista:ArrayCollection = new ArrayCollection();
+			if( $funcion == 0){
+			lista = ObjectUtil.copy( listaTemp ) as ArrayCollection;
+			}else{
+			var empleado:Empleado = new Empleado();
+			empleado.usuario = $valorAdicional;
+			empleado.idEmpleado = 0;
+			lista.addItem( empleado );
+			for(var i:int = 0; i < listaTemp.length ;i++){
+			if( ( listaTemp[i]  as Empleado).idFuncion == $funcion ){
+			lista.addItem( listaTemp[i]);
+			} 
+			}
+			}
+			this._datos = lista = ObjectUtil.copy( lista ) as ArrayCollection;
+			this.selectedIndex = 0;
+			this.labelField = "usuario";
+			} */
+			
+			public function cargaEmpleadosPorFunciones($funciones:Array,$valorAdicional:String = "", $usuarioAdicional:Array = null ):void{
+				var listaTemp:ArrayCollection = DatosGlobales.getInstance()._empleadosHabilitados;
+				var lista:ArrayCollection = new ArrayCollection();
+				if($valorAdicional != ""){
+					var empleado:Empleado = new Empleado();
+					empleado.usuario = $valorAdicional;
+					empleado.idEmpleado = 0;
+					lista.addItem(empleado);
+				}
+				if($funciones.length == 0){
+					lista.source.concat(listaTemp.source);
+				}else{
+					for(var m:int = 0; m <$funciones.length; m++){
+						for(var i:int = 0; i<listaTemp.length; i++){
+							if( $usuarioAdicional != null ){
+								if( $usuarioAdicional.indexOf( listaTemp[i].usuario ) != -1 )	lista.addItem( listaTemp[i] );
+							}
+							if( listaTemp[i].idFuncion == $funciones[m]){
+								lista.addItem(listaTemp[i]);
+							}
+						}
+					}
+				}
+				/////
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "usuario";
+				//dataSortField.numeric = true;
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				this._datos = lista;
+				_datos.sort = numericDataSort;
+				_datos.refresh();
+				this.selectedIndex = 0;
+				this.labelField = "usuario";
+			}
+			/**
+			 * Funcion publica que puede ser dispara desde cualquier componente que necesite el Combo de Marcas 
+			 * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 * Esta funcion manda a llamar el MapaComboCatalogos y regresa una lista de MArcasen la funcion recibirMarcas();
+			 */ 
+			public function cargarMarcas(valorAdicion:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_MARCAS );
+				evento.valorAdicional = valorAdicion;
+				dispatchEvent( evento );
+			}
+			public function set recibirMarcas(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Funcion publica que puede ser dispara desde cualquier componente que necesite el Combo de Contactos para Proveedor
+			 * REcibe 3 argumentos 
+			 * String busca = es el nombre del proveedor
+			 * int tipoBusca = es el tipo de busqueda
+			 * int buscarEn = para proveedores es 0 por default
+			 * Esta funcion manda a llamar el MapaComboCatalogos y regresa una lista de contactos degun el proveedor en el metodo recibeContactosPorProveedor
+			 */ 
+			public function cargarContactosPorProveedor(nombreProveedor:String, tipoBusca:int , buscarEn:int ):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CONTACTO_POR_PROVEEDOR );
+				evento.nombreProveedor = nombreProveedor;
+				evento.tipoBusca = tipoBusca;
+				evento.buscarEn = buscarEn;
+				dispatchEvent( evento );
+			}
+			public function set recibirContactosPorProveedor(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				for(var i:int = 0; i < datos.length; i++ ){
+					(datos[i] as Contacto).valor = (datos[i] as Contacto).nombre; 
+					(datos[i] as Contacto).llave = (datos[i] as Contacto).idContacto;
+				}
+				this._datos = datos;
+				this.selectedIndex = 0;
+				var evento:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.AVISA_LLEGADA_CONTACTOS );
+				evento.aviso = true;
+				dispatchEvent( evento );
+			}
+			
+			// FIXME agregar function para recibir empleadosPorTipo, recibira todos los ev, los esac y ambos
+			//valor adicional 'esac', 'ev', 'esac-eve', 'esac-esac_master', 'comprador', 'esac_master'
+			//obtenerEmpleadosPorTipoTablero('RT','--TODOS--') asi se obtienen a los mensajeros (responsabke trafico)
+			public function cargarEmpleadosXTipoTablero( $valorAdicional:String, $valor:String = "", $primerItem:String = "" ):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_EMPLEADOS_POR_TIPO_TABLERO );
+				evento.valorAdicional = $valorAdicional;
+				evento.nombreEsacMaster = $valor;
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			public function set recibirEmpleadosPorTipo($lista:ArrayCollection):void
+			{
+				if($lista == null)
+					return;
+				
+				_datos = $lista;
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "valor";
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				_datos.sort = numericDataSort;
+				_datos.refresh();
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				selectedIndex = 0;
+				/* var evvt:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.INICIA_CONSULTA );
+				dispatchEvent( evvt ); */
+			}
+			
+			/**
+			 * function para recibir empleadosPorTipo, recibira todos los ev, los esac y ambos
+			 * * El argumento que recibe puede ser un string tal como: 'comprador'
+			 */
+			public function obtenerEmpleadosXTipoTablero( $valor:String , valorAdicional:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_EMPLEADOS_POR_TIPO );
+				evento.valor = $valor;
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			public function set recibirEmpleadosXTipoTablero($lista:ArrayCollection):void
+			{
+				if($lista == null)
+					return;
+				
+				_datos = $lista;
+				selectedIndex = 0;
+			}
+			
+			
+			public function cargaPaises( valorAdicional:String = '' ):void{
+				var evt:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PAISES );
+				evt.valorAdicional = valorAdicional;
+				dispatchEvent( evt );
+			}
+			public function set recibirPaises( $datos:ArrayCollection ):void
+			{
+				if($datos == null)
+					return;
+				
+				_datos = $datos;
+				selectedIndex = 0;
+			}
+			
+			/**
+			 * funcion para cargar las unidades, se obtiene 
+			 */
+			public function cargarUnidades(valorAdicional:String):void{
+				var evt:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_UNIDADES );
+				/* evt.valor = valorAdicional; */
+				evt.valor = valorAdicional ;
+				dispatchEvent( evt );
+			}
+			public function set recibeUnidades( $datos:ArrayCollection ):void
+			{
+				if($datos == null)
+					return;
+				
+				_datos = $datos;
+				selectedIndex = 0;
+			}
+			/**
+			 * carga las rutas de los mensajeros
+			 */ 
+			public function cargarRutas($opcionExtra:String=''):void
+			{
+				var evt:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_RUTAS );
+				evt.valorAdicional = $opcionExtra;
+				dispatchEvent( evt );
+				/* _primerItem = $opcionExtra; */
+			}
+			
+			public function set recibeRutas( $datos:ArrayCollection ):void
+			{
+				if( $datos == null )
+				{
+					return;
+				}
+				_datos = $datos;
+				_datos.refresh();
+				
+				/* if( _primerItem != "" )
+				{
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				} */
+				
+				this.selectedIndex = 0;
+				this.labelField = "valor";
+			}
+			
+			public function cargarRutasLocal($opcionExtra:String=''):void
+			{
+				var $datos:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:'Local',llave:1},
+					{valor:'Guadalajara',llave:2}]);
+				
+				_datos = $datos;
+				_datos.refresh();
+				
+				this.selectedIndex = 0;
+				this.labelField = "valor";
+			}
+			
+			
+			
+			public function cargarNivelesDeIngreso($opcionExtra:String=''):void
+			{
+				var evt:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_NIVEL_INGRESO );
+				/* evt.valorAdicional = $opcionExtra; */
+				dispatchEvent( evt );
+				/* _primerItem = $opcionExtra; */
+				_datos = null;
+			}
+			
+			public function set recibeNivelesDeIngreso( $datos:ArrayCollection ):void
+			{
+				if( $datos == null )
+				{
+					return;
+				}
+				_datos = $datos;
+				_datos.refresh();
+				
+				/* if( _primerItem != "" )
+				{
+				var firstItem:CatalogoItem = new CatalogoItem();
+				firstItem.valor = _primerItem;
+				_datos.addItemAt( firstItem, 0 );
+				_primerItem = "";
+				} */
+				
+				this.selectedIndex = 0;
+				this.labelField = "valor";
+			}
+			
+			
+			/**
+			 * acepta todos los valores NINGUNO, TODOS, o vacio
+			 * obtienes los tiempos de entrega
+			 */ 
+			public function cargarTiemposDeEntrega( $valorAdicional:String ):void{
+				var evt:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_TIEMPOS_ENTREGA );
+				evt.valorAdicional = $valorAdicional;
+				dispatchEvent( evt );
+			}
+			public function set recibeTiemposDeEntrega( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				_datos = $datos;
+				_datos.refresh();
+				this.selectedIndex = 0;
+				this.labelField = "valor";
+			}			
+			/**
+			 * Este combo traera por default las opciones de Estado
+			 * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaEstado($opcionExtra:String=''):void{
+				var _estado:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:'Cerrado',llave:1},
+					{valor:'Abierto',llave:2}]);
+				
+				if( $opcionExtra == ""){
+					_estado.removeItemAt(0);
+				}
+				this._datos = _estado
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones de Medio
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaMedio($opcionExtra:String=''):void{
+				var _medio:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:'Correo',llave:1},
+					{valor:'Fax',llave:2},
+					{valor:'Pendiente',llave:3}]);
+				if( $opcionExtra == ""){
+					_medio.removeItemAt(0);
+				}
+				this._datos = _medio;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default las opciones de Origen de Documento
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaOrigen($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Cliente",llave:1},
+					              {valor:"Proveedor",llave:2}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}
+			/**
+			 * Este combo traera por default las opciones de Abierto o Cerrado de un documento
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaCerrado($opcionExtra:String=''):void{
+				var _cerrado:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Abierto",llave:1},
+					           {valor:"Cerrado",llave:2}]);
+				if($opcionExtra == ""){
+					_cerrado.removeItemAt(0);
+				}
+				this._datos = _cerrado;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones del tipo de documento recibido
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaTipoDocumento($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Otros",llave:1},
+					{valor:"Pago",llave:2},
+					{valor:"Pedido",llave:3},
+					//{valor:"Queja",llave:4}, ya no es necesario
+					   {valor:"Requisición",llave:5}]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default las opciones del estado de factura
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaEstadoFactura($opcionExtra:String=''):void{
+				var _factura:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Cobrada",llave:1},
+					{valor:"Cancelada",llave:2},
+					{valor:"Por Cobrar",llave:3},
+					{valor:"Por cancelar",llave:4},
+					{valor:"A refacturación",llave:5}]);
+				if($opcionExtra == ""){
+					_factura.removeItemAt(0);
+				}
+				this._datos = _factura;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones de SI o NO de una refacturacion
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaRefacturada($opcionExtra:String=''):void{
+				var _refactura:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"SI",llave:1},
+					 {valor:"NO",llave:2}]);
+				if($opcionExtra == ""){
+					_refactura.removeItemAt(0);
+				}
+				this._datos = _refactura;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones de las distintas compañias
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaEmpresas($opcionExtra:String=''):void{
+				var _facturo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Proveedora",llave:1},
+					{valor:"Proquifa",llave:2},
+					{valor:"Pharma",llave:3},
+					{valor:"Golocaer",llave:4},
+					{valor:"Mungen",llave:5} ]);
+				if($opcionExtra == ""){
+					_facturo.removeItemAt(0);
+				}
+				this._datos = _facturo;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 *Cargar catalogo de Empresas para fuera de sistema..
+			 */
+			public function cargaEmpresasFueraSistema($opcionExtra:String=''):void{
+				var _facturo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Proveedora",llave:1},
+					{valor:"Proquifa",llave:2},
+					{valor:"Pharma",llave:3},
+					{valor:"Golocaer",llave:4},
+					{valor:"Mungen",llave:5},
+					{valor:"RYNDEM",llave:6},
+					{valor:"Proquifa Servicios",llave:7} ]);
+				if($opcionExtra == ""){
+					_facturo.removeItemAt(0);
+				}
+				this._datos= _facturo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones del tipo de factura
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaTipoFactura($opcionExtra:String=''):void{
+				var _tipoFactura:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Por adelantado",llave:1},
+					{valor:"Normal",llave:2}]);
+				if($opcionExtra == ""){
+					_tipoFactura.removeItemAt(0);
+				}
+				this._datos = _tipoFactura;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones del Medio de factura
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaTipoMedioFactura($opcionExtra:String=''):void{
+				var _medioFactura:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Electronica",llave:1},
+					{valor:"Fisica",llave:2}]);
+				if($opcionExtra == ""){
+					_medioFactura.removeItemAt(0);
+				}
+				this._datos = _medioFactura;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones del estado de la compra
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaEstadoCompra($opcionExtra:String=''):void{
+				var _estadoCompra:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Abierto",llave:1},
+					{valor:"Cerrado",llave:2}]);
+				if($opcionExtra == ""){
+					_estadoCompra.removeItemAt(0);
+				}
+				this._datos = _estadoCompra;
+				this.selectedIndex = 0;
+			}	
+			/**
+			 * Este combo traera por default las opciones de tipo de moneda
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaMoneda($opcionExtra:String=''):void{
+				var _moneda:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0,valor2:$opcionExtra},
+					{valor:"Dolares",llave:1,valor2:"Dolares"},
+					{valor:"DlCan",llave:2,valor2:"Dolares canadienses"},
+					{valor:"Euros",llave:1,valor2:"Euros"},
+					{valor:"Libras",llave:1,valor2:"Libras"},
+					{valor:"Pesos",llave:2,valor2:"Pesos"}]);
+				if($opcionExtra == ""){
+					_moneda.removeItemAt(0);
+				}
+				this._datos = _moneda;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default las opciones de colocacion
+			 * * El argumento que recibe puede ser un string tal como: '','--TODOS--'
+			 */ 
+			public function cargaColoco($opcionExtra:String=''):void{
+				var _coloco:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Ciudad de México",llave:1},
+					{valor:"Laredo",llave:2}]);
+				if($opcionExtra == ""){
+					_coloco.removeItemAt(0);
+				}
+				this._datos = _coloco;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default los medios de pago
+			 * * El argumento que recibe puede ser un string tal como: '','--TODOS--'
+			 */ 
+			public function cargaMedioPago($opcionExtra:String=''):void{
+				var _mPago:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Cheque",llave:1},
+					{valor:"Depósito bancario",llave:2},
+					{valor:"Efectivo",llave:3},
+					{valor:"Otros",llave:4},
+					{valor:"Tarjeta",llave:5},
+					{valor:"Transferencia",llave:6}]);
+				   /* {valor:"N/A",llave:7}]);*/
+				if($opcionExtra == ""){
+					_mPago.removeItemAt(0);
+				}
+				this._datos = _mPago;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default los estados de cobro
+			 * * El argumento que recibe puede ser un string tal como: '','--TODOS--'
+			 */ 
+			public function cargaEstadoCobro($opcionExtra:String=''):void{
+				var _cobro:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Cerrado",llave:1},
+					{valor:"Abierto",llave:2}]);
+				if($opcionExtra == ""){
+					_cobro.removeItemAt(0);
+				}
+				this._datos = _cobro;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default el credito pago
+			 * * El argumento que recibe puede ser un string tal como: '','--TODOS--'
+			 */ 
+			public function cargaCreditoPago($opcionExtra:String=''):void{
+				var _cPago:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"15 DIAS",llave:1},
+					{valor:"21 DIAS",llave:2},
+					{valor:"30 DIAS",llave:3},
+					{valor:"45 DIAS",llave:4},
+					{valor:"60 DIAS",llave:5},
+					{valor:"ANTICIPO 50%",llave:6},
+					{valor:"PAGO CONTRA ENTREGA",llave:7},
+					{valor:"PREPAGO 100%",llave:8}]);
+				if($opcionExtra == ""){
+					_cPago.removeItemAt(0);
+				}
+				this._datos = _cPago;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default los días restantes para el pago 
+			 * * El argumento que recibe puede ser un string tal como: '','--TODOS--'
+			 */ 
+			public function cargaDiasRestantes($opcionExtra:String=''):void{
+				var _dRestantes:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:5},
+					{valor:"En Tiempo",llave:0},
+					{valor:"A tres días del vencimiento",llave:1},
+					{valor:"Vencimiento",llave:2},
+					{valor:"Tres días después de vencimiento",llave:3},
+					{valor:"Vencido",llave:4}]);
+				if($opcionExtra == ""){
+					_dRestantes.removeItemAt(0);
+				}
+				this._datos = _dRestantes;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Urgencia
+			 */ 
+			public function cargaUrgencias():void{
+				var _urgencias:ArrayCollection = new ArrayCollection([{valor:"--NINGUNO--", llave: 0},
+					{valor:"Alta", llave: 1},
+					{valor:"Media",llave: 2},
+					{valor:"Baja", llave: 3}]);
+				this._datos = _urgencias;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Conformidad
+			 */ 
+			public function cargarConformidad($opcionExtra:String=''):void{
+				var _dRestantes:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Pendiente",llave:1},
+					{valor:"No aplica",llave:2},
+					{valor:"SI",llave:3},
+					{valor:"NO",llave:4}]);
+				if($opcionExtra == ""){
+					_dRestantes.removeItemAt(0);
+				}
+				this._datos = _dRestantes;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 ********************************************************************************************************** Puesto
+			 */ 
+			public function cargarPuestos($opcionExtra:String=''):void{
+				var _dRestantes:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"DIRECTOR",llave:1},
+					{valor:"GERENTE",llave:2},
+					{valor:"ADMINISTRATIVO",llave:3},
+					{valor:"USUARIO",llave:4}]);
+				if($opcionExtra == ""){
+					_dRestantes.removeItemAt(0);
+				}
+				this._datos = _dRestantes;
+				this.selectedIndex = 0;
+			}
+			/**
+			 ********************************************************************************************************** Decision
+			 */ 
+			public function cargarDecision($opcionExtra:String=''):void{
+				var _dRestantes:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"BAJO",llave:1},
+					{valor:"MEDIO",llave:2},
+					{valor:"ALTO",llave:3},
+					{valor:"DECIDE",llave:4}]);
+				if($opcionExtra == ""){
+					_dRestantes.removeItemAt(0);
+				}
+				this._datos = _dRestantes;
+				this.selectedIndex = 0;
+			}
+			
+			
+			/**
+			 * Este combo traera por default los Tipos de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaTipoProducto($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0,valor2:$opcionExtra},
+					{valor:"ESTANDARES",llave:1,valor2:"ESTÁNDARES",valor3:"Estandares"},
+					{valor:"LABWARE",llave:2,valor2:"LABWARE",valor3:"Labware"},
+					{valor:"MEDICAMENTOS",llave:3,valor2:"MEDICAMENTOS",valor3:"Medicamentos"},
+					{valor:"PUBLICACIONES",llave:4,valor2:"PUBLICACIONES",valor3:"Publicaciones"},
+					{valor:"REACTIVOS",llave:5, valor2:"REACTIVOS",valor3:"Reactivos"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default el Control de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaSubTipoProducto($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"BIOLÓGICO",llave:1,valor2:"Biológico"},
+					{valor:"QUÍMICO",llave:2,valor2:"Químico"} 
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default el Control de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaControlProductos($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"MUNDIALES",llave:1,valor2:"Mundiales"},
+					{valor:"NACIONALES",llave:2,valor2:"Nacionales"},
+					{valor:"NORMAL",llave:3,valor2:"Normal"}]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			/**
+			 * Este combo traera por default el depositario internacional
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaDepositarioInternacional($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"ATCC",llave:1},
+					{valor:"CIP",llave:2},
+					{valor:"IMI",llave:3},
+					{valor:"NCIMB",llave:4},
+					{valor:"NCTC",llave:5},
+					{valor:"NBRC",llave:6},
+					{valor:"NCPF",llave:7}]);
+				
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default el Control de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaClasifQuimico($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"BASE",llave:1,valor2:"Base"},
+					{valor:"COMPUESTO RELACIONADO",llave:2,valor2:"Compuesto relacionado"} 
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default el Control de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaClasifTodos($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"BACTERIA",llave:1,valor2:"Bacteria"},
+					{valor:"HONGO",llave:2,valor2:"Hongo"},
+					{valor:"LEVADURA",llave:3,valor2:"Levadura"},
+					{valor:"PARÁSITO",llave:4,valor2:"Parásito"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default la clasificación de Producto Tipo Psicotrópico
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaClasifProductoPsicotropico($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"PSICOTRÓPICO",llave:1,valor2:"Psicotrópico"},
+					{valor:"PRECURSOR",llave:2,valor2:"Precursor"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default el Control de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaTipoPermiso($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"ALOPÁTICO",llave:1,valor2:"Alopático"},
+					{valor:"PLAFEST",llave:2,valor2:"Plafest"},
+					{valor:"PSICOTRÓPICO",llave:3,valor2:"Psicotrópico"} 
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default el Control de Productos
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaEstadoFisico($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"SÓLIDO",llave:1, valor2:"Solido"},
+					{valor:"LÍQUIDO",llave:2, valor2:"Liquido"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargaClientesEstado(valorAdicional:String, tipo:String, $primerItem:String = "" ):void
+			{
+				var evtCli:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CLIENTES_ESTADO);
+				evtCli.valorAdicional = valorAdicional;
+				evtCli.tipo = tipo;
+				dispatchEvent( evtCli );
+				_primerItem = $primerItem;
+			}
+			 
+			
+			
+			/**
+			 * 
+			 * Funcion pública que obtiene los agentes aduanales
+			 * 
+			 * */
+			public function solicitarListaAgentesAduanales(valorAdicional:String,$idConfiguracion:Number):void
+			{
+				_datos = null;
+				_primerItem = '';
+				var evento:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.SOLICITAR_AGENTES_ADUANALES);
+				if($idConfiguracion > 0)
+				{
+					evento.idConfiguracion = $idConfiguracion;
+				}
+				else
+				{
+					evento.idConfiguracion = 0;
+				}
+				
+				dispatchEvent( evento );
+				_primerItem = valorAdicional;
+			}
+			
+			private var age:AgenteAduanal;
+			public function set recibeListaAgentesAduanales($agentes:ArrayCollection):void{
+				if($agentes == null){
+					return;
+				}
+				
+				//datos = $agentes;
+				
+				//formar los items de Agente aduanal
+				var seAgregoDefault:Boolean = false;
+				_datos = new ArrayCollection;
+				var currentItem:Object;
+				if( _primerItem != "" ){
+					currentItem = new Object;
+					currentItem.key = "0_0";
+					currentItem.valor = _primerItem;
+					currentItem.idAgenteAduanal = 0;
+					currentItem.idLugar = 0;
+					currentItem.llave = 0;
+					_datos.addItem(currentItem);
+					seAgregoDefault = true;
+				}
+				
+				for (var i:int = 0; i < $agentes.length; i++)
+				{
+					currentItem = new Object;
+					
+					currentItem.valor = StringUtil.trim(($agentes[i] as AgenteAduanal).nombreComercial + "_" + ($agentes[i] as AgenteAduanal).lugar.lugarAgenteAbreviatura);
+					currentItem.montoMaximo = ( $agentes[i] as AgenteAduanal).montoMaximo;
+					currentItem.montoMinimo = ( $agentes[i] as AgenteAduanal).montoMinimo;
+					
+					currentItem.idAgenteAduanal = ($agentes[i] as AgenteAduanal).idAgenteAduanal;
+					currentItem.idLugar = ($agentes[i] as AgenteAduanal).lugar.id_lugarAgente;
+					currentItem.key = StringUtil.trim(($agentes[i] as AgenteAduanal).idAgenteAduanal + "_" + ($agentes[i] as AgenteAduanal).lugar.id_lugarAgente);
+					
+					currentItem.llave = seAgregoDefault == true ? i+1:i;
+					_datos.addItem(currentItem);
+				}  
+				
+				this.selectedIndex = 0;
+			}
+			
+			
+			
+			public function solicitarListaConceptosAA($valorAdicional:String, $idLugar:Number):void
+			{
+				_datos = null;
+				_primerItem = '';
+				
+				if($idLugar > 0)
+				{
+					var evento:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.SOLICITAR_CONCEPTOS_DE_UN_LUGAR_AGENTE_ADUANAL);
+					evento.idLugarAgenteAduanal = $idLugar;
+					dispatchEvent( evento );
+					_primerItem = $valorAdicional;
+				}
+				else
+				{
+					_datos = new ArrayCollection;
+					var item:Object = new Object;
+					item.llave = 0;
+					item.valor = "--NINGUNO--";
+					_datos.addItem(item);
+					this.selectedIndex = 0;
+				}
+				
+			}
+			
+			public function set recibeListaConceptosLugarAgentesAduanales($listaConceptos:ArrayCollection):void
+			{
+				if($listaConceptos == null)
+				{
+					return;
+				}
+				
+				var seAgregoDefault:Boolean = false;
+				_datos = new ArrayCollection;
+				var currentItem:Object;
+				
+				if( _primerItem != "" ){
+					currentItem = new Object;
+					currentItem.key = "0";
+					currentItem.valor = _primerItem;
+					currentItem.idConcepto = 0;
+					currentItem.llave = 0;
+					_datos.addItem(currentItem);
+					seAgregoDefault = true;
+				}
+				
+				for (var i:int = 0; i < $listaConceptos.length; i++) 
+				{	
+					currentItem = new Object;
+					
+					currentItem.idConcepto = ($listaConceptos[i] as LugarConcepto).idConcepto;
+					if(($listaConceptos[i] as LugarConcepto).monto == 0)
+					{
+						currentItem.valor = ($listaConceptos[i] as LugarConcepto).concepto + "_" +($listaConceptos[i] as LugarConcepto).porcentaje +" %"; 
+					}
+					else
+					{
+						currentItem.valor = ($listaConceptos[i] as LugarConcepto).concepto + "_" +($listaConceptos[i] as LugarConcepto).monto +" Dls"; 
+					}
+					currentItem.llave = seAgregoDefault ? i+1: i;
+					_datos.addItem(currentItem);
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			
+			private var valorSeleccionado:String;
+			/**
+			 * Retorna el index de un valor en String pasado como parámetro, con el fin de poder seleccionar dicho valor.
+			 * */
+			public function seleccionarValor($value:String,$atributoParaBuscarValor1AValorN:String = null):int
+			{
+				var item:String;
+				var i:int;
+				
+				if($atributoParaBuscarValor1AValorN == null)
+				{
+					if($value != null && StringUtil.trim($value).length)
+					{
+						item= null;
+						if(this.dataProvider != null && this.dataProvider.length>0)
+						{
+							for (i = 0; i < this.dataProvider.length; i++) 
+							{
+								if(this.labelField.length>0)
+									item = this.dataProvider[i][this.labelField];
+								else
+									item = this.dataProvider[i].valor;
+								if(item == $value)
+								{
+									return i;
+									break;
+								}
+							}
+						}
+					}
+				}
+				else
+				{
+					var currentAtributo:String = StringUtil.trim($atributoParaBuscarValor1AValorN);
+					
+					if($value != null && StringUtil.trim($value).length)
+					{
+						item = null;
+						if(this.dataProvider != null && this.dataProvider.length>0)
+						{
+							for (i = 0; i < this.dataProvider.length; i++) 
+							{
+								
+								if(dataProvider[i].hasOwnProperty(currentAtributo))
+								{
+									
+									item = this.dataProvider[i][currentAtributo];
+									if(item != null && $value.toLowerCase() == item.toLowerCase())
+									{
+										return i;
+										break;
+									}
+								}
+								else
+								{
+									trace("ADVERTENCIA: No se encuentra el atributo "+ currentAtributo + ", en el dataprovider del combo " + this.id);	
+								}
+							}
+						}
+					}
+				}
+				return 0;
+			}
+			
+			
+			/**
+			 * Retorna el index de un valor en entero pasado como parámetro, con el fin de poder seleccionar dicho valor.
+			 * */
+			public function seleccionarValorPorNumero($value:Number,$atributoParaBuscarValor1AValorN:String = null):int
+			{
+				var item:Number;
+				var i:int;
+				
+				if($atributoParaBuscarValor1AValorN != null)
+				{
+					var currentAtributo:String = StringUtil.trim($atributoParaBuscarValor1AValorN);
+					
+					if($value > 0 )
+					{
+						item = 0;
+						if(this.dataProvider != null && this.dataProvider.length > 0)
+						{
+							for (i = 0; i < this.dataProvider.length; i++) 
+							{
+								
+								if(dataProvider[i].hasOwnProperty(currentAtributo) && !isNaN(dataProvider[i][currentAtributo]))
+								{
+									item = this.dataProvider[i][currentAtributo];
+									if($value == item)
+									{
+										return i;
+										break;
+									}
+								}
+								else
+								{
+									trace("ADVERTENCIA: No se encuentra el atributo o no es un número"+ currentAtributo + ", en el dataprovider del combo " + this.id);	
+								}
+							}
+						}
+					}
+				}
+				return 0;
+			}
+			
+			public function cargarTipoIncidencia($primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_TIPO_INCIDENCIA_ASISTENCIA);
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaTipoIncidencia(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = new ArrayCollection;
+				for (var i:int = 0; i< datos.length; i++) 
+				{
+					var obj:Object = {valor:datos[i].nomIncidencia, llave:datos[i].cveIncidencia}
+					this._datos.addItem(obj);
+				}
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			
+			public function solicitarCondicionesDePago($opcionExtra:String=""):void
+			{
+				/* var condicionesPagoTemporal:ArrayCollection = new ArrayCollection([{valor:"15 Días"},{valor:"30 días"},{valor:"10 días"},{valor:"5 días"}]); 
+				
+				_datos = condicionesPagoTemporal;
+				selectedIndex = 0;*/
+				_primerItem=$opcionExtra;
+				dispatchEvent(new EventoComboCatalogos(EventoComboCatalogos.SOLICITAR_CONDICIONES_PAGO_PROVEEDOR)); 
+			}
+			
+			public function set recibirCondicionesDePagoParaProveedor($condiciones:ArrayCollection):void
+			{
+				if($condiciones == null)
+				{
+					if(_primerItem && _primerItem != "")
+					{
+						_datos.addItem(_primerItem);
+					}
+				}
+				else
+				{
+					_datos = new ArrayCollection;
+					if(_primerItem && _primerItem != "" ){
+						var firstItem:CatalogoItem = new CatalogoItem();
+						firstItem.valor = _primerItem;
+						$condiciones.addItemAt(firstItem, 0);
+						_primerItem = "";
+					}
+					_datos = $condiciones;
+				}
+				
+				this.selectedIndex = 0;	
+			}
+			
+			public function solicitarBancosParaElPago($opcionExtra:String = ""):void
+			{
+				/* var bancoTemporal:ArrayCollection = new ArrayCollection([{valor:"Santander"},{valor:"Banamex"},{valor:"Banjio"},{valor:"HSBC"}]);
+				_datos = bancoTemporal;
+				selectedIndex = 0; */
+				_primerItem = $opcionExtra;
+				dispatchEvent(new EventoComboCatalogos(EventoComboCatalogos.SOLICITAR_BANCOS_PAGO_PROVEEDOR));
+			}
+			
+			public function obtenerCuentasBanco(banco:String, fpor:String, primerItem:String):void
+			{
+				_primerItem = primerItem;
+				var event:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.BUSQUEDA_CUENTAS_BANCO);
+				event.banco = banco;
+				event.fpor = fpor;
+				dispatchEvent(event);
+			}
+			
+			public function set recibirCuentasBanco(cuentas:ArrayCollection):void
+			{
+				if(cuentas == null)
+					return;
+				
+					_datos = new ArrayCollection;
+				if(cuentas!=null)
+				{
+					cuentas.addItemAt(_primerItem,0);
+					_datos = cuentas;					
+				}
+				else
+				{
+					_datos.addItem(_primerItem);
+				}
+				selectedIndex = 0;
+			}
+			
+			public function obtenerBancosClientes(fpor:String, primerItem:String):void
+			{
+				_primerItem = primerItem;
+				var event:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.BUSQUEDA_BANCOS_CLIENTES);
+				event.fpor = fpor;
+				dispatchEvent(event);
+			}
+			
+			public function set recibirBancosClientes(bancos:ArrayCollection):void
+			{
+				if(bancos == null)
+					return;
+				
+				_datos = new ArrayCollection;
+				if(bancos!=null)
+				{
+					bancos.addItemAt(_primerItem,0);
+					_datos = bancos;					
+				}
+				else
+				{
+					_datos.addItem(_primerItem);
+				}
+				selectedIndex = 0;
+			}
+				
+			
+			
+			public function set recibirBancosParaElPago($bancos:ArrayCollection):void
+			{
+				if($bancos == null)
+				{
+					if( _primerItem && _primerItem != "")
+					{
+						_datos.addItem(_primerItem);
+					}
+				}
+				else
+				{
+					_datos = new ArrayCollection;
+					if(_primerItem && _primerItem != "" ){
+						var firstItem:CatalogoItem = new CatalogoItem();
+						firstItem.valor = _primerItem;
+						$bancos.addItemAt(firstItem, 0);
+						_primerItem = "";
+					}
+					_datos = $bancos;
+				}
+				
+				this.selectedIndex = 0;	
+			}
+			
+			public function cargarLocalidad($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:"0"},
+					{valor:"PROQUIFA",llave:"DISTRITO FEDERAL"},
+					{valor:"RYNDEM",llave:"CUERNAVACA"},
+					{valor:"GUADALAJARA",llave:"GUADALAJARA"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarCategoria($primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_CATEGORIA_ASISTENCIA);
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaCategoria(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = new ArrayCollection;
+				for (var i:int = 0; i< datos.length; i++) 
+				{
+					var obj:Object = {valor:datos[i].nombreCategoria, llave:datos[i].claveCategoria}
+					this._datos.addItem(obj);
+				}
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarDepartamento($primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_DEPARTAMENTO_ASISTENCIA);
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaDepartamento(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = new ArrayCollection;
+				for (var i:int = 0; i< datos.length; i++) 
+				{
+					var obj:Object = {valor:datos[i].nombreDepartamento, llave:datos[i].claveDepartamento}
+					this._datos.addItem(obj);
+				}
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarArea($primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_AREA_ASISTENCIA);
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaArea(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = new ArrayCollection;
+				for (var i:int = 0; i< datos.length; i++) 
+				{
+					var obj:Object = {valor:datos[i].nombreArea, llave:datos[i].claveArea}
+					this._datos.addItem(obj);
+				}
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			
+			public var ponerGrupos:Boolean=false;
+			public function cargarEmpleadosPorSoloPorTipo($tipo:String,$primerItem:String ="", $ponerGrupos:Boolean = false):void
+			{
+				var solicitarEmpleadosXtipo:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.BUSQUEDA_EMPLEADOS_SOLAMENTE_POR_TIPO);
+				solicitarEmpleadosXtipo.tipo = $tipo;
+				dispatchEvent(solicitarEmpleadosXtipo);
+				_primerItem = $primerItem;
+				ponerGrupos = $ponerGrupos;
+			}
+			
+			public function set recibeEmpleadosSoloPorTipo($empleados:ArrayCollection):void
+			{
+				if($empleados == null)
+				{
+					return;
+				}
+				
+				this._datos = new ArrayCollection;
+				
+				if(StringUtil.trim(_primerItem).length > 0)
+				{
+					var primerObject:Object = {valor:_primerItem, llave:0};
+					_datos.addItem(primerObject);
+				}
+				
+				for (var i:int = 0; i < $empleados.length; i++) 
+				{
+					var currObject:Object;
+					if (ponerGrupos)
+					{
+						currObject = {valor:'GPO'+(i+1)+'-'+$empleados[i].usuario,llave:$empleados[i].idEmpleado};
+					}
+					else
+					{
+						currObject = {valor:$empleados[i].usuario,llave:$empleados[i].idEmpleado};
+					}
+					_datos.addItem(currObject);
+				}
+				
+				ponerGrupos = false;
+				this.selectedIndex = 0;
+			}
+			
+			
+			//////////////////////// COMBO PARA ESAC CON NOMBRE CARTERA //////////////////////////
+			public function cargarESACnombreCartera($primerItem:String =""):void
+			{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_ESAC_CON_NOMBRES_CARTERA);
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirESACnombreCartera(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = new ArrayCollection;
+				for (var i:int = 0; i< datos.length; i++) 
+				{
+					var obj:Object = {valor:datos[i].valor.toUpperCase(), llave:datos[i].idValorCombo, nombre:datos[i].concepto, extra:datos[i].extra}
+					this._datos.addItem(obj);
+				}
+				this._datos = Util.sortArray(_datos,"valor");
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			
+			public function cargarTipoChecada($primerItem:String = ""):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$primerItem,llave:0},
+					{valor:"ENTRADA DE TURNO",llave:"ET"},
+					{valor:"SALIDA A COMER",llave:"SC"},
+					{valor:"ENTRADA DE COMER",llave:"EC"},
+					{valor:"SALIDA DE TURNO",llave:"ST"},
+					{valor:"ENTRADA IMPREVISTA",llave:"EI"},
+					{valor:"SALIDA IMPREVISTA",llave:"SI"},
+				]);
+				if($primerItem == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarTrabajador($primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CATALOGO_TRABAJADOR_ASISTENCIA);
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirListaTrabajador(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = new ArrayCollection;
+				for (var i:int = 0; i< datos.length; i++) 
+				{
+					var obj:Object = {valor:datos[i].nombreCorto.toUpperCase(), llave:datos[i].idTrabajador}
+					this._datos.addItem(obj);
+				}
+				this._datos = Util.sortArray(_datos,"valor");
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			
+			public function cargarEstadoNotaDeCredito($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:"0"},
+					{valor:"APLICADA",llave:"APLICADA"},
+					{valor:"POR APLICAR",llave:"POR APLICAR"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			/**
+			 * Este combo traera por default las opciones de Origen de Documento
+			 * * El argumento que recibe puede ser un string tal como: '','--NINGUNO--','--TODOS--'
+			 */ 
+			public function cargaLugar($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"AEROPUERTO",llave:1},
+					{valor:"LAREDO",llave:2},
+					{valor:"SAN DIEGO",llave:3}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}
+			
+			
+			public function cargaIndustria($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"ALIMENTOS Y BEBIDAS",llave:1},
+					{valor:"CLINICA HOSPITALARIA",llave:2},
+					{valor:"FARMACEUTICA",llave:3},
+					{valor:"OTRA",llave:4}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			
+			public function cargarCondicionesDePago($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"15 Días",llave:1},
+					{valor:"21 Días",llave:2},
+					{valor:"30 Días",llave:3},
+					{valor:"45 Días",llave:4},
+					{valor:"60 Días",llave:5},
+					{valor:"Anticipo 50%",llave:6},
+					{valor:"Pago contra entrega",llave:7},
+					{valor:"Prepago 100%",llave:8}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			
+			
+			public function cargarTipoRegion($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"CENTRO",llave:1},
+					{valor:"GUADALAJARA",llave:2}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			
+			public function cargarRegion($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"AZCAPOTZALCO-GAM",llave:1},
+					{valor:"BENITO JUAREZ-DEL VALLE",llave:1},
+					{valor:"CELAYA",llave:1},
+					{valor:"CUAUHTEMOC-ROMA",llave:1},
+					{valor:"CUERNAVACA",llave:1},
+					{valor:"IZTACALCO",llave:1},
+					{valor:"MIGUEL HIDALGO-POLANCO",llave:1},
+					{valor:"MORELIA",llave:1},
+					{valor:"NAUCALPAN-TLALNEPANTLA",llave:1},
+					{valor:"PERIFERICO SUR-ALVARO OBREGON",llave:1},
+					{valor:"PUEBLA",llave:1},
+					{valor:"QUERETARO",llave:1},
+					{valor:"SALIDA A QRO-CUAUTITLAN",llave:1},
+					{valor:"SALIDA A TOLUCA-CUAJIMALPA",llave:1},
+					{valor:"TLAHUAC-IZTAPALAPA",llave:1},
+					{valor:"TLALPAN-COYOACAN",llave:1},
+					{valor:"TOLUCA",llave:1},
+					{valor:"XOCHIMILCO",llave:2}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			
+			
+			public function cargaSector($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"PRIVADO",llave:1},
+					{valor:"PUBLICO",llave:2}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}
+			
+			public function tipoEntregaClientes($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Almacén",llave:1},
+					{valor:"Usuario",llave:2},
+					{valor:"Compras",llave:3},
+					{valor:"Recoge en Proquifa",llave:2}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}
+			
+			
+			public function cargaRol($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"DISTRIBUIDOR",llave:1},
+					{valor:"LABORATORIO",llave:2},
+					{valor:"OTRO",llave:3}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}
+			
+			
+			public function cargaNP($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"ALTO",llave:1},
+					{valor:"MEDIO",llave:2},
+					{valor:"BAJO",llave:3}]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}
+			
+			/**
+			 * Combo con tipo de Notas de Credito
+			*/
+			public function cargarTipoNotaDeCredito($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:""},
+					{valor:"FACTURA",llave:"Factura"},
+					{valor:"PERIODO",llave:"Periodo"},
+					{valor:"SOBRANTE",llave:"Sobrante"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			
+			/**  
+			* Cargar Empresar por servicio
+			*/
+			public function cargaEmpresasxServicio($primerItem:String = ""):void{
+				 var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_EMPRESAS);
+				dispatchEvent( evento );
+				_primerItem = $primerItem; 
+			}
+			
+			public function set recibirListaEmpresas(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				
+				 if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				} 
+				
+				this.selectedIndex = 0;
+			}
+			
+			/**  
+			 * Cargar Corporativos
+			 */
+			public function cargaCorporativos(e:Empleado,$primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CORPORATIVOS);
+				var ejecutivo:Boolean = false;
+				if( e.idFuncion == 22 || e.idFuncion == 1 || e.idFuncion == 2  || e.idFuncion == 35 || e.usuario == "ernestogl" || e.esGerente == true )
+				{
+					ejecutivo = true;
+				}
+				evento.idUsuario = ejecutivo == true ? "": e.usuario;
+				dispatchEvent( evento );
+				_primerItem = $primerItem; 
+			}
+			
+			public function set recibirListaCorporativos(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					firstItem.llave = -1;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				} 
+				
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarImportancia($opcionExtra:String=''):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"MAXIMA",llave:5},
+					{valor:"ALTA",llave:4},
+					{valor:"MEDIA",llave:3},
+					{valor:"BAJA",llave:2},
+					{valor:"MUY BAJA",llave:1}
+					]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				
+				this._datos = _origen;
+				this.selectedIndex = 1;
+			}	
+			
+			public function cargarEstadoConfirmacion($opcionExtra:String = ""):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Por realizar",llave:1},
+					{valor:"Realizada",llave:2},
+					{valor:"En realización",llave:3}
+				]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarPrioridadConfirmacion($opcionExtra:String = ""):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"P0",llave:1},
+					{valor:"P1",llave:2},
+					{valor:"P2",llave:3},
+					{valor:"FT",llave:4}
+				]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarTipoProveedorConfirmacion($opcionExtra:String = ""):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Regular",llave:1},
+					{valor:"Temporal",llave:2}
+				]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargaCompro($valor:Boolean , valorAdicional:String):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_COMPRO_EMPRESAS);
+				evento.habilitado = $valor;
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			
+			public function set recibirEmpresasCompro($lista:ArrayCollection):void
+			{
+				if($lista == null)
+					return;
+				
+				_datos = $lista;
+				selectedIndex = 0;
+			}
+			
+			/**  
+			 * Cargar Distribuidores
+			 */
+			public function cargarDistribuidores(habilitado:Boolean,$primerItem:String = ""):void{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_DISTRIBUIDORES);
+				evento.empleado = DatosGlobales.getInstance()._usuario;
+				evento.habilitado = habilitado;
+				dispatchEvent( evento );
+				_primerItem = $primerItem; 
+			}
+			
+			public function set recibirListaDistribuidores(datos:ArrayCollection):void{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				this._datos = datos;
+				
+				if( _primerItem != "" ){
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					_datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				} 
+				
+				this.selectedIndex = 0;
+			}
+			
+			public function cargaRoles($opcionExtra:String = ""):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"DISTRIBUIDOR",llave:1},
+					{valor:"FABRICANTE",llave:2},
+					{valor:"FABRICANTE Y DISTRIBUIDOR",llave:3}
+				]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			
+			public function cargaRanking($opcionExtra:String = ""):void{
+				var _origen:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"1",llave:1},
+					{valor:"2",llave:2},
+					{valor:"3",llave:3}
+				]);
+				if($opcionExtra == ""){
+					_origen.removeItemAt(0);
+				}
+				
+				this._datos = _origen;
+				this.selectedIndex = 0;
+			}
+			
+			
+			//------------------------------  COMBO PARA LISTA DE AGENTE ADUANAL ------------------------------
+			public function cargaAgenteAduanal(valorAdicional:String=""):void
+			{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_AGENTE_ADUANALES);
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			public function set recibirListaAgentesAduanales(datos:ArrayCollection):void
+			{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				_datos = datos;
+				selectedIndex = 0;
+			}
+			
+			
+			//------------------------------  COMBO PARA LISTA DE TIPO DE PRODUCTOS ------------------------------
+			public function cargaTipoProductos(valorAdicional:String = ""):void
+			{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_TIPO_PRODUCTOS);
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			public function set recibirListaTipoProductos(datos:ArrayCollection):void
+			{
+				if(datos == null || datos.length == 0){
+					return;
+				}
+				_datos = datos;
+				selectedIndex = 0;
+			}
+
+			private var ningunaRuta:ArrayCollection = new ArrayCollection
+				([
+					{valor:"--NINGUNA--",llave:0}
+				]);
+			
+			private var mensajeriaRuta:ArrayCollection = new ArrayCollection
+				([
+					{valor:"--NINGUNA--",llave:0},
+					{valor:'DHL',llave:1},
+					{valor:'UPS',llave:2},
+					{valor:'ESTAFETA',llave:3},
+					{valor:'FEDEX',llave:4},
+					{valor:'AEROEXPRESS',llave:5},
+					{valor:'MULTIPACK',llave:6}
+				]);
+			
+			private var localRuta:ArrayCollection = new ArrayCollection
+				([
+					{valor:"--NINGUNA--",llave:0},
+					{valor:'SUR',llave:1},
+					{valor:'NORTE',llave:2},
+					{valor:'TOLUCA',llave:3},
+					{valor:'CUERNAVACA',llave:4},
+					{valor:'PUEBLA',llave:5}
+				]);
+			
+			public function cargarZonasPorRutas($ruta:String):void
+			{
+				if($ruta.toLowerCase() == "--ninguna--")
+				{
+					_datos = ningunaRuta;
+				}
+				else if($ruta.toLowerCase() == "local")
+				{
+					_datos = localRuta;
+				}
+				else
+				{
+					_datos = mensajeriaRuta;
+				}
+				
+				this.selectedIndex = 0;
+			}
+			
+			/**  
+			* COMBO LISTA DE INSPECTORES
+			*/
+			public function cargarInpectores($primerItem:String):void{
+				var solicitarInspectores:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.SOLICITAR_INPECTORES);
+				solicitarInspectores.valorAdicional = "";
+				dispatchEvent(solicitarInspectores);
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirInspectores($inspectores:ArrayCollection):void{
+				if ($inspectores == null || $inspectores.length == 0){
+					return;
+				}
+				this._datos = $inspectores;
+				if (_primerItem != ""){
+					var firsItem:CatalogoItem = new CatalogoItem();
+					firsItem.valor = _primerItem;
+					firsItem.llave = 0;
+					_datos.addItemAt(firsItem, 0);
+					_primerItem = "";
+				}
+				
+				this.selectedIndex = 0
+			}
+			
+			public function cargaNivelIngreso($opcionExtra:String=''):void{
+				var nivelI:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0,valor2:$opcionExtra},
+					{valor:"AA+",llave:1,valor2:"AAplus"},
+					{valor:"AA",llave:2,valor2:"AA"},
+					{valor:"AM",llave:1,valor2:"AM"},
+					{valor:"AB",llave:1,valor2:"AB"},
+					{valor:"MA",llave:2,valor2:"MA"},
+					{valor:"MM",llave:2,valor2:"MM"},
+					{valor:"MB",llave:2,valor2:"MB"},
+					{valor:"Bajos",llave:2,valor2:"Bajos"},
+					{valor:"Nuevos",llave:2,valor2:"Nuevos"},
+					{valor:"Distribuidor",llave:2,valor2:"Distribuidor"}
+				]);
+				if($opcionExtra == ""){
+					nivelI.removeItemAt(0);
+				}
+				this._datos = nivelI;
+				this.selectedIndex = 0;
+			}
+			public function cargarTipoDocumentosEnviados($primerItem:String = ""):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$primerItem,llave:0},
+					{valor:"Pedidos por enviar",llave:1},
+					{valor:"Cotizaciones por enviar",llave:2},
+					{valor:"Proforma por enviar",llave:3},
+					{valor:"Facturas por enviar",llave:4},
+					{valor:"Factura-Proforma por enviar",llave:5},
+					{valor:"Notificaciones por enviar",llave:6},
+				]);
+				if($primerItem == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+			private var dataChange:Boolean = false;
+			override public function set dataProvider(value:IList):void
+			{
+				super.dataProvider = value;
+				selectedIndex = 0;
+				
+				if (dataProvider != null && dataProvider.length > 0)
+				{
+					selecionarIndex();
+				}
+			}
+			
+			public function selecionarIndex():void
+			{
+				selectedIndex = 0;
+				if(selectedItem != null && selectedItem != undefined)
+				{
+					return;
+				}
+				setTimeout(selecionarIndex,100);
+			}
+			
+			override protected function itemSelected(index:int, selected:Boolean):void
+			{
+				super.itemSelected(index, selected);
+			}
+			
+			/**
+			 * Este combo traera las revisiones de facturacion
+			 * * El argumento que recibe puede ser un string tal como: '','--NO APLICA--'
+			 */ 
+			public function cargarRevisionFactura($opcionExtra:String=''):void{
+				var _revision:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"Física",llave:1,valor2:"Física"},
+					{valor:"Factura Portal",llave:2,valor2:"Factura Portal"},
+					{valor:"Ambas",llave:1,valor2:"Ambas"}]);
+				if($opcionExtra == ""){
+					_revision.removeItemAt(0);
+				}
+				this._datos = _revision;
+				this.selectedIndex = 0;
+			}
+			
+			
+			
+			public function cargaVigencia($opcionExtra:String=''):void{
+				var _extra:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:0},
+					{valor:"0:15 Hrs",llave:15},
+					{valor:"0:30 Hrs",llave:30},
+					{valor:"1:00 Hrs",llave:60},
+					{valor:"1:30 Hrs",llave:60},
+					{valor:"2:00 Hrs",llave:120}]);
+				if($opcionExtra == ""){
+					_extra.removeItemAt(0);
+				}
+				this._datos = _extra;
+				this.selectedIndex = 0;
+			}
+			
+			public function cargarTipoHallazgo($opcionExtra:String=''):void{
+				var _tipo:ArrayCollection = new ArrayCollection([{valor:$opcionExtra,llave:""},
+					{valor:"Competencia",llave:"Competencia"},
+					{valor:"Marca",llave:"Marca"},
+					{valor:"Regulatorio",llave:"Regulatorio"}
+				]);
+				if($opcionExtra == ""){
+					_tipo.removeItemAt(0);
+				}
+				this._datos = _tipo;
+				this.selectedIndex = 0;
+			}
+			
+		]]>
+	</fx:Script>
+</s:ComboBox>

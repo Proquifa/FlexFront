@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" 
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.pedidos.EventoConsultaPedidosNuevo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pedido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _graficoTipo:Boolean = false;
+			[Bindable] private var _infoVsETFT:ArrayCollection = new ArrayCollection();
+			
+			public function set obtenerInfopedidoGrafica($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoVsETFT = new ArrayCollection();
+				mychart.dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				var arrayTemp:Array = new Array();
+				arrayTemp = ObjectUtil.copy(($infoGrafica) as ArrayCollection).source;
+				arrayTemp.sortOn("enTiempo",Array.DESCENDING);
+				
+				/**
+				 * Se obtiene un array con ET o FT con el fin de saber si vienen los dos o sólo uno 
+				 *  sin duplicarse, que será el que controlará el for para las sumas.
+				 * */
+				keys = new Object();
+				var arrayTotalETvsFT:Array = new Array();
+				arrayTotalETvsFT = arrayTemp.filter(quitaDuplicados);
+				
+				if(arrayTotalETvsFT.length>1)
+					arrayTotalETvsFT.sortOn("enTiempo",Array.DESCENDING);
+				
+				FormarLosETvsFT(arrayTotalETvsFT,arrayTemp,"ETVSFT",_infoVsETFT);
+				
+				
+				mychart.dataProvider = mychart.aplicarFormatoConsultasGraficas(_infoVsETFT);
+				
+				//Para liberar Memoria
+				arrayTemp = new Array();
+				arrayTotalETvsFT = new Array();
+				keys = new Object();
+			}
+			
+			private function FormarLosETvsFT(TotalETvsFT:Array,etvsftInfo:Array,etiqueta:String,infoETvsFT:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPedidos:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientesAbiertas:Object= new Object();
+				var keysPedidosFT:Object= new Object();
+				var keys2:Object = new Object();
+				keys = new Object();
+				
+				var currentPartidaPedido:Pedido; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalETvsFT.length; i++){
+					j=0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPedidos =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaPedido = etvsftInfo[j] as Pedido;
+					while( (TotalETvsFT[i] as Pedido).enTiempo == currentPartidaPedido.enTiempo ){
+						totalPartidas += currentPartidaPedido.totalPartidas;
+						totalPiezas += currentPartidaPedido.totalPiezas;
+						totalMonto += currentPartidaPedido.montoTotal;
+						
+						/**
+						 * Para el conteo de cotizaciones Dando Peso a las cotizaciones que están FT
+						 * */
+						if( currentPartidaPedido.enTiempo == "FT"){
+							if(!keysPedidosFT.hasOwnProperty(currentPartidaPedido.cpedido)){
+								keysPedidosFT[currentPartidaPedido.cpedido] = currentPartidaPedido.cpedido;
+								totalPedidos++;
+							}
+							if(!keysClientesAbiertas.hasOwnProperty(currentPartidaPedido.nombreCliente)){
+								keysClientesAbiertas[currentPartidaPedido.nombreCliente] = currentPartidaPedido.nombreCliente;
+								totalClientes++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentPartidaPedido.cpedido) ){
+								keys[currentPartidaPedido.cpedido]=currentPartidaPedido.cpedido;
+								totalPedidos++;
+							}
+							if(!keys2.hasOwnProperty(currentPartidaPedido.nombreCliente) ){
+								keys2[currentPartidaPedido.nombreCliente] = currentPartidaPedido.nombreCliente;
+								totalClientes++;
+							}
+						}
+						
+						etvsftInfo.shift();
+						if(etvsftInfo.length >0)
+							currentPartidaPedido = etvsftInfo[j] as Pedido;
+						else
+							currentPartidaPedido =new Pedido();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalETvsFT[i] as Pedido).enTiempo.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = (TotalETvsFT[i] as Pedido).enTiempo.toLocaleUpperCase();
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalPedidos = totalPedidos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoETvsFT.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+				/**
+				 * Se necesita ordenar inversamente primero la suma de los ET y luego los FT para invertir colores en la gráfica.
+				 * */ 
+				if(infoETvsFT.length>0){
+					if(infoETvsFT.length == 1){
+						if((infoETvsFT[0] as ResumenConsulta).conceptoResultado == "FT"){
+							itemResumenConsulta = new ResumenConsulta();
+							itemResumenConsulta.conceptoResultado ="ET";
+							itemResumenConsulta.etiqueta = "ET";
+							itemResumenConsulta.total = 0;
+							itemResumenConsulta.piezasTotal =0;
+							itemResumenConsulta.totalPedidos =0;
+							itemResumenConsulta.totalClientes =0;
+							itemResumenConsulta.partidas = 0;
+							infoETvsFT.addItemAt(itemResumenConsulta,0);
+						}
+					} else{
+						var sortField:SortField = new SortField();
+						sortField.name = "conceptoResultado";
+						sortField.numeric = false;
+						
+						var sort:Sort = new Sort();
+						sort.fields = [sortField];
+						infoETvsFT.sort = sort;
+						infoETvsFT.refresh();
+					} 
+				}
+			}
+			
+			private function selectedVs(event:ChartItemEvent):void{
+				var evt:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.MOSTRAR_SELECTED_GRAFICA);
+				
+				evt.tipo = event.hitData.item.etiqueta;
+				evt.seleccionarGraficas = 1;
+				evt.valorAdicional = 'grafETVsFT';
+				dispatchEvent(evt);
+			} 
+			
+			private function quitaDuplicados(item:Pedido, idx:uint, _clientes:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.enTiempo)){
+					return false;
+				}else{
+					keys[item.enTiempo]= item.enTiempo;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="ENTREGADO ET vs FT" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+	
+	<s:VGroup width="100%" verticalAlign="top" gap="0" >
+		<graficas:PieChartPqGris id="mychart" etiquetasHabilitadas="true" habilitarResumen="true"
+								 fondoCircular="true" fondoCircularRadius="7"
+								 showDataTips="false"  innerRadius=".5" 
+								 lineasHabilitadas="true" 
+								 width="100%" height="100%" 
+								 dataProvider="{null}"
+								 >
+			<graficas:series>
+				<graficas:pieSeriesVS field="partidas"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+	</s:VGroup>
+</s:Group>

@@ -1,0 +1,485 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:formatoCol ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Accion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.ConsultaIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Ponderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.AnalisisIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.IncidenteDecision;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.ReferenciasIncidente;
+			import mx.controls.Alert;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			private var _registroIncidente:ConsultaIncidenteRegistro =null;
+			private var _componenteGestion:ConsultaIncidenteGestion = null;
+			private var _componenteVerificacion:ConsultaIncidenteRealizacionVerificacion = null;
+			private var _componentePonderacion:IncidenteConsultaPonderacion = null;
+			private var _componenteRechazo:ConsultaIncidenteRechazado = null;
+			private var _referencias:ReferenciasIncidente;
+			private var _analisisIncidente:AnalisisIncidente;
+			private var _decisionIncidente:IncidenteDecision;
+			private var _incidente:Incidente;
+			private var _listaReferencias:ArrayCollection;
+			private var _gestion:Gestion;
+			private var _analisisOdecision:String;
+			private var _listaAcciones:ArrayCollection;
+			private var _ponderacion:Ponderacion;
+			[Bindable]
+			public var _parametros:ConsultaIncidente;
+
+			/**
+			 * funcion con la que se inicia el componente, tambien dispara un evento que busca en el mapa MapaIncidenteConsulta
+			 * el incidente por su is y lo regresa en el metodo obtenIncidente();
+			 */ 
+			public function inicia( parametros:ConsultaIncidente ):void{
+				this._parametros = parametros;
+				this._gestion = new Gestion();
+				this._listaAcciones = new ArrayCollection();
+				this._listaReferencias = new ArrayCollection();
+				if( this._parametros.decision == "ND"){
+					this.lblDecisionPendiente.width = 165;
+					this.lblDecisionPendiente.height = 24;
+					this.lblDecisionAceptado.width = 0;
+					this.lblDecisionAceptado.height = 0;
+					this.lblDecisionRechazado.width = 0;
+					this.lblDecisionRechazado.height = 0;
+				}else if( this._parametros.decision == "Aceptado"){
+					this.lblDecisionAceptado.width = 152;
+					this.lblDecisionAceptado.height = 24;
+					this.lblDecisionPendiente.width = 0;
+					this.lblDecisionPendiente.height = 0;
+					this.lblDecisionRechazado.width = 0;
+					this.lblDecisionRechazado.height = 0;
+				}else if( this._parametros.decision == "Rechazado"){
+					this.lblDecisionRechazado.width = 175;
+					this.lblDecisionRechazado.height = 24;
+					this.lblDecisionPendiente.width = 0;
+					this.lblDecisionPendiente.height = 0;
+					this.lblDecisionAceptado.width = 0;
+					this.lblDecisionAceptado.height = 0;
+				}
+				var eventoH:EventoIncidenteConsulta = new EventoIncidenteConsulta( EventoIncidenteConsulta.CONSULTA_HISTORIAL_INCIDENTE);
+				eventoH.idIncidente = parametros.idIncidente;
+				dispatchEvent( eventoH ); 
+				var evento:EventoIncidenteConsulta = new EventoIncidenteConsulta( EventoIncidenteConsulta.CONSULTA_INCIDENTE_POR_ID );
+				evento.idIncidente = parametros.idIncidente;
+				dispatchEvent( evento );
+			}
+			
+			[Bindable]
+			private var arreglo:ArrayCollection = new ArrayCollection();
+			
+			/**
+			 * Metodo que recibe el historial del Incidente
+			 */ 
+			public function set recibeHistorial( datos:ArrayCollection ):void{
+				this.arreglo = new ArrayCollection();
+				if( datos == null ){
+					return;
+				}
+				 (datos.getItemAt( 0 ) as ConsultaIncidente ).fechaInicio = null; 
+				 (datos.getItemAt( 0 ) as ConsultaIncidente ).tiempoProceso = "00:00"; 
+				var sumaTemporal:Number = 0;
+				for( var i:int = 0; i< datos.length; i++ ){
+					sumaTemporal = sumaTemporal + ( datos.getItemAt( i ) as ConsultaIncidente ).tiempoTotal;
+					datos[i].numFila = i+ 1;
+				}
+				this.lblDiasTotales.text = sumaTemporal.toString() + " día(s)";
+				this.arreglo = ObjectUtil.copy(datos) as ArrayCollection;
+			}
+			/**
+			 * Metodo que recibe del mapa MapaIncidenteConsulta un Incidente
+			 */ 
+			public function set obtenIncidente( dato:Incidente ):void{
+				if( dato == null ){
+					return;
+				}
+				this._incidente = new Incidente();
+				this._incidente = dato;
+				visualizaRegistro(); 
+				if( this._incidente.idGestiono.toString() != "NaN" || this._incidente.idGestiono > 0 ){
+					llamaGestion();
+				}
+			}
+			/**
+			 * funcion para llamar la gestion al MapaIncidenteConsulta
+			 */ 
+			private function llamaGestion():void{
+				var evento:EventoIncidenteConsulta = new EventoIncidenteConsulta( EventoIncidenteConsulta.CARGA_GESTION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion que recibe del mapa MapaIncidenteConsulta la Gestion 
+			 */  
+			public function set cargaGestion(datos:Gestion):void{
+				if( datos == null ){
+					return;
+				}
+				this._gestion = new Gestion();
+				this._gestion = datos;
+				if( this._parametros.decision != "ND" && this._parametros.decision != "Rechazado" && this._gestion.decision == true ){
+					buscaAcciones();
+				}
+			}
+			/**
+			 * Si el estatus del incidente fue aceptado se busca las acciones del Incidente
+			 */ 
+			private function buscaAcciones():void{
+				var evento:EventoIncidenteConsulta = new EventoIncidenteConsulta( EventoIncidenteConsulta.CONSULTA_ACCIONES );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que recibe del mapa La Lista de Acciones asociadas al Incidente. Ademas manda a llamar la funcion para 
+			 */ 
+			public function set recibeListaAcciones( datos:ArrayCollection ):void{
+				if( datos == null ){
+					return;
+				}
+				this._listaAcciones = datos;
+				var eventoP:EventoIncidenteConsulta = new EventoIncidenteConsulta( EventoIncidenteConsulta.CONSULTA_PONDERACION );
+				eventoP.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( eventoP );
+			}
+			/** 
+			 * Metodo que recibe la ponderacion
+			 */ 
+			public function set recibePonderacion( datos:Ponderacion ):void{
+				if( datos == null ){
+					return;
+				}
+				this._ponderacion = datos;
+			}
+			/**
+			 * Metodo par vizualisar el registro del incidente
+			 */ 
+			private function visualizaRegistro():void{
+				this.espacioConsulta.removeAllChildren();
+				if( this._registroIncidente == null ){
+					this._registroIncidente = new ConsultaIncidenteRegistro();
+				}
+				this.espacioConsulta.addChild( this._registroIncidente ); 
+				this._registroIncidente._incidente = this._incidente;
+			}
+			/**
+			 * Metodo par vizualisar el gestion del incidente
+			 */ 
+			private function visualizaGestion( datos:ConsultaIncidente ):void{
+				this.espacioConsulta.removeAllChildren();
+				if( this._componenteGestion == null ){
+					this._componenteGestion = new ConsultaIncidenteGestion();
+				}
+				this._componenteGestion._gestion = this._gestion;
+				this._componenteGestion._listaAccion = this._listaAcciones;
+				this._componenteGestion._parametros = this._parametros;
+				this._componenteGestion._opcionSeleccionada = datos;
+				this.espacioConsulta.addChild( this._componenteGestion ); 
+				this._componenteGestion.inicia();
+			}
+			/**
+			 * Metodo para vizualizar la Realizacion y Verificacion de la accion
+			 */ 
+			private function visualizaAccion( datos:ConsultaIncidente ):void{
+				this.espacioConsulta.removeAllChildren();
+				if( this._componenteVerificacion == null ){
+					this._componenteVerificacion = new ConsultaIncidenteRealizacionVerificacion();
+				}
+				this.espacioConsulta.addChild( this._componenteVerificacion ); 
+				this._componenteVerificacion._listaAccion = this._listaAcciones;
+				this._componenteVerificacion._opcionSeleccionada= datos;
+				if( this._gestion.nombreEmpleado == null || this._gestion.nombreEmpleado == ""){
+					this._gestion.nombreEmpleado = "Pendiente";
+				}
+				this._componenteVerificacion._programo = this._gestion.nombreEmpleado;
+				this._componenteVerificacion.inicia();
+				for( var i:int = 0; i < this.arreglo.length ; i++ ){					
+					if(   (this.arreglo.getItemAt( i ) as ConsultaIncidente).folio == datos.folio ){ // si en la lista se encuentra el folio seleccionado
+						if( datos.fechaInicio  == null ){
+							this._componenteVerificacion._fechaInicioAccion = "Pendiente"
+						}else{
+							this._componenteVerificacion._fechaInicioAccion = UtilsFecha.formatoFechaDDMMMYYYYHHMM( datos.fechaInicio );
+						}
+						if((this.arreglo.getItemAt( i ) as ConsultaIncidente).fechaFin == null ){ //si en la fecha fin del grid se encuentra nula sera un ND
+							this._componenteVerificacion._fechaRealizacionVerificacion = "Pendiente";
+						}else{
+							this._componenteVerificacion._fechaRealizacionVerificacion = UtilsFecha.formatoFechaDDMMMYYYYHHMM( (this.arreglo.getItemAt( i ) as ConsultaIncidente).fechaFin );
+						}
+					}
+				}
+			}
+			/**
+			 * Metodo par vizualisar la ponderacion del incidente
+			 */ 
+			private function visualizaPonderacion( datos:ConsultaIncidente ):void{
+				this.espacioConsulta.removeAllChildren();
+				if( this._componentePonderacion == null ){
+					this._componentePonderacion = new IncidenteConsultaPonderacion();
+				}
+				this.espacioConsulta.addChild( this._componentePonderacion ); 
+				this._componentePonderacion._incidente = this._incidente;
+				this._componentePonderacion._opcionSeleccionada = datos;
+				this._componentePonderacion.inicia( this._ponderacion );
+			}
+			/**
+			 * Metodo par vizualisar un incidente Rechazado
+			 */ 
+			private function visualizaRechazo( datos:ConsultaIncidente ):void{
+				this.espacioConsulta.removeAllChildren();
+				if( this._componenteRechazo == null ){
+					this._componenteRechazo = new ConsultaIncidenteRechazado();
+				}
+				this.espacioConsulta.addChild( this._componenteRechazo ); 
+				this._componenteRechazo._gestion = this._gestion;
+				this._componenteRechazo._incidente = this._incidente;
+				this._componenteRechazo._opcionSeleccionada = datos;
+				this._componenteRechazo.inicia();
+			}
+			/**
+			 * funcion para abrir las referencias
+			 */ 
+			private function abrirReferencias():void{
+				this._listaReferencias = this._incidente.referencias;
+				if(this._listaReferencias != null && this._listaReferencias.length > 0 ){
+					if( this._referencias == null ){
+						this._referencias = new ReferenciasIncidente();
+						_referencias = ReferenciasIncidente( PopUpManager.createPopUp( this, ReferenciasIncidente, true ) );  
+						this._referencias.addEventListener( EventoIncidenteConsulta.CIERRA_REFERENCIAS, cierraPopUpReferencias );
+					}else{
+						PopUpManager.addPopUp( _referencias,this,true );
+					}
+					for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+						( this._listaReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaReferencias.getItemAt( i ) as Referencia ).folio;
+					} 
+					this._referencias.folioIncidente = this._incidente.folio;
+					this._referencias.vieneD = "consultaIncidente";
+					this._referencias.listaReferencias = ObjectUtil.copy( this._listaReferencias ) as ArrayCollection; 
+					this._referencias.iniciaReferencias();
+				}else{
+					Alert.show("No existen referencias del incidente", "¡Atención!");
+				}
+			}
+			/**
+			 * funcion para cerrar las referencias
+			 */ 
+			private function cierraPopUpReferencias( evento:EventoIncidenteConsulta ):void{
+				PopUpManager.removePopUp( _referencias );
+			}
+			
+			///////////////////////////////////////////////////////////////////// Para Salir /////////////////////////////////////////////////////////
+			/**
+			 * funcion para regresar al listado de los incidentes consultados
+			 */ 
+			private function regresaAListadoIncidentes():void{
+				/* this.espacioConsulta.removeAllChildren(); */
+				var evento:EventoIncidenteConsulta = new EventoIncidenteConsulta( EventoIncidenteConsulta.REGRESA_AL_GRID );
+				dispatchEvent( evento );
+			}
+			/////////////////////////////////////////////////////////// Fin de Funcion Para Salir /////////////////////////////////////////////////////////
+			/**
+			 * funcion que se ejecuta al darle click a la columna del grid
+			 */ 
+			public function elegirUbicacion( datos:ListEvent ):void{
+				if( (datos.itemRenderer.data as ConsultaIncidente).ubicacion == "Registro" ){
+					this.visualizaRegistro();
+				}else if( (datos.itemRenderer.data  as ConsultaIncidente).ubicacion== "Gestión" ){
+					this.visualizaGestion( datos.itemRenderer.data  as ConsultaIncidente );
+				}else if( (datos.itemRenderer.data  as ConsultaIncidente).ubicacion == "Ponderación" ){
+					this.visualizaPonderacion( datos.itemRenderer.data  as ConsultaIncidente );
+				}else if( (datos.itemRenderer.data  as ConsultaIncidente).ubicacion == "Rechazo" ){
+					this.visualizaRechazo( datos.itemRenderer.data  as ConsultaIncidente );
+				}else{
+					this.visualizaAccion( datos.itemRenderer.data  as ConsultaIncidente );
+				}
+			}
+			/**
+			 * funcion para el formato del grid
+			 */ 
+			private function formatoFecha(dato:Object, col:DataGridColumn ):String{
+				var fechaConFormato:String;
+				
+				if( col.dataField == "fechaInicio" ){
+					if ( ( dato as ConsultaIncidente).fechaInicio == null ){
+						return "ND";
+					}else{
+						fechaConFormato = UtilsFecha.formatoFechaDDMMMYYYYHHMM( ( dato as ConsultaIncidente).fechaInicio );
+					}
+				}else{
+					if ( ( dato as ConsultaIncidente).fechaFin == null ){
+						return "ND";
+					}else{
+						fechaConFormato = UtilsFecha.formatoFechaDDMMMYYYYHHMM( ( dato as ConsultaIncidente).fechaFin );
+					}
+				}
+				return fechaConFormato; 
+			}
+		]]>
+	</fx:Script>
+	<mx:HBox width="100%">
+		<label:labelTitulo_Otros text="INSPECTOR DE DATOS"/>
+		<!--<s:Label fontSize="40" fontWeight="bold" text="INSPECTOR DE DATOS"/>-->
+		<mx:Spacer width="100%"/>
+		<label:labelSubtitulo text="{this._parametros.folio}"/>
+		<!--<s:Label fontSize="24" fontWeight="bold" text="{this._parametros.folio}" color="black" />-->
+	</mx:HBox>
+	<mx:Spacer height="1"/>
+	<otros:division width="100%"/>
+	<!--<mx:HRule width="100%"/>-->
+	<mx:Spacer height="1"/>
+	<mx:HBox width="100%" height="100%">
+			<mx:VBox width="100%" height="100%">
+				<mx:HBox width="100%">
+					<!--<s:Label text="Incidente" fontSize="24" fontWeight="bold"/>-->
+					<label:labelSubtitulo text="Incidente"/>
+					<mx:Spacer width="100%"/>
+					<mx:HBox horizontalGap="0">
+						<label:labelSubtitulo color="#4965DF" text="PENDIENTE" id="lblDecisionPendiente"/>
+						<!--<s:Label color="#4965DF" fontSize="24" fontWeight="bold" text="PENDIENTE" id="lblDecisionPendiente" />-->
+						<label:labelSubtitulo id="lblDecisionAceptado" width="0" height="0" color="#009900" text="ACEPTADO"/>
+						<!--<s:Label id="lblDecisionAceptado" width="0" height="0" color="#009900" fontSize="24"
+								 fontWeight="bold" text="ACEPTADO"/>-->
+						<label:labelSubtitulo id="lblDecisionRechazado" width="0" color="#CC0000" text="RECHAZADO" height="0"/>
+						<!--<s:Label id="lblDecisionRechazado" width="0" color="#CC0000" fontSize="24" height="0"
+								 fontWeight="bold" text="RECHAZADO"/>-->
+					</mx:HBox>
+				</mx:HBox>
+				<mx:VBox width="100%" height="100%" verticalGap="0" horizontalGap="0">
+					<mx:DataGrid dataProvider="{this.arreglo}" width="100%" height="100%" id="dtgHistorial" textAlign="center"  change="elegirUbicacion(event)"  >
+						<mx:columns>
+							<mx:DataGridColumn headerText="#" dataField="numFila" width="20" />
+							<mx:DataGridColumn headerText="UBICACIÓN" dataField="" width="150">
+								<mx:itemRenderer>
+									<fx:Component>
+										<mx:VBox  width="100%" height="100%"  verticalGap="0"  >
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.ConsultaIncidente;
+													import mx.controls.Alert;
+													import mx.events.FlexEvent;
+													[Bindable]
+													private var etiquetaFolio:String;
+													override public function set data(value:Object):void
+													{
+														etiquetaFolio = "";
+														/* super.data = new ConsultaIncidente();
+														objeto = new ConsultaIncidente(); */
+														if(!value){
+															return;
+														}
+														super.data = value;
+														/* objeto = value as ConsultaIncidente; */
+														if( (this.data as ConsultaIncidente).ubicacion == "Gestión"){
+															/* this.lblFolio.percentHeight = 100; */
+															this.etiquetaFolio= "A + D + P";
+														} else if( (this.data as ConsultaIncidente).ubicacion != "Registro" &&  (this.data as ConsultaIncidente).ubicacion != "Ponderación"){
+															this.etiquetaFolio = "R + V";
+														} 
+													}
+												]]>
+											</fx:Script>
+											<mx:Spacer height="3"/>
+											<s:Label  text="{data.ubicacion}"  width="100%" />
+											<mx:Spacer height="3"/>
+											<s:Label width="100%"  id="lblFolio" height="18" text="{ etiquetaFolio }"/>
+										</mx:VBox>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="RESPONSABLE" dataField="responsable"/>
+							<mx:DataGridColumn headerText="INICIO" dataField="fechaInicio" labelFunction="formatoFecha" width="140"/>
+							<mx:DataGridColumn headerText="TERMINÓ" dataField="fechaFin" labelFunction="formatoFecha" width="140"/>
+							<mx:DataGridColumn headerText="TOTAL" dataField="tiempoProceso" width="95"/>
+							<mx:DataGridColumn headerText="TOTAL DÍAS" dataField="tiempoTotal" width="70"/>
+						</mx:columns>
+					</mx:DataGrid>
+					
+					<!--<s:DataGrid dataProvider="{this.arreglo}" width="100%" height="100%" id="dtgHistorial" textAlign="center">
+						<s:columns>
+							<s:ArrayList>
+								<formatoCol:GridColumnFormato formato="numfila" headerText="#" width="20" />
+								<s:GridColumn headerText="UBICACIÓN" dataField="" width="150">
+									<s:itemRenderer >
+										<fx:Component >
+											<s:GridItemRenderer width="100%" >
+												<fx:Script>
+													<![CDATA[
+														import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.ConsultaIncidente;
+														[Bindable]
+														private var etiquetaFolio:String;
+														override public function set data(value:Object):void
+														{
+															etiquetaFolio = "";
+															/* super.data = new ConsultaIncidente();
+															objeto = new ConsultaIncidente(); */
+															if(!value){
+																return;
+															}
+															super.data = value;
+															/* objeto = value as ConsultaIncidente; */
+															if( (this.data as ConsultaIncidente).ubicacion == "Gestión"){
+																/* this.lblFolio.percentHeight = 100; */
+																this.etiquetaFolio= "A + D + P";
+															}else if( (this.data as ConsultaIncidente).ubicacion == "Realización" ||  (this.data as ConsultaIncidente).ubicacion == "Verificación"){
+																/* this.lblFolio.percentHeight = 100; */
+																this.etiquetaFolio = ( this.data as ConsultaIncidente).folio;
+															}
+														}
+													]]>
+												</fx:Script>
+												<mx:VBox width="100%" height="100%"  verticalGap="0"  >
+													<mx:LinkButton label="{data.ubicacion}"  click="this['outerDocument'].elegirUbicacion(this.data)" width="100%" color="blue" textDecoration="underline"/>
+													<mx:Spacer height="3"/>
+													<s:Label width="100%"  id="lblFolio" height="18" text="{ etiquetaFolio }"/>
+												</mx:VBox>
+											</s:GridItemRenderer>
+										</fx:Component>
+									</s:itemRenderer>
+								</s:GridColumn>
+								<s:GridColumn headerText="RESPONSABLE" dataField="responsable"/>
+								<s:GridColumn  dataField="fechaInicio" headerText="INICIO" labelFunction="formatoFecha" width="140"/>
+								<s:GridColumn  dataField="fechaFin" headerText="TERMINÓ" labelFunction="formatoFecha" width="140"/>
+								<s:GridColumn headerText="TOTAL" dataField="tiempoProceso" width="95"/>
+								<s:GridColumn headerText="TOTAL DÍAS" dataField="tiempoTotal" width="95"/>
+								
+							</s:ArrayList>
+						</s:columns>
+					</s:DataGrid>-->
+					<mx:HBox backgroundColor="black" width="100%" paddingTop="5" paddingBottom="5">
+						<mx:Spacer width="100%"/>
+						<s:Label fontSize="18" fontWeight="bold" text="TIEMPO TOTAL DE REALIZACIÓN:" textAlign="right" color="white"/>
+						<!--<label:labelSubtitulo text="TIEMPO TOTAL DE REALIZACIÓN" color="white" textAlign="right"/>
+						<label:labelSubtitulo textAlign="left" id="lblDiasTotales" color="white"/>-->
+						<s:Label  fontSize="18" fontWeight="bold" textAlign="left" id="lblDiasTotales" color="white"/>
+						<mx:Spacer width="100%"/>
+					</mx:HBox>		
+				</mx:VBox>
+				<mx:Spacer height="3"/>
+				<s:Button styleName="botonNegroOld" label="REFERENCIAS" fontSize="13" click="abrirReferencias()" width="100%" />
+			</mx:VBox>
+			<mx:VRule height="100%"/>
+			<mx:VBox width="100%" height="100%" id="espacioConsulta"/>
+	</mx:HBox>
+	<mx:Spacer height="1"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="1"/>
+	<mx:HBox width="100%">
+		<mx:Spacer width="100%"/>
+		<s:Button styleName="botonNegroOld" label="Regresa" width="80" click="regresaAListadoIncidentes()"/>
+	</mx:HBox>
+</mx:VBox>

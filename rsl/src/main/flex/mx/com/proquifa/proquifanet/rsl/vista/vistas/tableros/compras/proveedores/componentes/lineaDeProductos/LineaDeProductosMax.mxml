@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:tabla="skins.botones.tabla.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  xmlns:grafica="skins.botones.grafica.*" 
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet1="skins.skin.datagrid.pqNet.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*" xmlns:label="skins.skin.label.*" xmlns:lineaDeProductos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.lineaDeProductos.*"
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.proveedor.ComprasProveedorLineaProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.PropiedadesProveedor;
+			import mx.utils.ObjectUtil;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			private var _mesesTrabajados:Number = 0;
+			private var _mesesActuales:Number = 0;
+			private var fecha:Date = new Date();
+			public static var vistaGrid:Boolean = false;
+			
+			public function seleccionaTabla():void
+			{
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.tipoEventos.push("BUSCA_COMPARATIVA_LINEA_PRODUCTOS");
+				dispatchEvent(eventEspera);
+				vistaGrid = true;
+				var eventGrid:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCA_COMPARATIVA_LINEA_PRODUCTOS);
+				eventGrid.parametros = PropiedadesProveedor.parametrosBus;
+				eventGrid.parametros.comparativas = true;
+				dispatchEvent(eventGrid);
+				stackGeneral.selectedChild = this.vistaTabla;
+			}
+			public function seleccionarGrafica():void{
+				stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			[Bindable]	public var _listadoLineaDeProductos:ArrayCollection = new ArrayCollection();
+			
+			private function minimiza():void{	
+				vistaGrid = false;
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			public function set recibeLinealDeProductos( $lista:ArrayCollection ):void
+			{
+				if( $lista == null )
+					return;
+				var tempArray:ArrayCollection = Util.sortArray(convertirAResumenConsulta(UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_0" )),"total",true);
+				myChart.dataProvider = myChart.aplicarFormatoTableroProveedores(tempArray );
+				
+				_listadoLineaDeProductos = $lista;
+				filtrarPeriodos($lista);
+			}
+			
+			protected function convertirAResumenConsulta( $lista:ArrayCollection ):ArrayCollection{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				for( var r:int = 0; r < $lista.length; r++ ){
+					var cItem:ComprasProveedorLineaProductos = $lista[r] as ComprasProveedorLineaProductos;
+					var itemResumen:ResumenConsulta = new ResumenConsulta();
+					itemResumen.etiqueta 					= cItem.etiqueta;
+					itemResumen.conceptoResultado 	= cItem.nombre;
+					itemResumen.total 							= cItem.montoCompra;
+					itemResumen.provedorIndividual     = 1;
+					itemResumen.totalCompras	 			= cItem.compras;
+					itemResumen.partidas                    = cItem.totalPartidas;
+					itemResumen.piezasTotal              = cItem.cantidad;
+					arrReturn.addItem( itemResumen );
+				}
+				return arrReturn;
+			}
+			
+			private var _event:EventoTabProveedores;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _keyAnterior:String = "";
+			private var _anioFiltro:Number;
+			private var _anioFiscal:Boolean;
+			public function set recibirFiltrosTableroProveedores(etiqueta:EventoTabProveedores):void{
+				if(etiqueta == null) return;
+				
+				_event = etiqueta;
+				_minimoMeses = _event.parametros.mesInicio;
+				_maximoMeses = _event.parametros.mesFin;
+				_anioFiltro = _event.parametros.anio;
+				_anioFiscal = _event.parametros.anioFiscal;
+				
+				lblPeriodo_0.text = _event.parametros.periodo.toUpperCase();
+				lblPeriodo_1.text = _event.parametros.periodo.toUpperCase();
+				lblPeriodo_2.text = _event.parametros.periodo.toUpperCase();
+				lblPeriodo_3.text = _event.parametros.periodo.toUpperCase();
+				lblPeriodo_4.text =_event.parametros.periodo.toUpperCase();
+				
+				iniciarGrid( _listadoLineaDeProductos );
+			}
+			private function filtrarPeriodos( $lista:ArrayCollection ):void
+			{
+				infoObjetivos.removeAllElements();
+				//obtenerFamilias(UtilsGrid.queryCampoX( $lista));
+				obtenerFamilias(UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_0"));
+				generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_0"),0x307888 );
+				generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_1"),0x595959 );
+				generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_2"),0x551381);
+				generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_3"),0xb58618 );
+				generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "Compras_4"),0xb72d30 );
+				
+				
+			}
+			private function generateObjectItemBarChart( arrTemp:ArrayCollection, color:uint):void
+			{
+				var objeto:Object = new Object();
+				arrTemp = StringFunciones.sortArreglo(arrTemp,"nombre");
+				var vgroup:VGroup = new VGroup;
+				vgroup.percentWidth = 16;
+				vgroup.gap = 25;
+				vgroup.paddingTop = 5;
+				vgroup.horizontalAlign = "center"
+				for (var i:int = 0; i < arrTemp.length; i++) 
+				{
+					var label:Texto_16_GrisCasiNegro = new Texto_16_GrisCasiNegro();
+					label.setStyle("color",color);
+					label.text = "US $ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas((arrTemp[i] as ComprasProveedorLineaProductos).montoCompra);
+					vgroup.addElement(label);
+					var div:division = new division;
+					div.percentWidth = 100;
+					vgroup.addElement(div);
+				}
+				infoObjetivos.addElement(vgroup);
+				
+				
+			}
+			
+			private function obtenerFamilias( arrTemp:ArrayCollection):void
+			{
+				var objeto:Object = new Object();
+				arrTemp = StringFunciones.sortArreglo(arrTemp,"nombre");
+				var vgroup:VGroup = new VGroup;
+				vgroup.percentWidth = 20;
+				vgroup.gap = 25; 
+				vgroup.paddingTop = 5;
+				vgroup.horizontalAlign = "center"
+				for (var i:int = 0; i < arrTemp.length; i++) 
+				{
+					var label:Texto_16_GrisCasiNegro = new Texto_16_GrisCasiNegro();
+					label.text = (arrTemp[i] as ComprasProveedorLineaProductos).nombre;
+					vgroup.addElement(label);
+					var div:division = new division;
+					div.percentWidth = 100;
+					vgroup.addElement(div);
+				}
+				infoObjetivos.addElement(vgroup);
+				
+				
+			}
+			
+			
+			private function iniciarGrid($lista:ArrayCollection):void
+			{
+				_mesesActuales = fecha.getMonth()+1;
+				var periodos:String ;
+				var mesP:String; 
+				
+				if(_anioFiltro == fecha.fullYear)
+				{
+					if(_event.parametros.periodo == "Anual")
+					{
+						_mesesTrabajados = _mesesActuales;
+						lblPeriodo_0.text = obtenerMes(_minimoMeses).toUpperCase()+" - "+obtenerMes(_mesesTrabajados).toUpperCase();
+					}
+					else if(_event.parametros.periodo == "Semestral" || _event.parametros.periodo == "Trimestral") 
+					{
+						periodos = _listaMensual[_minimoMeses - 1] + ' - ' + _listaMensual[_maximoMeses - 1];
+						lblPeriodo_1.text = lblPeriodo_2.text = lblPeriodo_3.text = lblPeriodo_4.text = lblPeriodo_0.text = periodos.toUpperCase();
+					}
+					else if(_event.parametros.periodo == "Mensual")
+					{
+						mesP = _listaMensual[_minimoMeses];
+						lblPeriodo_1.text = lblPeriodo_2.text = lblPeriodo_3.text = lblPeriodo_4.text = lblPeriodo_0.text = mesP.toUpperCase();
+					}
+				}
+				else
+				{
+					if(_event.parametros.periodo == "Anual")
+					{
+						lblPeriodo_0.text = _event.parametros.periodo.toUpperCase();
+					}
+					else if(_event.parametros.periodo == "Semestral" || _event.parametros.periodo == "Trimestral") 
+					{
+						periodos = _listaMensual[_minimoMeses - 1] + ' - ' + _listaMensual[_maximoMeses - 1];
+						lblPeriodo_1.text = lblPeriodo_2.text = lblPeriodo_3.text = lblPeriodo_4.text = lblPeriodo_0.text = periodos.toUpperCase();
+					}
+					else if(_event.parametros.periodo == "Mensual")
+					{
+						mesP = _listaMensual[_minimoMeses];
+						lblPeriodo_1.text = lblPeriodo_2.text = lblPeriodo_3.text = lblPeriodo_4.text = lblPeriodo_0.text = mesP.toUpperCase();
+					}
+				}
+				
+				if(_event.parametros.anioFiscal)
+				{
+					lblAnio_0.text = String( _anioFiltro ) + ' - ' +  String( _anioFiltro +1 );
+					lblAnio_1.text = String( _anioFiltro-1 ) + ' - ' +  String( _anioFiltro );
+					lblAnio_2.text = String( _anioFiltro-2 ) + ' - ' +  String( _anioFiltro -1 );
+					lblAnio_3.text = String( _anioFiltro-3 ) + ' - ' +  String( _anioFiltro -2 );
+					lblAnio_4.text = String( _anioFiltro-4 ) + ' - ' +  String( _anioFiltro -3 );
+					
+					var meses:String = _listaMensual[ _event.mesInicioFiscal -1 ] + ' - ' + _listaMensual[ _event.mesFinFiscal - 1 ] ;
+					lblPeriodo_0.text = lblPeriodo_1.text = lblPeriodo_2.text = meses.toUpperCase();
+					lblPeriodo_3.text = lblPeriodo_4.text = meses.toUpperCase();
+				}
+				else
+				{
+					lblAnio_0.text = (_anioFiltro).toString();
+					lblAnio_1.text = (_anioFiltro-1).toString();
+					lblAnio_2.text = (_anioFiltro-2).toString();
+					lblAnio_3.text = (_anioFiltro-3).toString();
+					lblAnio_4.text = (_anioFiltro-4).toString();
+				}
+			}
+			
+			public function obtenerMes($mes:Number):String
+			{
+				var valor:String="";
+				switch($mes)
+				{
+					case 1:	{valor ="ENERO"; break;}
+					case 2:	{valor ="FEBRERO"; break;}
+					case 3:	{valor ="MARZO"; break;}
+					case 4:	{valor ="ABRIL"; break;}
+					case 5:	{valor ="MAYO";	break;}
+					case 6:	{valor ="JUNIO"; break;}
+					case 7:	{valor ="JULIO"; break;}
+					case 8:	{valor ="AGOSTO"; break;}
+					case 9:	{valor ="SEPTIEMBRE"; break;}
+					case 10:{valor ="OCTUBRE"; break;}
+					case 11:{valor ="NOVIEMBRE"; break;}
+					case 12:{valor ="DICIEMBRE"; break;}
+				}
+				return valor;
+			}
+			protected function myChart_itemRollOverHandler(event:ChartItemEvent):void
+			{
+				var sItem:PieSeriesItem = event.hitData.chartItem as PieSeriesItem;
+				myChart.lblDataTipBold.text = (sItem.item.nombre as String).toUpperCase();
+				myChart.lblDataTip.text = sItem.percentValue.toFixed(2) + " %" 
+					+ '\n' + sItem.item.cantidad + " Pieza" + (sItem.item.cantidad == '1' ? '' : 's')
+					+ '\n' + sItem.item.montoVentaString;
+			}
+			
+			private function compareFunction_MontoCompra(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoCompra,item2.montoCompra); 
+			}
+			
+			private function compareFunction_MontoVenta(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoVenta,item2.montoVenta); 
+			}
+			
+			private function compareFunction_margenDirecto(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.margenDirecto,item2.margenDirecto); 
+			}
+			
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero width="100%" text="LINEA DE PRODUCTOS" />
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all">
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="0">
+				<otros:divisionGruesa width="100%" />
+				
+				<s:VGroup width="100%" height="100%" gap="25" verticalAlign="middle">
+					
+					<s:HGroup width="100%" paddingRight="20" paddingLeft="20" paddingTop="20">
+						<s:VGroup width="20%" horizontalAlign="center" verticalAlign="middle">
+							<label:Texto_16_GrisCasiNegro id="familias" text="LINEA DE PRODUCTOS" fontWeight="bold" paddingTop="0" fontSize="14"/>
+						</s:VGroup>
+						<s:VGroup width="16%" horizontalAlign="center">							
+							<label:Texto_16_GrisCasiNegro id="lblAnio_0" paddingTop="0" fontSize="14" fontWeight="bold" color="0x307888" />
+							<label:Texto_16_GrisCasiNegro id="lblPeriodo_0" paddingTop="0" fontSize="14" fontWeight="bold" color="0x307888"/>
+						</s:VGroup>
+						<s:VGroup width="16%" horizontalAlign="center">							
+							<label:Texto_16_GrisCasiNegro id="lblAnio_1" paddingTop="0" fontSize="14" fontWeight="bold" color="0x595959"/>
+							<label:Texto_16_GrisCasiNegro id="lblPeriodo_1" paddingTop="0" fontSize="14" fontWeight="bold" color="0x595959"/>
+						</s:VGroup>
+						<s:VGroup width="16%" horizontalAlign="center" >							
+							<label:Texto_16_GrisCasiNegro id="lblAnio_2" paddingTop="0" fontSize="14" fontWeight="bold" color="0x551381"/>
+							<label:Texto_16_GrisCasiNegro id="lblPeriodo_2" paddingTop="0" fontSize="14" fontWeight="bold" color="0x551381"/>
+						</s:VGroup>
+						<s:VGroup width="16%" horizontalAlign="center" >							
+							<label:Texto_16_GrisCasiNegro id="lblAnio_3" paddingTop="0" fontSize="14" fontWeight="bold" color="0xb58618"/>
+							<label:Texto_16_GrisCasiNegro id="lblPeriodo_3" paddingTop="0" fontSize="14" fontWeight="bold" color="0xb58618"/>
+						</s:VGroup>
+						<s:VGroup width="16%" horizontalAlign="center" >							
+							<label:Texto_16_GrisCasiNegro id="lblAnio_4" paddingTop="0" fontSize="14" fontWeight="bold" color="0xb72d30"/>
+							<label:Texto_16_GrisCasiNegro id="lblPeriodo_4" paddingTop="0" fontSize="14" fontWeight="bold" color="0xb72d30"/>
+						</s:VGroup>
+					</s:HGroup>
+					<s:VGroup width="100%" paddingRight="20" paddingLeft="20">
+						<otros:division width="100%" color="0x000000"  grueso="1.8"/>						
+					</s:VGroup>
+					
+					<s:HGroup id="infoObjetivos" width="100%" gap="0" paddingRight="20" paddingLeft="20" paddingBottom="15" />
+					
+				</s:VGroup>
+				
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<!--	<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()"/>-->
+				</s:HGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" paddingTop="40" paddingBottom="20" dataProvider="{null}" showDataTips="false" innerRadius=".5"  
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true">
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total"/>
+						</graficas:series>
+					</graficas:PieChartPqGris>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Compra</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()" />
+						<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+				<!--<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_CLIENTES_MIXMARCAS}" />-->
+			</s:HGroup>  
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

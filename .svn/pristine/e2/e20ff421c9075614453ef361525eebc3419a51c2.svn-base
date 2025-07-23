@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" initialize="inicia()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*" >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.asfusion.mate.core.mate;
+			
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPopUpContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.events.TextOperationEvent;
+			
+			/* import vista.evento.EventoEVGeneral;
+			import vista.evento.EventoEVReqMovil;
+			import vista.vistas.popUp.VendedorContactosPopUp; */
+			
+			private var _listaClientesUniverso:ArrayCollection;
+			private var _listaFiltradaDeClientes:ArrayCollection;
+			
+			[Bindable]
+			public var _contacto:Contacto; 
+			
+			[Bindable]
+			private var _procedencia:String = "";
+			
+			private var _popUpContacto:AIESC_AgregaContactoNuevo_PopUp = null; 
+			
+			[Bindable]
+			private var _idClienteSeleccionado:int = 0;
+			
+			[Bindable]
+			private var _contactoSeleccionado:int = 0;
+			
+			private function inicia():void{
+				var evt:EventoPopUpContactos = new EventoPopUpContactos( EventoPopUpContactos.CARAGAR_CONTACTOS );
+				evt.idEmpleado = 0;
+				dispatchEvent( evt );
+				_contactoSeleccionado = 0;
+				this.addEventListener( ResizeEvent.RESIZE, acomodaPopUp );
+			}
+			
+			public function estableceProcedencia( $evt:EventoPopUpContactos ):void{
+				_procedencia = $evt.vieneDE_PopUp;
+				
+			}
+			
+			private function validaFiltro():void{
+
+				if( txtBusquedaContacto.text != '' ){
+					var listaTemp:ArrayCollection = new ArrayCollection();
+					_idClienteSeleccionado =  ( lstCliente.selectedItem as Cliente ).idCliente;
+					listaTemp = ObjectUtil.copy( UtilsGrid.queryCampoXLike( _universoContactos, 'nombre', txtBusquedaContacto.text ) ) as ArrayCollection;
+					if( listaTemp.length == 0 ){this.btnAsociar.enabled = false;}else{this.btnAsociar.enabled = true;}
+					agrupaContacto(listaTemp);
+					listaTemp = new ArrayCollection();
+					this.lstContacto.selectedIndex = _contactoSeleccionado;
+				}
+			}
+			
+			private var _estatusContacto:String = "";
+			public function estatusContacto( $evt:EventoPopUpContactos ):void{
+				cargaListaContactos();
+				this.btnNuevoCont.includeInLayout = true;
+				this.btnNuevoCont.visible = true;
+				this.btnAsociar.includeInLayout = true;
+				this.btnAsociar.visible = true;
+				_procedencia = $evt.vieneDE_PopUp;
+				if( _estatusContacto == 'edita' ){
+					abrirPopUpContacto('nuevo');
+				}
+				//|| $evt.vieneDE_PopUp == 'LlamNew'
+				if( $evt.vieneDE_PopUp == 'stageEditDoc'  || $evt.vieneDE_PopUp == 'DocumentosSalientesInspectorMail' || $evt.vieneDE_PopUp == 'DocumentosSalientesInspectorFax' ){
+					this.btnNuevoCont.includeInLayout = false;
+					this.btnNuevoCont.visible = false;
+					
+					if( $evt.vieneDE_PopUp == 'DocumentosSalientesInspectorMail' || $evt.vieneDE_PopUp == 'DocumentosSalientesInspectorFax' ){
+						this.btnAsociar.includeInLayout = false;
+						this.btnAsociar.visible = false;
+					}
+				}
+			}
+			private function acomodaPopUp( evt:Event ):void{
+				if( _popUpContacto != null ){
+					setTimeout(retraso, 600);
+				} 
+			}
+			
+			private function retraso():void{
+				 _popUpContacto.x = ( this.stage.width / 2 ) - 250;
+				if( this.stage.height <= 1100){
+					_popUpContacto.y = 30 ;
+				}else{
+					_popUpContacto.y = ( this.stage.height / 2 ) - 355 ;
+				} 
+			}
+			
+			public function set recibirContactos( $lista:ArrayCollection ):void{
+				if($lista == null){
+					return;
+				}
+				_listaClientesUniverso = new ArrayCollection();
+				_listaClientesUniverso = ObjectUtil.copy( $lista ) as ArrayCollection;
+				this.txtBusqueda.text = "";
+				this.txtBusquedaContacto.text = "";
+				agrupaClientes( $lista );
+			}
+			
+			private function filtraClientes( event:TextOperationEvent ):void{
+				_listaFiltradaDeClientes = new ArrayCollection();
+				_listaFiltradaDeClientes = ObjectUtil.copy( UtilsGrid.queryCampoXLike( _listaClientesUniverso, 'nombre', txtBusqueda.text ) ) as ArrayCollection;
+				if( _listaFiltradaDeClientes != null ){
+					if( _listaFiltradaDeClientes.length > 1 ){
+						lstCliente.selectedIndex = 0;
+						_idClienteSeleccionado = ( _listaFiltradaDeClientes[0] as Cliente ).idCliente;
+					}
+				}
+				agrupaClientes( _listaFiltradaDeClientes );
+			}
+			
+			[Bindable]
+			private var _listaTemp:ArrayCollection;
+			private function agrupaClientes( $lista:ArrayCollection ):void{
+				_listaTemp = new ArrayCollection();
+				for( var i:int = 0; i< $lista.length; i++ ){
+					_listaTemp.addItem( $lista[i] );
+				}
+				
+				var contactoTemp:Cliente = new Cliente();
+				contactoTemp.totalClientes = _listaTemp.length;
+				_listaTemp.addItem( contactoTemp );
+				/* if (_idClienteSeleccionado == 0 ){
+					this.lstCliente.selectedIndex = 0;
+				}else{
+					for( var c:int = 0; c < this.lstCliente.dataProvider.length; c++){
+						if( _idClienteSeleccionado  == ( this.lstCliente.dataProvider[c] as Cliente).idCliente ){
+							this.lstCliente.selectedIndex = c;
+							c = this.lstCliente.dataProvider.length;
+						}else{
+							this.lstCliente.selectedIndex = 0;
+						}
+					}
+				} */
+				this.lstCliente.selectedIndex = 0;
+				cargaListaContactos();
+				//	cargaListaContactos();
+				//setTimeout( retarda, 1500 );
+			}
+			
+			public function cargaListaContactos():void{
+				var evt:EventoPopUpContactos = new EventoPopUpContactos( EventoPopUpContactos.CARAGAR_CONTACTOS_ID_CLIENTE );
+				if(  this.lstCliente.selectedItem != undefined ){
+					evt.idCliente = (this.lstCliente.selectedItem as Cliente).idCliente;
+					dispatchEvent( evt );
+					_idClienteSeleccionado = (this.lstCliente.selectedItem as Cliente).idCliente; 
+				}else{
+					if( this.lstCliente.dataProvider.length > 1 ){
+						this.lstCliente.selectedIndex = 0;
+						evt.idCliente = (this.lstCliente.dataProvider[0] as Cliente).idCliente;
+						dispatchEvent( evt );
+						_idClienteSeleccionado = (this.lstCliente.dataProvider[0] as Cliente).idCliente;
+					}
+				}
+			}
+			
+			[Bindable]
+			private var _universoContactos:ArrayCollection;
+			public function set recibirContactosXIdCliente( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				_universoContactos = new ArrayCollection();
+				_universoContactos = ObjectUtil.copy( $datos ) as ArrayCollection;
+				agrupaContacto( _universoContactos );
+				validaFiltro();
+			}
+			
+			private function filtraContacto( event:TextOperationEvent ):void{
+				var listaTemp:ArrayCollection = new ArrayCollection();
+				_idClienteSeleccionado =  ( lstCliente.selectedItem as Cliente ).idCliente;
+				listaTemp = ObjectUtil.copy( UtilsGrid.queryCampoXLike( _universoContactos, 'nombre', txtBusquedaContacto.text ) ) as ArrayCollection;
+				if( listaTemp.length == 0 ){this.btnAsociar.enabled = false;}else{this.btnAsociar.enabled = true;}
+				agrupaContacto(listaTemp);
+				listaTemp = new ArrayCollection();
+				this.lstContacto.selectedIndex = _contactoSeleccionado;
+			}
+			
+			private function agrupaContacto( $datos:ArrayCollection):void{
+				var listaTemp:ArrayCollection = new ArrayCollection();
+				listaTemp = ObjectUtil.copy( $datos ) as ArrayCollection;
+				//_idClienteSeleccionado =  ( lstCliente.selectedItem as Cliente ).idCliente;
+				if(  this.lstCliente.selectedItem != undefined ){
+					_idClienteSeleccionado = (this.lstCliente.selectedItem as Cliente).idCliente; 
+				}else{
+					if( this.lstCliente.dataProvider.length > 1 ){
+						this.lstCliente.selectedIndex = 0;
+						_idClienteSeleccionado = (this.lstCliente.dataProvider[0] as Cliente).idCliente;
+					}
+				}
+				_contactoSeleccionado = 0;
+				for( var n:int = 0; n < listaTemp.length; n++){
+					(listaTemp[n] as Contacto).numFila = n + 1;
+				}
+				var contactoTemp:Contacto = new Contacto();
+				contactoTemp.totalContactosPorEmpresa = listaTemp.length;
+				lstContacto.dataProvider = new ArrayCollection();
+				lstContacto.dataProvider = ObjectUtil.copy( listaTemp ) as ArrayCollection;
+				lstContacto.dataProvider.addItem( contactoTemp );
+				if( lstCliente.dataProvider.length > 1 ){
+					lblNombreCliente.text =  (lstCliente.selectedItem as Cliente).nombre;
+					lblGiroCliente.text = (lstCliente.selectedItem as Cliente).rol + ' · ' + ( lstCliente.selectedItem as Cliente).sector ;
+				}
+				listaTemp = new ArrayCollection();
+				this.lstContacto.selectedIndex = _contactoSeleccionado;
+				cargaDatosContacto();
+			}
+			
+			private function cargaDatosContacto():void{
+				this._contacto = new Contacto();
+				_contactoSeleccionado = 0;
+				if( lstContacto.dataProvider.length > 1 ){
+					_contacto = lstContacto.selectedItem;
+				}
+				if( _contacto != null ){
+					if( _contacto.direccion != null && !isNaN( _contacto.direccion.idLugar ) &&  _contacto.direccion.idLugar != 0 ){
+						grpDirecciones.visible  = true;
+						grpDireccionesNula.visible = false;
+					}else{
+						grpDirecciones.visible  = false;
+						grpDireccionesNula.visible = true;						
+					}
+				}
+			}
+			
+			private function abrirPopUpContacto( $accion:String = '' ):void{
+				if( lstCliente.dataProvider.length <= 1 ){
+					alertaSingleton.show( "Es necesario seleccionar un cliente", catalogoAlertas.TIT_ADV_operacionImposible	 );
+					return;
+				}
+				if( this._popUpContacto == null ){
+					_popUpContacto = AIESC_AgregaContactoNuevo_PopUp( PopUpManager.createPopUp( this, AIESC_AgregaContactoNuevo_PopUp, true ) );
+					_popUpContacto.addEventListener( EventoPopUpContactos.RECIBE_DATOS_CONTACTO_POUP, guardaContactoPopUp );
+					_popUpContacto.addEventListener( EventoPopUpContactos.CANCELA_DATOS_CONTACTO_POUP, cierraPopUpContactos );
+					_popUpContacto.addEventListener( EventoPopUpContactos.SELECCIONA_CONTACTO, seleccionaContacto );
+				}else{	
+					PopUpManager.addPopUp( _popUpContacto, this, true );
+				}	
+				_popUpContacto.creaContacto(  _contacto );
+				_popUpContacto.x = ( this.stage.width / 2 ) - 250;
+				_popUpContacto.y = ( this.stage.height / 2 ) - 355;
+				PopUpManager.centerPopUp( _popUpContacto );
+				
+				// Si el PopUp no se visualizo se carga de nuevo.
+				if (!_popUpContacto.isPopUp){
+					abrirPopUpContacto('nuevo');
+				}
+					
+			}
+			
+			private function seleccionaContacto( $evt:EventoPopUpContactos):void{
+				/* _contactoSeleccionado = $evt.idContacto;
+				cargaListaContactos(); */
+				this._contacto = $evt.nuevoContacto;
+				botonpqnetlargo1_clickHandler();
+			}
+			
+			private function guardaContactoPopUp( $evt:EventoPopUpContactos ):void{
+				_estatusContacto = $evt.estatusContacto;
+			}
+			
+			private function cierraPopUpContactos( $evt:EventoPopUpContactos ):void{
+				_estatusContacto = $evt.estatusContacto;
+				PopUpManager.removePopUp( _popUpContacto ); 
+			} 
+			
+			protected function botonpqnetlargo1_clickHandler():void{
+				//En el modelo de PopUp al tener el dato Viene De se analiza a donde se regresan los datos
+				var evt:EventoPopUpContactos = new EventoPopUpContactos( EventoPopUpContactos.ENVIA_CONTACTO_ASOCIADO );
+				evt.nuevoContacto = this._contacto;
+				evt.vieneDE_PopUp = this._procedencia;
+				dispatchEvent( evt );
+			}
+			public function seleccionaNuevoCliente( $idCliente:int ):void{
+				for( var i:int = 0; i < lstCliente.dataProvider.length ; i++ ){
+					if( (lstCliente.dataProvider[i] as Contacto).idEmpresa == $idCliente ){
+						lstCliente.selectedIndex = i ; 
+						//setTimeout( retarda, 1500 );
+					}
+				}
+				cargaListaContactos();
+			}
+		]]>
+		
+	</fx:Script>
+	<s:HGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" paddingTop="15" paddingBottom="15">
+		<s:VGroup  height="100%" width="25%" gap="0">
+			<s:Spacer height="15"/>
+			<s:TextInput id="txtBusqueda" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtraClientes(event)" />
+			<s:Spacer height="15"/>
+			<otros:division width="100%"/>
+			<s:List id="lstCliente" height="100%" width="100%" borderVisible="false" itemRenderer="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.popUpContactos.ItemRenderer.AiescClientesIR"
+					mouseDown="cargaListaContactos();" horizontalScrollPolicy="off" dataProvider="{_listaTemp}"/>
+		</s:VGroup>
+		<s:Spacer width="10" />
+		<otros:VDivisionHueca height="100%"/>
+		<s:Spacer width="10" />
+		<s:VGroup height="100%" width="25%" gap="0" horizontalAlign="center">
+			<s:Spacer height="15"/>
+			<s:TextInput id="txtBusquedaContacto" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtraContacto(event)" />
+			<s:Spacer height="15"/>
+			<otros:division width="100%"/>
+			<s:Spacer height="15"/>
+			<s:Label id="lblNombreCliente" fontWeight="bold" fontSize="19" width="100%" maxDisplayedLines="2" textAlign="center"/>
+			<s:Spacer height="10"/>
+			<s:Label id="lblGiroCliente" color="0x{catalogoColores.LABEL_GRIS}" fontWeight="bold" fontSize="13" width="100%" maxDisplayedLines="2" textAlign="center"/>
+			<s:Spacer height="15"/>
+			<otros:division width="100%"/>
+			<s:List id="lstContacto" height="100%" width="100%" borderVisible="false" 
+					horizontalScrollPolicy="off" mouseDown="cargaDatosContacto()"
+					itemRenderer="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.popUpContactos.ItemRenderer.AiescContactosIR"/>
+			<s:Spacer height="15"/>
+			<pqNet:botonPqNetLargo width="70%" botonRedondo="true" label="NUEVO CONTACTO" click="abrirPopUpContacto('nuevo')" id="btnNuevoCont"/>
+		</s:VGroup>
+		<s:Spacer width="10" />
+		<otros:VDivisionHueca height="100%"/>
+		<s:Spacer width="10" />
+		<s:VGroup height="100%" width="50%" gap="0" horizontalAlign="center">
+			<s:Label id="lblNombreContacto" fontWeight="bold" fontSize="19" width="100%" maxDisplayedLines="2" textAlign="center" text="{_contacto.titulo + ' ' + _contacto.nombre }"/>
+			<s:Spacer height="10"/>
+			<s:Label id="lblPuestoContacto" color="0x{catalogoColores.LABEL_GRIS}" fontWeight="bold" fontSize="15" width="100%" maxDisplayedLines="2" textAlign="center" text="{ _contacto.puesto }"/>
+			<s:Spacer height="10"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:VGroup width="100%" height="100%">
+				<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_mailSmall }"/>
+					<s:Spacer height="15" />
+					<mx:Text  color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{_contacto.EMail }"
+							 width="100%" selectable="true" fontFamily="Tahoma" fontStyle="normal"/> <!-- maxDisplayedLines="3" -->
+				</s:HGroup>
+				<otros:division width="100%"/>
+				<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_telSmall }"/>
+					<s:Spacer height="15" />
+					<s:VGroup height="100%" verticalAlign="middle" >
+						<s:Label color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{_contacto.telefono }"/>
+						<s:Spacer height="15"/>
+						<s:Label  color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{_contacto.telefonoN }" />
+					</s:VGroup>
+				</s:HGroup>
+				<otros:division width="100%"/>
+				<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_faxSmall }"/>
+					<s:Spacer height="15" />
+					<s:VGroup height="100%" verticalAlign="middle" >
+						<s:Label color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{ _contacto.fax }"/>
+					</s:VGroup>
+				</s:HGroup>
+				<otros:division width="100%"/>
+				<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_direcccionSmall }"/>
+					<s:Spacer height="15" />
+					<s:Group height="100%">
+						<s:VGroup height="100%" verticalAlign="middle" id="grpDirecciones" >
+							<s:Label color="0x{ catalogoColores.LABEL_GRIS }" 
+									 text="{_contacto.direccion.calle+' · '+_contacto.direccion.municipio  }"/>
+							<s:Spacer height="15"/>
+							<s:Label  color="0x{ catalogoColores.LABEL_GRIS }"
+									  text="{_contacto.direccion.pais+' '+_contacto.direccion.estado+' · '+_contacto.direccion.codigoPostal+' : '+ ( _contacto.direccion.zonaMensajeria == null ? 'No Disponible' : _contacto.direccion.zonaMensajeria )   }"/>
+						</s:VGroup>
+						<s:VGroup height="100%" verticalAlign="middle" id="grpDireccionesNula" visible="false">
+							<s:Label color="0x{ catalogoColores.LABEL_GRIS }" 
+									 text="No Disponible"/>
+						</s:VGroup>
+					</s:Group>
+				</s:HGroup>
+				<otros:division width="100%"/>
+				<s:Spacer height="15"/>
+				<s:HGroup width="100%"  verticalAlign="bottom" >
+					<pqNet:botonPqNetLargo width="100%"  label="Cancelar" gradientePqnet="true" colorBase="0x{catalogoColores.LABEL_ROJO}" click="_procedencia = 'CERRAR';botonpqnetlargo1_clickHandler()"/>
+					<s:Spacer width="15"/>
+					<pqNet:botonPqNetLargo width="100%"  label="Asociar" click="this._contacto = this.lstContacto.selectedItem;botonpqnetlargo1_clickHandler()" id="btnAsociar"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:VGroup>
+	</s:HGroup>
+</s:Group>

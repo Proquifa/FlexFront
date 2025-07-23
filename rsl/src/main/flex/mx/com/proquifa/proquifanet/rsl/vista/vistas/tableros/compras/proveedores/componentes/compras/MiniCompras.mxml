@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorTableroMiniChart xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								  xmlns:s="library://ns.adobe.com/flex/spark" 
+								  xmlns:componentes = "mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+								  xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*" 
+								  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+								  xmlns:mx="library://ns.adobe.com/flex/mx" 
+								  xmlns:graficas="skins.skin.graficas.*"
+								  informacion="{catalogoInfoGraficas.TABLERO_PROVEEDORES_COMPRAS}" titulo="COMPRAS"
+								  vistaTablaGrafica="{ new MaxCompras() }" comparacion="{ new ProveedorComprasComparacion()}"
+								  width="100%" height="100%"
+								  
+								   >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="500"/>
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="2"/>
+		<mx:SolidColorStroke id = "s2" color="0xdd9c12" weight="2"/>
+		<mx:SolidColor id="sc3" color="0x{catalogoColores.LABEL_NARANJA}" alpha="1"/>
+		<s:SolidColorStroke id="stroke2" color="0x{catalogoColores.LABEL_NARANJA}" weight="5"/>
+		<mx:SolidColorStroke id = "sObj" color="0xC54B8C" weight="3"/>
+		<mx:SolidColor id="sc4" color="0xC54B8C" alpha="1"/>
+		<s:SolidColorStroke id="s4" color="0xC54B8C" weight="2"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.PeriodoToolTip;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+			
+			private const _tamanioMinimo:int = 170;
+			private var totalLegend:Number = 0;
+			
+			[Bindable] private var _ocComprasGrafica:ArrayCollection;
+			
+			private var _listaMontoObjetivo:ArrayCollection = new ArrayCollection();
+			private var yallegaronlosMontosObjetivos:Boolean = false;
+			private var yallegaronLasCompras:Boolean = false;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			
+			public function set resumenComparativaCompra(comparativa:ArrayCollection):void{
+				if(comparativa == null) return;
+				
+				this._ocComprasGrafica = new ArrayCollection();
+				this._ocComprasGrafica = comparativa;
+				yallegaronLasCompras  = true;
+			}
+			
+			
+			private function llamarAIniciarGrafica():void
+			{
+				if(yallegaronlosMontosObjetivos && yallegaronLasCompras)
+				{
+					yallegaronlosMontosObjetivos = false;
+					yallegaronLasCompras = false;
+					myChart.dataProvider = iniciarGrafica( _ocComprasGrafica );
+				}
+				else
+				{
+					setTimeout(llamarAIniciarGrafica,300);
+				}
+			}
+			
+			public function set recibeMontosObjetivoCompras($montos:ArrayCollection):void
+			{
+				if($montos == null) 
+					return;
+				_listaMontoObjetivo = new ArrayCollection();
+				_listaMontoObjetivo = $montos;
+				yallegaronlosMontosObjetivos = true;
+				
+				/**********************************Ordenar de menor a mayor arrayCollection***************************/
+				var ordenar:SortField = new SortField();
+				ordenar.name = "mes";
+				ordenar.numeric = true;
+				var tipo:Sort = new Sort();
+				tipo.fields = [ordenar];
+				_listaMontoObjetivo.sort = tipo;
+				_listaMontoObjetivo.refresh();
+				/**************************************************/
+			}    
+			
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection{
+				totalLegend = 0;
+				var m:int = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var contador:int = 0;
+				
+				while( cuenta < 13){
+					if(cuenta >= _minimoMeses && cuenta <= _maximoMeses){
+						objeto = new Object();
+						objeto.numeroMes = cuenta;
+						objeto.mes = _listaMensual[cuenta -1];
+						objeto.montoUSD_0 = 0;
+						objeto.montoUSD_1 = 0;
+						objeto.montoUSD_2 = 0;
+						objeto.totalPeriodo = 0;
+						objeto.montoObjetivo = 0; 
+						objeto.montoFundamental = 0;
+						
+						for( m = 0; m < $lista.length;m++ ){
+							var resumen:ResumenConsulta = $lista[m] as ResumenConsulta;
+							if(cuenta == resumen.mes){
+								if( resumen.etiqueta == "OC_COMPRAS_0" && resumen.conceptoResultado == 'Confirmada')
+									totalLegend += objeto.montoUSD_0 += resumen.total;
+								if( resumen.etiqueta == "OC_COMPRAS_1" && resumen.conceptoResultado == 'Confirmada')
+									objeto.montoUSD_1 += resumen.total;
+								if( resumen.etiqueta == "OC_COMPRAS_2" && resumen.conceptoResultado == 'Confirmada' )
+									objeto.montoUSD_2 += resumen.total;
+							}
+						}
+						
+						if((_listaMontoObjetivo.length != 0) && (_listaMontoObjetivo.length != _maximoMeses - 1) )
+						{
+							/*if(contador < _listaMontoObjetivo.length)
+							{*/
+							objeto.montoObjetivo = _listaMontoObjetivo[contador].monto ;
+							objeto.montoFundamental = _listaMontoObjetivo[contador].montoFundamental + 100 ;
+							contador++;
+							/*}*/
+						}	
+						
+						arrReturn.addItem(objeto);
+					}
+					cuenta++;
+				}
+				for( var g:int = 0; g < arrReturn.length; g++ )
+				{
+					arrReturn[g].totalPeriodo = totalLegend;
+				}
+				
+				if(_anioFiscal)
+					return ordenarPeriodosFiscal(arrReturn);
+				else
+					return arrReturn;	
+			}
+			
+			
+			private function ordenarPeriodosFiscal($arreglo:ArrayCollection):ArrayCollection
+			{
+				if($arreglo.length == 0)
+					return new ArrayCollection();
+				
+				var arrayNew:ArrayCollection = new ArrayCollection();
+				var tmpFin:ArrayCollection = new ArrayCollection();
+				var tmpInicio:ArrayCollection = new ArrayCollection();
+				var cont:int = 0;
+				for(var t:int = 0; t < $arreglo.length; t++)
+				{
+					if(t < _event.mesFinFiscal)
+					{
+						tmpFin.addItem($arreglo[t]);
+					}
+					if(t >= _event.mesFinFiscal )
+					{
+						tmpInicio.addItem($arreglo[t]);
+					}
+				}
+				
+				for(var n:int = 0; n < tmpInicio.length; n++)
+				{
+					if(n==0)
+						arrayNew.addItem(new Object());
+					
+					arrayNew.addItem(tmpInicio[n]);
+				}
+				
+				for(var h:int = 0; h < tmpFin.length; h++)
+				{
+					arrayNew.addItem(tmpFin[h]);
+				}
+				
+				arrayNew.addItem(new Object());
+				return arrayNew;
+				
+			}
+			
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso =  '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private var _event:EventoTabProveedores;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _keyAnterior:String = "";
+			private var _anioFiscal:Boolean;
+			
+			public function set recibirFiltrosTableroProveedores(etiqueta:EventoTabProveedores):void{
+				if(etiqueta == null) return;
+				_event = etiqueta;
+				if(!_event.parametros.anioFiscal){
+					_minimoMeses = _event.parametros.mesInicio;
+					_maximoMeses = _event.parametros.mesFin;
+				}else{
+					_minimoMeses = 1;
+					_maximoMeses = 12;
+				}
+				_anioFiscal = _event.parametros.anioFiscal;
+				
+				llamarAIniciarGrafica();
+			}
+		]]>
+	</fx:Script>
+	
+	<graficaPie:contenido >	
+		<s:VGroup width="100%" height="100%" horizontalAlign="right" paddingTop="50" paddingBottom="10" >
+			<mx:LineChart height="100%" width="100%" id="myChart"
+						  mouseSensitivity="5" 
+						  dataTipRenderer="{PeriodoToolTip}" 
+						  showDataTips="true" 
+						  showDataTipTargets="false"  
+						  dataTipMode="single" 
+						  paddingRight="{ width > _tamanioMinimo ? 30 : 5}"
+						  paddingLeft="{ width > _tamanioMinimo ? 20 : 5}"
+						  seriesFilters="[]">
+				<mx:series>
+					<mx:LineSeries  yField="montoObjetivo" xField="numeroMes" form="step"  lineStroke="{s2}" showDataEffect="{fxInterpolateIn}" />
+					<mx:PlotSeries id="montoObjetivo" yField="montoObjetivo" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}" 
+								   stroke="{stroke2}" fill="{sc3}" itemRenderer="mx.charts.renderers.TriangleItemRenderer">
+					</mx:PlotSeries>
+					<mx:LineSeries  yField="montoFundamental" xField="numeroMes" form="step"  lineStroke="{s4}" showDataEffect="{fxInterpolateIn}" />
+					<mx:PlotSeries id="montoFundamental" yField="montoFundamental" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}" 
+								   stroke="{s4}" fill="{sc4}" itemRenderer="mx.charts.renderers.TriangleItemRenderer">
+					</mx:PlotSeries>
+					<mx:LineSeries yField="montoUSD_0" xField="numeroMes" form="segment"  lineStroke="{s1}" showDataEffect="{fxInterpolateIn}" />
+					<mx:PlotSeries yField="montoUSD_0" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer>
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+										]]>
+									</fx:Script>
+									<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+										<s:fill>
+											<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+										</s:fill>		
+									</s:Ellipse>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:PlotSeries> 
+				</mx:series>
+				
+				<mx:horizontalAxis>
+					<mx:CategoryAxis id="vMes" categoryField="numeroMes"  />
+				</mx:horizontalAxis>
+				<mx:verticalAxis>
+					<mx:LinearAxis id="vCantidad" labelFunction="formateoEje" />
+				</mx:verticalAxis>
+				<mx:verticalAxisRenderers>
+					<mx:AxisRenderer axis="{vCantidad}" showLine="false" showLabels="{ width > _tamanioMinimo ? true : false}" tickPlacement="none" styleName="axisVerticalLabels"/>
+				</mx:verticalAxisRenderers>
+				<mx:horizontalAxisRenderers>
+					<mx:AxisRenderer axis="{vMes}" showLine="false" showLabels="false" />
+				</mx:horizontalAxisRenderers>
+				<mx:backgroundElements>
+					<mx:GridLines visible="{ width > _tamanioMinimo ? true: false}">
+						<mx:horizontalStroke>
+							<s:SolidColorStroke weight="0.5" color="0xeeeeee" />
+						</mx:horizontalStroke>
+					</mx:GridLines>
+				</mx:backgroundElements>
+			</mx:LineChart>
+			<componentes:horizontalAxisChartPq text="CANTIDAD CONFIRMADA" horizontalCenter="0" width="100%" paddingRight="{ width > _tamanioMinimo ? 30 : 5}" paddingLeft="{ width > _tamanioMinimo ? 70 : 5}"/>
+			<s:Label width="100%" paddingLeft="15" styleName="axisVerticalLabels">
+				<s:text>Los montos se refieren a costo de Compra</s:text>
+			</s:Label>
+		</s:VGroup>				
+	</graficaPie:contenido>
+</comun:ContenedorTableroMiniChart>

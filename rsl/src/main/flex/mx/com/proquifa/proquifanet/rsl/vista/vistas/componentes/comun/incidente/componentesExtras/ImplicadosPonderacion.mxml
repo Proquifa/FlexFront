@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox  xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:label="skins.skin.label.*" >
+	<mx:Script>
+		<![CDATA[
+			import flashx.textLayout.factory.TruncationOptions;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoPonderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Ponderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.PonderacionImplicado;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable]
+			public var _ponderacion:Ponderacion = new Ponderacion();
+			public var _quedaVacia:Boolean = false;
+			public var _ponderacionTemp:PonderacionImplicado = new PonderacionImplicado();
+			//private var ventanaImplicados:PopUpColaboradores;
+			
+			[Bindable]
+			public var promedio:Number = 0;
+			[Bindable]
+			public var _totalHH:Number = 0; 
+			
+			public function set recibir_Implicados(ponderacion:Ponderacion):void{
+				this._ponderacion = new Ponderacion();
+				this.promedio = 0;
+				if(ponderacion.incidente != 0){
+					this._ponderacion = ponderacion;
+					if(this._ponderacion.implicados == null || this._ponderacion.implicados.length == 0){
+						this._ponderacion.implicados = new ArrayCollection();
+						this._ponderacion.implicados.addItem( new PonderacionImplicado());
+						//calcularmaximo();
+					}
+					calcularmaximo();
+					this.calculartotal();
+				}
+			}
+			
+			private function calculartotal():void{
+				var temp:Number = 0;
+				for(var m:int = 0; m<this._ponderacion.implicados.length; m++){
+					temp = temp + this._ponderacion.implicados[m].total;
+				}
+				if (this._ponderacion.implicados[0].usuario != '' ){
+					_totalHH = this._ponderacion.implicados.length * 6.2;
+				}else{
+					_totalHH = 0;
+				}
+				//this.promedio = temp/this._ponderacion.implicados.length;
+				this.promedio = temp;
+			}
+			
+			public function crearVentana():void{
+				var ventanaImplicados:PopUpColaboradores =  new PopUpColaboradores();
+				ventanaImplicados = PopUpManager.createPopUp(this,PopUpColaboradores,true) as PopUpColaboradores;
+				ventanaImplicados.addEventListener("pasarSeleccionados",agregarImplicados,false,0,true);
+				//ventanaImplicados.addEventListener(CloseEvent.CLOSE,ventanavisible);
+				//ventanaImplicados.visible = false;
+			}
+			
+			public function borrarvacios():void{
+				if(this._ponderacion.implicados.length > 0){
+					for(var m:int = 0;m<this._ponderacion.implicados.length;m++){
+						if(this._ponderacion.implicados[m].empleado == 0){
+							_quedaVacia = false;
+							_ponderacionTemp = new PonderacionImplicado();
+							_ponderacionTemp = this._ponderacion.implicados[0];
+							this._ponderacion.implicados.removeItemAt(m);
+							//prueba 1
+							if( this._ponderacion.implicados.length == 0){
+								//quedo vacia
+								_quedaVacia = true;
+							}
+						}
+					}
+				}
+			}
+			
+			public function rellenarSiEsVacia():void{
+				if(_quedaVacia){
+					this._ponderacion.implicados.addItem( _ponderacionTemp );
+				}
+				_ponderacionTemp = new PonderacionImplicado();
+				_quedaVacia = false;
+			}
+			
+			public function agregarImplicados(event:Event):void{
+				var _implicados:ArrayCollection = new ArrayCollection();
+				_implicados = event.currentTarget.seleccionados;
+				var consecutivo:int = this._ponderacion.implicados[this._ponderacion.implicados.length - 1].numFila;
+				for(var m:int = 0; m<_implicados.length; m++){
+					consecutivo = consecutivo + 1;
+					_implicados[m].numFila = consecutivo;
+					_implicados[m].ponderacion = this._ponderacion.idPonderacion;
+					_implicados[m].horasHombre = 6.2;
+					this._ponderacion.implicados.addItem(_implicados[m]);
+				}
+				borrarvacios();
+				calcularmaximo();
+				calculartotal();
+				regresarEficiencia(); //linea puesta por osva para quirta la pantalla de feiciencia
+				//trace("");
+			}
+			
+			public function calcularmaximo():void{
+				for(var p:int = 0; p<this._ponderacion.implicados.length;p++){
+					if(p == (this._ponderacion.implicados.length -1)){
+						this._ponderacion.implicados[p].maximo = true;
+					}
+					else{
+						this._ponderacion.implicados[p].maximo = false;
+					}
+				}
+			}
+			
+			/*private function ventanavisible(event:CloseEvent):void{
+			this.ventanaImplicados.visible = false;
+			}*/
+			
+			public function mostrarVentanaColaboradores():void{
+				var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.OBTENER_TODOS_COLABORADORES_PONDERACION);
+				evento._ponderacion = this._ponderacion;
+				this.dispatchEvent(evento);
+				//evento._ponderacion.implicados;
+				this.crearVentana();
+			}
+			
+			
+			public function eliminarColaborador(Colaborador:PonderacionImplicado):void{
+				for(var m:int = 0; m< this._ponderacion.implicados.length;m++){
+					if(this._ponderacion.implicados[m].empleado == Colaborador.empleado){
+						this._ponderacion.implicados.removeItemAt(m);
+					}
+				}
+				
+				if(this._ponderacion.implicados.length == 0){
+					this._ponderacion.implicados.addItem(new PonderacionImplicado());
+				}
+				this.calcularmaximo();
+				calculartotal();
+				regresarEficiencia();
+			}
+			
+			public function editarColaborador(colaborador:PonderacionImplicado):void{
+				var EditarImplicado:PopUpImplicado = new PopUpImplicado();
+				EditarImplicado = PopUpManager.createPopUp(this,PopUpImplicado,true) as PopUpImplicado;
+				EditarImplicado._implicado = colaborador;
+				EditarImplicado.addEventListener("ImplicadoModificado",actualizargrid);
+			}
+			
+			public function actualizargrid(event:Event):void{
+				var $implicado:PonderacionImplicado = new PonderacionImplicado;
+				$implicado = event.currentTarget._implicado;
+				for(var p:int = 0; p<this._ponderacion.implicados.length;p++){
+					if( (_ponderacion.implicados[p] as PonderacionImplicado).numFila == $implicado.numFila ){
+						_ponderacion.implicados[p] = $implicado;
+					}
+				}
+				this.calculartotal();
+				regresarEficiencia(); //linea puesta por osva para quirta la pantalla de feiciencia
+			}
+			
+			public function verificarmaximo(colaborador:PonderacionImplicado):Boolean{
+				if(this._ponderacion.implicados[this._ponderacion.implicados.length-1].empleado == colaborador.empleado){
+					return true;
+				}
+				return false
+			}
+			
+			private function formatopesos(item:Object, column:DataGridColumn):String{
+				var monto:String = "";
+				monto = this.formatomoneda.format(item[column.dataField]);
+				return monto;
+			}
+			
+			private function regresarEficiencia():void{
+				var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.REGRESAR_EFICIENCIA_PONDERACION);
+				evento._ponderacion = new Ponderacion();
+				evento._ponderacion.implicados = ObjectUtil.copy(this._ponderacion.implicados) as ArrayCollection;
+				this.dispatchEvent(evento);
+			}
+			
+			
+		]]>
+	</mx:Script>
+	<mx:CurrencyFormatter currencySymbol="$" id="formatomoneda" thousandsSeparatorTo="," precision="2"/>
+	<mx:HBox width="100%">
+		<!--<mx:Label width="100%" fontSize="25" text="Implicados" fontWeight="bold"/>-->
+		<label:labelSubtitulo width="100%" text="Implicados" />
+		<!--<mx:Button verticalCenter="0"  label="Eficacía" click="regresarEficiencia()" width="80"/>-->
+		<s:Button styleName="botonNegroOld" verticalCenter="0"  label="Eficacía" click="regresarEficiencia()" width="80" visible="false"/>
+	</mx:HBox>
+	<mx:DataGrid height="100%" width="100%" dataProvider="{this._ponderacion.implicados}" >
+		<mx:columns>
+			<mx:DataGridColumn headerText="#"  dataField="numFila"/>
+			<mx:DataGridColumn headerText="Colaborador" dataField="usuario"/>
+			<mx:DataGridColumn headerText="Función" dataField="funcion"/>
+			<mx:DataGridColumn headerText="Nivel" dataField="nivelFuncion"/>
+			<!--<mx:DataGridColumn labelFunction="formatopesos" headerText="$/HH" dataField="costoHoraHombre"/>-->
+			<mx:DataGridColumn headerText="HH" dataField="horasHombre"/>
+			<!--<mx:DataGridColumn headerText="Total" dataField="total"/>-->
+			<mx:DataGridColumn headerText="">
+				<mx:itemRenderer>
+					<mx:Component>
+						<mx:LinkButton enabled="{this.data.maximo}" creationComplete="verificar()"  color="#0C4AFC"  label="+" click="mostrar()">
+							<mx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.PonderacionImplicado;
+									
+									public function mostrar():void{
+										this["outerDocument"].mostrarVentanaColaboradores();
+									}
+									public function verificar():void{
+										//this.enabled = this["outerDocument"].verificarmaximo(data as PonderacionImplicado);
+										this.data.maximo = this["outerDocument"].verificarmaximo(data as PonderacionImplicado);
+									}
+								]]>
+							</mx:Script>
+						</mx:LinkButton>
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="">
+				<mx:itemRenderer>
+					<mx:Component>
+						<mx:LinkButton enabled="{this.data.empleado != 0}"  color="#0C4AFC"  click="this['outerDocument'].eliminarColaborador(this.data as PonderacionImplicado)" label="-">
+							<mx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.PonderacionImplicado;
+								]]>
+							</mx:Script>
+						</mx:LinkButton>
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="">
+				<mx:itemRenderer>
+					<mx:Component>
+						<mx:LinkButton enabled="{this.data.empleado != 0}" textDecoration="underline" color="#0C4AFC"  label="Editar" click="this['outerDocument'].editarColaborador(this.data as PonderacionImplicado)">
+							<mx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.PonderacionImplicado;
+								]]>
+							</mx:Script>
+						</mx:LinkButton>
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+		</mx:columns>
+	</mx:DataGrid>
+	<mx:HBox width="100%">
+		<mx:Label text="Total Global:" width="50%" textAlign="center"/>
+		<mx:Label text="{this._totalHH.toString()} horas" width="50%" textAlign="center" id="lblTotalHorasH"/>
+		<!--<mx:Label text="{this.promedio.toString()} horas" width="50%" textAlign="center" id="lblTotalHorasH"/>
+-->	</mx:HBox>
+</mx:VBox>

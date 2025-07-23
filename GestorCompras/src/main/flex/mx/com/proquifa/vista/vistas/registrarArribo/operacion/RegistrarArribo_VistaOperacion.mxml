@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		 xmlns:progreso="mx.com.proquifa.vista.vistas.registrarArribo.progreso.*" 
+		 xmlns:pop="mx.com.proquifa.vista.vistas.registrarArribo.popUp.*" 
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 xmlns:textInput="mx.com.proquifa.vista.vistas.skin.textInput.*" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%"
+		 creationComplete="init(event)"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.vistas.registrarArribo.popUp.PopUpPantallaCompleta;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosBotoneras;
+			
+			[Bindable]private var sizeFont:Number;
+			[Bindable]private var sizeFontTitulo:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable] public var flete:String;
+			[Bindable] public var pedimento:String;
+			public var arribado:Boolean;
+			
+			
+			private var popUpCompleto:PopUpPantallaCompleta = null;
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener("botonCancelar",switchVistaPrincipal,false,0,true);
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				
+				sizeFont = (15/2005) * (unscaledWidth);
+				sizeFontTitulo = (60/2005) * (unscaledWidth);
+				sizeFontProvee = (18/2005) * (unscaledWidth);
+				
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 8 ? 8:sizeFont;
+				
+				sizeFontTitulo = sizeFontTitulo > 60 ? 60:sizeFontTitulo;
+				sizeFontTitulo = sizeFontTitulo < 25 ? 25:sizeFontTitulo;
+				
+				sizeFontProvee = sizeFontProvee > 18 ? 18:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 15 ? 15:sizeFontProvee;
+			}
+			
+			private var arreglo:ArrayCollection;
+			public function dataProvider($arreglo:ArrayCollection):void
+			{
+				arreglo = new ArrayCollection();
+				stackVistas.selectedIndex = 0;
+				gpProgreso.limpiar();
+				
+				for (var i:int = 0; i < $arreglo.length; i++) 
+				{
+					$arreglo[i].numFila = i + 1;
+				}
+				
+				listGuias.dataProvider = $arreglo;
+				listGuias.selectedIndex = 0;
+				arreglo = ObjectUtil.copy($arreglo) as ArrayCollection;
+				focusInput();
+			}
+			
+			
+			protected function cmpTitulo_vistaAnteriorHandler(event:EventoGestorCompras):void
+			{
+				dispatchEvent(new Event('cambiarPrincipal',true));
+				stackVistas.selectedIndex = 0;
+				gpProgreso.clicCancelar();
+			}
+			
+			protected function verificarEscaneo(event:FlexEvent):void
+			{
+				var array:Array = new Array;
+				codigoS = txtPedimentoBack.text;
+				array = codigoS.split("mj");
+				if(array.length >= 2)
+					terminoCaptura(array[0]+" "+array[1],array[3]);	
+				
+				setTimeout(continuar,2000);
+			}
+			
+			private function errorLeerCodido():void
+			{
+				grpErrorPedimento.visible = grpErrorPedimento.includeInLayout = true;
+				grpInputPedimento.visible = grpInputPedimento.includeInLayout = false;
+				setTimeout(visualizarInputPedimento,2000);
+				focusInput();
+			}
+			
+			private function visualizarInputPedimento():void
+			{
+				grpErrorPedimento.visible = grpErrorPedimento.includeInLayout = false;
+				grpInputPedimento.visible = grpInputPedimento.includeInLayout = true;
+			}
+			
+			private function switchVistaPrincipal(ert:Event):void
+			{
+				stackVistas.selectedIndex = 0;
+				listGuias.selectedIndex = 0;
+				focusInput();
+				
+			}
+			
+			private function PopUp():void
+			{
+				if( popUpCompleto == null ){
+					popUpCompleto = PopUpPantallaCompleta(PopUpManager.createPopUp( this, PopUpPantallaCompleta, true ) );
+					popUpCompleto.numPedimento = inputPedimento.text;
+				}else{
+					PopUpManager.addPopUp( popUpCompleto , this, true );
+				}
+				
+				stage.addEventListener(KeyboardEvent.KEY_DOWN,verTecla);
+				setTimeout(switchProceso,5000);
+			}
+			
+			
+			private function switchCorrecto():void
+			{
+				
+				stackVistas.selectedIndex = 1;
+				setTimeout(PopUp,2000);
+				
+			}
+			
+			private function switchProceso():void
+			{
+				PopUpManager.removePopUp( popUpCompleto );
+				popUpCompleto = null;
+				stage.removeEventListener(KeyboardEvent.KEY_DOWN,verTecla);
+				
+				stackVistas.selectedIndex = 2;
+				gpProgreso.resetAll();
+			}
+			
+			protected function focusInput():void
+			{
+				inputPedimento.text = "";
+				txtPedimentoBack.text = "";
+				longitudCadena = 0;
+				focusManager.setFocus(txtPedimentoBack);
+				
+				if(listGuias.selectedIndex == 0)
+					division.visible = false;
+				else
+					division.visible = true;
+			}
+			
+			protected function buscador(event:TextOperationEvent):void
+			{
+				setTimeout(hacerBusqueda,300);
+			}
+			
+			private function hacerBusqueda():void
+			{
+				listGuias.dataProvider = UtilsGrid.queryCampoXLike(arreglo,"guiaEmbarque",txtBuscador.text);
+				listGuias.selectedIndex = 0;
+				focusInput();
+			}
+			
+			
+			/////////// LECTURA DE CODIGO
+			public var codigoS:String
+			public var longitudCadena:int;
+			private function terminoCaptura(folio:String,pedimento:String):void
+			{
+				inputPedimento.text="";
+				inputPedimento.text = folio;
+			    
+				/*setTimeout(continuar,2000);*/
+			}
+			private function continuar():void
+			{
+				arribado = (listGuias.selectedItem as OrdenDespacho).arribado;
+				/*if(inputPedimento.text.toLowerCase() == "3018 5000375")*/
+				if(inputPedimento.text.toLowerCase() == listGuias.selectedItem.noPedimento.toLowerCase())
+				{
+					if(arribado)
+					{
+						switchCorrecto();
+						gpProgreso.currentSelect = listGuias.selectedItem as OrdenDespacho;
+						gpProgreso.grpHuellas.current = listGuias.selectedItem as OrdenDespacho;
+						
+					}
+					else 
+					{
+						alertaSingleton.show('La Guía de Embarque seleccionada no esta Arribada', catalogoAlertas.TIT_ADV_informacionIncompleta );
+						grpErrorPedimento.visible = grpErrorPedimento.includeInLayout = false;
+						grpInputPedimento.visible = grpInputPedimento.includeInLayout = true;
+						focusInput();
+					}
+					
+					
+				}
+				else
+				{
+					errorLeerCodido();
+				}
+			}
+			protected function entraFocus(event:FocusEvent):void
+			{
+				focusManager.setFocus(txtPedimentoBack);
+			}
+			
+			private function verTecla(event:KeyboardEvent):void
+			{
+				if(event.keyCode == 27){
+					event.preventDefault();
+					return ;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	
+	
+	
+	<s:VGroup width="100%" height="100%" gap="0">
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="REGISTRAR ARRIBO" isVisble="true" subTitulo="{flete}" vistaAnterior="cmpTitulo_vistaAnteriorHandler(event)" visible="false" includeInLayout="false"/>
+		
+		
+		<pq:MobViewStack id="stackVistas" width="100%" height="100%" activateFade="true">
+			
+			
+			<s:HGroup id="gpOperacion" width="100%" height="100%" gap="20" paddingTop="15" verticalAlign="middle">
+				<s:VGroup id="grpProvee" width="20%" height="100%" gap="0" paddingLeft="5">
+					<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="GUÍAS DE EMBARQUE" width="100%" textAlign="left" />
+					<s:Spacer height="100%" maxHeight="13" width="100%"/>
+					<s:TextInput id="txtBuscador" prompt="Número de guía" width="100%" maxWidth="{grpProvee.width}" changing="buscador(event)"
+								 skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" fontStyle="normal"/>
+					<s:Spacer height="100%" maxHeight="17" width="100%"/>
+					<otros:division id="division" width="100%" grueso="1" color="#e9e9e9"/>
+					
+					<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+							id="listGuias" contentBackgroundAlpha="0" change="focusInput()"
+							itemRenderer="mx.com.proquifa.vista.vistas.registrarArribo.operacion.RegistrarArribo_Operaciones_IRGuia"/>
+					
+					<otros:division width="100%" grueso="1"/>
+					
+					<s:VGroup width="100%"  paddingBottom="15" paddingTop="15" horizontalAlign="center">
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="{listGuias.dataProvider.length.toString()} Guías de embarque" />
+					</s:VGroup>
+					
+				</s:VGroup>
+				<otros:divisionDegradadoVertical height="85%" />
+				
+				<!-- ESTA ES LA PARTE DEL INPUT Y FALLO AL LEER CODIGO -->
+				<s:VGroup width="80%" height="100%" >
+					
+					<s:VGroup id="grpInputPedimento" width="100%" height="100%" horizontalAlign="center">
+						<s:Spacer height="16%" />
+						<mx:Image source="{catalogoIconosBotoneras.getInstance().escaneo}" />
+						<s:Spacer height="18%" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text="Leer código de barras del pedimento." />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text="{(listGuias.selectedItem as OrdenDespacho).noPedimento}" color="#008894"/>
+						<s:Spacer height="5%" />
+						<textInput:textInputLinea id="inputPedimento" focusRect="false" enter="verificarEscaneo(event)" width="70%" 
+												  focusIn="entraFocus(event)" height="100%" maxHeight="100" fontSize="86" color="#008894" textAlign="center"/> 
+						
+						<textInput:textInputLinea id="txtPedimentoBack" focusRect="false" width="70%" height="100%" visible="false" includeInLayout="false"
+												  maxHeight="100" fontSize="86" color="#008894" textAlign="center" enter="verificarEscaneo(event)"/> 
+					</s:VGroup>  
+					
+					<s:VGroup id="grpErrorPedimento" width="100%" height="100%" visible="false" includeInLayout="false" horizontalAlign="center" >
+						<s:Spacer height="16%" />
+						<mx:Image source="{catalogoIconosBotoneras.getInstance().escaneo_incorrecto}" />
+						<s:Spacer height="18%" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text="Lectura del código de barras del pedimento" />
+						
+						<s:HGroup width="100%" gap="4" horizontalAlign="center">
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text="{(listGuias.selectedItem as OrdenDespacho).noPedimento}" color="#008894"/>
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text=" es incorrecto." />
+						</s:HGroup>   
+					</s:VGroup>  
+					
+				</s:VGroup>  
+				
+			</s:HGroup> 
+			
+			
+			
+			<s:VGroup id="gpEscaneoCorrecto" width="100%" height="100%" horizontalAlign="center" visible="false" includeInLayout="false">
+				<s:Spacer height="16%" />
+				<mx:Image source="{catalogoIconosBotoneras.getInstance().escaneo_palomita}" />
+				<s:Spacer height="18%" />
+				<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text="Lectura del código de barras del pedimento" />
+				
+				<s:HGroup width="100%" gap="4" horizontalAlign="center">
+					<s:Label styleName="tab_texto_14_Helvetica" id="lblCodigoGuia" fontSize="{sizeFontTitulo}" text="{inputPedimento.text}" color="#008894"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontTitulo}" text="correcto." />
+				</s:HGroup>  
+			</s:VGroup>  
+			
+			
+			<progreso:RegistrarArribo_VistaProgreso id="gpProgreso" width="100%" height="100%" />
+			
+			
+		</pq:MobViewStack>
+		
+   
+	</s:VGroup>
+	
+</s:Group>

@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 width="100%" height="100%" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			public var _currentType:String;
+			
+			private var _infoCobradorET:ArrayCollection;
+			private var _infoCobradorFT:ArrayCollection;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET")
+						chartCobrador.dataProvider = chartCobrador.aplicarFormatoConsultas(_infoCobradorET,null,"totalCobros");
+					else if(_currentType =="FT")
+						chartCobrador.dataProvider = chartCobrador.aplicarFormatoConsultas(_infoCobradorFT,null,"totalCobros");
+				}
+			}
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void
+			{
+				if($infoGrafica == null) return;
+				
+				/**
+				 * Se realiza una copia de la info y se recibe en un Array simple, para poder aplicar funciones específicas de los mismos
+				 **/
+				var arraySource:Array = new Array();
+				_infoCobradorET = new ArrayCollection();
+				_infoCobradorFT = new ArrayCollection();
+				
+				chartCobrador.dataProvider = new ArrayCollection();
+				arraySource = (ObjectUtil.copy($infoGrafica)as ArrayCollection).source;
+				
+				
+				if(arraySource.length > 0)
+				{
+					/**
+					 * Se obtienen los Arreglos con los Cobros que están en ET y los FT deacuerdo a ciertos criterios que estan
+					 * definidos en las funciones obtenerCobrosET y obtenerCobrosFT referirse a ellas para más información
+					 * */
+					var arrayCobradorET:Array = new Array();
+					arrayCobradorET = arraySource.filter(obtenerCobrosET);
+					
+					var arrayCobradorFT:Array = new Array();
+					arrayCobradorFT = arraySource.filter(obtenerCobrosFT);
+					
+					/**
+					 * Se ordenan todos los Dias restantes de crédito tanto los ET como los FT
+					 * */
+					arrayCobradorET.sortOn("cobrador");
+					arrayCobradorFT.sortOn("cobrador");
+					
+					//Para limpiar memoria
+					arraySource = new Array();
+					
+					/**
+					 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Día de restante de crédito
+					 * quitando las duplicados
+					 * */
+					
+					keys= new Object();
+					var arrayTotalCobradorET:Array = new Array();
+					arrayTotalCobradorET = arrayCobradorET.filter(quitaDuplicados);
+					
+					keys= new Object();
+					var arrayTotalCobradorFT:Array = new Array();
+					arrayTotalCobradorFT = arrayCobradorFT.filter(quitaDuplicados);
+					
+					/**
+					 * Se forman los objetos que serán enviados a la grafica, los totales de cada Día restante de crédito
+					 * */
+					if(arrayTotalCobradorET.length > 0)
+						FormarLosDRC(arrayTotalCobradorET,arrayCobradorET,"COBRADOR_ET",_infoCobradorET);
+					if(arrayTotalCobradorFT.length > 0)
+						FormarLosDRC(arrayTotalCobradorFT,arrayCobradorFT,"COBRADOR_FT",_infoCobradorFT);
+					
+					if(_currentType =="ET")
+						chartCobrador.dataProvider = chartCobrador.aplicarFormatoConsultas(_infoCobradorET,null,"totalCobros");
+					else if(_currentType =="FT")
+						chartCobrador.dataProvider = chartCobrador.aplicarFormatoConsultas(_infoCobradorFT,null,"totalCobros");
+					
+					//Para liberar Memoria
+					arrayTotalCobradorET = new Array();
+					arrayCobradorET = new Array();
+					arrayTotalCobradorFT = new Array();
+					arrayCobradorFT = new Array();
+				}
+				
+			}
+			private function FormarLosDRC(Totalcobrador:Array,COBRADORInfo:Array,etiqueta:String,infoCOBRADOR:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCobros:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientes:Object;
+				
+				var currentPartidaCobros:Cobros; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<Totalcobrador.length; i++){
+					j=0;
+					keysClientes = new Object();
+					totalCobros =0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCobros = COBRADORInfo[j] as Cobros;
+					
+					if(currentPartidaCobros.cobrador)
+					{ 
+						while( (Totalcobrador[i] as Cobros).cobrador == currentPartidaCobros.cobrador){
+							
+							totalPartidas += currentPartidaCobros.partidas;
+							totalPiezas += currentPartidaCobros.piezas;
+							totalMonto += currentPartidaCobros.montoDolares;
+							
+							totalCobros++;
+							
+							if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+								keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+								totalClientes++;
+							}
+							
+							COBRADORInfo.shift();
+							if(COBRADORInfo.length >0)
+								currentPartidaCobros = COBRADORInfo[j] as Cobros;
+							else
+								currentPartidaCobros =new Cobros();
+						}
+						
+						itemResumenConsulta = new ResumenConsulta();
+						itemResumenConsulta.conceptoResultado = (Totalcobrador[i] as Cobros).cobrador.toLocaleUpperCase();
+						itemResumenConsulta.etiqueta = etiqueta;
+						itemResumenConsulta.total = totalMonto;
+						itemResumenConsulta.totalClientes = totalClientes;
+						itemResumenConsulta.totalCobros = totalCobros;
+						itemResumenConsulta.partidas = totalPartidas;
+						itemResumenConsulta.piezasTotal = totalPiezas;
+						
+						infoCOBRADOR.addItem(ObjectUtil.copy(itemResumenConsulta));
+					}
+				} 
+			}
+			public function quitaDuplicados(item:Cobros, id:uint, _array:Array):Boolean{
+				if (keys.hasOwnProperty(item.cobrador)) {
+					return false;
+				} else {
+					keys[item.cobrador] = item.cobrador;
+					return true;
+				}
+			}
+			private function obtenerCobrosET(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				if(item.estadoParaMostrar == 'Abierto' ){
+					if(isNaN(Number(item.diasRestantesCobro))){
+						if(item.diasRestantesCobro == 'Pendiente'){
+							return true;
+						}else{
+							return false;
+						}
+					}else if(Number(item.diasRestantesCobro) >= 0){
+						return true;
+					}else{
+						return false;
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){
+					if(item.moroso == "NO"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			private function obtenerCobrosFT(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				
+				if(item.estadoParaMostrar == 'Abierto'){ 
+					if(!isNaN(Number(item.diasRestantesCobro)))
+					{
+						if(Number(item.diasRestantesCobro) < 0)
+						{
+							return true;
+						}
+						else
+						{
+							return false;
+						}
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado')
+				{ 
+					if(item.moroso == "SI")
+					{
+						return true;
+					}
+					else
+					{
+						return false;
+					}
+				}
+				return false;
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="chartCobrador" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="COBRADOR" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+	
+</s:Group>

@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 xmlns:formatoCol ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*"
+		 creationComplete="inicia()" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<mx:NumberFormatter id="formatoDecimales" precision="2" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.comun.llamadas.EventoReporteLamadas;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.controls.Alert;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable]
+			public var _datosPie:ArrayCollection =  new ArrayCollection();
+			[Bindable]
+			private var _listaDatos:ArrayCollection = new ArrayCollection();
+			public var _totalPendientes:int;
+			
+			private var consumidorVerificacion:Consumer = new Consumer();
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			
+			private function inicia():void{				
+				this.consumidorVerificacion.destination = "actualizacionService";
+				this.consumidorVerificacion.addEventListener("fault",falloconsumidor);
+				this.consumidorVerificacion.addEventListener(MessageEvent.MESSAGE,actualizar);
+				this.canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesVerificacion = new ChannelSet();
+				this.canalesVerificacion.addChannel(canalVerificacion);
+				this.consumidorVerificacion.channelSet = this.canalesVerificacion;
+				this.consumidorVerificacion.subscribe();
+				invocaLlamadas();
+			}
+			private function falloconsumidor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Consumidor de ReporteDeLlamadas","Error");
+			}
+			
+			
+			private function actualizar(mensaje:MessageEvent):void{
+				if(mensaje.message.headers["Destino"] == "reporteLlamada" && mensaje.message.headers["Usuario"] == DatosGlobales.getInstance()._usuario.usuario ){
+					invocaLlamadas();
+				}
+			}
+			/**
+			 * Metodo para invocar la lista de las LLamadas pendientes
+			 */ 
+			public function invocaLlamadas():void{
+				var _llamada:Llamada = new Llamada();
+				var evento:EventoReporteLamadas = new EventoReporteLamadas( EventoReporteLamadas.CONSULTA_LLAMADAS_PENDIENTES );
+				_llamada.atendio = DatosGlobales.getInstance()._usuario.usuario;
+				evento.llamada = _llamada;
+				dispatchEvent( evento);
+			}
+			
+			/**
+			 * Metodo que recibe del mapa las lista de las Llamadas
+			 */ 
+			public function set recibeLlamadas( datos:ArrayCollection  ):void{
+				if( datos == null ){
+					return;
+				}
+				var abiertosTemp:int = 0;
+				var cerradosTemp:int = 0;
+				_totalPendientes = 0;
+				this._listaDatos = datos;
+				for( var i:int = 0; i < datos.length; i++){
+					if ( UtilsFecha.determinarFechaEnTiempo( (datos.getItemAt( i ) as Llamada).fecha ) == "enTiempo" ){
+						cerradosTemp = cerradosTemp + 1;
+					}else if ( UtilsFecha.determinarFechaEnTiempo( (datos.getItemAt( i ) as Llamada).fecha ) == "fueraDeTiempo" ){
+						abiertosTemp = abiertosTemp + 1; 
+					}
+					datos[0].numFila = i + 1;
+				}
+				_totalPendientes = cerradosTemp + abiertosTemp;
+				this._datosPie = new ArrayCollection([
+					{estado:"FUERA DE TIEMPO", Monto: cerradosTemp , EtiquetaMonto: "FUERA DE TIEMPO ( "+ cerradosTemp + " )"},
+					{estado:"EN TIEMPO ", Monto: abiertosTemp , EtiquetaMonto: "EN TIEMPO ( "+ abiertosTemp  + " )" }
+				]);	
+				if( _totalPendientes > 0){
+					this.hbxPie.percentHeight = 100;
+					this.hbxPie.visible = true;
+				}else if( _totalPendientes < 1){
+					this.hbxPie.percentHeight = 0;
+					this.hbxPie.visible = false;
+				}
+				
+			}
+			/**
+			 * Metodo usado para darle formato a los DATATIPS del la grafica del Pie (en tiempo y fuera de tiempo)
+			 */ 
+			public function dtFunc(hd:HitData):String {
+				var porcentaje:Number = new Number;
+				porcentaje = (hd.item.Monto * 100 ) /this._totalPendientes;
+				return 	"<B>" + hd.item.estado + ":</B> "+ formatoDecimales.format( porcentaje ) + "<B>%</B>" + "<BR>" +
+					"<B>Monto:</B> "+ hd.item.Monto + "<BR>";
+			}
+			
+		]]>
+	</fx:Script>
+	<!--<s:Label text="Reporte Llamadas" fontSize="40" fontWeight="bold"/>-->
+	<label:labelTitulo_Otros text="Reporte Llamadas"/>
+	<s:Spacer height="3"/>
+	<otros:division width="100%"/>
+	<!--<mx:HRule width="100%"/>-->
+	<s:Spacer height="3"/>
+	<mx:VBox width="100%" height="100%" verticalGap="0" id="vbxDataGrid">
+		<mx:DataGrid width="100%" height="100%" dataProvider="{ this._listaDatos }">
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" dataField="numFila" width="30"/>
+				<mx:DataGridColumn headerText="FECHA" dataField="fechaHoraFormato"/>
+				<mx:DataGridColumn headerText="EMPRESA" dataField="empresa"/>
+				<mx:DataGridColumn headerText="CONTACTO" dataField="contacto"/>
+				<mx:DataGridColumn headerText="ASUNTO" dataField="asunto"/>
+				<mx:DataGridColumn headerText="DESTINO" dataField="destino"/>
+				<mx:DataGridColumn headerText="ATENDIO" dataField="atendio"/>
+				<mx:DataGridColumn headerText="ESTADO" dataField="estado">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:LinkButton label="{data.estado}" textDecoration="underline" color="#0C4AFC" click="ejecutar()" width="100%">
+								<fx:Script>
+									<![CDATA[
+										import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.comun.llamadas.EventoReporteLamadas;
+										import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+										private function ejecutar():void{
+											var evento:EventoReporteLamadas = new EventoReporteLamadas( EventoReporteLamadas.CAMBIA_HIJO);
+											evento.llamada = this.data as Llamada;
+											dispatchEvent( evento );
+										}
+									]]>
+								</fx:Script>
+							</mx:LinkButton>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+		<!--<s:DataGrid width="100%" height="100%" dataProvider="{ this._listaDatos }">
+			<s:columns>
+				<s:ArrayList>
+					<formatoCol:GridColumnFormato formato="numfila" headerText="#" width="30"/>
+					<formatoCol:GridColumnFormato formato="fechaHora" dataField="fecha" headerText="FECHA" />
+					<s:GridColumn headerText="EMPRESA" dataField="empresa"/>
+					<s:GridColumn headerText="CONTACTO" dataField="contacto"/>
+					<s:GridColumn headerText="ASUNTO" dataField="asunto"/>
+					<s:GridColumn headerText="DESTINO" dataField="destino"/>
+					<s:GridColumn headerText="ATENDIO" dataField="atendio"/>
+					<s:GridColumn headerText="ESTADO" dataField="estado">
+						<s:itemRenderer>
+							<fx:Component>
+								<s:GridItemRenderer>
+									<mx:LinkButton label="{data.estado}" textDecoration="underline" color="#0C4AFC" click="ejecutar()" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.comun.llamadas.EventoReporteLamadas;
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+												private function ejecutar():void{
+													var evento:EventoReporteLamadas = new EventoReporteLamadas( EventoReporteLamadas.CAMBIA_HIJO);
+													evento.llamada = this.data as Llamada;
+													dispatchEvent( evento );
+												}
+											]]>
+										</fx:Script>
+									</mx:LinkButton>
+								</s:GridItemRenderer>
+							</fx:Component>
+						</s:itemRenderer>
+					</s:GridColumn>
+				</s:ArrayList>
+			</s:columns>
+		</s:DataGrid>-->
+		<s:Spacer height="5"/>
+		<mx:HBox width="100%" height="0" borderStyle="solid" paddingLeft="10" paddingTop="10" id="hbxPie"  visible="false">
+			<label:labelSubtitulo text="Tasa de espera"/>
+			<!--<s:Label text="Tasa de espera" fontSize="24" fontWeight="bold"/>-->
+			<mx:PieChart height="100%" width="100%" dataProvider="{ this._datosPie }"  showDataTips="true" dataTipFunction="dtFunc">
+				<mx:series>
+					<mx:PieSeries id="pieSeriesId" 
+								  field="Monto" 
+								  nameField="estado"
+								  labelField= "EtiquetaMonto"  
+								  explodeRadius=".05" 
+								  labelPosition="inside"
+								  />
+				</mx:series>	
+			</mx:PieChart>
+			<s:Spacer width="50%"/>
+		</mx:HBox>
+	</mx:VBox>	<!--vbox que contiene a el dataGrid y la grafica de Pie--> 
+</mx:VBox>

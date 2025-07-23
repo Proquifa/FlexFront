@@ -1,0 +1,665 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:analisis ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.compras.analisisCompras.*"
+		  xmlns:ladoB ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.compras.*" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:pqNet1="skins.skin.datagrid.pqNet.*" 
+		  xmlns:grafica="skins.botones.grafica.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" 
+		  >
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="600"/>
+		<mx:SolidColorStroke id = "sA" color="0x3b98af" weight="2"/>
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="6"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+		
+		<s:LinearGradient id="sc1" rotation="90">
+			<s:GradientEntry alpha="1.0" color="#b4c871" ratio="0"/>
+			<s:GradientEntry alpha="1.0" color="#8da741" ratio="1"/> 
+		</s:LinearGradient>
+		<s:LinearGradient id="sc2" rotation="90">
+			<s:GradientEntry alpha="1.0" color="#990429" ratio="0"/>
+			<s:GradientEntry alpha="1.0" color="#910824" ratio="1"/>
+		</s:LinearGradient>
+		
+		
+		<mx:SolidColorStroke id = "s2" color="0xdd9c12" weight="2"/>
+		<mx:SolidColor id="sc3" color="0x{catalogoColores.LABEL_NARANJA}" alpha="1"/>
+		<s:SolidColorStroke id="stroke2" color="0x{catalogoColores.LABEL_NARANJA}" weight="5"/>
+		<mx:SolidColorStroke id = "sObj" color="0xC54B8C" weight="3"/>
+		<mx:SolidColor id="sc4" color="0xC54B8C" alpha="1"/>
+		<s:SolidColorStroke id="s4" color="0xC54B8C" weight="2"/>
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.ChartItem;
+			import mx.charts.chartClasses.Series;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.PeriodoToolTip;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable] private var _ocComprasTab:ArrayCollection;
+			[Bindable]  private var _valorTotal:String;
+			
+			private var totalLegend:Number = 0;
+			private var _ocComprasGrafica:ArrayCollection;
+			private var _montoObjetivo:Number = 0;
+			private var _montoFundamental:Number = 0;
+			private var _diferencial:Number = 0;
+			private var _porcentaje:String = '';
+			private var _signo:String = '';
+			private var _hoy:Date = new Date();
+			private var _listaMontoObjetivo:ArrayCollection = new ArrayCollection();
+			private var yallegaronlosMontosObjetivos:Boolean = false;
+			private var yallegaronLasCompras:Boolean = false;
+			
+			private var _desepenoAnterior:Number = 0;
+			private var _desempenoActual:Number = 0;
+			private var _mesesTrabajados:Number = 0;
+			private var fecha:Date = new Date();
+			private var _anioFiscal:Boolean;
+			
+			
+			private function maxConfirmacionCanceladas():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			public function set resumenComparativaCompra(comparativa:ArrayCollection):void
+			{
+				if(comparativa == null) return;
+				
+				this._ocComprasGrafica = new ArrayCollection();
+				this._ocComprasGrafica = comparativa;
+				yallegaronLasCompras = true;
+			}
+			
+			
+			private function llamarAIniciarGrafica():void
+			{
+				if(yallegaronlosMontosObjetivos && yallegaronLasCompras)
+				{
+					yallegaronlosMontosObjetivos = false;
+					yallegaronLasCompras = false;
+					myChart.dataProvider = iniciarGrafica( _ocComprasGrafica );
+				}
+				else
+				{
+					setTimeout(llamarAIniciarGrafica,300);
+				}
+			}
+			
+			public function set recibeMontosObjetivoCompras($montos:ArrayCollection):void
+			{
+				if($montos == null) 
+					return;
+				_listaMontoObjetivo = new ArrayCollection();
+				_listaMontoObjetivo = $montos;
+				yallegaronlosMontosObjetivos = true;
+				
+				/**********************************Ordenar de menor a mayor arrayCollection***************************/
+				var ordenar:SortField = new SortField();
+				ordenar.name = "mes";
+				ordenar.numeric = true;
+				var tipo:Sort = new Sort();
+				tipo.fields = [ordenar];
+				_listaMontoObjetivo.sort = tipo;
+				_listaMontoObjetivo.refresh();
+				/**************************************************/
+			} 
+			
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection
+			{
+				_desempenoActual = 0;
+				totalLegend = 0;
+				var m:int = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				arrReturn.addItem(new Object());
+				var objeto:Object ;
+				var cuenta:int = 1;
+				var contador:int = 0;
+				var contadorPromedio:int = 0;
+				var mes:Number = fecha.month + 1;
+				var _anio:Number;
+				
+				if($lista.length ==0)
+					_anio = fecha.getFullYear();
+				else
+					_anio= ($lista[0] as ResumenConsulta).periodo;
+				
+				_montoObjetivo = 0;
+				_montoFundamental = 0;
+				_diferencial = 0;
+				_porcentaje = '';
+				_signo = '';
+				_desepenoAnterior = 0;
+				
+				while( cuenta < 13)
+				{
+					if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+					{
+						objeto = new Object();
+						objeto.numeroMes = cuenta;
+						objeto.mes = _listaMensual[cuenta -1];
+						objeto.montoUSD_0 = 0;
+						objeto.montoUSD_1 = 0;
+						objeto.montoUSD_2 = 0;
+						objeto.totalPeriodo = 0;
+						objeto.montoObjetivo = 0; 
+						objeto.montoFundamental = 0;
+						
+						for( m = 0; m < $lista.length;m++ ){
+							var resumen:ResumenConsulta = $lista[m] as ResumenConsulta;
+							if(cuenta == resumen.mes){
+								if( resumen.etiqueta == "OC_COMPRAS_0" && resumen.conceptoResultado == 'Confirmada')
+								{
+									totalLegend += resumen.total;
+									objeto.montoUSD_0 += resumen.total;
+									_desempenoActual += resumen.total;	
+									contadorPromedio++;
+								}
+								else if( resumen.etiqueta == "OC_COMPRAS_1" && resumen.conceptoResultado == 'Confirmada')
+								{
+									objeto.montoUSD_1 += resumen.total;
+									_desepenoAnterior += resumen.total;
+								}
+								else if( resumen.etiqueta == "OC_COMPRAS_2" && resumen.conceptoResultado == 'Confirmada' )
+								{
+									objeto.montoUSD_2 += resumen.total;
+								}
+							}
+						}
+						
+						if((_listaMontoObjetivo.length != 0) && (_listaMontoObjetivo.length != _maximoMeses - 1) )
+						{
+							objeto.montoObjetivo = _listaMontoObjetivo[contador].monto;
+							objeto.montoFundamental = _listaMontoObjetivo[contador].montoFundamental;
+							_montoObjetivo += objeto.montoObjetivo;
+							_montoFundamental += objeto.montoFundamental;
+							contador++;
+						}	
+						
+						arrReturn.addItem(objeto);
+					}
+					cuenta++;
+				}
+				establecerDatosObjetivos("deseado",_montoObjetivo,_anio,_mesesTrabajados);
+				establecerDatosObjetivos("fundamental",_montoFundamental,_anio,_mesesTrabajados);  
+				arrReturn.addItem( new Object() );
+				lblPer1.text = _event.labelPeriodo1;
+				
+				if(_anioFiscal)
+					return ordenarPeriodosFiscal(arrReturn);
+				else
+					return arrReturn;	
+			}
+			
+			
+			private function ordenarPeriodosFiscal($arreglo:ArrayCollection):ArrayCollection
+			{
+				if($arreglo.length == 0)
+					return new ArrayCollection();
+				
+				$arreglo.removeItemAt($arreglo.length-1);
+				$arreglo.removeItemAt(0);
+				
+				
+				var arrayNew:ArrayCollection = new ArrayCollection();
+				var tmpFin:ArrayCollection = new ArrayCollection();
+				var tmpInicio:ArrayCollection = new ArrayCollection();
+				var cont:int = 0;
+				for(var t:int = 0; t < $arreglo.length; t++)
+				{
+					if(t < _event.mesFinFiscal)
+					{
+						tmpFin.addItem($arreglo[t]);
+					}
+					if(t >= _event.mesFinFiscal )
+					{
+						tmpInicio.addItem($arreglo[t]);
+					}
+				}
+				
+				for(var n:int = 0; n < tmpInicio.length; n++)
+				{
+					if(n==0)
+						arrayNew.addItem(new Object());
+					
+					arrayNew.addItem(tmpInicio[n]);
+				}
+				
+				for(var h:int = 0; h < tmpFin.length; h++)
+				{
+					arrayNew.addItem(tmpFin[h]);
+				}
+				
+				arrayNew.addItem(new Object());
+				return arrayNew;
+				
+			}
+			
+			public function seleccionaTabla():void
+			{
+				_currentVistaSelected = "vistaTabla";
+				stackGeneral.paddingRight = 20;
+				this.stackGeneral.selectedChild = vistaTabla;
+				grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = false;
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				_currentVistaSelected = "vistaGrafico";
+				stackGeneral.paddingRight = 0;
+				this.stackGeneral.selectedChild = vistaGrafico;
+				
+				if(_currentFiltroBusqueda == "PROVEEDOR")
+				{
+					grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = false;
+				}
+				else
+				{
+					grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = true;
+				}
+			}
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			
+			
+			/**
+			 * Metodo que recibe del mapa  Compras Grid
+			 */
+			public function set obtenerOCCompras(compras:ArrayCollection):void
+			{
+				if (compras==null)
+				{
+					return ;
+				}
+				this._ocComprasTab = compras;
+			}
+			
+			private var _event:EventoTabProveedores;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _keyAnterior:String = "";
+			private var _anioFiltro:Number;
+			private var _periodo:String = "";
+			
+			public function set recibirFiltrosTableroProveedores(etiqueta:EventoTabProveedores):void
+			{
+				if(etiqueta == null) return;x
+				
+				_event = etiqueta;
+				if(!_event.parametros.anioFiscal){
+					_minimoMeses = _event.parametros.mesInicio;
+					_maximoMeses = _event.parametros.mesFin;
+				}else{
+					_minimoMeses = 1;
+					_maximoMeses = 12;
+				}
+				_anioFiltro = _event.parametros.anio;
+				_anioFiscal = _event.parametros.anioFiscal;
+				_periodo = _event.parametros.periodo;
+				
+				anioActual.text = fecha.getFullYear() == _anioFiltro ? "ACTUAL":"CERRADO";
+				_valorTotal = "D"+(_anioFiltro - 1).toString();
+				
+				if(_anioFiscal)
+					lblinfoPerObjetivos.text = "D"+(_anioFiltro-1).toString() + "-" + (_anioFiltro).toString();
+				else
+					lblinfoPerObjetivos.text = "D"+(_anioFiltro-1).toString();
+				
+				llamarAIniciarGrafica();
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso =  '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function formatoCantidadCancelada(dato:ChartItem,serie:Series):String
+			{
+				return dato.item.cantidadesFT;
+			}
+			
+			private function formatoCantidadConfirmada(dato:ChartItem,serie:Series):String
+			{
+				return dato.item.cantidadesT;
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				if(_anioFiscal)
+				{
+					return _listaMensual[ int($etiqueta) -1 ].toUpperCase();
+				}
+				else
+					return _listaMensual[ int($etiqueta) -1 ].toUpperCase();
+			}
+			
+			
+			private var _currentVistaSelected:String;
+			private function cambiarVistaTablaGrafica($vistaSelected:String):void
+			{
+				_currentVistaSelected = $vistaSelected;
+				if($vistaSelected == 'vistaTabla')
+				{
+					stackGeneral.selectedChild = vistaTabla;
+					stackGeneral.paddingRight = 20;
+					grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = false;
+				}
+				else
+				{
+					stackGeneral.selectedChild = vistaGrafico;
+					
+					if(_currentFiltroBusqueda == "PROVEEDOR")
+					{
+						grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = false;
+					}
+					else
+					{
+						grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = true;
+					}
+					stackGeneral.paddingRight = 0;
+				}
+			}
+			
+			
+			private var _currentFiltroBusqueda:String = "PROVEEDOR";
+			public function set recibeFiltroDeMenu($filtro:String):void
+			{
+				if($filtro == null) return;
+				
+				_currentFiltroBusqueda = $filtro;
+				
+				if(_currentVistaSelected == 'vistaTabla')
+				{
+					grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = false;
+				}
+				else
+				{
+					if(_currentFiltroBusqueda == "GLOBAL" ||_currentFiltroBusqueda == "ESTRATEGICOS")
+					{
+						grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = false;
+					}
+					else
+					{
+						grpGraficasDonas.includeInLayout = grpGraficasDonas.visible = true;
+					}
+				}
+			}
+			
+			private function establecerDatosObjetivos($tipo:String, $monto:Number, $anio:Number, $contador:int):void
+			{
+				_porcentaje = '';
+				
+				var fecha:Date = new Date();
+				var promFacPer_Actual:Number = _desempenoActual / UtilsFormatosNumericos.getMesesTrabajados(_anioFiltro,_anioFiscal,_periodo);
+				var proyecPeriodo_actual:Number = promFacPer_Actual * getMesesTotales();
+				var promFacPer_Fund:Number = _montoFundamental / getMesesTotales();
+				var proyecPeriodo_Fund:Number = (promFacPer_Fund * getMesesTotales());
+				var promFacPer_Deseado:Number = _montoObjetivo / getMesesTotales();
+				var proyecPeriodo_Deseado:Number = (promFacPer_Deseado * getMesesTotales());
+				
+				lblinfoMontoAnterior.text = "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas( _desepenoAnterior );
+				lblDesempeno_Actual.text = "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas( _desempenoActual );
+				lblDifDesempeno_Actual.text = UtilsFormatosNumericos.precisionADosDecimales(((_desempenoActual/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDifDesempenoVSobj_Actual.text = "NA";
+				lblProyecPeriodo_Actual.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(proyecPeriodo_actual);
+				lblProyecCrecimiento_Actual.text =   UtilsFormatosNumericos.precisionADosDecimales(((proyecPeriodo_actual/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDiferObjetivos_Actual.text = "NA";
+				lblPromFactPeriodo_Actual.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(promFacPer_Actual);
+				lblDiferPromFacturacion_Actual.text = "NA";
+				
+				etqMontoObjetivoFund.text =  "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoFundamental);
+				lblDifDesempeno_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((_montoFundamental/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDifDesempenoVSobj_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((_desempenoActual/_montoFundamental)-1)*100).toString()+"%";
+				lblProyecPeriodo_Fund.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(proyecPeriodo_Fund);
+				lblProyecCrecimiento_Fund.text =   UtilsFormatosNumericos.precisionADosDecimales(((_montoFundamental/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDiferObjetivos_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((proyecPeriodo_actual/proyecPeriodo_Fund)-1)*100).toString()+"%";
+				lblPromFactPeriodo_Fund.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(promFacPer_Fund);
+				lblDiferPromFacturacion_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((promFacPer_Actual/promFacPer_Fund)-1)*100).toString()+"%";
+				
+				etqMontoObjetivo_Deseado.text =  "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoObjetivo);
+				lblDifDesempeno_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((_montoObjetivo/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDifDesempenoVSobj_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((_desempenoActual/_montoObjetivo)-1)*100).toString()+"%";
+				lblProyecPeriodo_Deseado.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(proyecPeriodo_Deseado);
+				lblProyecCrecimiento_Deseado.text =   UtilsFormatosNumericos.precisionADosDecimales(((_montoObjetivo/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDiferObjetivos_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((proyecPeriodo_Fund/proyecPeriodo_Deseado)-1)*100).toString()+"%";
+				lblPromFactPeriodo_Deseado.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(promFacPer_Deseado);
+				lblDiferPromFacturacion_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((promFacPer_Fund/promFacPer_Deseado)-1)*100).toString()+"%";
+				
+			}
+			
+			private function getMesesTotales():Number
+			{
+				var valor:Number = 0;
+				switch(_event.parametros.periodo)
+				{
+					case "Anual":
+					{
+						valor = 12;
+						break;
+					}
+					case "Semestral":
+					{
+						valor = 6;
+						break;
+					}
+					case "Trimestral":
+					{
+						valor = 3;
+						break;
+					}
+					default:
+					{
+						valor = 1;
+						break;
+					}
+				}
+				return valor;
+			}
+			
+			protected function Regresar_VistaDefaultAnalisisCompraHandler(event:Event):void
+			{
+				if(AnalisisCompras_Default(event.currentTarget).vistaARegresar == "grafica_VistaDefaultAnalisisCompras")
+				{
+					cambiarVistaTablaGrafica('vistaGrafico');
+					
+				}
+				else if(AnalisisCompras_Default(event.currentTarget).vistaARegresar == "incio_VistaDefaultAnalisisCompras")
+				{
+					minimiza();
+				} 
+			}
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%">
+		
+		<!--	 AQUI ESTA EL COMPONENETE DEL GRID	-->
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<analisis:AnalisisCompras_Default id="grpVistaDefaultAnalisisVentas" width="100%" height="100%" Regresar_VistaDefaultAnalisisCompras="Regresar_VistaDefaultAnalisisCompraHandler(event)"/>
+		</s:NavigatorContent>
+		
+		
+		<!--	 AQUI ESTA EL COMPONENETE DE LA GRAFICA MAXIMIZADA	-->
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" paddingLeft="20" paddingTop="25" paddingBottom="15">
+				
+				<s:HGroup width="100%">
+					<componentes:TituloChartMaxTablero width="100%" text="COMPRAS"/>
+					<componentes:TituloChartMaxTablero id="lblPer1" paddingRight="20" textAlign="center"/>
+				</s:HGroup>
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+						<otros:divisionGruesa width="100%" />
+						<mx:LineChart height="100%" width="100%" id="myChart"
+									  mouseSensitivity="5" 
+									  dataTipRenderer="{PeriodoToolTip}" 
+									  showDataTips="true" 
+									  showDataTipTargets="false"  
+									  dataTipMode="single" 
+									  paddingRight="30" paddingLeft="20" paddingTop="40"
+									  paddingBottom="40"
+									  seriesFilters="[]">
+							<mx:series>
+								
+								<mx:LineSeries  yField="montoObjetivo" xField="numeroMes" form="step"  lineStroke="{s2}" showDataEffect="{fxInterpolateIn}" />
+								<mx:PlotSeries id="montoObjetivo" yField="montoObjetivo" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}" 
+											   stroke="{stroke2}" fill="{sc3}" itemRenderer="mx.charts.renderers.TriangleItemRenderer"/>
+								
+								<mx:LineSeries  yField="montoFundamental" xField="numeroMes" form="step"  lineStroke="{s4}" showDataEffect="{fxInterpolateIn}" />
+								<mx:PlotSeries id="montoFundamental" yField="montoFundamental" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}" 
+											   stroke="{s4}" fill="{sc4}" itemRenderer="mx.charts.renderers.TriangleItemRenderer">
+								</mx:PlotSeries>
+								
+								<mx:LineSeries yField="montoUSD_0" xField="numeroMes" form="segment"  lineStroke="{s1}" showDataEffect="{fxInterpolateIn}" />
+								<mx:PlotSeries yField="montoUSD_0" xField="numeroMes" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+									<mx:itemRenderer>
+										<fx:Component>
+											<s:MXItemRenderer>
+												<fx:Script>
+													<![CDATA[
+														import skins.catalogos.catalogoColores;
+													]]>
+												</fx:Script>
+												<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+													<s:fill>
+														<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+													</s:fill>		
+												</s:Ellipse>
+											</s:MXItemRenderer>
+										</fx:Component>
+									</mx:itemRenderer>
+								</mx:PlotSeries>
+							</mx:series>
+							<mx:horizontalAxis>
+								<mx:CategoryAxis id="vMes" categoryField="numeroMes"  />
+							</mx:horizontalAxis>
+							<mx:verticalAxis>
+								<mx:LinearAxis id="vCantidad" labelFunction="formateoEje" autoAdjust="false" padding="1"  minimum="0"/>
+							</mx:verticalAxis>
+							<mx:verticalAxisRenderers>
+								<mx:AxisRenderer axis="{vCantidad}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"/>
+							</mx:verticalAxisRenderers>
+							<mx:horizontalAxisRenderers>
+								<mx:AxisRenderer axis="{vMes}" axisStroke="{trazoGruezo}" tickPlacement="none" showLine="true" showLabels="true" 
+												 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction" />
+							</mx:horizontalAxisRenderers>
+						</mx:LineChart>
+						
+						
+						<!--	 AQUI ESTA EL GRID DE DESEMPENO	-->
+						<s:Group width="100%" id="grpValoresGrid">
+							<s:VGroup width="100%" paddingTop="135" paddingRight="20">
+								<otros:division width="100%" color="0x000000" />
+							</s:VGroup>
+							
+							<s:VGroup id="infoObjetivos" width="100%" paddingRight="20" paddingBottom="15">
+								<label:Titulo_22_pTop10 id="lblinfoPerObjetivos" textAlign="center" width="100%" paddingTop="0" />
+								<otros:division width="100%" colorLinea="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+								<label:Titulo_22_pTop10 id="lblinfoMontoAnterior" width="100%" textAlign="center" paddingTop="0" color="0x328faa"/>
+								<otros:division width="100%" color="0x000000" grueso="1.8"/>
+								<s:HGroup width="100%" paddingTop="10">
+									
+									<s:VGroup width="100%" horizontalAlign="right" gap="20">
+										<label:Texto id="Dummy" paddingTop="0" fontSize="12"/>
+										<label:Titulo text="DESEMPEÑO" fontSize="12" paddingTop="0" />
+										<label:Texto_16_GrisCasiNegro text="{'Dif desempeño '}" fontSize="12" color="0xaaa9ab" />
+										<label:Texto_16_GrisCasiNegro text="Dif desempeño contra objetivos" fontSize="12" color="0xaaa9ab"/>
+										<label:Titulo text="Proyección del periodo" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro text="Proyección de crecimiento" fontSize="12" color="0xaaa9ab"/>
+										<label:Texto_16_GrisCasiNegro text="Diferencia de objetivos" fontSize="12" color="0xaaa9ab"/>
+										<label:Titulo text="Promedio de Compras del Periodo" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro text="Diferencia Promedio de Compras" fontSize="12" color="0xaaa9ab"/>
+									</s:VGroup>
+									
+									<s:VGroup width="100%" horizontalAlign="center" gap="20">
+										<label:Titulo id="anioActual" text="ACTUAL" paddingTop="0" fontSize="12"/>
+										<label:Titulo id="lblDesempeno_Actual" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblDifDesempeno_Actual" fontSize="12" color="0x757578"/>
+										<label:Texto_16_GrisCasiNegro id="lblDifDesempenoVSobj_Actual" fontSize="12" color="0x757578"/>
+										<label:Titulo id="lblProyecPeriodo_Actual" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblProyecCrecimiento_Actual" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+										<label:Texto_16_GrisCasiNegro id="lblDiferObjetivos_Actual" fontSize="12" color="0x757578"/>
+										<label:Titulo id="lblPromFactPeriodo_Actual" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblDiferPromFacturacion_Actual" fontSize="12" color="0x757578"/>
+									</s:VGroup>
+									
+									<s:VGroup width="100%" horizontalAlign="center" gap="20">
+										<label:Titulo text="OBJETIVO FUNDAMENTAL" paddingTop="0" fontSize="12"/>
+										<label:Titulo id="etqMontoObjetivoFund" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblDifDesempeno_Fund" fontSize="12" color="0x757578"/>
+										<label:Texto_16_GrisCasiNegro id="lblDifDesempenoVSobj_Fund" fontSize="12" color="0x757578"/>
+										<label:Titulo id="lblProyecPeriodo_Fund" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblProyecCrecimiento_Fund" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+										<label:Texto_16_GrisCasiNegro id="lblDiferObjetivos_Fund" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+										<label:Titulo id="lblPromFactPeriodo_Fund" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblDiferPromFacturacion_Fund" fontSize="12" color="0x757578"/>
+									</s:VGroup>
+									
+									<s:VGroup width="100%" horizontalAlign="center" gap="20">
+										<label:Titulo text="OBJETIVO DESEADO" paddingTop="0" fontSize="12"/>
+										<label:Titulo id="etqMontoObjetivo_Deseado" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblDifDesempeno_Deseado" fontSize="12" color="0x757578"/>
+										<label:Texto_16_GrisCasiNegro id="lblDifDesempenoVSobj_Deseado" fontSize="12" color="0x757578"/>
+										<label:Titulo id="lblProyecPeriodo_Deseado" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblProyecCrecimiento_Deseado" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+										<label:Texto_16_GrisCasiNegro id="lblDiferObjetivos_Deseado" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+										<label:Titulo id="lblPromFactPeriodo_Deseado" fontSize="12" paddingTop="0"/>
+										<label:Texto_16_GrisCasiNegro id="lblDiferPromFacturacion_Deseado" fontSize="12" color="0x757578"/>
+									</s:VGroup>
+								</s:HGroup>
+							</s:VGroup>
+						</s:Group>
+						
+						<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+							<s:text>Los montos se refieren  a costo de Compra</s:text>
+						</s:Label>
+						<otros:divisionHueca width="100%" />
+						<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+							<grafica:botonPopUp icono="tabla" click="cambiarVistaTablaGrafica('vistaTabla')"/>
+							<pqNet:botonPqNetLargo label="Inicio" click="maxConfirmacionCanceladas()" />
+						</s:HGroup>	
+					</s:VGroup>
+				</s:HGroup>	
+			</s:VGroup>
+		</s:NavigatorContent>	
+	</pq:MobViewStack>
+	<ladoB:MaxCompras_Graficas width="32%" height="100%" id="grpGraficasDonas" />
+</s:HGroup>

@@ -1,0 +1,119 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita
+{
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.Requisicion;
+	import mx.controls.List;
+
+	[Bindable]
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.ventas.visitas.ReportarVisita")]
+	public class ReportarVisita
+	{
+		private var _requerimientos:ArrayCollection;
+		private var _pendientes:ArrayCollection;
+		private var _hallazgos:ArrayCollection;
+		private var _requisicion:Requisicion;
+		private var _cotizacion:ArrayCollection;
+		private var _calificacion:Number;
+		private var _reporte:String;
+		private var _correo:Correo;
+		private var _notas:String;
+		
+		public function ReportarVisita()
+		{
+		}
+
+		public function get notas():String
+		{
+			return _notas;
+		}
+
+		public function set notas(value:String):void
+		{
+			_notas = value;
+		}
+
+		public function get correo():Correo
+		{
+			return _correo;
+		}
+
+		public function set correo(value:Correo):void
+		{
+			_correo = value;
+		}
+
+		public function get calificacion():Number
+		{
+			return _calificacion;
+		}
+
+		public function set calificacion(value:Number):void
+		{
+			_calificacion = value;
+		}
+
+		public function get reporte():String
+		{
+			return _reporte;
+		}
+
+		public function set reporte(value:String):void
+		{
+			_reporte = value;
+		}
+
+		public function get requerimientos():ArrayCollection
+		{
+			return _requerimientos;
+		}
+
+		public function set requerimientos(value:ArrayCollection):void
+		{
+			_requerimientos = value;
+		}
+
+		public function get pendientes():ArrayCollection
+		{
+			return _pendientes;
+		}
+
+		public function set pendientes(value:ArrayCollection):void
+		{
+			_pendientes = value;
+		}
+
+		public function get hallazgos():ArrayCollection
+		{
+			return _hallazgos;
+		}
+
+		public function set hallazgos(value:ArrayCollection):void
+		{
+			_hallazgos = value;
+		}
+
+		public function get requisicion():Requisicion
+		{
+			return _requisicion;
+		}
+
+		public function set requisicion(value:Requisicion):void
+		{
+			_requisicion = value;
+		}
+
+		public function get cotizacion():ArrayCollection
+		{
+			return _cotizacion;
+		}
+
+		public function set cotizacion(value:ArrayCollection):void
+		{
+			_cotizacion = value;
+		}
+
+
+	}
+}

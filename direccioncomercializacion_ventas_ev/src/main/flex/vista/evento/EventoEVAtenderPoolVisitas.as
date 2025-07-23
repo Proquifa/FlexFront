@@ -1,0 +1,42 @@
+package vista.evento
+{
+	import flash.events.Event;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+
+	public class EventoEVAtenderPoolVisitas extends Event
+	{
+		public var tipoSelect:String;
+		public var usuario:Number;
+		public var cliente:String;
+		public var solicitudVisitas:ArrayCollection;
+		public var idCliente:int;
+		public var habilitado:int;
+		public var solicitud:SolicitudVisita;
+		public var visitaExtratemporal:Boolean;
+		
+		/////////////////////////////	SERVICIOS	/////////////////////////////	
+		public static const OBTENER_VISITAS_SOLICITADAS:String = "obtenerVisitasSolicitadaEventoEVPoolVisitas";
+		public static const ENVIAR_SOLICITUD_VISITAS_POR_AGRUPAR:String = "enviarSolicitudesVisitaEventoEVPoolVisitas";
+		public static const PENDIENTES_VISITA_A_CLIENTES:String = "consultarPendientesVisitaClienteEventoEVPoolVisitas";
+		public static const ACCIONES_VISITA_A_CLIENTES:String = "consultarAccionesVisitaClienteEventoEVPoolVisitas";
+		public static const OBTENER_CONTACTOS_POR_CLIENTE:String = "consultarContactosPorClienteEventoEVPoolVisitas";
+		public static const ACTUALIZAR_CONTACTO_SOLICITUD:String = "actualizarContactoPorClienteEventoEVPoolVisitas";
+		
+		/////////////////////////////	VISTA	/////////////////////////////
+		public static const CLIC_BOTONERA_HEAD:String = "clicBotoneraHeadEventoEVAtenderPoolVisitas";
+		public static const CLIC_PLANIFICAR_CLIENTES:String = "clicPlanificarClientesEventoEVAtenderPoolVisitas";
+		public static const CERRAR_VISTAS_SECUNDARIAS:String = "cerrarVistasSecundariasEventoEVAtenderPoolVisitas";
+		
+		public function EventoEVAtenderPoolVisitas(type:String, bubbles:Boolean=true, cancelable:Boolean=false)
+		{
+			super(type, bubbles, cancelable);
+		}
+		
+		public override function clone():Event
+		{
+			return new EventoEVGeneral( type, bubbles, cancelable );
+		}
+	}
+}

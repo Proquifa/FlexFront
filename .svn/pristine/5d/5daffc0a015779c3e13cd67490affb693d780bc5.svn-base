@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" 
+		 xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.*"
+		 xmlns:nuevaGestion="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.gestion.*"
+		 xmlns:mapaIncidente="mx.com.proquifa.proquifanet.rsl.vista.mapas.incidentes.*"	
+		 xmlns:mapaPopUp = "mx.com.proquifa.proquifanet.rsl.vista.mapas.popup.*"
+		 xmlns:mapaSolicitus="mx.com.proquifa.proquifanet.rsl.vista.mapas.solicitud.*"
+		 xmlns:catalogos="mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.catalogos.*"
+		 xmlns:gestion="mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.gestion.*"
+		 xmlns:espera="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:boton="skins.plantillaproquifa.menu.boton.*" 
+		 xmlns:barratitulo="skins.plantillaproquifa.barratitulo.*" 
+		 creationPolicy="all"  width="100%" height="100%"  
+		 paddingTop="35" paddingBottom="15" paddingLeft="20" paddingRight="20" 
+		 creationComplete="inicio()" 
+		 verticalGap="0"
+		 showEffect="{fxFade}"
+		 >
+	<s:Fade id="fxFade" duration="400" alphaFrom="0" alphaTo="1" />
+	<mx:states >
+		<mx:State name="VistaAdmonComunicacion" id="vistaAdmonComunicacion" >
+			<mx:AddChild relativeTo="{hbox1}" position="after">
+				<mx:VBox height="100%" width="100%" label="Documentos" id="boxDocumentacion" >
+					<vistas:Documentos id="idDocumentos" />
+				</mx:VBox>
+			</mx:AddChild>
+			<mx:AddChild relativeTo="{boxDocumentacion}" position="after">
+				<mx:HBox height="100%" width="100%" label="Llamadas" id="boxLlamadas">
+					<vistas:LamadasAdmonComunicacion id="idLlamadasAdmonComunicacion"/>
+				</mx:HBox>
+			</mx:AddChild>
+		</mx:State>
+	</mx:states>
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaContactoService;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.soliciud.EventoSolicitudGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.InformacionVentana;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Usuario;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.alertPqNet.alertPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.VistaEspera;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.contacto.PopUpInformeContacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.RegistroIncidenteInterior;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.vistaincidente.RegistroIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.contactos.ObtenerContacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.catalogos.VistaDefaultCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.configuracion.VistaDefaultConfiguracion;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.gestion.VistaDefaultBonos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.gestion.VistaDefaultGestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitud.VistaDefaultSolicitud;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitudVisita.VistaDefaultPendienteSolicitarVisita;
+			import mx.controls.Alert;
+			import mx.core.Application;
+			import mx.core.IVisualElement;
+			import mx.core.UIComponent;
+			import mx.events.EffectEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.plantillaproquifa.menu.botonanimar.btnFlechaderecha;
+			import skins.plantillaproquifa.menu.botonanimar.btnFlechaizq;
+			
+			private var alerta:alertPqNet = null;
+			
+			private var _componentePopUpContactos:ObtenerContacto = null;
+			
+			/* private var registraIncidente:RegistroIncidente =  null; */
+			private var registraIncidente:RegistroIncidenteInterior = null;
+			
+			private var vEspera:VistaEspera = new VistaEspera();
+			
+			//pop Up informacion del contacto
+			private var _popUpInformacionContacto:PopUpInformeContacto = new PopUpInformeContacto();
+			
+			private var vistaGestion:VistaDefaultGestion = null;
+			private var vistaCatalogos:VistaDefaultCatalogos = null;
+			private var vistaConfiguracion:VistaDefaultConfiguracion = null;
+			private var vistaSolicitud:VistaDefaultPendienteSolicitarVisita = null;
+			
+			[Bindable]
+			private var _userName:String = "";
+			
+			public function get userName():String
+			{
+				return _userName;
+			}
+			
+			public function set userName(value:String):void{
+				_userName = value;
+				this.arrayMenu[0].etiqueta = value;
+				this.arrayMenu.refresh();
+				botoneraMenu.selectedIndex = 1;
+			}
+			
+			[Bindable]
+			public var puesto:String = "";
+			
+			[Bindable]
+			private var _usuarioLogueado:Empleado = new Empleado();
+			/**
+			 * Funcion para asignar usuario Logueado
+			 */ 
+			public function init():void{
+				this._usuarioLogueado = DatosGlobales.getInstance()._usuario;
+				// para maximizar/fullscreen ventana con F14 y F15 y ocultar menu con F13
+				stage.addEventListener(KeyboardEvent.KEY_UP, keyDownListener);
+				stage.addEventListener(Event.RESIZE, resizeHandler);
+				if( _usuarioLogueado.administrador ){
+					arrayMenu = new ArrayCollection([ {etiqueta:"USUARIO",funcion:"",imagen:"USUARIO"},
+													  {etiqueta:"PENDIENTES",funcion:"seleccionaPendientes",imagen:"PENDIENTES"},
+													  {etiqueta:"MEJORAS",funcion:"seleccionaMejoras",imagen:"MEJORAS"},
+													  {etiqueta:"INCIDENTE",funcion:"seleccionaIncidente",imagen:"INCIDENTE"},
+													  {etiqueta:"SOLICITUD",funcion:"",imagen:"SOLICITUD"},
+													  {etiqueta:"GESTIÓN",funcion:"seleccionarGestion",imagen:"gestion"},
+													  {etiqueta:"CATÁLOGOS",funcion:"selecionarCatalogos",imagen:"CATALOGOS"},
+													  {etiqueta:"CONFIGURACIÓN",funcion:"muestraConfiguracion",imagen:"configuraciones"},
+					]);
+				}
+				 else if( _usuarioLogueado.idFuncion == 5 || _usuarioLogueado.idFuncion == 37 || _usuarioLogueado.idFuncion == 3 ||
+						  _usuarioLogueado.idFuncion == 7 || _usuarioLogueado.idFuncion == 35 || _usuarioLogueado.idFuncion == 23	){
+					 arrayMenu = new ArrayCollection([ {etiqueta:"USUARIO",funcion:"",imagen:"USUARIO"},
+						{etiqueta:"PENDIENTES",funcion:"seleccionaPendientes",imagen:"PENDIENTES"},
+						{etiqueta:"MEJORAS",funcion:"seleccionaMejoras",imagen:"MEJORAS"},
+						{etiqueta:"INCIDENTE",funcion:"seleccionaIncidente",imagen:"INCIDENTE"},
+						{etiqueta:"SOLICITUD",funcion:"seleccionaSolicitud",imagen:"SOLICITUD"},
+						{etiqueta:"GESTIÓN",funcion:"seleccionarGestion",imagen:"gestion"},
+						{etiqueta:"CATÁLOGOS",funcion:"selecionarCatalogos",imagen:"CATALOGOS"},
+						{etiqueta:"CONFIGURACIÓN",funcion:"muestraConfiguracion",imagen:"configuraciones"},
+					]); 
+				} 
+			}
+			/**
+			 * Envia Evento al Padre de Documentos
+			 */ 
+			public function iniciaDocumentos():void{			 	
+				if(this.tabNvgPlantillaProquifa.selectedChild.label == "Documentos"){
+					var evento:EventoGenerico = new EventoGenerico( EventoGenerico.MOSTRAR_DATOS_EN_PESTANAS_DOCUMENTACION);
+					var infoVentana:InformacionVentana = new InformacionVentana();
+					infoVentana.idVentana = "EnviarDocumentacion";
+					evento.informacion = infoVentana;	
+					this.parentApplication.mostarDatosEnPestanasDocumentacion(evento);
+				}else if(this.tabNvgPlantillaProquifa.selectedChild.label == "Llamadas"){
+					var evento2:EventoGenerico = new EventoGenerico( EventoGenerico.MOSTARA_DATOS_EN_PESTANA_LLAMADAS);
+					var infoVentana2:InformacionVentana = new InformacionVentana();
+					infoVentana2.idVentana = "LlamadasAdmonComunicaion";
+					evento2.informacion = infoVentana2;	
+					this.parentApplication.mostarDatosEnPestanasLlamadas(evento2);
+				}
+			}
+			/**
+			 * Funcion para esconder los pendientes de AIESC y dejar un espacio vacio para cualquier componente Vista Default
+			 * Se tendra q mandar a llamar esta funcion en todos los componentes principales a exepcion de AIESC
+			 */ 
+			public function muestraEspacioVistaDefaultPendientes(ventana:IVisualElement):void{
+				this.vBoxPendientesAIESC.height = 0;
+				this.vistaDefaultEspacioVacioPendientes.percentHeight = 100;
+				this.agregaComponentesAEspacioVistaDefault( ventana );
+			}
+			/**
+			 * Funcion q agrega al espacioVitaDefaul los componentes enviados
+			 */ 
+			private function agregaComponentesAEspacioVistaDefault( ventana:IVisualElement):void{
+				this.vistaDefaultEspacioVacioPendientes.addElement( ventana );
+			}
+			
+			private function inicio():void{
+				scroll();
+				vEspera = PopUpManager.createPopUp(this,VistaEspera) as VistaEspera;
+				vEspera.visible = false;
+				this.addEventListener(EventoEsperar.INICIA_ESPERA,entro);
+				this.addEventListener(EventoEsperar.TERMINA_ESPERA,entro);
+				PopUpManager.centerPopUp(vEspera);
+				PopUpManager.centerPopUp(vEspera);
+				_popUpInformacionContacto = PopUpManager.createPopUp( this, PopUpInformeContacto) as PopUpInformeContacto;
+				_popUpInformacionContacto.visible = false;
+				PopUpManager.centerPopUp( _popUpInformacionContacto );
+				this.addEventListener(EventoGenerico.MUESTRA_POPUP_INFORMACION_CONTACTOS, muestraPopUpInformacionContactos);
+				
+				alertaSingleton.elDisplayObject = UIComponent(this.parentApplication); 
+			}
+			private function entro(evento:EventoEsperar):void{
+				if(evento.type == EventoEsperar.INICIA_ESPERA){
+					PopUpManager.centerPopUp(vEspera);
+					this.MenuAccion.enabled = false;
+					this.stackAcciones.enabled = false;
+					//this.controlInferior.enabled = false;
+					this.vEspera.visible = true;
+				}
+					if(evento.type == EventoEsperar.TERMINA_ESPERA){
+					this.MenuAccion.enabled = true;
+					this.stackAcciones.enabled = true;
+					//this.controlInferior.enabled = true;
+					this.vEspera.visible = false;
+				}
+			} 
+			private function muestraPopUpInformacionContactos( $evt:EventoGenerico ):void{
+				_popUpInformacionContacto.visible = true;
+			}
+			private function muestraAlertaPqNet($event:EventoAlertaPqNet):void{
+				if(this.alerta == null){
+					this.alerta = new alertPqNet();
+					this.alerta = PopUpManager.createPopUp(this,alertPqNet,true) as alertPqNet;
+					this.alerta.configurar($event.mensaje,$event.encabezado,$event.vieneD,$event.labelOk,$event.labelCancel,$event.labelYes,$event.labelNo);
+				}
+				else{
+					this.alerta.visible = true;
+					this.alerta.configurar($event.mensaje,$event.encabezado,$event.vieneD,$event.labelOk,$event.labelCancel,$event.labelYes,$event.labelNo);
+				}
+				PopUpManager.centerPopUp(this.alerta);
+			}
+			
+			private function cierraPopUpContactos(event:EventoParaContactoService):void{
+				this._componentePopUpContactos.visible = false; 
+				
+			}
+			private function regresaDatosAlPadre($evento:EventoParaContactoService):void{
+				var evento:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.RECIBIR_DATOS_CONTACTO_DE_PLANTILLA);
+				//evento.actividad = $event
+				//dispatchEvent(evento);
+			}
+			
+			private function muestraPopUpContactos(event:EventoParaContactoService):void{
+				if(this._componentePopUpContactos == null){
+					this._componentePopUpContactos = new ObtenerContacto();
+					this._componentePopUpContactos = PopUpManager.createPopUp(this, ObtenerContacto,true) as ObtenerContacto;
+					this._componentePopUpContactos.addEventListener(EventoParaContactoService.CIERRA_POPUP, cierraPopUpContactos);
+					this._componentePopUpContactos.addEventListener(EventoParaContactoService.RECIBIR_DATOS_CONTACTO, regresaDatosAlPadre);
+					this._componentePopUpContactos.addEventListener(EventoParaContactoService.OCULTAR_CHECKBOX, this._componentePopUpContactos.ocultaCheck );
+					this._componentePopUpContactos.addEventListener(EventoAlertaPqNet.MOSTRAR_ALERTA,muestraAlertaPqNet);
+					this._componentePopUpContactos.btnasociarEnabled = event.asociar;
+					this._componentePopUpContactos.compBuscaContacto.tipoConsulta( event.consulta, event.busquedaPorEmpresa);
+					this._componentePopUpContactos.vieneD = event.vieneD;
+					this._componentePopUpContactos._checkBox = false;
+					this._componentePopUpContactos._idContacto = event.idContacto;
+				}
+				else{
+					this._componentePopUpContactos.visible = true; 
+					this._componentePopUpContactos.btnasociarEnabled = event.asociar;
+					this._componentePopUpContactos.addEventListener(EventoParaContactoService.OCULTAR_CHECKBOX, this._componentePopUpContactos.ocultaCheck );
+					this._componentePopUpContactos.compBuscaContacto.tipoConsulta( event.consulta, event.busquedaPorEmpresa);
+					this._componentePopUpContactos.vieneD = event.vieneD;
+					this._componentePopUpContactos._checkBox = false;
+					this._componentePopUpContactos._idContacto = event.idContacto;
+					/* var evt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.OBTENER_TIPO_CONSULTA);
+					evt.consulta = "cliente";
+					dispatchEvent(evt);
+					var evtt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.AGREGA_BOTON);
+					evtt.asociar = event.asociar;
+					dispatchEvent(evtt); */
+				}
+				PopUpManager.centerPopUp(this._componentePopUpContactos);
+			}
+			private var ComboMedio:Array = new Array();
+			/**
+			 * Abre el componente Llamadas de Recepcion en la pestaña Llamadas
+			 */ 
+			public function agregarComponenteLlamadas (menu:DisplayObject):void{
+				this.idLlamadasAdmonComunicacion.agregaComponente( menu );
+			}
+			/**
+			 * Recibe Documentacion para el apartado de Documentos
+			 */ 
+			public function agregarComponenteDocumentacion (menu:DisplayObject):void{
+				this.idDocumentos.agregaComponente( menu );
+			}
+			/**
+			 * Recibe el Menu para el apartado Pendientes.
+			 */
+			public function agregarMenuPendientes( menu:DisplayObject ):void{
+				this.menuRoles.agregaMenu(menu);
+			}
+			/**
+			 * Agrega Ventana en el apartado de Pendientes.
+			 */
+			public function agregarVentanaEnPendientes( ventana:DisplayObject ):void{
+				if(ventana == null){
+					return;
+				}
+				this.espacioTrabajoPendientes.removeAllChildren();
+				this.espacioTrabajoPendientes.addChild( ventana );
+			}
+			/**
+			 * Cerrar Ventana en el apartado de Pendientes.
+			 */
+			public function cerrarVentanaEnPendientes( ventana:DisplayObject ):void{
+				if(ventana == null){
+					return;
+				}
+				this.espacioTrabajoPendientes.removeChild(ventana);			
+			}
+			/**
+			 * Funcion para poder Cambiar de Estado
+			 */
+			public function funcionParaCambiarEstado( tipoEstado:String ):void{
+				if(tipoEstado == null){
+					return;
+				}
+				this.currentState = tipoEstado;		
+			}
+			/**
+			 * Metod para seleccionar el hijo del ViewStack (Escritorio, Pendientes)
+			 */ 
+			public function seleccionaPendientes():void{
+				this.stackAcciones.selectedChild = this.vBoxTabNvgPlantillaProquifa;
+			}
+			/**
+			 * Metod para seleccionar el hijo del ViewStack (Escritorio, Pendientes)
+			 */ 
+			public function seleccionaNotificaciones():void{
+				this.stackAcciones.selectedChild = 	hbxNotificaciones;
+			}
+			/**
+			 * Metodo para invocar mejoras
+			 */ 
+			private function seleccionaMejoras():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente(EventoGestionIncidente.RESET_A_REGISTRO_INCIDENTE);
+				dispatchEvent( evento );
+				this.stackAcciones.selectedChild = this.hbxMejoras; 
+			}
+			/**
+			 * Metodo para seleccionar e hijo del ViewStack (Incidente, para registrar Incidentes)
+			 */ 
+			private function seleccionaIncidente():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente(EventoGestionIncidente.RESET_A_REGISTRO_INCIDENTE);
+				dispatchEvent( evento );
+				this.stackAcciones.selectedChild = this.hbxIncidente;
+				if( this.registraIncidente == null){
+					/* this.registraIncidente = new RegistroIncidente(); */
+					this.registraIncidente = new RegistroIncidenteInterior();
+				}
+				this._usuarioLogueado = DatosGlobales.getInstance()._usuario;
+				this.hbxIncidenteInterno.addChild( registraIncidente )				
+				this.registraIncidente._empleadoLogueado = this._usuarioLogueado; //dato usado solo para el componete de Osva 'registro incidente interior' no aplica para el de serch
+				this.registraIncidente.iniciaIncidente(); //funcion usada solo para el componete de Osva 'registro incidente interior' no aplica para el de serch
+			}
+			
+			[Bindable][Embed (source="skins/plantillaproquifa/barratitulo/assets/flechacolapse.png")]
+			public var iconoMostrar:Class;
+			[Bindable][Embed (source="skins/plantillaproquifa/barratitulo/assets/flechacolapse2.png")]
+			public var iconoOcultar:Class;
+			
+			[Bindable]	private var _ocultarMostrarMenuBool:Boolean = true;
+			
+			public function menuMuestraOculta():void{
+				if( !fxResize.isPlaying ){
+					if( _ocultarMostrarMenuBool){//if(this.btnCajon.getStyle("skinClass").toString() == "[class btnFlechaizq]"){
+						//this.btnCajon.setStyle("skinClass",btnFlechaderecha);
+						this.fxResize.stop();
+						this.fxResize.widthTo = 0;
+						_ocultarMostrarMenuBool = false;
+						this.btnCajon.source = iconoMostrar;
+						this.grpImagenBotonOcultaMenu.toolTip = "Mostrar menú (F13)";
+					}else{
+						//this.btnCajon.setStyle("skinClass",btnFlechaizq);
+						this.fxResize.stop();
+						this.fxResize.widthTo = 180;
+						_ocultarMostrarMenuBool = true;
+						this.btnCajon.source = iconoOcultar;
+						this.grpImagenBotonOcultaMenu.toolTip = "Ocultar menú (F13)";
+					} 
+					this.fxResize.play();
+					//return;
+				}
+			}
+			
+			public function selecionarCatalogos():void
+			{
+				if(this.vistaCatalogos == null)
+				{
+					this.vistaCatalogos = new VistaDefaultCatalogos();
+					this.espacioTrabajoCatalogos.addChild(vistaCatalogos);
+				}
+				this.stackAcciones.selectedChild = hbxCatalogos;
+			}
+			
+			public function seleccionarGestion():void{
+				if( this.vistaGestion == null){
+					this.vistaGestion = new VistaDefaultGestion();
+					this.espacioTrabajoGestion.addChild( vistaGestion )
+				}
+				//this.stage.fullScreenSourceRect = new Rectangle(200,0,this.stackAcciones.width,this.stackAcciones.height);
+				//this.stage.displayState = StageDisplayState.FULL_SCREEN_INTERACTIVE;
+				this.stackAcciones.selectedChild = hbxGestion;
+			}
+			
+			public function seleccionaSolicitud():void{
+				if( this.vistaSolicitud == null){
+					this.vistaSolicitud = new VistaDefaultPendienteSolicitarVisita();
+					this.espacioTrabajoSolicitud.addChild( vistaSolicitud )
+				}
+				//this.stage.fullScreenSourceRect = new Rectangle(200,0,this.stackAcciones.width,this.stackAcciones.height);
+				//this.stage.displayState = StageDisplayState.FULL_SCREEN_INTERACTIVE;
+				this.stackAcciones.selectedChild = hbxSolicitud;
+				var evt:EventoSolicitudGeneral = new EventoSolicitudGeneral( EventoSolicitudGeneral.CARAGAR_CONTACTOS );
+				evt.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+				dispatchEvent( evt );
+			}
+			
+			public function muestraConfiguracion():void{
+				if( this.vistaConfiguracion == null){
+					this.vistaConfiguracion = new VistaDefaultConfiguracion();
+					this.espacioTrabajoConfiguracion.addChild( vistaConfiguracion )
+				}
+				//this.stage.fullScreenSourceRect = new Rectangle(200,0,this.stackAcciones.width,this.stackAcciones.height);
+				//this.stage.displayState = StageDisplayState.FULL_SCREEN_INTERACTIVE;
+				this.stackAcciones.selectedChild = hbxConfiguracion;
+			
+				
+			}
+			
+			public function agregarVentanaEnCatalogos( ventana:DisplayObject ):void{
+				if(ventana == null){
+					return;
+				}
+				this.espacioTrabajoCatalogos.removeAllChildren();
+				this.espacioTrabajoCatalogos.addChild(ventana);
+				this.stackAcciones.selectedChild = hbxCatalogos;
+			}
+			
+			[Bindable]
+			public var arrayMenu:ArrayCollection = new ArrayCollection([
+				{etiqueta:"USUARIO",funcion:"",imagen:"USUARIO"},
+				{etiqueta:"PENDIENTES",funcion:"seleccionaPendientes",imagen:"PENDIENTES"},
+				{etiqueta:"MEJORAS",funcion:"seleccionaMejoras",imagen:"MEJORAS"},
+				{etiqueta:"INCIDENTE",funcion:"seleccionaIncidente",imagen:"INCIDENTE"},
+				{etiqueta:"SOLICITUD",funcion:"",imagen:"SOLICITUD"},
+				{etiqueta:"GESTIÓN",funcion:"seleccionarGestion",imagen:"gestion"},
+				{etiqueta:"CATÁLOGOS",funcion:"selecionarCatalogos",imagen:"CATALOGOS"}]);
+			
+			protected function cambio(event:IndexChangeEvent):void
+			{
+				if( event.currentTarget.selectedItem == undefined ) return;
+				if(event.currentTarget.selectedItem.funcion == "" || event.newIndex == -1)return;
+				this[event.currentTarget.selectedItem.funcion]();	
+			}
+			
+			private function resizeHandler(event:Event):void {
+				//trace("resizeHandler: " + event);
+				//trace("stageWidth: " + stage.stageWidth + " stageHeight: " + stage.stageHeight);
+				//this.MenuAccion.percentHeight = 100;
+				//this.vbxEscritorio.percentHeight = 100;
+				//this.vbxEscritorio.percentWidth = 100;
+			}
+			private function keyDownListener(e:KeyboardEvent):void{
+				if (e.keyCode == 125){ // F14
+					this.stage.nativeWindow.displayState == "normal" ? this.stage.nativeWindow.maximize() :this.stage.nativeWindow.restore();
+				} 
+				if (e.keyCode == 126){ // F15
+					this.stage.displayState = StageDisplayState.FULL_SCREEN_INTERACTIVE;
+				}
+				if(e.keyCode == 124){ //F13
+					menuMuestraOculta();
+				}
+			}
+			
+			public function seleccionarOpcionMenu($valor:int):void
+			{
+				if($valor)
+					botoneraMenu.selectedIndex = $valor;
+				seleccionaPendientes();
+			}
+			
+			protected function scroll():void
+			{
+				systemManager.addEventListener("mouseWheel", bumpDelta, true);
+			}
+			
+			public function bumpDelta(event:MouseEvent):void
+			{
+				event.delta = event.delta > 0 ? 1 : -1;
+			}
+			
+			protected function fxResize_effectEndHandler(event:EffectEvent):void
+			{
+				// TODO Auto-generated method stub
+				if(!_ocultarMostrarMenuBool)
+				{
+					MenuAccion.alpha = 0;
+				}
+			}
+			
+			protected function fxResize_effectStartHandler(event:EffectEvent):void
+			{
+				if(_ocultarMostrarMenuBool)
+				{
+					MenuAccion.alpha = 1;
+				}
+			}
+			
+		]]>
+	</mx:Script>
+	<mapaIncidente:MapaAnalisisIncidente/>
+	<mapaIncidente:MapaGestionIncidentes/>
+	<mapaIncidente:MapaRegistroIncidente/>
+	<mapaIncidente:MapaIncidenteProgramarAccion/>
+	<mapaIncidente:MapaIncidenteAsociado/>
+	<mapaIncidente:MapaIncidenteRechazado/>
+	<mapaIncidente:MapaIncidenteConsulta/>
+	<mapaIncidente:MapaReformulaIncidente/>
+	<mapaPopUp:MapaPopUp/>
+	<mapaSolicitus:MapaSolicitudGeneral/>
+	
+	<mx:Resize id="fxResize" duration="350" target="{this.MenuAccion}" effectStart="fxResize_effectStartHandler(event)" effectEnd="fxResize_effectEndHandler(event)" />
+	
+	<barratitulo:tituloPlantilla width="100%" height="50" puesto="{this.puesto}"/><!--x="0" y="0" -->
+	<mx:HBox width="100%" height="100%" horizontalGap="0" paddingTop="0" depth="9000">  
+		<s:Group id="MenuAccion" width="180" height="100%" >
+			<s:Rect x="0" y="0" width="100%" height="100%">
+				<s:fill>
+					<s:SolidColor alpha="1" color="#363636"/>
+				</s:fill>
+			</s:Rect>
+			<s:VGroup width="100%" height="100%" gap="0" id="vBotones">
+				<s:ButtonBar id="botoneraMenu" changing="cambio(event)" dataProvider="{arrayMenu}" labelField="etiqueta" skinClass="skins.plantillaproquifa.menu.buttonbar.skinMenuButtonBar" requireSelection="true">
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+				</s:ButtonBar>
+			</s:VGroup>
+		</s:Group>
+		
+		<mx:HBox id="vbxEscritorio" width="100%" height="100%" depth="-5">
+			<s:Group width="100%" height="100%">
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="#ffffff"/>
+					</s:fill>
+				</s:Rect>
+				<mx:ViewStack id="stackAcciones" backgroundColor="#FFFFFF"  width="100%" height="100%" >			
+					<!--  ///////////////////////////////////////////////////////////////////////// Pendintes ////////////////////////////////////////////////////////////////////////-->
+					<mx:VBox verticalGap="0" id="vBoxTabNvgPlantillaProquifa"> 
+						<!--id="vBoxTabNvgPlantillaProquifa" id comentado pertenece al -->
+						<mx:VBox verticalGap="0"  width="100%" height="100%" id="vBoxPendientesAIESC">
+							<s:TabBar width="100%" dataProvider="{tabNvgPlantillaProquifa}" />
+							
+							<mx:ViewStack  id="tabNvgPlantillaProquifa"  width="100%" change="iniciaDocumentos()"  height="100%">
+								<mx:HBox width="100%" height="100%" label="Pendientes" id="hbox1">		
+									<vistas:MenuRoles id="menuRoles" paddingTop="27" paddingLeft="10" />
+									<vistas:EspacioTrabajo id="espacioTrabajoPendientes" paddingRight="10" />
+								</mx:HBox>
+							</mx:ViewStack>
+						</mx:VBox>
+						<s:NavigatorContent width="100%" height="0" id="vistaDefaultEspacioVacioPendientes" />
+					</mx:VBox>
+				
+				<mx:HBox id="hbxCatalogos" width="100%" height="100%" label="Catálogos" visible="false" horizontalScrollPolicy="off" >
+					<mx:HBox backgroundColor="#ffffff" width="100%" height="100%" id="espacioTrabajoCatalogos" horizontalScrollPolicy="off"/>
+					</mx:HBox>
+					
+					<mx:HBox id="hbxConfiguracion" width="100%" height="100%" label="Configuración" visible="false" >
+						<mx:HBox backgroundColor="#ffffff" width="100%" height="100%" id="espacioTrabajoConfiguracion"/>
+					</mx:HBox>
+					<mx:HBox id="hbxGestion" width="100%" height="100%" label="Gestión" >
+						<mx:HBox backgroundColor="#FFFFFF" width="100%" height="100%" id="espacioTrabajoGestion"/>
+					</mx:HBox>
+					<mx:HBox id="hbxSolicitud" width="100%" height="100%" label="Gestión" >
+						<mx:HBox backgroundColor="#FFFFFF" width="100%" height="100%" id="espacioTrabajoSolicitud"/>
+					</mx:HBox>
+					<mx:HBox id="hbxIncidente" width="100%" height="100%"  >				
+						<mx:HBox id="hbxIncidenteInterno" backgroundColor="#ffffff"  width="100%" height="100%" paddingLeft="20" paddingRight="20" paddingBottom="20" paddingTop="5" borderStyle="solid">				
+						</mx:HBox>
+					</mx:HBox>
+					<mx:HBox id="hbxMejoras" width="100%" height="100%" >
+						<mx:HBox backgroundColor="#ffffff"  width="100%" height="100%">
+							<vistas:Mejoras id="idMejoras"/><!--version anterior de incidentes-->
+							<!--<nuevaGestion:ConsultaGestion id="idMejoras"/>-->
+						</mx:HBox>
+					</mx:HBox>
+					<mx:HBox id="hbxDatosPersonales" width="100%" height="100%" >
+						<mx:HBox backgroundColor="#ffffff"  width="100%" height="100%" paddingTop="17">
+						</mx:HBox>
+					</mx:HBox>
+					<mx:HBox id="hbxNotificaciones" width="100%" height="100%" >
+						<mx:HBox backgroundColor="#ffffff"  width="100%" height="100%" paddingTop="17">
+						</mx:HBox>
+					</mx:HBox>
+				</mx:ViewStack>
+			</s:Group>
+		</mx:HBox>
+		
+	</mx:HBox>
+	
+	<!--<s:Group width="100%" height="38">
+	<barratitulo:barraTitulo width="100%"/>
+	<mx:HBox height="38" id="controlInferior" width="100%"  borderAlpha="0.0" 	 horizontalGap="0" verticalAlign="middle">
+	<s:Spacer width="15"/>
+	<s:Button styleName="botonNegroOld" left="15" width="30" height="28" label="&lt;" id="btnCajon" click="animarCajo(event)" skinClass="skins.plantillaproquifa.menu.botonanimar.btnFlechaizq"/>
+	<mx:Spacer width="100%"/>        
+	</mx:HBox>
+	</s:Group>-->
+	<s:Group width="100%">
+		<s:Rect width="100%" height="100%" >
+			<s:fill>
+				<s:LinearGradient rotation="90">
+					<s:GradientEntry alpha="1.0" color="#fafafa" ratio=".1"/>
+					<s:GradientEntry alpha="1.0" color="#c9c9c9" ratio=".9"/>
+				</s:LinearGradient>
+			</s:fill>
+			<s:filters>
+				<s:DropShadowFilter  alpha="0.1" angle="270" blurX="1" blurY="1"
+									 color="#000000" distance="1" hideObject="false" inner="false"
+									 knockout="false" quality="2" strength="1"/>
+			</s:filters>
+		</s:Rect>
+		<s:HGroup width="100%" height="27" verticalAlign="middle" horizontalAlign="left">
+			<s:HGroup id="grpImagenBotonOcultaMenu" width="30" horizontalAlign="center" verticalAlign="middle" height="100%" click="menuMuestraOculta()" toolTip="Ocultar menú (F13)">
+				<s:Image id="btnCajon" source="{iconoOcultar}" />
+			</s:HGroup>
+		</s:HGroup>
+	</s:Group>
+	
+</mx:VBox>

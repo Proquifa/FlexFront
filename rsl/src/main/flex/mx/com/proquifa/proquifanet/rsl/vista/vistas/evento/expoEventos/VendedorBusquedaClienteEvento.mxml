@@ -1,0 +1,731 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:evento="skins.botones.evento.*"
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%"
+		 initialize="inicia()" 
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.evento.EventoEventoProquifa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.expofarma.RegistroExpoFarma;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.evento.expoEventos.cuestionarios.CuestionarioExpoFarma2013;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.evento.expoEventos.popup.VendedorContactoPopUpEvento;
+			import mx.core.FlexGlobals;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.events.TextOperationEvent;
+			
+			
+			private var _listaClientesUniverso:ArrayCollection;
+			private var _listaFiltradaDeClientes:ArrayCollection;
+			[Bindable]
+			public var _contacto:Contacto; 
+			
+			private var _popUpContacto:VendedorContactoPopUpEvento = null;
+			
+			[Bindable]
+			private var _idClienteSeleccionado:int = 0;
+			
+			[Bindable]
+			private var _contactoSeleccionado:int = 0;
+			
+			[Bindable]
+			private var _origen:String = "";
+			
+			private var _poopUpCuestionario:CuestionarioExpoEventos = null;
+			
+			//private var _poopUpCuestionarioMed:CuestionarioExpoMed = null; 
+			private var _poopUpCuestionarioFarma:CuestionarioExpoFarma2013 = null;
+			
+			[Bindable]
+			private var popUpCuestionarioPrimeraVez:Boolean;
+			
+			public function validaOrigen( $origen:String = '' ):void{
+				if( $origen == 'expoPharma' || $origen == "expoMed" || $origen == 'expoFarma2014'){
+					btnRequisitar.visible = false;
+					btnCheckIn.visible = true;
+				}else{
+					btnRequisitar.visible = true;
+					btnCheckIn.visible = false;
+				}
+				_origen = $origen;
+			}
+			private function inicia():void{
+				_contactoSeleccionado = 0;
+				this.txtBusqueda.addEventListener(TextOperationEvent.CHANGE, filtraClientes, false, 0, true );
+				//this.addEventListener( ResizeEvent.RESIZE, acomodaPopUp );
+			}
+			
+			
+			private function acomodaPopUp( evt:Event ):void{
+				if(_origen == "expoPharma" || _origen == 'expoFarma2014'){
+					if( _poopUpCuestionarioFarma != null ){
+						/* setTimeout(retraso2, 750); */
+					}
+				}else{
+					if( _poopUpCuestionario != null ){
+						setTimeout(retraso2ExpoMed, 750);
+					}
+				}
+			}
+			
+			private function limpiaBusquedaCuestExpo( ):void{
+				
+				txtBusqueda.text = '';
+				_listaFiltradaDeClientes = new ArrayCollection();
+				_listaFiltradaDeClientes = ObjectUtil.copy( UtilsGrid.queryCampoXLike( _listaClientesUniverso, 'empresa', txtBusqueda.text ) ) as ArrayCollection;
+				if( _listaFiltradaDeClientes != null ){
+					if( _listaFiltradaDeClientes.length > 1 ){
+						lstCliente.selectedIndex = 0;
+						_idClienteSeleccionado = ( _listaFiltradaDeClientes[0] as Contacto ).idEmpresa;
+					}
+				}
+				
+				if(_origen == "expoPharma" || _origen == 'expoFarma2014'){
+					agrupaClientes( _listaFiltradaDeClientes );
+					
+					var evt:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.OBTENER_INFO_GRAFICOS_EXPO_MED);
+					evt.origen = _origen;
+					dispatchEvent(evt); 
+				}else if(_origen == "expoMed"){
+					agrupaContactosConSql( _listaFiltradaDeClientes );
+					var evt2:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.OBTENER_INFO_GRAFICOS_EXPO_MED);
+					evt2.origen = _origen;
+					dispatchEvent(evt2);   
+				}
+				
+				
+			}
+			
+			/* private function retraso2():void{
+			PopUpManager.centerPopUp( _poopUpCuestionarioFarma );
+			if( this.parent.width <= 1400){
+			_poopUpCuestionarioFarma.y = 20 ;
+			_poopUpCuestionarioFarma.x = (this.stage.width/2) - 468;
+			}
+			_poopUpCuestionarioFarma.visible = true;
+			} */
+			
+			private function retraso2ExpoMed():void{
+				PopUpManager.centerPopUp( _poopUpCuestionario );
+				if( this.parent.width <= 1400){
+					_poopUpCuestionario.y = 20 ;
+					_poopUpCuestionario.x = (this.stage.width/2) - 468;
+				}else{
+					_poopUpCuestionario.x = (_poopUpCuestionario.x - 234);
+				}
+				_poopUpCuestionario.visible = true;
+			}
+			
+			public function set recibirContactos( $lista:ArrayCollection ):void{
+				
+				if($lista == null){
+					return;
+				}
+				if(_origen == "normal" || _origen == "expoPharma" || _origen == 'expoFarma2014'){
+					_listaClientesUniverso = new ArrayCollection();
+					_listaClientesUniverso = ObjectUtil.copy( $lista ) as ArrayCollection;
+					agrupaClientes( $lista );
+				}
+			}
+			
+			public function set recibirContactosParaExpoMed( $lista:ArrayCollection ):void{
+				
+				if($lista == null){
+					return;
+				}
+				
+				if(_origen == "expoMed"){
+					_listaClientesUniverso = new ArrayCollection();
+					_listaClientesUniverso = ObjectUtil.copy( $lista ) as ArrayCollection;
+					agrupaContactosConSql( $lista );
+				}
+			}
+			
+			private function filtraClientes( event:TextOperationEvent ):void{
+				_listaFiltradaDeClientes = new ArrayCollection();
+				_listaFiltradaDeClientes = ObjectUtil.copy( UtilsGrid.queryCampoXLike( _listaClientesUniverso, 'empresa', txtBusqueda.text ) ) as ArrayCollection;
+				if( _listaFiltradaDeClientes != null ){
+					if( _listaFiltradaDeClientes.length > 1 ){
+						lstCliente.selectedIndex = 0;
+						_idClienteSeleccionado = ( _listaFiltradaDeClientes[0] as Contacto ).idEmpresa;
+					}
+				}
+				agrupaClientes( _listaFiltradaDeClientes );
+			}
+			
+			
+			
+			private var _listaTemp:ArrayCollection;
+			
+			private function agrupaClientes( $lista:ArrayCollection ):void{
+				_listaTemp = new ArrayCollection();
+				lstCliente.dataProvider = new ArrayCollection;
+				
+				var inicia:Number = new Date().time; 
+				
+				for( var i:int = 0; i< $lista.length; i++ ){
+					if( i == 0 ){ 
+						_listaTemp.addItem( $lista[i] ); 
+						(_listaTemp[0] as Contacto).totalContactosPorEmpresa = 1;
+					}else{
+						var agregado:Boolean = false;
+						for( var t:int = 0; t < _listaTemp.length; t++ ){
+							if( ($lista[i] as Contacto).idEmpresa == (_listaTemp[t] as Contacto).idEmpresa ){
+								(_listaTemp[t] as Contacto).totalContactosPorEmpresa = (_listaTemp[t] as Contacto).totalContactosPorEmpresa + 1;
+								agregado = true;
+								t = _listaTemp.length;
+							}
+						}
+						if( !agregado ){
+							_listaTemp.addItem( $lista[i] ); 
+							(_listaTemp[_listaTemp.length - 1] as Contacto).totalContactosPorEmpresa = 1;
+						}
+					}
+				}
+				
+				var termina:Number = new Date().time;
+				
+				trace("Agrupando por Fors tardó: " + (termina-inicia) + "ms");
+				
+				
+				//se agrega total de empresas
+				var contactoTemp:Contacto = new Contacto();
+				contactoTemp.totalClientes = _listaTemp.length;
+				_listaTemp.addItem( contactoTemp );
+				
+				lstCliente.dataProvider = _listaTemp;
+				
+				if (_idClienteSeleccionado == 0 ){
+					this.lstCliente.selectedIndex = 0;
+				}else{
+					for( var c:int = 0; c < this.lstCliente.dataProvider.length; c++){
+						if( _idClienteSeleccionado  == ( this.lstCliente.dataProvider[c] as Contacto).idEmpresa ){
+							this.lstCliente.selectedIndex = c;
+							c = this.lstCliente.dataProvider.length;
+						}else{
+							this.lstCliente.selectedIndex = 0;
+						}
+					}
+				}
+				
+				cargaListaContactos();
+				setTimeout( retarda, 1500 );
+			}
+			
+			
+			
+			private var sql:Query;
+			private function agrupaContactosConSql($listaContactos:ArrayCollection):void{
+				_listaTemp = new ArrayCollection;
+				lstCliente.dataProvider = new ArrayCollection;
+				
+				sql = new Query($listaContactos,["idEmpresa"]);
+				keys = new Object;
+				var arrayTemp:Array = ObjectUtil.copy($listaContactos.source) as Array;
+				var otro:Array = arrayTemp.filter(quitaDuplicados);
+				
+				
+				if(sql != null){
+					
+					if(sql.indexObject.hasOwnProperty("idEmpresa")){
+						var punterosidEmpresas:Object = sql.indexObject.idEmpresa;
+					} 
+					
+					for (var i:int = 0; i < otro.length; i++) 
+					{
+						if(punterosidEmpresas.hasOwnProperty((otro[i] as Contacto).idEmpresa))
+						{
+							(otro[i] as Contacto).totalContactosPorEmpresa =( (punterosidEmpresas[(otro[i] as Contacto).idEmpresa]) as Array).length;  
+						}
+					}
+				}
+				
+				
+				var contactoTemp:Contacto = new Contacto();
+				contactoTemp.totalClientes = otro.length;
+				otro.push( contactoTemp );
+				
+				lstCliente.dataProvider = new ArrayCollection(otro);
+				
+				if (_idClienteSeleccionado == 0 ){
+					this.lstCliente.selectedIndex = 0;
+				}else{
+					for( var c:int = 0; c < this.lstCliente.dataProvider.length; c++){
+						if( _idClienteSeleccionado  == ( this.lstCliente.dataProvider[c] as Contacto).idEmpresa ){
+							this.lstCliente.selectedIndex = c;
+							c = this.lstCliente.dataProvider.length;
+						}else{
+							this.lstCliente.selectedIndex = 0;
+						}
+					}
+				}
+				
+				cargaListaContactos();
+				setTimeout( retarda, 1500 );
+			}
+			private var keys:Object;
+			private function quitaDuplicados(item:Contacto, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.idEmpresa)){
+					return false;
+				}else{
+					keys[item.idEmpresa] = item.idEmpresa;
+					return true;
+				}
+			}
+			
+			
+			private function retarda():void{
+				lstCliente.ensureIndexIsVisible( this.lstCliente.selectedIndex )
+			}
+			
+			private function seleccionaContacto( $evt:EventoEventoProquifa):void{
+				_contactoSeleccionado = $evt.idContacto;
+				cargaListaContactos();
+			}
+			
+			
+			private var indiceSeleccionado:int; 
+			private function cargaListaContactos():void{
+				
+				if( lstCliente.selectedIndex == (lstCliente.dataProvider.length-1) ){
+					if(isNaN(indiceSeleccionado) || indiceSeleccionado == 0){
+						indiceSeleccionado = 0;
+					}
+					lstCliente.selectedIndex = indiceSeleccionado;
+					return;
+				}
+				
+				indiceSeleccionado = lstCliente.selectedIndex ;
+				var listaTemp:ArrayCollection = new ArrayCollection();
+				
+				_idClienteSeleccionado =  ( lstCliente.selectedItem as Contacto ).idEmpresa;
+				
+				for( var i:int = 0; i < _listaClientesUniverso.length; i++ ){
+					if( (this.lstCliente.selectedItem as Contacto).idEmpresa == (_listaClientesUniverso[i] as Contacto ).idEmpresa ){
+						listaTemp.addItem( _listaClientesUniverso[i] );
+						( listaTemp[listaTemp.length - 1] as Contacto ).numFila = listaTemp.length;
+						( listaTemp[listaTemp.length - 1] as Contacto ).totalContactosPorEmpresa = NaN;
+					}
+				}
+				if( _contactoSeleccionado != 0 ){
+					for( var t:int = 0; t < listaTemp.length; t++){
+						if( (listaTemp[t] as Contacto).idContacto == _contactoSeleccionado){
+							_contactoSeleccionado = ObjectUtil.copy( t ) as int;
+							t = listaTemp.length;
+						}
+					}
+				}
+				var contactoTemp:Contacto = new Contacto();
+				contactoTemp.totalContactosPorEmpresa = listaTemp.length;
+				lstContacto.dataProvider = new ArrayCollection();
+				lstContacto.dataProvider = ObjectUtil.copy( listaTemp ) as ArrayCollection;
+				lstContacto.dataProvider.addItem( contactoTemp );
+				if( lstCliente.dataProvider.length > 1 ){
+					lblNombreCliente.text =  (lstCliente.selectedItem as Contacto).empresa;
+					lblGiroCliente.text = (lstCliente.selectedItem as Contacto).industria + ' · ' + ( lstCliente.selectedItem as Contacto).nivelIngresos ;
+				}
+				listaTemp = new ArrayCollection();
+				this.lstContacto.selectedIndex = _contactoSeleccionado;
+				cargaDatosContacto();
+			}
+			
+			private var contactoSeleccionado:int;
+			private function cargaDatosContacto():void{
+				if( lstContacto.selectedIndex == (lstContacto.dataProvider.length-1) ){
+					lstContacto.selectedIndex = contactoSeleccionado;
+					return;
+				}
+				contactoSeleccionado = lstContacto.selectedIndex;
+				this._contacto = new Contacto();
+				_contactoSeleccionado = 0;
+				if( lstContacto.dataProvider.length > 1 ){
+					_contacto = lstContacto.selectedItem;
+				}
+				if( _contacto != null ){
+					if( _contacto.direccion != null && !isNaN( _contacto.direccion.idLugar ) &&  _contacto.direccion.idLugar != 0 ){
+						grpDirecciones.visible  = true;
+						grpDireccionesNula.visible = false;
+					}else{
+						grpDirecciones.visible  = false;
+						grpDireccionesNula.visible = true;						
+					}
+					
+				}
+			}
+			[Bindable]
+			private var popUPContactosPriemraVez:Boolean = false;
+			private function abrirPopUpContacto( $accion:String = '' ):void
+			{
+				if( lstCliente.dataProvider.length <= 1 ){
+					alertaSingleton.show( "Es necesario seleccionar un cliente", catalogoAlertas.TIT_ADV_operacionImposible );
+					return;
+				}
+				
+				var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+				if( _popUpContacto == null ){
+					_popUpContacto = new VendedorContactoPopUpEvento();
+					_popUpContacto =  VendedorContactoPopUpEvento( PopUpManager.createPopUp(app, VendedorContactoPopUpEvento, true ) );
+					
+					_popUpContacto.addEventListener( EventoEventoProquifa.RECIBE_DATOS_CONTACTO_POUP, guardaContactoPopUp,false,0,true );
+					_popUpContacto.addEventListener( EventoEventoProquifa.CANCELA_DATOS_CONTACTO_POUP, cierraPopUpContactos,false,0,true );
+					_popUpContacto.addEventListener( EventoEventoProquifa.SELECCIONA_CONTACTO, seleccionaContacto,false,0,true );
+					
+					PopUpManager.centerPopUp( _popUpContacto );
+				}
+				
+				if( $accion == 'editar'){
+					_popUpContacto.editaContacto(_contacto, (lstCliente.selectedItem as Contacto).idEmpresa );
+				}
+				else if( $accion == 'nuevo' ){
+					_popUpContacto.creaContacto(  _contacto );
+				}
+				_popUpContacto.validaOrigen( this._origen );
+				
+			}
+			private function guardaContactoPopUp( $evt:EventoEventoProquifa ):void{
+				_contacto = $evt.nuevoContacto;
+			}
+			private function cierraPopUpContactos( $evt:EventoEventoProquifa ):void{
+				PopUpManager.removePopUp( _popUpContacto );
+				_popUpContacto = null;
+			}
+			
+			protected function botonpqnetlargo1_clickHandler(event:MouseEvent):void{
+				var evt:EventoEventoProquifa = new EventoEventoProquifa( EventoEventoProquifa.MUESTRA_VISTA );
+				evt.ubicacion = '_compRequisitar';
+				evt.nuevoContacto = this._contacto;
+				dispatchEvent( evt );
+			}
+			public function seleccionaNuevoCliente( $idCliente:int ):void{
+				for( var i:int = 0; i < lstCliente.dataProvider.length ; i++ ){
+					if( (lstCliente.dataProvider[i] as Contacto).idEmpresa == $idCliente ){
+						lstCliente.selectedIndex = i ; 
+						setTimeout( retarda, 1500 );
+					}
+				}
+				cargaListaContactos();
+			}
+			
+			[Bindable]
+			private var _regsitroExpoFarma:RegistroExpoFarma;
+			[Bindable]
+			private var soloUnPop:Boolean = false;
+			protected function realizarCuestionario():void{
+				
+				if(_origen == "expoPharma" || _origen == 'expoFarma2014'){
+					var evetFolioExpo:EventoEventoProquifa = new EventoEventoProquifa( EventoEventoProquifa.REGISTRO_EXPO_FARMA );
+					evetFolioExpo.registroExpo = new RegistroExpoFarma();
+					evetFolioExpo.registroExpo.idCliente = _contacto.idEmpresa;
+					evetFolioExpo.registroExpo.idContacto = _contacto.idContacto;
+					evetFolioExpo.registroExpo.origen = _origen;
+					dispatchEvent( evetFolioExpo );
+					soloUnPop = true;
+				}else{
+					var evetFolioExpoMed:EventoEventoProquifa = new EventoEventoProquifa( EventoEventoProquifa.REGISTRO_EXPO_MED );
+					evetFolioExpoMed.registroExpoMed = new RegistroExpoFarma();
+					evetFolioExpoMed.registroExpoMed.idCliente = _contacto.idEmpresa;
+					evetFolioExpoMed.registroExpoMed.idContacto = _contacto.idContacto;
+					dispatchEvent( evetFolioExpoMed );
+					soloUnPop = true;
+					
+				}
+				
+			}
+			
+			public function set confirmaRegistoExpo( $dato:RegistroExpoFarma ):void{
+				if( $dato == null ){
+					return;
+				}
+				if( soloUnPop ){
+					
+					_regsitroExpoFarma = new RegistroExpoFarma();
+					_regsitroExpoFarma = $dato;
+					if( _regsitroExpoFarma.registrado ){
+						alertaSingleton.show( 'Usted ya ha sido registrado, agradecemos su visita.');
+					}else{
+						
+						var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+						if(_origen == "expoPharma" || _origen == 'expoFarma2014'){
+							if( _poopUpCuestionarioFarma == null ){
+								_poopUpCuestionarioFarma = new CuestionarioExpoFarma2013();
+								_poopUpCuestionarioFarma =  CuestionarioExpoFarma2013( PopUpManager.createPopUp(app, CuestionarioExpoFarma2013, true ) );
+								
+								/* _poopUpCuestionarioFarma.addEventListener( EventoEventoProquifa.LIMPIA_BUSQUEDA_CONTACTO_DESDE_CUESTIONARIO, limpiaBusquedaCuestExpo,false,0,true ); */
+								_poopUpCuestionarioFarma.addEventListener( EventoEventoProquifa.CIERRA_POPUP_CUESTIONARIO_EXPO_FARMA, cierraPopUpCuestionario,false,0,true );
+								/* _popUpContacto.addEventListener( EventoEventoProquifa.SELECCIONA_CONTACTO, seleccionaContacto,false,0,true ); */
+								
+								PopUpManager.centerPopUp( _poopUpCuestionarioFarma );
+							}
+							_poopUpCuestionarioFarma.iniciaCuestionario( this._contacto, this._regsitroExpoFarma );
+							
+							//var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+							/* if( this._poopUpCuestionarioFarma == null ){
+							_poopUpCuestionarioFarma = CuestionarioExpoFarma2013( PopUpManager.createPopUp( app, CuestionarioExpoFarma2013, true ) );
+							this._poopUpCuestionarioFarma.addEventListener( EventoEventoProquifa.LIMPIA_BUSQUEDA_CONTACTO_DESDE_CUESTIONARIO, limpiaBusquedaCuestExpo );
+							}else{	
+							_poopUpCuestionarioFarma.visible = false;
+							PopUpManager.addPopUp( _poopUpCuestionarioFarma, this, true);
+							}
+							_poopUpCuestionarioFarma.iniciaCuestionario( this._contacto, this._regsitroExpoFarma );
+							if( !popUpCuestionarioPrimeraVez ){
+							PopUpManager.centerPopUp(_poopUpCuestionarioFarma);	
+							popUpCuestionarioPrimeraVez = true;
+							}else{
+							setTimeout(retraso2, 750);
+							} */
+						}else{
+							
+							var appExpoMed:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+							if( this._poopUpCuestionario == null ){
+								_poopUpCuestionario = CuestionarioExpoEventos( PopUpManager.createPopUp( appExpoMed, CuestionarioExpoEventos, true ) );
+								/* this._poopUpCuestionario.addEventListener( EventoEventoProquifa.LIMPIA_BUSQUEDA_CONTACTO_DESDE_CUESTIONARIO, limpiaBusquedaCuestExpo ); */
+							}else{	
+								_poopUpCuestionario.visible = false;
+								PopUpManager.addPopUp( _poopUpCuestionario, this, true);
+							}
+							_poopUpCuestionario.iniciaCuestionario( this._contacto, this._regsitroExpoFarma );
+							
+							if( !popUpCuestionarioPrimeraVez ){
+								PopUpManager.centerPopUp(_poopUpCuestionario);	
+								popUpCuestionarioPrimeraVez = true;
+							}else{
+								setTimeout(retraso2ExpoMed, 750);
+							}
+							
+						}
+					}
+					soloUnPop = false;
+				}
+			}
+			
+			private function cierraPopUpCuestionario($evt:EventoEventoProquifa):void{
+				if (_poopUpCuestionarioFarma != null){
+					PopUpManager.removePopUp( _poopUpCuestionarioFarma );
+					limpiaBusquedaCuestExpo();
+					_poopUpCuestionarioFarma = null;
+				}
+				
+				if (_poopUpCuestionario != null){
+					PopUpManager.removePopUp( _poopUpCuestionario );
+					_poopUpCuestionario = null;
+				}
+				
+				var eventLimpia:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.LIMPIAR_TEXTO_BUSQUEDA_EXPO_EVENTO);
+				dispatchEvent(eventLimpia);
+			}
+			
+			protected function irRegistroCliente(event:MouseEvent):void
+			{
+				var evento:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.CAMBIA_VISTA_REGISTRO_BUSQUEDA_CLIENTE);
+				evento.irRegistroCliente = true;
+				dispatchEvent(evento);
+				
+			}
+			
+			public function exportarClientes():void{
+				var array:Object = new Object;
+				array = lstCliente.dataProvider;
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Cliente");
+				fila1[2] = hoja.addItem("Industria");
+				fila1[3] = hoja.addItem("Titulo");
+				fila1[4] = hoja.addItem("Contacto");
+				fila1[5] = hoja.addItem("Sector");
+				fila1[6] = hoja.addItem("Rol");
+				for(var i:int = 0 ; i< array.length ; i++ ){
+					fila1 = new Array();	
+					fila1[0] = i +1;
+					fila1[1] = '"'+( array[i] as Contacto ).empresa+'"';
+					fila1[2] = '"'+( array[i] as Contacto ).industria+'"';
+					fila1[3] = '"'+( array[i] as Contacto ).titulo+'"';
+					fila1[4] = '"'+( array[i] as Contacto ).nombre+'"';
+					fila1[5] = '"'+( array[i] as Contacto ).sector+'"';
+					fila1[6] = '"'+( array[i] as Contacto ).rol+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, 'EventoProquifaExpoFarma-'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date() )+'.csv');
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" gap="0">
+		
+		<s:Group width="100%" height="100%">
+			<s:Rect width="100%" height="100%" >
+				<s:fill>
+					<s:SolidColor color="#DFDFDF" />
+				</s:fill>
+			</s:Rect>
+			<s:VGroup  height="100%" width="100%" gap="0" paddingLeft="15" paddingRight="15">
+				<!--<s:Spacer height="15"/>-->
+				<s:TextInput id="txtBusqueda" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtraClientes(event)" visible="false" includeInLayout="false"/>
+				<!--<s:Spacer height="15"/>-->
+				
+				<s:HGroup width="100%" gap="0" paddingTop="20" paddingBottom="30" verticalAlign="middle">
+					<label:TituloMyriadPro_22 width="100%" text="CLIENTE" />
+					<s:Spacer width="100%"/>
+					<evento:botonColoresConImagenEventoDefault width="49" height="50" color="0x378899" icono="nuevo" click="irRegistroCliente(event)" />
+				</s:HGroup>  
+				
+				<otros:division width="100%"/>
+				<s:List id="lstCliente" height="100%" width="100%" borderVisible="false" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.evento.expoEventos.itemrenderer.VendedorListaCliente_IR_Evento"
+						horizontalScrollPolicy="off" mouseDown="cargaListaContactos();" contentBackgroundColor="#DFDFDF" />
+			</s:VGroup>
+		</s:Group>
+		
+		<!--<s:Spacer width="10" />-->
+		<otros:VDivisionHueca height="100%"/>
+		<!--<s:Spacer width="10" />-->
+		<s:Group width="100%" height="100%">
+			<s:Rect width="100%" height="100%" >
+				<s:fill>
+					<s:SolidColor color="#FFFFFF" />
+				</s:fill>
+			</s:Rect>
+			<s:VGroup height="100%" width="100%" gap="0" horizontalAlign="center" paddingLeft="15" paddingRight="15">
+				
+				
+				<s:Label id="lblNombreCliente" fontWeight="bold" fontSize="19" width="100%" maxDisplayedLines="2" textAlign="center" visible="false" includeInLayout="false"/>
+				<!--<s:Spacer height="10"/>-->
+				<s:Label id="lblGiroCliente" color="0x{catalogoColores.LABEL_GRIS}" fontWeight="bold" fontSize="15" width="100%" maxDisplayedLines="2" textAlign="center" visible="false" includeInLayout="false"/>
+				<!--<s:Spacer height="15"/>-->
+				
+				<s:HGroup width="100%" gap="0" paddingTop="20" paddingBottom="30" verticalAlign="middle">
+					<label:TituloMyriadPro_22 width="100%" text="CONTACTO" />
+					<s:Spacer width="100%"/>
+					<evento:botonColoresConImagenEventoDefault width="49" height="50" color="0x378899" icono="nuevo" click="abrirPopUpContacto('nuevo')" />
+				</s:HGroup>  
+				
+				<otros:division width="100%"/>
+				<!--<s:Spacer height="15"/>-->
+				<pqNet:botonPqNetLargo width="70%" botonRedondo="true" label="NUEVO CONTACTO" click="abrirPopUpContacto('nuevo')" visible="false" includeInLayout="false" />
+				<s:List id="lstContacto" height="100%" width="100%" borderVisible="false" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.evento.expoEventos.itemrenderer.VendedorListaContacto_IR_Evento"
+						horizontalScrollPolicy="off" mouseDown="cargaDatosContacto()" contentBackgroundColor="#FFFFFF"  />
+			</s:VGroup>
+		</s:Group>
+		
+		<!--<s:Spacer width="10" />-->
+		<otros:VDivisionHueca height="100%"/>
+		<!--<s:Spacer width="10" />-->
+		
+		<s:Group width="100%" height="100%">
+			<s:Rect width="100%" height="100%" >
+				<s:fill>
+					<s:SolidColor color="#DFDFDF" />
+				</s:fill>
+			</s:Rect>
+			
+			<s:VGroup height="100%" width="100%" gap="0" horizontalAlign="center" paddingLeft="15" paddingRight="15">
+				
+				<s:VGroup width="100%" gap="0" paddingTop="20" paddingBottom="30" verticalAlign="middle" horizontalAlign="left">
+					
+					<s:HGroup width="100%" horizontalAlign="left" verticalAlign="middle" >
+						<s:Label id="lblNombreContacto" fontWeight="bold" fontSize="19" maxDisplayedLines="2" textAlign="left" text="{_contacto.titulo +' '+_contacto.nombre }" width="100%" />
+						<evento:botonColoresConImagenEventoDefault id="btnEditar" icono="editarGrande" click="abrirPopUpContacto('editar')" width="49" height="50" />
+						<evento:botonColoresConImagenEventoDefault color="0x378899" icono="checkin" width="49" height="50" click="realizarCuestionario()" />
+					</s:HGroup>
+					<s:Label id="lblPuestoContacto" color="0x{catalogoColores.LABEL_GRIS}" fontWeight="bold" fontSize="15" maxDisplayedLines="2" textAlign="center" text="{ _contacto.puesto }"/>
+				</s:VGroup>
+				 
+				<otros:divisionGruesa width="100%"/>
+				
+				<s:VGroup width="100%" height="100%">
+					
+					<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_mailSmall }"/>
+						<s:Spacer height="15" />
+						<s:Label width="100%" color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{_contacto.EMail }"/>
+					</s:HGroup>
+					
+					<otros:division width="100%"/>
+					
+					<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_telSmall }"/>
+						<s:Spacer height="15" />
+						<s:VGroup height="100%" verticalAlign="middle" width="100%">
+							<s:Label color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{_contacto.telefono }" width="100%"/>
+							<s:Spacer height="15"/>
+							<s:Label  color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{_contacto.telefonoN }" width="100%"/>
+						</s:VGroup>
+					</s:HGroup>
+					
+					<otros:division width="100%"/>
+					
+					<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_faxSmall }"/>
+						<s:Spacer height="15" />
+						<s:VGroup width="100%" height="100%" verticalAlign="middle">
+							<s:Label color="0x{ catalogoColores.LABEL_GRIS }" fontWeight="bold" text="{ _contacto.fax }"/>
+						</s:VGroup>
+					</s:HGroup>
+					
+					<otros:division width="100%"/>
+					
+					<s:HGroup width="100%" height="25%" paddingLeft="20" verticalAlign="middle">
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_direcccionSmall }"/>
+						<s:Spacer height="15" />
+						<s:Group height="100%" width="100%">
+							<s:VGroup height="100%" verticalAlign="middle" id="grpDirecciones"  width="100%">
+								<s:Label color="0x{ catalogoColores.LABEL_GRIS }" width="100%"
+										 text="{_contacto.direccion.calle+' · '+_contacto.direccion.municipio  }"/>
+								<s:Spacer height="15"/>
+								<s:Label  color="0x{ catalogoColores.LABEL_GRIS }" width="100%"
+										  text="{_contacto.direccion.pais+' '+_contacto.direccion.estado+' · '+_contacto.direccion.codigoPostal+' : '+  _contacto.direccion.zonaMensajeria }"/>
+							</s:VGroup>
+							<s:VGroup height="100%" verticalAlign="middle" id="grpDireccionesNula" visible="false">
+								<s:Label color="0x{ catalogoColores.LABEL_GRIS }" 
+										 text="No Disponible"/>
+							</s:VGroup>
+						</s:Group>
+					</s:HGroup>
+					
+					<otros:division width="100%"/>
+					<!--<s:Spacer height="15"/>-->
+					
+					<s:HGroup width="100%"  verticalAlign="bottom" visible="false" includeInLayout="false" >
+						<pqNet:botonPqNetLargo width="33%"  label="Editar" colorBase="0x2e99b4" click="abrirPopUpContacto('editar')" />
+						<s:Spacer width="100%"/>
+						<s:Group width="33%">
+							<pqNet:botonPqNetLargo width="100%"  label="Requisitar" id="btnRequisitar" visible="false"  click="botonpqnetlargo1_clickHandler(event)" />
+							<pqNet:botonPqNetLargo width="100%"  label="Check-In" click="realizarCuestionario()" id="btnCheckIn"/>
+						</s:Group>	
+					</s:HGroup>
+					
+				</s:VGroup>
+				
+			</s:VGroup>
+		</s:Group>
+	</s:HGroup>
+	
+</s:Group>

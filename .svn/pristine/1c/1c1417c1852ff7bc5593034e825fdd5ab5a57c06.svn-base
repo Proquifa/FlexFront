@@ -1,0 +1,777 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:combo="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				xmlns:texto="skins.skin.comun.consultas.panelCtaDetalle.*"
+				xmlns:label="skins.skin.label.*"
+				xmlns:otros="skins.otros.*"
+				autoDrawBackground="false"
+				height="82"
+				width="100%" xmlns:boton="mx.com.proquifa.vista.vistas.skin.boton.*"
+				resize="reajustar_resizeHandler(event)"
+				>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.VistaListaArribo;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.GridAsociarPartidaListaArriboLista;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.components.List;
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			[Embed(source="/../rsl/src/main/flex/skins/imagenes/iconos/botones/gestorCompras/svg/agregar_todo.svg")]
+			[Bindable] public var agregar:Class;	
+			public var object:Object = new Object;
+			public var objectAsociar:Object = new Object;
+			
+			private var partida:PartidaCompra;
+			private var certificadoPdf:ByteArray = null;
+			/*private var _rutaDoc:String;*/
+			public var file:File = new File();
+			public var filepdf:File = new File();
+			[Bindable] public var tipoMoneda:String = "";
+			[Bindable] public var montoTotal:Number;
+			public var tipoItem:String;
+			public var lote:String;
+			public var bloquear:Boolean = true;
+			public var bloquearArchivoUSP:Boolean;
+			public var bloqueoLote:Boolean = false;
+			public var bloIniEliminar:Boolean = true;
+			public var bloIniAgregar:Boolean = true;
+			
+			
+			
+			public var rutaPDF:String;
+			[Bindable]public var tipoLote:Boolean;
+			public var pdfByte:ByteArray;
+			public var loteActual:int;
+			public var origenCompra:String;
+			public var agregoDoc:Boolean;
+			public var pub:Boolean;
+			
+			override public function set data(value:Object):void{
+				super.data = value;
+				
+				if(value != null){
+					
+					tipoItem = value.object;
+					
+					switch(value.object)
+					{
+						case "agregarPartida":
+						{
+							tipoLote = value.tipoLote;	
+							/*if(bloIniAgregar){*/
+							montoTotal = (value.precioUnitario * value.cantidadCompra);
+							agregarPDF.visible = agregarPDF.includeInLayout = true;
+							editarPDF.visible = editarPDF.includeInLayout = false;
+							agregarPartidaGrid.visible = agregarPDF.includeInLayout = true;
+							eliminarPartidaGrid.visible = editarPDF.includeInLayout = false;
+							
+							CargarFactura.visible = editarPDF.includeInLayout = false;
+							
+							seleccionarOrigen();
+							lineaListaArribo.visible = lineaListaArribo.includeInLayout = true;
+							
+							gridPartidasObject();
+							
+							agregarPartidaGrid.enabled = false;
+							if (!value.asociar)
+								agregarPartidaGrid.enabled = true;
+							tipoPublicaciones(value.tipo);
+							if(!agregoDoc){
+								ordenarLote(value);
+								seleccionarLote();
+								
+							}
+							habilitarVer();
+							break;
+						}
+						case "eliminarPartida":
+						{
+							tipoLote = value.tipoLote;
+							if(bloIniEliminar){
+								
+							montoTotal = (value.precioUnitario * value.cantidadCompra);
+							agregarPDF.visible = agregarPDF.includeInLayout = false;
+							editarPDF.visible = editarPDF.includeInLayout = true;
+							agregarPartidaGrid.visible = agregarPDF.includeInLayout = false;
+							eliminarPartidaGrid.visible = editarPDF.includeInLayout = true;
+							
+							CargarFactura.visible = CargarFactura.includeInLayout = false;
+							
+							seleccionarOrigen();
+							lineaListaArribo.visible = lineaListaArribo.includeInLayout = true;
+							
+							gridPartidasAsociarObject();
+							agregarPartidaGrid.enabled = bloquear;
+							tipoPublicaciones(value.tipo);
+							
+							if(!agregoDoc){
+								ordenarLote(value);
+								seleccionarLote();
+								
+							}
+							}
+							habilitarVer();
+							/*asignarRuaCertificadoUSP();*/
+							break;
+						}
+						case "agregarCargaFactura":
+						{
+							if(super.data)
+								data.numFila = itemIndex;
+							CargarFactura.visible = CargarFactura.includeInLayout = true;
+							AgregarPartida.visible = AgregarPartida.includeInLayout = false;
+							agregarPartidaFactura.visible = agregarPartidaFactura.includeInLayout = true;
+							eliminarPartidaFactura.visible = eliminarPartidaFactura.includeInLayout = false;
+							lineaCargarFactura.visible = lineaCargarFactura.includeInLayout = true;
+							
+							activarAgregado(value);
+							break;
+						}
+						case "eliminarCargaFactura":
+						{
+							if(super.data)
+								data.numFila = itemIndex;
+							CargarFactura.visible = CargarFactura.includeInLayout = true;
+							AgregarPartida.visible = AgregarPartida.includeInLayout = false;
+							agregarPartidaFactura.visible = agregarPartidaFactura.includeInLayout = false;
+							eliminarPartidaFactura.visible = eliminarPartidaFactura.includeInLayout = true;
+							lineaCargarFactura.visible = lineaCargarFactura.includeInLayout = true;
+							break;
+						}
+						default:
+						{
+							CargarFactura.visible = CargarFactura.includeInLayout = true;
+							AgregarPartida.visible = AgregarPartida.includeInLayout = false;
+							break;
+						}
+					}
+					
+				}
+				if(data != null){
+					if (data.abierto){
+						lineaCargarFactura.visible = false;
+						lineaListaArribo.visible = false;
+					}else{
+						lineaCargarFactura.visible = true;
+						lineaListaArribo.visible = true;
+					}
+					cargaOrigen();
+				}
+			}
+			
+			private function cargaOrigen():void{
+				if( cmbOrigen.dataProvider != null && cmbOrigen.dataProvider.length > 0 ){
+					if( data.origenCompra != null && data.origen==null )
+					{
+						cmbOrigen.selectedIndex = cmbOrigen.seleccionarValor(data.origenCompra,'valor');
+						partida.origen=data.origenCompra;
+					}
+				}else{
+					setTimeout( cargaOrigen, 250 );
+				}
+			}
+			
+			/************************Lista de Arribo************************/
+			protected function numericstepper1_changeHandler(event:Event):void
+			{
+				if(tipoItem == "agregarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra;
+					partida.cantidadCompra = parseInt(nmsCantidad.textDisplay.text);
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'cantidadCompra');
+				}
+				if(tipoItem == "eliminarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra;
+					partida.cantidadCompra = parseInt(nmsCantidad.textDisplay.text);
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosQuitar(partida,'cantidadCompra');
+				}
+				
+			}
+			
+			protected function txt_changeHandler(event:TextOperationEvent):void
+			{
+				
+				lote = txtLote.text;
+				if(tipoItem == "agregarPartida"){
+					
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra
+					partida.lote = txtLote.text;
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'lote');
+					data.lote = txtLote.text;
+					dispatchEvent( new Event("validarBotonGenerarLA",true));
+				}
+				if(tipoItem == "eliminarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra
+					partida.lote = txtLote.text;
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosQuitar(partida,'lote');
+					data.lote = txtLote.text;
+					dispatchEvent( new Event("validarBotonGenerarLA",true));
+				}
+			}
+			
+			protected function cmbLote_changeHandler(event:IndexChangeEvent):void
+			{
+				var rutaPDF1:String;
+				var rutacertificado:String;
+				var rutacertificadoActual:String;
+				if(tipoItem == "agregarPartida"){
+					if(cmbLote.selectedItem != null){
+						partida = new PartidaCompra();
+						partida = ObjectUtil.copy(data) as PartidaCompra
+						partida.lote = cmbLote.selectedItem.valor;
+						/*if(cmbLote.selectedItem.valor != null)
+						loteActual = ObjectUtil.copy(cmbLote.selectedItem.valor) as String; */
+						if(cmbLote.selectedItem.llave == 0)
+						{
+							partida.tipoLote = false;
+								/*rutaPDF = data.rutaCertificadoActual;*/
+							tipoLote = false;
+							/*data.tipoLote = false;
+							data.rutaPDF = data.rutaCertificadoActual;*/
+							/*data.rutaPDF = data.rutaCertificadoActual;*/
+							data.tipoLote = false;
+							rutaPDF1 = ObjectUtil.copy(data.rutaPDF) as String; 
+							rutacertificado = ObjectUtil.copy(data.rutaCertificadoAnterior) as String; 
+							rutacertificadoActual = ObjectUtil.copy(data.rutaCertificadoActual) as String; 
+							if((rutaPDF1 == null) && (rutaPDF1 == rutacertificado))
+								data.rutaPDF = rutacertificadoActual;
+						}
+						else if(cmbLote.selectedItem.llave == 1)
+						{
+							partida.tipoLote = true;
+							tipoLote = true;
+							/*data.rutaPDF = data.rutaCertificadoAnterior;*/
+							/*data.rutaPDF = data.rutaCertificadoAnterior;*/
+							data.tipoLote = true;
+							rutaPDF1 = ObjectUtil.copy(data.rutaPDF) as String; 
+							rutacertificado = ObjectUtil.copy(data.rutaCertificadoAnterior) as String; 
+							rutacertificadoActual = ObjectUtil.copy(data.rutaCertificadoActual) as String; 
+							if((rutaPDF1 == null) && (rutaPDF1 == rutacertificadoActual))
+								data.rutaPDF = rutacertificado;
+						}
+						((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'lote');
+						((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'tipoLote');
+						/*((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarTipoLote(data.idPartidaCompra,tipoLote);*/
+						/*data.lote = loteActual;*/
+					}
+					dispatchEvent( new Event("validarBotonGenerarLA",true));
+				}
+				if(tipoItem == "eliminarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra
+					if(cmbLote.selectedItem != null){
+						partida.lote = cmbLote.selectedItem.valor;
+						if(cmbLote.selectedItem != null && cmbLote.selectedItem.llave == 0)
+						{
+							partida.tipoLote = false;
+							data.tipoLote = false;
+							if((data.rutaPDF == data.rutaCertificadoAnterior))
+								data.rutaPDF = data.rutaCertificadoActual;
+							tipoLote = false;
+							/*data.tipoLote = false;*/
+						}
+						if(cmbLote.selectedItem != null && cmbLote.selectedItem.llave == 1)
+						{
+							/*data.tipoLote = true;*/
+							partida.tipoLote = true;
+							data.tipoLote = true;
+							if((data.rutaPDF == data.rutaCertificadoActual))
+								data.rutaPDF = data.rutaCertificadoAnterior;
+							tipoLote = true;
+						}
+						((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosQuitar(partida,'lote');
+						((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosQuitar(partida,'tipoLote');
+						((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarTipoLote(data.idPartidaCompra,tipoLote);
+					}
+					dispatchEvent( new Event("validarBotonGenerarLA",true));
+				}
+			}
+			
+			private function selectLote():void
+			{
+				/*if(cmbLote.selectedItem == null){*/
+						
+						if(data.tipoLote == false)
+						{
+							/*cmbLote.selectedIndex = 0;*/
+							cmbLote.selectedIndex = 0;
+							if(data.rutaPDF == null)
+								data.rutaPDF = data.rutaCertificadoActual;
+								/*data.rutaPDF = data.rutaPDF
+							else*/
+							
+						}
+						else
+						{
+							cmbLote.selectedIndex=1;
+							if(data.rutaPDF == null)
+								data.rutaPDF = data.rutaCertificadoAnterior;
+								/*data.rutaPDF = data.rutaPDF
+							else*/
+						}
+					/*}*/
+			}
+			
+			private function seleccionarLote():void
+			{
+				if (cmbLote && cmbLote.dataProvider && cmbLote.dataProvider.length > 0)
+				{
+					selectLote();
+				}
+				else
+				{
+					setTimeout(seleccionarLote,100);
+				}
+			}
+			
+			protected function ordenarLote(value:Object):void
+			{
+				partida = new PartidaCompra();
+				partida = ObjectUtil.copy(data) as PartidaCompra
+				var lotes:ArrayCollection = new ArrayCollection();
+				var loteAnterior:Object = new Object();
+				var lote:Object = new Object();
+				/*if(!bloqueoLote){*/
+					tipoLote = data.tipoLote;
+					loteAnterior.valor = data.loteAnterior;
+					loteAnterior.llave = 1;
+					if(data.loteVigente != null)
+					lote.valor = data.loteVigente;
+					else
+					lote.valor = "";
+					lote.llave = 0;	
+					//if(data.loteVigente != null)
+						lotes.addItem(lote);
+					
+					if(data.loteAnterior!= null)
+						lotes.addItem(loteAnterior);
+					/*if(cmbLote.dataProvider == null)*/
+						cmbLote.dataProvider = lotes;
+					/*cmbLote.selectedItem = indiceActual; */
+					/*if(data.tipoLote == false)
+					{
+						cmbLote.selectedIndex = 0;
+						if(data.rutaPDF != null)
+							rutaPDF = data.rutaPDF
+						else
+							rutaPDF = data.rutaCertificadoActual;
+							
+					}
+					else
+					{
+						cmbLote.selectedIndex = 1;
+						if(data.rutaPDF != null)
+							rutaPDF = data.rutaPDF
+						else
+							rutaPDF = data.rutaCertificadoAnterior;
+					}*/
+					if(VistaListaArribo.proveedor==true && data.tipo != 'Publicaciones')
+					{
+						txtLote.visible = txtLote.includeInLayout = false;
+						cmbLote.visible = cmbLote.includeInLayout = true;
+						esferasLote.visible = esferasLote.includeInLayout = true;
+						cmbLote.textInput.editable = false;
+					}
+					else
+					{
+						txtLote.visible = txtLote.includeInLayout = true;
+						cmbLote.visible = cmbLote.includeInLayout = false;
+						esferasLote.visible = esferasLote.includeInLayout = false;
+						cmbLote.textInput.editable = true;
+					}
+					
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'lote');
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'tipoLote');
+					
+					if(data.lote == null){
+						txtLote.text = "";
+					}
+					if(data.loteVigente == null && data.loteAnterior == null)
+					{
+						cmbLote.dataProvider=null;
+						cmbLote.enabled = false;
+					}else{cmbLote.enabled = true;}
+					
+				/*}
+				bloqueoLote = false;*/
+			}
+			
+			protected function agregardocumento1_clickHandler(valor:String):void
+			{
+				browseFileSystem(valor);	
+			}
+			
+			public function browseFileSystem(valor:String):void{
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				
+				var docFilter:FileFilter;
+				if (valor == 'pdf')
+				{
+					docFilter = new FileFilter("Documents", "*.pdf");
+					file.addEventListener(Event.COMPLETE,completeHandlerPDF);	
+				}
+				
+				file.browse([docFilter]); 
+			}
+			public function habilitarVer():void
+			{
+				if(data.rutaPDF != null || data.rutaCertificadoActual != null){
+					ver1.source = catalogoIconosBotones.getInstance().vista_previa_cuadro;
+					ver2.source = catalogoIconosBotones.getInstance().vista_previa_cuadro;
+					cargar1.source = catalogoIconosBotones.getInstance().recargar_documento;
+					cargar2.source = catalogoIconosBotones.getInstance().recargar_documento;
+				}else{
+					ver1.source = catalogoIconosBotones.getInstance().vista_previa_gris;
+					ver2.source = catalogoIconosBotones.getInstance().vista_previa_gris;
+					cargar1.source = catalogoIconosBotones.getInstance().cargar_archivo;
+					cargar2.source = catalogoIconosBotones.getInstance().cargar_archivo;
+				}
+			}
+			private function selectHandler(event:Event):void 
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void 
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void 
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandlerPDF(event:Event):void 
+			{
+				trace("completeHandler: " + event);
+				agregoDoc = true;
+				certificadoPdf = this.file.data;
+				/*data.rutaPDF = file.nativePath;*/
+				/*filepdf = file;*/
+				/*rutaPDF = file.nativePath;*/
+				data.rutaPDF = file.nativePath;
+				data.certificadoPdf = file.data;
+				/*(data as PartidaCompra).certificadoPdf = this.certificadoPdf;*/
+				
+				if(tipoItem == "agregarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra;
+					partida.rutaPDF = data.rutaPDF;
+					partida.certificadoPdf = data.certificadoPdf;
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'rutaPDF');
+				}
+				else if(tipoItem == "eliminarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra;
+					partida.rutaPDF = data.rutaPDF;
+					partida.certificadoPdf = data.certificadoPdf;
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosQuitar(partida,'rutaPDF');
+				}
+				((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarCertificados(data.idPartidaCompra,certificadoPdf);
+				/*outerDocument.seteoBytesArray((data as PartidaCompra).idPartidaCompra.toString(),this.certificadoPdf);*/
+				agregoDoc = false;
+				dispatchEvent( new Event("validarBotonGenerarLA",true));
+				habilitarVer();
+			}
+			protected function visualizarPDF_clickHandler(event:MouseEvent):void
+			{
+				var request:URLRequest = new URLRequest("file://"+  encodeURI(data.rutaPDF));
+				navigateToURL(request);
+			}
+			
+			private function seleccionarOrigen():void
+			{
+				if (cmbOrigen && cmbOrigen.dataProvider && cmbOrigen.dataProvider.length > 0)
+				{
+					cmbOrigen.selectedIndex = cmbOrigen.seleccionarValor(data.origen);
+				}
+				else
+				{
+					setTimeout(seleccionarOrigen,100);
+				}
+			}
+			
+			protected function cmbOrigen_changingHandler(event:IndexChangeEvent):void
+			{
+				
+				if(tipoItem == "agregarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra
+					partida.origen = cmbOrigen.selectedItem.valor;
+					origenCompra = cmbOrigen.selectedItem.valor;
+					
+					data.origen = cmbOrigen.selectedItem.valor;
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosAgregar(partida,'origen');
+					dispatchEvent( new Event("validarBotonGenerarLA",true));
+				}
+				if(tipoItem == "eliminarPartida"){
+					partida = new PartidaCompra();
+					partida = ObjectUtil.copy(data) as PartidaCompra
+					partida.origen = cmbOrigen.selectedItem.valor;
+					origenCompra = cmbOrigen.selectedItem.valor;
+					data.origen = cmbOrigen.selectedItem.valor;
+					((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarDatosQuitar(partida,'origen');
+					dispatchEvent( new Event("validarBotonGenerarLA",true));
+				}
+				//((owner as List).parentDocument as GridAsociarPartidaListaArriboLista).almacenarOrigen(data.idPartidaCompra,origenCompra);
+			}
+			
+			protected function agregarPartida(event:MouseEvent):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.AGREGAR_PARTIDAS_ARRIBO_GRID);
+				evento.partida = data as PartidaCompra;
+				evento.partida.object = "eliminarPartida";
+				evento.indiceLista = this.itemIndex;
+				dispatchEvent(evento);
+			}
+			protected function eliminarPartida(event:MouseEvent):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ELIMINAR_PARTIDAS_ARRIBO_GRID);
+				evento.partida = data as PartidaCompra;
+				evento.partida.object = "agregarPartida";
+				evento.indiceLista = this.itemIndex;
+				dispatchEvent(evento);
+			}
+			protected function tipoPublicaciones(value:String):void{
+				if(value == "Publicaciones"){
+					pdfMateriales.visible = pdfMateriales.includeInLayout = false;
+					numfila.percentWidth = 4;
+					lblSort.percentWidth = 7;
+					descripcion.percentWidth = 26;
+					monto.percentWidth = 9;
+					cant.percentWidth = 9;
+					montoT.percentWidth = 9;
+					origen.percentWidth = 12;
+					grpCmb.percentWidth = 12;
+					pdfMateriales.percentWidth = 0;
+					accion.percentWidth = 12;
+				}
+				else{
+					pdfMateriales.visible = pdfMateriales.includeInLayout = true;
+					numfila.percentWidth = 3;
+					lblSort.percentWidth = 6;
+					descripcion.percentWidth = 25;
+					monto.percentWidth = 8;
+					cant.percentWidth = 8;
+					montoT.percentWidth = 8;
+					origen.percentWidth = 12;
+					grpCmb.percentWidth = 12;
+					pdfMateriales.percentWidth = 7;
+					accion.percentWidth = 11;
+				}
+			}
+			
+			/************************Cargar Factura************************/
+			
+			[Bindable] private var font14:Number;
+			/*override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+			
+			super.updateDisplayList($width,$height);
+			
+			font14 = (14 / 1148) * ($width);
+			
+			
+			font14 = font14 > 14 ? 14:font14;
+			
+			}*/
+			protected function reajustar_resizeHandler(event:ResizeEvent):void
+			{
+				font14 = (14 / 1148) * (unscaledWidth);
+				
+				
+				font14 = font14 > 14 ? 14:font14;
+			}
+			private function activarAgregado(value:Object):void
+			{
+				agregarPartidaFactura.enabled = false;
+				if (value.asociar)
+					agregarPartidaFactura.enabled = true;
+			}
+			protected function agregarPartidaCargarFactura(event:MouseEvent):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ASOCIAR_PARTIDAS_GRID);
+				evento.partida = data as PartidaCompra;
+				evento.partida.numFila = itemIndex;
+				evento.partida.object = "eliminarCargaFactura";
+				dispatchEvent(evento);
+			}
+			protected function eliminarPartidaCargarFactura(event:MouseEvent):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ELIMINAR_ASOCIAR_PARTIDAS_GRID);
+				evento.partida = data as PartidaCompra;
+				evento.partida.numFila = itemIndex;
+				evento.partida.object = "agregarCargaFactura";
+				dispatchEvent(evento);		
+			}
+			/*******************************************************/
+			public function gridPartidasObject():void
+			{
+				var evt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ENVIAR_OBJETO_PARTIDA_COMPRA);
+				evt.partida = data as PartidaCompra;
+				evt.gridTipo = "gridPartida";
+				dispatchEvent(evt);
+				
+			}
+			public function gridPartidasAsociarObject():void
+			{
+				
+				var evt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ENVIAR_OBJETO_PARTIDA_COMPRA);
+				evt.partida = data as PartidaCompra;
+				evt.gridTipo = "gridAsociarPartida";
+				dispatchEvent(evt);
+			}
+			private function asignarRuaCertificadoUSP():void
+			{
+				var conRuta:Boolean;
+				if(data.nombreProveedor=='USP'){
+					if(!bloquearArchivoUSP){
+						/*if((data.rutaCertificadoActual != null) || (data.rutaCertificadoActual != ''))*/
+						if(data.rutaCertificadoActual != null){
+							if( data.rutaCertificadoActual != ''){
+								data.rutaPDF = data.rutaCertificadoActual;
+							}
+						}
+					}
+					bloquearArchivoUSP = true;
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="hovered"/>
+		<s:State name="selected"/>
+	</s:states>
+	
+	<s:Rect width="100%" height="100%">
+		<s:fill>
+			<s:SolidColor color="#FFFFFF" color.selected="#e6e6e6" color.hovered="#e6e6e6"/>
+		</s:fill>
+	</s:Rect>
+	
+	<!--Agregar Partidas-->
+	<s:HGroup id="AgregarPartida" verticalAlign="middle" horizontalAlign="left" 
+			  width="100%" height="100%" gap="0" >
+		<label:TituloNovecento_18 id="numfila" fontSize="16" text="{data.numFila}" width="3%" textAlign="center"/>
+		<label:Texto_14_Helvetica id="lblSort" text="{data.sortChar}" width="6%" textAlign="center" maxDisplayedLines="3"/>
+		<label:Texto_14_Helvetica id="descripcion" toolTip="{data.descripcionProducto}" width="25%" text="{data.descripcionProducto}" textAlign="center" maxDisplayedLines="3"/>
+		<label:Texto_14_Helvetica id="monto" text="{data.monedaSimbolo + ' ' +UtilsFormatosNumericos.precisionADosDecimalesConComas(data.precioUnitario)}" width="8%" textAlign="center"/>
+		<s:HGroup id="cant" width="8%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+			<s:NumericStepper skinClass="mx.com.proquifa.vista.vistas.skin.boton.skinNumericStepperFlechas" id="nmsCantidad" value="{data.cantidadCompra}" minimum="1" maximum="{data.cantidadCompra}" styleName="tab_texto_14_HelveticaLight" change="numericstepper1_changeHandler(event)"  />
+		</s:HGroup>
+		<s:HGroup id="montoT" width="8%" height="100%" horizontalAlign="center" verticalAlign="middle">
+			<label:Texto_14_Helvetica text="{data.monedaSimbolo + ' ' +UtilsFormatosNumericos.precisionADosDecimalesConComas(montoTotal)}" textAlign="center"/>
+		</s:HGroup>  
+		<s:VGroup id="origen" width="12%" horizontalAlign="center" verticalAlign="middle" gap="0">
+			<combo:ComboCatalogosBlanco id="cmbOrigen" width="180" height="24" color="#008894"   creationComplete="{cmbOrigen.cargaPaises()}" changing="cmbOrigen_changingHandler(event)"  />
+		</s:VGroup>
+		<s:HGroup id="grpCmb" width="12%" horizontalAlign="center" verticalAlign="middle">
+			
+			<s:Group id="esferasLote" >
+				<s:Ellipse width="10" height="10" id="orange" visible="{tipoLote}" includeInLayout="{tipoLote}">
+					<s:fill>
+						<s:SolidColor color="#db9600"/>
+					</s:fill>
+				</s:Ellipse>
+				<s:Ellipse width="10" height="10" id="green" visible="{!tipoLote}" includeInLayout="{!tipoLote}">
+					<s:fill>
+						<s:SolidColor color="#70a83b"/>
+					</s:fill>
+				</s:Ellipse>
+			</s:Group>  
+			
+			<combo:ComboCatalogosBlanco id="cmbLote" color="#008894" width="130" height="24" change="cmbLote_changeHandler(event)" />
+			<s:TextInput id="txtLote" width="130" text="{data.lote}" color="#008894" styleName="tab_texto_14_HelveticaLight" change="txt_changeHandler(event)" />
+		</s:HGroup>
+		<s:HGroup id="pdfMateriales" width="7%" gap="0" horizontalAlign="center" verticalAlign="middle" >
+			<s:HGroup id="agregarPDF" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+				<!--<boton:AgregarDocumentoSencillo width="50" height="100%" click="agregardocumento1_clickHandler('pdf')"/>-->
+				<mx:Image id="cargar1" source="{catalogoIconosBotones.getInstance().cargar_archivo}" click="agregardocumento1_clickHandler('pdf')"/>
+				<mx:Image id="ver1" source="{catalogoIconosBotones.getInstance().vista_previa_gris}" click="visualizarPDF_clickHandler(event)"/>
+				<!--<label:TituloNovecento_18 text="VER" color="#008894" fontFamily="Novecento" fontWeight="bold" fontSize="18" click="visualizarPDF_clickHandler(event)"/>-->
+			</s:HGroup>  
+			<s:HGroup id="editarPDF" width="100%" height="100%" gap="0" horizontalAlign="center" verticalAlign="middle">
+				<s:HGroup width="100%" horizontalAlign="center" verticalAlign="middle" gap="10">
+					<!--<label:TituloNovecento_18 text="EDITAR" color="#008894" fontFamily="Novecento" fontWeight="bold" fontSize="18" click="agregardocumento1_clickHandler('pdf')"/>
+					<label:TituloNovecento_18 text="VER" color="#008894" fontFamily="Novecento" fontWeight="bold" fontSize="18" click="visualizarPDF_clickHandler(event)"/>-->
+					<mx:Image id="cargar2" source="{catalogoIconosBotones.getInstance().cargar_archivo}" click="agregardocumento1_clickHandler('pdf')"/>
+					<!--<pqNet:botonPqNetLargo  id="btnRecargar"  width="40" height="30" icono="recargarImg" colorBase="0x008894" />-->
+					<mx:Image id="ver2" source="{catalogoIconosBotones.getInstance().vista_previa_gris}" click="visualizarPDF_clickHandler(event)"/>
+				</s:HGroup>
+			</s:HGroup>  
+			
+		</s:HGroup>
+		<s:VGroup id="accion" width="11%" gap="0" horizontalAlign="center" verticalAlign="middle">
+			<s:HGroup id="agregarPartidaGrid" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" click="agregarPartida(event)">
+				<mx:Image source="{catalogoIconosBotones.getInstance().agregarFlecha}"  horizontalAlign="center" verticalAlign="middle"/>
+			</s:HGroup>
+			<s:HGroup id="eliminarPartidaGrid" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" click="eliminarPartida(event)">
+				<mx:Image source="{catalogoIconosBotones.getInstance().eliminar}" horizontalAlign="center" verticalAlign="middle"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+	
+	
+	<!--Cargar Factura-->
+	<s:HGroup id="CargarFactura" verticalAlign="middle" horizontalAlign="left" 
+			  width="100%" height="100%" gap="0" >
+		<s:VGroup width="5%"  verticalAlign="middle">
+			<label:Texto_14_Helvetica text="{(itemIndex+1)/*data.numFila*/}" width="100%" textAlign="center" fontSize="{font14}" verticalAlign="middle"/>	
+		</s:VGroup>
+		<s:VGroup width="33%" >
+			<label:Texto_14_Helvetica text="{data.descripcionProducto}"  fontSize="{font14}" width="100%" height="100%" textAlign="left" maxDisplayedLines="3" verticalAlign="middle"/>	
+		</s:VGroup>
+		<s:VGroup width="9%" >
+			<label:Texto_14_Helvetica text="{data.cantidadCompra}"  fontSize="{font14}" width="100%" textAlign="center" />	
+		</s:VGroup>
+		<s:VGroup width="11%" >
+			<label:Texto_14_Helvetica  text="{data.monedaString + ' ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data.precioUnitario)}" fontSize="{font14}" width="100%" textAlign="center"/>	
+		</s:VGroup>
+		<s:VGroup width="12%" >
+			<label:Texto_14_Helvetica text="{data.monedaString + ' ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data.precioTotal)}"  fontSize="{font14}" width="100%" textAlign="center"/>	
+		</s:VGroup>
+		<s:VGroup width="14%" >
+			<label:Texto_14_Helvetica text="{data.estado}" fontSize="{font14}" width="100%" textAlign="center"/>	
+		</s:VGroup>
+		<!--<s:VGroup  id="imgDetallePrevioImportacion" width="100%" height="100%" horizontalAlign="center" click="agregarPartida(event)">
+		
+		<mx:Image verticalAlign="middle" verticalCenter="0" width="{outerDocument.sizeWidth}" height="{outerDocument.sizeHeight}" source="{catalogoIconosBotones.getInstance().agregarFlecha}"  />	
+		</s:VGroup>-->
+		<s:VGroup width="12%" gap="0" horizontalAlign="center" verticalAlign="middle">
+			<s:HGroup id="agregarPartidaFactura" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" click="agregarPartidaCargarFactura(event)">
+				<mx:Image source="{catalogoIconosBotones.getInstance().agregarFlecha}"  horizontalAlign="center" verticalAlign="middle"/>
+			</s:HGroup>
+			<s:HGroup id="eliminarPartidaFactura" width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" click="eliminarPartidaCargarFactura(event)">
+				<mx:Image source="{catalogoIconosBotones.getInstance().eliminar}"  horizontalAlign="center" verticalAlign="middle"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+	
+	<otros:LineaDivision id="lineaListaArribo" width="100%" height="1" color="#e6e6e6" bottom="0" visible="false" includeInLayout="false" />
+	<otros:LineaDivision id="lineaCargarFactura" width="100%" height="1" color="#f9f9f9" bottom="0" visible="false" includeInLayout="false"/>
+	
+	
+</s:ItemRenderer>

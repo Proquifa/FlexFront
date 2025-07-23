@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"  width="100%" height="100%" creationComplete="init()" xmlns:acordeon="skins.skin.acordeon.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark" >
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoVerificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Accion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.ReferenciasIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.seleccionador;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			private var _cmbSeleccionador:seleccionador = null;
+			private var _cmbSeleccionador2:seleccionador = null;
+			[Bindable]
+			private var _accion:Accion = new Accion();
+			
+			private var _accionAntesDCambios:Accion = new Accion();
+			[Bindable]
+			private var _usuario:String = "";
+			
+			public var referenciasActuales:ArrayCollection = new ArrayCollection();
+			public var referenciasEliminadas:ArrayCollection = new ArrayCollection();
+			
+			
+			/*[Bindable]
+			public var ActivarVerificacion:Boolean = false;*/
+			
+			/* [Bindable]
+			public var datosPorcentaje:ArrayCollection = new ArrayCollection([{valor:"99", label:"99% (Muy alta)"},
+				{valor:"80", label:"80% (Alta)"},
+				{valor:"60", label:"60% (Media)"},
+				{valor:"40", label:"40% (Baja)"},
+				{valor:"20", label:"20% (Muy baja)"}]); */
+			
+			
+			
+			private var productorVerificacion:Producer = new Producer();
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			
+			
+			private function init():void{
+				this.productorVerificacion.destination = "actualizacionService";
+				this.productorVerificacion.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesVerificacion = new ChannelSet();
+				this.canalesVerificacion.addChannel(canalVerificacion);
+				this.productorVerificacion.channelSet = this.canalesVerificacion;
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de verificación","Error");
+			}
+			
+			public function set recibir_Accion(datos:Object):void{
+				if(datos == null){
+					return;
+				}
+				this._accion = datos.accion as Accion;
+				this._usuario = datos.usuario;
+				this.btnverificar.enabled = false;
+				/* if(this._accion.eficaciaVerificacion != 0 ){
+					for(var m:int = 0; m<this.datosPorcentaje.length; m++){
+						if(this.datosPorcentaje[m].valor == this._accion.eficaciaVerificacion){
+							this.cbporcentaje.selectedIndex = m;
+						}
+					}
+				}  */
+				//validarVerificacion();
+				//this.btnfinalizar.enabled = true;
+				//this.btnguardar.enabled = true;
+				/*if(this._accion.fechaRealizacion == null){
+				this._accion.fechaRealizacion = new Date();
+				}*/
+				//this.addEventListener(EventoVerificacion.TRAER_VERIFICACION,hecho);
+				cargarComboNavegacion();
+			}
+			
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				if( this._accion.referencias == null  ){
+					this._accion.referencias = new ArrayCollection();
+				}
+				if( this._accion.referencias != null  ){
+					for( var i:int=0 ; i < this._accion.referencias.source.length ; i++ ){
+						( this._accion.referencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._accion.referencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._accion.referencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;	
+				}
+				this._cmbSeleccionador.empleadoLogueado = new Empleado();
+				this._cmbSeleccionador.empleadoLogueado.usuario = this._usuario;
+				this._cmbSeleccionador.idIncidente = this._accion.incidente;
+				this._cmbSeleccionador.folioIncidente = this._accion.incidenteFolio;
+				this._cmbSeleccionador.vieneDe = "url";
+				this._cmbSeleccionador.origen = "Verificación";
+				this._cmbSeleccionador.accionReferencias = "consulta";
+				this.parent.stage.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE_VERIFICACION,agregarreferencias);
+				this.contenedorCombo.addChild( this._cmbSeleccionador );
+			}
+			
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion2():void{
+				this.contenedor2.removeAllChildren();
+				if( this._cmbSeleccionador2 == null ){
+					this._cmbSeleccionador2 = new seleccionador();
+				}
+				if( this._accion.referencias == null  ){
+					this._accion.referencias = new ArrayCollection();
+				}
+				if( this._accion.referencias != null ){
+					for( var i:int=0 ; i < this._accion.referencias.source.length ; i++ ){
+						( this._accion.referencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._accion.referencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._accion.referencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador2.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;				}
+				this._cmbSeleccionador2.empleadoLogueado = new Empleado();
+				this._cmbSeleccionador2.empleadoLogueado.usuario = this._usuario;
+				this._cmbSeleccionador2.idIncidente = this._accion.incidente;
+				this._cmbSeleccionador2.folioIncidente = this._accion.incidenteFolio;
+				this._cmbSeleccionador2.vieneDe = "url";
+				this._cmbSeleccionador2.origen = "Verificación";
+				this._cmbSeleccionador2.accionReferencias = "modificación";
+				this.parent.stage.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE_VERIFICACION,agregarreferencias);
+				this.contenedor2.addChild( this._cmbSeleccionador2 );
+			}
+			
+			/*public function hecho(evento:EventoVerificacion):void{
+			Alert.show("hecho");
+			this.dispatchEvent(evento);
+			}*/
+			
+			
+			public function set recibir_Ejecutar(_accion:Accion):void{
+				if(_accion == null || _accion.idAccion.toString() == "NaN" ){
+					return;
+				}
+				if(this._accion.idAccion == _accion.idAccion){
+					//this.btnguardar.enabled = false;
+					this.btnverificar.enabled = false;
+					var mensaje:AsyncMessage = new AsyncMessage();
+					mensaje.headers["Destino"] = "Ponderacion"
+					mensaje.headers["Usuario"] = "PLozada";
+					mensaje.headers["Nivel"] = "Director";
+					mensaje.body = "Mensaje";
+					this.productorVerificacion.send(mensaje);
+					//this._accion.fechaRealizacion = _accion.fechaRealizacion;
+				}
+				//this.dispatchEvent(new EventoEsperar(EventoEsperar.TERMINA_ESPERA));
+				salir();
+			}
+			
+			public function salir():void{
+				var event:EventoVerificacion = new EventoVerificacion(EventoVerificacion.TRAER_VERIFICACION);
+				event._usuario = this._usuario;
+				this.dispatchEvent(event);
+				this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+				if(this._cmbSeleccionador2 != null){
+					this._cmbSeleccionador2.listaReferencias = new ArrayCollection();
+				}
+			}
+			
+			private function validar():void{
+				/*if(txtcomentarios.text == ""){
+				Alert.show("Escriba comentarios para la Acción");
+				return;
+				}*/
+				if( this.referenciasEliminadas.length> 0 ){
+					var evento:EventoVerificacion = new EventoVerificacion(EventoVerificacion.ELIMINAR_REFERENCIA);
+					evento._referenciasEliminadas = this.referenciasEliminadas;
+					this.dispatchEvent(evento);
+				}else{
+					guardar();
+				}
+			}
+			
+			private function guardar():void{
+				//var event:EventoAccion = new EventoAccion(EventoAccion.ACTUALIZAR_ACCION);
+				var event:EventoVerificacion = new EventoVerificacion(EventoVerificacion.ACTUALIZAR_VERIFICACION);
+				event._accion = this._accion;
+				//event._accion.comentarios = this.txtcomentarios.text;
+				event._accion.descripcionVerificacion = this.txtdescripcionVerificacion.text;
+				event._accion.horasInvertidas = int(this.txthorasinvertidas.text);
+				/* if(this.cbporcentaje.selectedIndex != -1){
+					this._accion.eficaciaVerificacion = this.cbporcentaje.selectedItem.valor;
+				} */
+				this._accion.eficaciaVerificacion = 0;
+				//this.dispatchEvent(new EventoEsperar(EventoEsperar.INICIA_ESPERA));
+				this.dispatchEvent(event);	
+			}
+			
+			private function alertEjecutar():void{
+				Alert.yesLabel = "Si";
+				Alert.noLabel = "No";
+				Alert.show("Una vez confirmada su 'VERIFICACIÓN' no podrá modificarla posteriormente, ¿Desea continuar?","¡Atención!",Alert.NO|Alert.YES,this,validarejecucion);
+			}
+			
+			private function validarejecucion(event:CloseEvent):void{
+				trace(event.type);
+				if(event.detail == 1){
+					//Alert.show("Ejecutar");
+					ejecutar();
+				}
+			}
+			
+			private function ejecutar():void{
+				var event:EventoVerificacion = new EventoVerificacion(EventoVerificacion.EJECUTAR_VERIFICACION);
+				event._accion = this._accion;
+				//event._accion.fechaRealizacion = new Date();
+				this.dispatchEvent(event);
+			}
+			
+			
+			private var PopUpRef:PopUpReferencias;
+			private var numInvocaiones:int = 0;
+			
+			private function referencias(accion:String):void{
+				for(var m:int=0;m<this._accion.referencias.length;m++){
+					this._accion.referencias[m].nombreArchivo = this._accion.referencias[m].folio;
+					this._accion.referencias[m].numFila = m + 1;
+				}
+				
+				PopUpRef = new PopUpReferencias();
+				
+				this.PopUpRef = PopUpManager.createPopUp(this,PopUpReferencias,true) as PopUpReferencias;
+				this.PopUpRef.listaReferencias = this._accion.referencias;
+				this.PopUpRef.referenciasEliminadas = new ArrayCollection();
+				this.PopUpRef.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE_VERIFICACION,agregarreferencias);
+				this.PopUpRef.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE,cerrarpopup);
+				if(accion == "modificar"){
+					this.PopUpRef.btnAdjunto.enabled = true;
+				}
+				if(accion == "consultar"){
+					this.PopUpRef.btnAdjunto.enabled = false;
+				}
+				this.PopUpRef.Origen = "Verificación";
+				this.PopUpRef.vieneD = "url";
+			}
+			
+			private function agregarreferencias(event:EventoIncidente):void{
+				//this.PopUpRef.removeEventListener(EventoIncidente.RECIBIR_ARRAY_COLLECTIO_DE_REFERENCIAS_INCIDENTE,agregarreferencias);
+				var referencias:ArrayCollection = new ArrayCollection();
+				var antesreferencias:ArrayCollection = new ArrayCollection();
+				var indices:int = 0;
+				for(var m:int = 0; m<event.listaDeArchivos.length;m++){
+					if(event.listaDeArchivos[m].folio == "" || event.listaDeArchivos[m].folio == null){
+						referencias.addItem(event.listaDeArchivos[m]);
+					}else{
+						antesreferencias.addItem(event.listaDeArchivos[m]);
+					}
+				}
+				if(antesreferencias.length > 0){
+					var ordenar:SortField = new SortField();
+					ordenar.name = "folio";
+					var orden:Sort = new Sort();
+					orden.fields=[ordenar];
+					antesreferencias.sort = orden;
+					antesreferencias.refresh();
+					indices = int(String(antesreferencias[antesreferencias.length -1].folio).substr(16,17));
+				}
+				
+				for(var r:int = 0; r<referencias.length; r++){
+					referencias[r].idIncidente = this._accion.incidente;
+					referencias[r].folio = "AMP-" + this._accion.incidenteFolio.substring(4,15);
+					if(indices == 0){
+						referencias[r].folio = "AMP-" + this._accion.incidenteFolio.substring(4,15);
+						if(r<10){
+							referencias[r].folio = referencias[r].folio + "-0" + r.toString();
+						}
+						else{
+							referencias[r].folio = referencias[r].folio + "-" + r.toString();
+						}
+					}
+					else{
+						referencias[r].folio = "AMP-" + this._accion.incidenteFolio.substring(4,15);
+						if((indices + 1) <10){
+							referencias[r].folio = referencias[r].folio + "-0" + (indices + 1 ).toString();
+							indices = indices + 1;
+						}
+						else{
+							referencias[r].folio = referencias[r].folio + "-" + (indices + 1 ).toString();
+							indices = indices + 1;
+						}
+					}
+					antesreferencias.addItem(referencias[r]);
+				}
+				this.referenciasActuales = antesreferencias;
+				this.referenciasEliminadas = event.listaDeArchivosEliminados;
+				this._accionAntesDCambios = ObjectUtil.copy(this._accion) as Accion;
+				this._accion.referencias = antesreferencias;
+				this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;
+				this._cmbSeleccionador2.listaReferencias = ObjectUtil.copy(this._accion.referencias) as ArrayCollection;
+				//this._accion.referencias = referencias;
+				/*var evento:EventoAccion = new EventoAccion(EventoAccion.ACTUALIZAR_ACCION);
+				evento._accion = this._accion;
+				this.dispatchEvent(evento);*/
+			}
+			
+			private function cerrarpopup(event:EventoIncidente):void{
+				this.PopUpRef.removeEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE,cerrarpopup);
+				this.PopUpRef.visible = false;
+				this.PopUpRef = null;
+			}
+			
+			
+			public function set recibir_EliminarAcciones(resultado:Boolean):void{
+				if(resultado == true){
+					this.guardar();	
+				}
+			}
+			
+			public function set recibir_Actualizacion(actualizacion:Accion):void{
+				//trace("hola");
+				//this.dispatchEvent(new EventoEsperar(EventoEsperar.TERMINA_ESPERA));
+				if(actualizacion.idAccion > 0){
+					Alert.show("Se actualizó la verificación de la acción: " + actualizacion.incidenteFolio,"Operación Exitosa");
+				}
+				var evento:EventoVerificacion = new EventoVerificacion( EventoVerificacion.TRAER_VERIFICACION_PARA_REFERENCIAS );
+				evento._accion = new Accion();
+				evento._usuario = DatosGlobales.getInstance()._usuario.usuario;
+				this.dispatchEvent(evento);				
+				validarVerificacion();
+			}
+			
+			/**
+			 * Metodo publico que recibe las lista de las acciones a verificar con las referencias actualiazadas
+			 */
+			public function set recibirListaVerificacionRef( datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}	
+				for( var i:int = 0; i < datos.length; i++ ){
+					if( this._accion.folio == (datos.getItemAt(i) as Accion).folio ){
+						this._accion = datos.getItemAt(i) as Accion;
+						if( this._cmbSeleccionador != null){
+							this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;
+						}
+						if( this._cmbSeleccionador2 != null){
+							this._cmbSeleccionador2.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;	
+						}
+					}
+				}
+				
+			}
+			
+			public function validarVerificacion():void{
+				if(this._accion.descripcionVerificacion != "" && this._accion.horasInvertidas != 0 ){ 
+				/* if(this._accion.descripcionVerificacion != "" && this._accion.horasInvertidas != 0 && this._accion.eficaciaVerificacion != 0){ */
+					this.btnverificar.enabled = true;
+				}
+				else{
+					this.btnverificar.enabled = false;
+				}
+			}
+			//metodo que cambia el tipo de accion 
+			private function cambiaAccionReferencias(accion:String):void{
+				if(accion == "modificar"){
+					cargarComboNavegacion2();
+				}
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:ViewStack id="contenedorVerificacion" width="100%" height="100%" creationPolicy="all">
+		<mx:VBox width="100%">
+			<mx:VBox id="vdatos"  width="100%">
+				<mx:HBox fontSize="30" paddingTop="10" paddingBottom="10" width="100%" fontWeight="normal">
+					<!--<mx:Label width="50%" text="{this._accion.folio}" fontWeight="bold" fontSize="40" id="lblFolioAccion"/>-->
+					<label:labelTitulo_Otros  width="50%" text="{this._accion.folio}" id="lblFolioAccion"/>
+					<mx:Label doubleClickEnabled="true" doubleClick="referencias('consultar');" width="50%" text="COMBO" textAlign="right" visible="false"/>
+					<mx:HBox id="contenedorCombo"/>
+				</mx:HBox>
+				<!--<mx:HRule width="100%" />-->
+				<otros:division width="100%"/>
+				<!--<mx:Label width="100%" fontSize="25" text="Datos generales" fontWeight="bold"/>-->
+				<label:labelTitulo_Otros  text="Datos generales" width="100%"/>
+				<mx:HBox horizontalAlign="center" horizontalCenter="0"  width="100%">
+					<mx:Form width="32%" >
+						<mx:FormItem label="Fecha:" fontWeight="bold">
+							<mx:Label text="{UtilsFecha.formatoFechaDDMMMYYYY(this._accion.fecha)}" fontWeight="normal"/>
+						</mx:FormItem>
+						<mx:FormItem   label="FER:" fontWeight="bold">
+							<mx:Label text="{UtilsFecha.formatoFechaDDMMMYYYY( this._accion.fechaEstimadaRealizacion) }"
+									  fontWeight="normal"/>
+						</mx:FormItem>
+					</mx:Form>
+					<mx:Form horizontalCenter="0" width="36%">
+						<mx:FormItem    label="Programó:" required="false" fontWeight="bold">
+							<mx:Label  text="{this._accion.nombreProgramo}" fontWeight="normal"/>
+						</mx:FormItem>
+						<mx:FormItem   label="Realización" fontWeight="bold">
+							<mx:Label text="{this._accion.nombreResponsable}" fontWeight="normal"/>
+						</mx:FormItem>
+					</mx:Form>
+					<mx:Form width="32%">
+						<mx:FormItem  label="Tipo:" fontWeight="bold">
+							<mx:Label text="{this._accion.tipo}" fontWeight="normal"/>
+						</mx:FormItem>
+						<!--<mx:FormItem    label="Eficacia Esperada:" fontWeight="bold">
+							<mx:Label text="{this._accion.eficacia + '%'}" fontWeight="normal"/>
+						</mx:FormItem>-->
+					</mx:Form>
+				</mx:HBox>
+				<!--<mx:HRule width="100%"/>-->
+				<otros:division width="100%"/>
+				<!--<mx:Label width="100%" text="Realización" fontSize="25" fontWeight="bold"/>-->
+				<label:labelSubtitulo width="100%" text="Realización"/>
+			</mx:VBox>
+			<acordeon:acordeonPqNet height="100%" width="100%" openDuration="250">
+				<!--height="{this.height - (this.barrabotones.height + this.lbfecha.height + this.vdatos.height + 50)}"-->
+				<mx:HBox width="100%" height="100%" label="INSTRUCCIONES">
+					<mx:TextArea width="100%" height="100%" text="{this._accion.descripcion}" editable="false"/>
+				</mx:HBox>
+				<mx:HBox width="100%" height="100%" label="COMENTARIOS ADICIONALES DE LA EJECUCIÓN">
+					<mx:TextArea editable="false" id="txtcomentarios" width="100%" height="100%" text="{this._accion.comentarios}"/>
+				</mx:HBox>
+			</acordeon:acordeonPqNet>
+			<mx:HBox width="100%" >
+				<mx:Spacer width="100%"/>
+				<mx:Label text="FR:" fontWeight="bold"/>
+				<mx:Label id="lbfecha" text="{ UtilsFecha.formatoFechaDDMMMYYYY( this._accion.fechaRealizacion) }" 
+						  textAlign="right" color="red"/>
+			</mx:HBox>
+			<mx:HBox width="100%" id="barrabotones">
+				<!--<mx:Button  label="Salir" click="salir()" width="80"/>-->
+				<s:Button styleName="botonNegroOld"  label="Salir" click="salir()" width="80"/>
+				<mx:HRule width="100%" strokeWidth="0"/>
+				<mx:HRule strokeWidth="0" width="100%"/>
+				<!--<mx:Button click="contenedorVerificacion.selectedIndex = 1;cambiaAccionReferencias('modificar')" id="btnfinalizar" label="Verificación"/>-->
+				<s:Button styleName="botonNegroOld" click="contenedorVerificacion.selectedIndex = 1;cambiaAccionReferencias('modificar')" id="btnfinalizar" label="Verificación"/>
+			</mx:HBox>
+		</mx:VBox>
+		
+		<mx:VBox width="100%">
+			<mx:VBox id="vdatos2"  width="100%">	
+				<mx:HBox fontSize="30" paddingTop="10" paddingBottom="10" width="100%" fontWeight="normal">
+					<!--<mx:Label width="50%" text="Verificación" fontWeight="bold" fontSize="40"/>-->
+					<label:labelTitulo_Otros width="50%" text="Verificación"/>
+					<mx:Label doubleClickEnabled="true" doubleClick="referencias('modificar')" width="50%" text="COMBO" textAlign="right"  visible="false"/>
+					<mx:HBox id="contenedor2" />
+				</mx:HBox>
+				<!--<mx:HRule width="100%"/>-->
+				<otros:division width="100%"/>
+				<!--<mx:Label width="100%" fontSize="25" text="Datos generales" fontWeight="bold"/>-->
+				<label:labelSubtitulo width="100%"  text="Datos generales"/>
+				<mx:HBox horizontalAlign="center" horizontalCenter="0" width="100%">
+					<mx:Form width="25%">
+						<mx:FormItem label="Fecha:" fontWeight="bold">
+							<mx:Label text="{ UtilsFecha.formatoFechaDDMMMYYYY( this._accion.fecha) }" fontWeight="normal"/>
+						</mx:FormItem>
+						<mx:FormItem label="ACC:" fontWeight="bold">
+							<mx:Label text="{this._accion.folio}" fontWeight="normal"/>
+						</mx:FormItem>
+					</mx:Form>
+					<mx:Form width="25%">
+						<mx:FormItem label="FER:" fontWeight="bold">
+							<mx:Label text="{ UtilsFecha.formatoFechaDDMMMYYYY( this._accion.fechaEstimadaRealizacion) }"
+									  fontWeight="normal"/>
+						</mx:FormItem>
+						<mx:FormItem label="FR:" fontWeight="bold">
+							<mx:Label text="{ UtilsFecha.formatoFechaDDMMMYYYY( this._accion.fechaRealizacion) }"
+									  fontWeight="normal" />
+						</mx:FormItem>
+					</mx:Form>
+					<mx:Form width="25%">
+						<mx:FormItem label="Programó:" fontWeight="bold">
+							<mx:Label text="{this._accion.nombreProgramo}" fontWeight="normal"/>
+						</mx:FormItem>
+						<mx:FormItem label="Realizó:" fontWeight="bold">
+							<mx:Label text="{this._usuario}" fontWeight="normal"/>
+						</mx:FormItem>
+					</mx:Form>
+					<mx:Form width="25%">
+						<mx:FormItem label="Tipo:" fontWeight="bold">
+							<mx:Label text="{this._accion.tipo}" fontWeight="normal"/>
+						</mx:FormItem>
+						<!--<mx:FormItem label="Eficacia Esperada:" fontWeight="bold">
+							<mx:Label text="{this._accion.eficacia + '%'}" fontWeight="normal"/>
+						</mx:FormItem>-->
+					</mx:Form>
+				</mx:HBox>
+				<!--<mx:HRule width="100%"/>-->
+				<otros:division width="100%"/>
+				<!--<mx:Label width="100%" text="Descripción" fontSize="25" fontWeight="bold"/>-->
+				<label:labelSubtitulo width="100%" text="Descripción" />
+			</mx:VBox>
+			<mx:TextArea id="txtdescripcionVerificacion" height="100%" text="{this._accion.descripcionVerificacion}" width="100%" />
+			<!--height="{this.height - (this.barrabotones2.height + this.area2.height + this.vdatos2.height + 50)}"-->
+			<mx:HBox id="area2" width="100%">
+				<mx:FormItem label="# de horas invertidas:" fontWeight="bold">
+					<mx:TextInput id="txthorasinvertidas" maxChars="3" restrict="\0-9\\" text="{this._accion.horasInvertidas.toString()}" fontWeight="normal"/>
+				</mx:FormItem>
+				<mx:Spacer width="100%" />
+				<!--<mx:FormItem label="Eficacia en Verificación:" fontWeight="bold">
+					<mx:ComboBox id="cbporcentaje" dataProvider="{this.datosPorcentaje}" prompt="NINGUNA"/>
+				</mx:FormItem>-->
+			</mx:HBox>
+			<mx:HBox width="100%" id="barrabotones2">
+				<!--<mx:Button label="Salir" click="salir()" width="80"/>-->
+				<s:Button styleName="botonNegroOld" label="Salir" click="salir()" width="80"/>
+				<!--<mx:Button label="Acción" click="contenedorVerificacion.selectedIndex = 0;cambiaAccionReferencias('consultar') " width="80"/>-->
+				<s:Button styleName="botonNegroOld" label="Acción" click="contenedorVerificacion.selectedIndex = 0;cambiaAccionReferencias('consultar') " width="80"/>
+				<mx:HRule width="100%" strokeWidth="0"/>
+				<!--<mx:Button label="Guardar" click="validar();" width="80"/>-->
+				<s:Button styleName="botonNegroOld" label="Guardar" click="validar();" width="80"/>
+				<mx:HRule width="100%" strokeWidth="0"/>
+				<!--<mx:Button enabled="false" click="alertEjecutar()" id="btnverificar" label="Finalizar" width="80"/>-->
+				<s:Button styleName="botonNegroOld" enabled="false" click="alertEjecutar()" id="btnverificar" label="Finalizar" width="80"/>
+			</mx:HBox>
+		</mx:VBox>
+	</mx:ViewStack>
+	
+</mx:Canvas>

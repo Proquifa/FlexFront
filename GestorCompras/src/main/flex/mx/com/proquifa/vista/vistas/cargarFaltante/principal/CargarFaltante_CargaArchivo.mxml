@@ -1,0 +1,612 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:input="skins.skin.textinput.*"
+		  creationComplete="init(event)" xmlns:checkBox="mx.com.proquifa.vista.vistas.skin.checkBox.*"
+		  >
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.cargarFaltante.EventoCargarFaltante;
+			import mx.controls.HTML;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			
+			[Bindable]
+			public var widModificado:int = 845;
+			[Bindable]
+			public var heiModificado:int = 632;
+			
+			[Bindable] private var tipoDocumento:String;
+			[Bindable] private var numeroActual:Number;
+			[Bindable] private var arregloImagenes:ArrayCollection;
+			private var numeroMax:Number;
+			public var esAdicional:Boolean;
+			
+			private var _currentDocumentoOrden:DocumentoOrdenDespacho;
+			
+			public var variacionW:int = 142.5;
+			public var variacionH:int = 158.75;
+			
+			public function cargarArchivos(event:MouseEvent):void
+			{
+				var docFilter:FileFilter;
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				docFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter])
+			}
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				trace("ARCHIVO CARGADO: " + event);
+				
+				var tmpAdicional:DocumentoOrdenDespacho = new DocumentoOrdenDespacho();
+				try
+				{
+					
+					currentDocumentoOrden.archivo = event.target.data;
+					currentDocumentoOrden.notas = lblNotas.text;
+					currentDocumentoOrden.nombreDocumento = event.target.name; 
+					currentDocumentoOrden.tituloDocumento = event.target.name;
+					
+					recibeUrlDocumento(file.url);
+					dispatchEvent(new Event("EnviarDocumentosConArchivosCargados",true));
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+				
+			}
+			
+			public function recibeUrlDocumento($rutaDocumentoAct:String):void
+			{
+				
+				documentoA.removeAllElements();
+				var imagenDisponible:Boolean = true;
+		
+				numeroActual = 0; 
+				arregloImagenes = new ArrayCollection();
+				
+				mostrarPDF($rutaDocumentoAct);
+			}
+			
+			public function definirtipoDocumento(value:String):void
+			{
+				chkCetificado.selected = false;
+				tipoDocumento = value;
+				if(value.toLowerCase() == "certificado"){
+					grupoCertificado.visible = grupoCertificado.includeInLayout = true;
+					grupoCartaUso.visible = grupoCartaUso.includeInLayout = false;
+					grupoAdicionales.visible = grupoAdicionales.includeInLayout = false;
+					grpCertificado.visible = grpCertificado.includeInLayout = true;
+					if(currentDocumentoOrden.disponibilidad){
+						chkCetificado.selected = true;
+						grpTodo.enabled = false;
+					}
+					else{
+						chkCetificado.selected = false;
+						grpTodo.enabled = true;
+					}
+					/*grpNotas.visible = grpNotas.includeInLayout = false;*/
+					grpNotas.visible =  false;
+					editar.visible = editar.includeInLayout = false;
+					imgCargar.addEventListener(MouseEvent.CLICK,cargarArchivos);
+					imgCargar.buttonMode = true;
+				}
+				else if(value.toLowerCase() == "cartauso"){
+					grupoCertificado.visible = grupoCertificado.includeInLayout = false;
+					grupoCartaUso.visible = grupoCartaUso.includeInLayout = true;
+					grupoAdicionales.visible = grupoAdicionales.includeInLayout = false;
+					grpCertificado.visible = grpCertificado.includeInLayout = false;
+					grpTodo.enabled = true;
+					grpNotas.visible = grpNotas.includeInLayout = false;
+					editar.visible = editar.includeInLayout = true;
+					imgCargar.removeEventListener(MouseEvent.CLICK,cargarArchivos);
+					imgCargar.buttonMode = false;
+				}
+				else if(value.toLowerCase() == "adicional"){
+					grupoCertificado.visible = grupoCertificado.includeInLayout = false;
+					grupoCartaUso.visible = grupoCartaUso.includeInLayout = false;
+					grupoAdicionales.visible = grupoAdicionales.includeInLayout = true;
+					grpCertificado.visible = grpCertificado.includeInLayout = false;
+					grpTodo.enabled = true;
+					grpNotas.visible = grpNotas.includeInLayout = true;
+					editar.visible = editar.includeInLayout = true;
+					imgCargar.addEventListener(MouseEvent.CLICK,cargarArchivos);
+					imgCargar.buttonMode = true;
+				}
+			}
+			
+			public function decrementaZoom():void
+			{
+				if(widModificado > 300 && heiModificado > 300){
+					heiModificado = heiModificado - variacionH;
+					widModificado = widModificado - variacionW;
+				}
+			}
+			public function incrementaZoom():void
+			{
+				if(widModificado <= 1160 && heiModificado <= 1280 ){
+					widModificado = widModificado + variacionW;
+					heiModificado = heiModificado + variacionH;
+				}
+			}
+			protected function scrollId_mouseWheelHandler(event:MouseEvent):void
+			{
+				event.delta = event.delta > 0 ? .5 : -1;
+			}
+			
+			private var file:File;
+			
+			protected function aumentarHoja():void
+			{
+				if(numeroActual < numeroMax - 1)
+				{
+					numeroActual++;
+					var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + arregloImagenes[numeroActual]);
+					var img:Loader = new Loader();
+					
+					img.load(url);				
+					img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);	
+				}
+			}
+			protected function restarHoja():void
+			{
+				if(numeroActual > 0)
+				{
+					numeroActual--;
+					var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + arregloImagenes[numeroActual]);
+					var img:Loader = new Loader();
+					
+					img.load(url);				
+					img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);	
+				}
+			}
+			
+			[Bindable]
+			public function get currentDocumentoOrden():DocumentoOrdenDespacho
+			{
+				return _currentDocumentoOrden;
+			}
+			
+			public function set currentDocumentoOrden(value:DocumentoOrdenDespacho):void
+			{
+				if(value != null){
+					_currentDocumentoOrden = value;
+					definirtipoDocumento(_currentDocumentoOrden.tipo);
+					currentState = "normal";
+				
+				}
+			}
+			
+			public function loaded(e:Event):void
+			{
+				var bitmap:Bitmap = e.target.content;
+				/*imagenVisualizaId.source = bitmap;*/
+				e.target.removeEventListener(Event.COMPLETE,loaded);
+				grupCargar.visible= grupCargar.includeInLayout = false;
+				grupImagen.visible= grupImagen.includeInLayout = true;
+			}
+			
+			
+			public function changeState($tipo:String,$accion:String=""):void
+			{
+				if($tipo == 'edit'){
+					currentState = "edit"
+				}
+				else if($tipo == 'normal'){
+					currentState = "normal"
+				}
+				
+				if($accion == "aceptar"){
+					currentDocumentoOrden.notas = txtNotas.text;
+					currentDocumentoOrden.caracteristicasFisicas = txtCaracteristicas.text;
+					currentDocumentoOrden.composicion = txtComposicion.text;
+					currentDocumentoOrden.formulaQuimica = txtFormula.text;
+					currentDocumentoOrden.peligrosidad = txtPeligrosidad.text;
+					currentDocumentoOrden.nombreDocumento = txtTitulo.text;
+					dispatchEvent(new Event("guardarCambiosInfo"));
+				}
+				else if($accion == "cancelar"){
+					txtNotas.text = currentDocumentoOrden.notas;
+					txtCaracteristicas.text = currentDocumentoOrden.caracteristicasFisicas;
+					txtComposicion.text = currentDocumentoOrden.composicion;
+					txtFormula.text = currentDocumentoOrden.formulaQuimica;
+					txtPeligrosidad.text = currentDocumentoOrden.peligrosidad;
+					txtTitulo.text = currentDocumentoOrden.nombreDocumento;
+				}
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				currentState = "unselected";
+			}
+			
+			public function set recibeDatosVisualizadorPDF($rutaImagen:ArrayCollection):void
+			{
+				
+				
+		/*		if ($rutaImagen == null || $rutaImagen.length == 0) 
+				{
+					grupCargar.visible= grupCargar.includeInLayout = true;
+					grupImagen.visible= grupImagen.includeInLayout = false;
+					return;
+				}
+				
+				numeroActual = 0; 
+				arregloImagenes = new ArrayCollection();
+				
+				if($rutaImagen.length > 0)
+				{
+					if($rutaImagen.length > 1)
+					{
+						imgHojaMas.visible = imgHojaMas.includeInLayout = true;
+						imgHojaMenos.visible = imgHojaMenos.includeInLayout = true;
+					}
+					else
+					{
+						imgHojaMas.visible = imgHojaMas.includeInLayout = false;
+						imgHojaMenos.visible = imgHojaMenos.includeInLayout = false;
+					}
+					
+					numeroMax = $rutaImagen.length;
+					arregloImagenes = ObjectUtil.copy($rutaImagen) as ArrayCollection;
+				}
+				else
+				{
+					imgHojaMas.visible = imgHojaMas.includeInLayout = false;
+					imgHojaMenos.visible = imgHojaMenos.includeInLayout = false;
+				}
+				
+				
+				var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + $rutaImagen[0]);
+				var img:Loader = new Loader();
+				
+				img.load(url);				
+				img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);	*/		
+			}
+			public function recibeDocumentosCargados(value:ArrayCollection):void
+			{
+				if(value.length > 0){
+					return ;
+				}
+				
+				var evnt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTIENE_IMAGEN);
+				evnt.documentoDespacho = currentDocumentoOrden;
+				evnt.paraImprimir = false;
+				dispatchEvent(evnt);
+				
+			}
+			public function cargarImagen():void
+			{
+				
+				var arreglo:Array;
+				var urlDocumentoAct:String = "";
+				arreglo = _currentDocumentoOrden.rutaAcceso.split('/');
+				
+				if(_currentDocumentoOrden.tipo == "CartaUso")
+					urlDocumentoAct =  RutasPdF.GENERAL_RUTA + arreglo[arreglo.length-4]+ "/"+arreglo[arreglo.length-3]+ "/"+arreglo[arreglo.length-2] + "/"+arreglo[arreglo.length-1];
+				else
+					urlDocumentoAct = RutasPdF.GENERAL_RUTA + arreglo[arreglo.length-3]+ "/"+arreglo[arreglo.length-2]+ "/"+arreglo[arreglo.length-1];
+				
+				recibeUrlDocumento(urlDocumentoAct);
+				/*var evnt:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.OBTIENE_IMAGEN_CARGAR_FALTANTE);
+				evnt.documentoDespacho = _currentDocumentoOrden;
+				evnt.paraImprimir = false;
+				dispatchEvent(evnt);*/
+			}
+			
+			protected function guardarDisponibilidad(event:Event):void
+			{
+				dispatchEvent(new Event("noDisponible"));
+			}
+			
+			private var ErrorPDF:String;
+			private var pdf:HTMLLoader;
+			
+			private function terminoCrear(event:FlexEvent):void{
+				pdf.width = documentoA.width;
+				pdf.height = documentoA.height;
+			}
+			
+			private function mostrarPDF(url:String):void{
+				
+				
+				if(HTMLLoader.pdfCapability == HTMLPDFCapability.STATUS_OK)  
+				{ 
+					grupImagen.visible = grupImagen.includeInLayout = true;
+					grupCargar.visible = grupCargar.includeInLayout = false;
+					trace("PDF content can be displayed"); 
+					var request:URLRequest = new URLRequest(url); 
+					pdf = new HTMLLoader();
+					pdf.load(request);
+					
+					documentoA.removeEventListener(FlexEvent.UPDATE_COMPLETE, terminoCrear);
+					documentoA.addEventListener(FlexEvent.UPDATE_COMPLETE, terminoCrear);
+					var verDoc:HTML = new HTML; 
+					verDoc.percentHeight = 100;
+					verDoc.percentWidth = 100;
+					verDoc.addChild(pdf);
+					documentoA.addElement(verDoc);
+					/*imagenVisualizaId.addChild(pdf);*/
+				} 
+				else  
+				{ 
+					
+					switch(HTMLLoader.pdfCapability)
+					{
+						case 3204:
+						{
+							ErrorPDF = "Reinstalar Acrobat Reader";
+							break;
+						}
+						case 3201:
+						{
+							ErrorPDF = "Instalar Acrobat Reader";
+							break;
+						}
+						case 3202:
+						{
+							ErrorPDF = "Actualizar Acrobat Reader";
+							break;
+						}
+						case 3203:
+						{
+							ErrorPDF = "Actualizar Acrobat Reader";
+							break;
+						}
+							
+						default:
+						{
+							break;
+						}
+					}
+					
+					//alertaSingleton.show(ErrorPDF); //Se comento por que ya no es funcional el adobe para los PDF's
+					
+				}
+				
+				/*INICIO:SE AGREGO NUEVO EL LINK PARA PROBAR LA VISUALIZACION DEL PDF 22/02/2023*/
+				var _url:URLRequest = new URLRequest();
+				_url.url = url;
+				navigateToURL(_url);
+				/*FIN:SE AGREGO NUEVO EL LINK PARA PROBAR LA VISUALIZACION DEL PDF 22/02/2023*/
+				
+			}
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="edit" />
+		<s:State name="unselected" />
+	</s:states>
+	
+	<s:HGroup id="grpCertificado" width="100%" height="10%" maxHeight="30" depth="5" verticalAlign="middle">
+		<!--<s:CheckBox id="chkCetificado" change="guardarDisponibilidad(event)"/>-->
+		<checkBox:checkPalomaVerde id="chkCetificado" change="guardarDisponibilidad(event)" width="100%" height="100%" maxHeight="30" maxWidth="30"/>
+		<s:Label styleName="tab_texto_14_Helvetica" text="Certificado NO disponible" color="#404040" fontSize="25"/>
+	</s:HGroup>
+	<s:VGroup width="100%" height="100%" gap="0" id="grpTodo">
+		
+		<s:VGroup width="100%" height="75%" horizontalAlign="center" verticalAlign="middle">
+			<!--<s:VGroup width="100%" height="100%" id="grpTodo">
+			
+			</s:VGroup>  -->
+			
+			<s:Group width="100%" height="100%" >
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="#f3f3f4" />
+					</s:fill>
+				</s:Rect>
+				<s:VGroup id="grupCargar" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" visible="true" includeInLayout="true" >
+					<mx:Image id="imgCargar" source="{catalogoIconosBotones.getInstance().cargar_pedimento}" horizontalCenter="0" verticalCenter="0" 
+							  buttonMode="true"/>
+					<s:Spacer height="5%" maxHeight="10"/>
+					<s:Label styleName="tab_texto_14_Helvetica" text="Cargar Documento" color="#858687" fontSize="25"/>
+				</s:VGroup>
+				
+				
+				
+				<s:VGroup id="grupImagen" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" visible="false" includeInLayout="false">					
+					
+					<s:VGroup width="100%" height="100%" id="grupoImagenVisualizador" verticalAlign="middle" horizontalAlign="center" >
+						
+						<s:Group id="grpContenedor" width="80%" height="80%"   verticalCenter="0" horizontalCenter="0" >
+							
+							<s:Scroller width="100%" height="100%" maxWidth="800" maxHeight="932" id="scrollId2" mouseWheel="scrollId_mouseWheelHandler(event)">
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" id="documentoA" >	
+									
+									
+								</s:VGroup>  					
+							</s:Scroller>
+						</s:Group>  
+					</s:VGroup>  
+					
+					<s:Group width="100%" height="5%">
+						<pqNet:botonPqNetLargo  id="btnRecargar"  width="35" right="20" icono="recargarImg" 
+												colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" click="cargarArchivos(event)"/>
+					</s:Group>
+				</s:VGroup>
+				
+<!--				<s:VGroup id="grupImagen" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" visible="false" includeInLayout="false">
+					
+					
+					<s:Scroller width="100%" height="100%" maxWidth="845" maxHeight="743" id="scrollId" mouseWheel="scrollId_mouseWheelHandler(event)">
+						<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" >						
+							<s:Image id="imagenVisualizaId" width="{widModificado}" height="{heiModificado}" horizontalAlign="center" verticalAlign="middle"/>
+						</s:VGroup>  					
+					</s:Scroller>
+					
+					<s:Group width="100%" height="5%">
+						<s:VGroup width="100%" height="100%" paddingBottom="10">
+							<s:HGroup gap="0" width="100%" horizontalAlign="center" verticalAlign="middle">
+								<s:Group click="restarHoja()">
+									<mx:Image id="imgHojaMenos" source="{catalogoIconosBotones.getInstance().pagina_anterior}"  smoothBitmapContent="true" visible="false"/>
+								</s:Group>
+								<s:Spacer width="10" />
+								<s:Label styleName="Texto_12" text="{' '+(numeroActual + 1).toString() + ' / ' + arregloImagenes.length.toString()+' '}" paddingTop="0"/>
+								<s:Spacer width="10" />
+								<s:Group click="aumentarHoja()">
+									<mx:Image id="imgHojaMas" source="{catalogoIconosBotones.getInstance().pagina_siguiente}"  smoothBitmapContent="true" visible="false"/>
+								</s:Group>
+							</s:HGroup>
+							
+							<s:HGroup gap="5" width="100%" horizontalAlign="center">
+								<s:Group click="decrementaZoom()">
+									<mx:Image id="imgZoomMenos" source="{catalogoIconosBotones.getInstance().zoom_menos}"  smoothBitmapContent="true" />
+								</s:Group>
+								<s:Group click="incrementaZoom()">
+									<mx:Image id="imgZoomMas" source="{catalogoIconosBotones.getInstance().zoom_mas}"  smoothBitmapContent="true"/>
+								</s:Group>
+							</s:HGroup>
+						</s:VGroup>  
+						
+						<pqNet:botonPqNetLargo  id="btnRecargar"  width="35" right="20" icono="recargarImg" 
+												colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" click="cargarArchivos(event)"/>
+					</s:Group>
+				</s:VGroup>-->
+				
+			</s:Group>
+			
+		</s:VGroup>
+		<s:Spacer height="30" />
+		<s:HGroup width="100%" height="25%" >
+			<s:VGroup id="grupoCertificado" width="50%" height="100%" verticalAlign="top" horizontalAlign="center" gap="20" 
+					  visible="true" includeInLayout="true">
+				<s:VGroup width="100%" height="100%" verticalAlign="middle">
+					<s:Label text="Producto" styleName="tab_texto_14_Helvetica" width="100%"/>
+					<s:Label id="lblProducto" text="{currentDocumentoOrden.nombreProducto}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18"/>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle">
+					<s:Label text="Catálogo" styleName="tab_texto_14_Helvetica" width="100%"/>
+					<s:Label id="lblCatalogo" text="{currentDocumentoOrden.codigoProducto}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18"/>
+				</s:VGroup>  
+				<s:VGroup width="100%" height="100%" verticalAlign="middle">
+					<s:Label text="Marca" styleName="tab_texto_14_Helvetica" width="100%"/>
+					<s:Label id="lblMarca" text="{currentDocumentoOrden.fabricaProducto}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18"/>
+				</s:VGroup>
+			</s:VGroup> 
+			<s:VGroup id="grupoCartaUso" width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="20" 
+					  visible="false" includeInLayout="false">
+				<s:VGroup width="100%" height="100%" >
+					<s:HGroup width="100%" height="100%" maxHeight="70">
+						<s:Label text="Producto: " styleName="tab_texto_14_Helvetica" />
+						<s:Label text="{currentDocumentoOrden.nombreProducto}" styleName="tab_texto_14_Helvetica" fontWeight="bold" fontSize="18" maxDisplayedLines="3" width="100%" textAlign="left"/>
+					</s:HGroup>  
+					<s:HGroup width="100%" height="100%" >
+						<s:VGroup width="100%" height="100%" >
+							<s:Label text="Características físicas:" styleName="tab_texto_14_Helvetica" width="100%"/>									
+							<s:Label id="lblFisico" text="{currentDocumentoOrden.caracteristicasFisicas == 'null' ? '':currentDocumentoOrden.caracteristicasFisicas}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18" includeIn="normal"/>
+							<s:TextArea id="txtCaracteristicas" width="100%" height="100%" fontFamily="Helvetica" fontWeight="bold" includeIn="edit" 
+										text="{currentDocumentoOrden.caracteristicasFisicas == 'null' ? '':currentDocumentoOrden.caracteristicasFisicas}"
+										skinClass="skins.skin.textarea.TextArea2D_azulSkin" styleName="tab_texto_14_Helvetica"/>
+						</s:VGroup>
+						<s:VGroup width="100%" height="100%"  >
+							<s:Label text="Fórmula química:" styleName="tab_texto_14_Helvetica" width="100%"/>									
+							<s:Label id="lblFormula" text="{currentDocumentoOrden.formulaQuimica == 'null' ? '':currentDocumentoOrden.formulaQuimica}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18" includeIn="normal"/>
+							<s:TextArea id="txtFormula" width="100%" height="100%" fontFamily="Helvetica" fontWeight="bold" includeIn="edit" 
+										text="{currentDocumentoOrden.formulaQuimica == 'null' ? '':currentDocumentoOrden.formulaQuimica}"
+										skinClass="skins.skin.textarea.TextArea2D_azulSkin" styleName="tab_texto_14_Helvetica"/>
+						</s:VGroup>
+					</s:HGroup> 
+					<s:HGroup width="100%" height="100%" >
+						<s:VGroup width="100%" height="100%" >
+							<s:Label text="Composición:" styleName="tab_texto_14_Helvetica" width="100%"/>									
+							<s:Label id="lblComposicion" text="{currentDocumentoOrden.composicion == 'null' ? '':currentDocumentoOrden.composicion}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18" includeIn="normal"/>
+							<s:TextArea id="txtComposicion" width="100%" height="100%" fontFamily="Helvetica" fontWeight="bold" includeIn="edit" 
+										text="{currentDocumentoOrden.composicion == 'null' ? '':currentDocumentoOrden.composicion}"
+										skinClass="skins.skin.textarea.TextArea2D_azulSkin" styleName="tab_texto_14_Helvetica"/>
+						</s:VGroup>
+						<s:VGroup width="100%" height="100%" >
+							<s:Label text="Peligrosidad:" styleName="tab_texto_14_Helvetica" width="100%"/>									
+							<s:Label id="lblPeligrosidad" text="{currentDocumentoOrden.peligrosidad == 'null' ? '':currentDocumentoOrden.peligrosidad}" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18" includeIn="normal"/>
+							<s:TextArea id="txtPeligrosidad" width="100%" height="100%" fontFamily="Helvetica" fontWeight="bold" includeIn="edit" 
+										text="{currentDocumentoOrden.peligrosidad == 'null' ? '':currentDocumentoOrden.peligrosidad}"
+										skinClass="skins.skin.textarea.TextArea2D_azulSkin" styleName="tab_texto_14_Helvetica"/>
+						</s:VGroup>  
+					</s:HGroup>  
+					
+				</s:VGroup>  
+				
+				
+			
+			</s:VGroup>
+			<s:VGroup id="grupoAdicionales" width="50%" height="100%" verticalAlign="top" horizontalAlign="center" gap="20"
+					  visible="false" includeInLayout="false">
+				<s:VGroup width="100%" verticalAlign="middle">
+					<s:Label text="Titulo del archivo" styleName="tab_texto_14_Helvetica" width="100%" />
+					<s:Label id="lblTitulo" text="{currentDocumentoOrden.nombreDocumento}" styleName="tab_texto_14_Helvetica" width="100%" includeIn="normal" fontSize="18" fontWeight="bold"/>
+					<s:TextInput id="txtTitulo" width="100%" height="100%" fontFamily="Helvetica" text="{currentDocumentoOrden.nombreDocumento}"  maxWidth="242" maxHeight="34" includeIn="edit"
+								 skinClass="skins.skin.textinput.skinTextInput2D" styleName="tab_texto_14_Helvetica"/>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle">
+					<!--<s:Label text="Usuario que sube archivo" styleName="tab_texto_14_Helvetica" width="100%"/>
+					<s:Label id="lblUsuario" text="Prodcuto" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18"/>-->
+				</s:VGroup>  
+				<s:VGroup width="100%"  verticalAlign="middle">
+					<s:Label text="Fecha" styleName="tab_texto_14_Helvetica" width="100%"/>
+					<s:Label id="lblFecha" styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" fontSize="18" text="{currentDocumentoOrden.fechaString}"/>
+				</s:VGroup>  
+			</s:VGroup>
+			<s:VGroup width="50%" height="100%" gap="20" verticalAlign="top" id="grpNotas">
+				<s:VGroup width="100%" height="100%" verticalAlign="middle">
+					<s:Label text="Notas" styleName="tab_texto_14_Helvetica" />
+					<s:Label styleName="tab_texto_14_Helvetica" height="100%" id="lblNotas" width="100%" maxDisplayedLines="10"  color="#424242"
+							 text="{currentDocumentoOrden.notas == 'null' ? '':currentDocumentoOrden.notas}"
+							 fontWeight="bold" includeIn="normal"/>
+					<s:TextArea id="txtNotas" width="100%" height="100%" fontFamily="Helvetica" fontWeight="bold" includeIn="edit" 
+								text="{currentDocumentoOrden.notas == 'null' ? '':currentDocumentoOrden.notas}"
+								skinClass="skins.skin.textarea.TextArea2D_azulSkin" styleName="tab_texto_14_Helvetica"/>
+				</s:VGroup>
+			</s:VGroup>  
+		</s:HGroup>
+		<s:HGroup width="100%" height="10%" maxHeight="80" paddingBottom="10" verticalAlign="bottom" horizontalAlign="left">
+			<s:HGroup width="100%" height="100%" verticalAlign="bottom" includeIn="edit">
+				<pqNet:botonPqNetLargo  id="cancelar"  width="170" height="30" label="CANCELAR"
+										colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" includeIn="edit" click="changeState('normal','cancelar')"/>
+			</s:HGroup>  
+			<s:HGroup width="100%" height="100%" verticalAlign="bottom" includeIn="normal" horizontalAlign="right">
+				<pqNet:botonPqNetLargo  id="editar"  width="170" height="30" label="EDITAR"
+										colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" includeIn="normal" click="changeState('edit')"/>
+			</s:HGroup>  
+			
+			<s:HGroup width="100%" height="100%" verticalAlign="bottom" includeIn="edit" horizontalAlign="right">
+				<pqNet:botonPqNetLargo  id="guardar"  width="170" height="30" label="ACEPTAR"
+										colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" includeIn="edit" click="changeState('normal','aceptar')"/>
+			</s:HGroup>  
+			
+		</s:HGroup>  
+	</s:VGroup> 
+</s:VGroup>

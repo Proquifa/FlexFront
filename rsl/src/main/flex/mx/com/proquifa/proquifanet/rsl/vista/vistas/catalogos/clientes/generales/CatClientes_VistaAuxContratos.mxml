@@ -1,0 +1,837 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*" gap="0"
+		  width="100%" height="100%" xmlns:shaders="skins.skin.shaders.*" xmlns:textinput="skins.skin.textinput.*" 
+		  resize="resizeHandler(event)" xmlns:botonesToggle="skins.botonesToggle.*"
+		  creationComplete="group1_creationCompleteHandler(event)" xmlns:chekbox="skins.skin.chekbox.*" xmlns:combos="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" xmlns:otros="skins.otros.*"
+		  >
+	
+	<fx:Declarations>
+		<s:NumberValidator id="validatorPorcentajeNegativo"
+						   allowNegative="true" 
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="6"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeSymbolError="El simbolo usado para el número negativo, no está colocado en el lugar correcto."
+						   />
+		
+		<s:NumberValidator id="validarTextInputTiempoEntrega"
+						   allowNegative="false" 
+						   domain="int" 
+						   lessThanMinError="El número debe ser mayor a cero."
+						   minValue="0"
+						   required="false" 
+						   parseError="No es un número valido."
+						   negativeError="No puede ser negativo."
+						   notAnIntegerError="Debe de ser un número entero."
+						   />
+		
+		<s:NumberValidator id="validarTexMaximoMeses"
+						   allowNegative="false" 
+						   domain="int" 
+						   lessThanMinError="El número debe ser mayor a cero."
+						   minValue="0"
+						   maxValue="12"
+						   greaterThanMaxError ="El número debe estar entre 1 y 12."
+						   required="false" 
+						   parseError="No es un número valido."
+						   negativeError="No puede ser negativo."
+						   notAnIntegerError="Debe de ser un número entero."
+						   />	
+	</fx:Declarations>		
+	
+	<fx:Metadata>
+		[Event(name="actualizarDataClasificacionyCosto", type="mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientesContratos")]
+		[Event(name="cerrarVistaAuxContratos", type="mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientesContratos")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientesContratos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.TiempoEntrega;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DatosTiempoEntrega;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.IVisualElement;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.components.CheckBox;
+			import spark.components.TextInput;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable] public var  universo:ArrayCollection;
+			[Bindable] public var  nombreProveedorSeleccionado:String;
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFontLittle:Number;
+			[Bindable] public var sizeFontBig:Number;
+			
+			private var _arrayLocalTE:TiempoEntrega;
+			private var _arrayGuadalajaraTE:TiempoEntrega;
+			private var _arrayForaneolTE:TiempoEntrega;
+			private var _arrayCentroATE:TiempoEntrega;
+			private var _arraySudaTE:TiempoEntrega;
+			private var _arrayRestoMundoTE:TiempoEntrega;
+			[Bindable] private var _configuracion:ConfiguracionPrecioProducto; 
+			private var _respaldoConfiguracion:ConfiguracionPrecioProducto;
+			private var _encuentraRuta:Boolean = false;
+			private var clickeado:String = "";
+			[Bindable] private var _clickeado:String = "";
+			[Bindable] private var currentProveedor:Proveedor;
+			[Bindable] private var datosTE_NR:DatosTiempoEntrega;
+			[Bindable] private var datosTE_ReqNoTiene:DatosTiempoEntrega;
+			[Bindable] private var datosTE_ReqSiTiene:DatosTiempoEntrega;
+			[Bindable]	private var _dias:ArrayCollection = new ArrayCollection([{valor:"DIAS HABILES",llave:0,valor2:"días hábiles"},
+				{valor:"MESES",llave:1,valor2:"meses"}]);
+			
+			public function cargarInformacionSeccionPreEntrega( $dato:ConfiguracionPrecioProducto, $nivel:String, $proveedor:Proveedor):void
+			{
+				
+				txtFactor.text='';
+				txtFactor.errorString='';
+				txtCostoFijo.text='';
+				txtCostoFijo.errorString='';
+				
+				
+				
+				if($proveedor.isProveedorNacional)
+				{
+					
+					grpTiempoEReqPermiso.visible = grpTiempoEReqPermiso.includeInLayout = false;
+					vivisionEntrega.visible = false;
+				}
+				else
+				{
+					vivisionEntrega.visible = true;
+					grpTiempoEReqPermiso.visible = grpTiempoEReqPermiso.includeInLayout = true;
+				}
+				
+				
+				_configuracion = ObjectUtil.copy( $dato ) as ConfiguracionPrecioProducto;
+				_respaldoConfiguracion = ObjectUtil.copy( $dato ) as ConfiguracionPrecioProducto;
+				
+				
+				if (_configuracion.costoFactorProducto != null) 
+				{
+					txtFactor.text = _configuracion.costoFactorProducto.factorCliente.toString(); 
+					txtCostoFijo.text = _configuracion.costoFactorProducto.factorCostoFijo == -1 ? "0":_configuracion.costoFactorProducto.factorCostoFijo.toString();
+				}
+				
+				
+					seleccionaItemsCombos();   
+				
+				
+			}
+			
+			private function seleccionaItemsCombos():void
+			{
+				
+				if(_configuracion.rutaCliente)
+				{
+					_clickeado = StringFunciones.noAccent(_configuracion.rutaCliente);
+					_encuentraRuta = true;
+				}
+				else
+				{
+					_encuentraRuta = false;
+				}
+				
+				setTiemposEntregas();
+				
+				_arrayCentroATE.ruta = "Centroamerica";
+				_arrayForaneolTE.ruta = "Foraneo";
+				_arrayGuadalajaraTE.ruta = "Guadalajara";
+				_arrayLocalTE.ruta = "Local";
+				_arrayRestoMundoTE.ruta = "Resto del mundo";
+				_arraySudaTE.ruta = "Sudamerica";
+				
+			}
+			
+			private function setTiemposEntregas():void
+			{
+				_arrayCentroATE = new TiempoEntrega();
+				_arrayForaneolTE = new TiempoEntrega();
+				_arrayGuadalajaraTE = new TiempoEntrega();
+				_arrayLocalTE = new TiempoEntrega();
+				_arrayRestoMundoTE = new TiempoEntrega();
+				_arraySudaTE = new TiempoEntrega();
+				
+				if (_encuentraRuta && _configuracion.tiempoEntregaRuta  && _configuracion.tiempoEntregaRuta.length > 0)
+				{
+					for (var r:Number=0; r< _configuracion.tiempoEntregaRuta.length; r++)
+					{
+						var current:TiempoEntrega = _configuracion.tiempoEntregaRuta[r] as TiempoEntrega;
+						if (current.ruta)
+						{
+							switch(StringFunciones.noAccent(current.ruta))
+							{
+								case 'Local':
+								{
+									_arrayLocalTE = current;
+									break;
+								}
+								case 'Guadalajara':
+								{
+									_arrayGuadalajaraTE = current;
+									break;
+								}
+								case 'Foraneo':
+								{
+									_arrayForaneolTE = current;
+									break;
+								}
+								case 'Centroamerica':
+								{
+									_arrayCentroATE = current;
+									break;
+								}
+								case 'Sudamerica':
+								{
+									_arraySudaTE = current;
+									break;
+								}
+								case 'Resto del mundo':
+								{
+									_arrayRestoMundoTE = current;
+									break;
+								}
+									
+								default:
+								{
+									break;
+								}
+							}
+						}
+					}
+				}	
+				aplicarTiempoEntrega(); 
+			}
+			
+			
+			private var _currentIndex:Number = NaN;
+			private function aplicarTiempoEntrega():void
+			{
+				var tiempoEntregaSelected:TiempoEntrega = new TiempoEntrega(); 
+				switch(_clickeado)
+				{
+					case "Local":
+					{
+						tiempoEntregaSelected = _arrayLocalTE;
+						_currentIndex =0;
+						break;
+					}
+					case "Guadalajara":
+					{
+						tiempoEntregaSelected = _arrayGuadalajaraTE; 
+						_currentIndex =1;
+						break;
+					}
+					case "Foraneo":
+					{
+						tiempoEntregaSelected = _arrayForaneolTE; 
+						_currentIndex =2;
+						break;
+					}
+					case "Centroamerica":
+					{
+						tiempoEntregaSelected = _arrayCentroATE; 
+						_currentIndex =3;
+						break;
+					}
+					case "Sudamerica":
+					{
+						tiempoEntregaSelected = _arraySudaTE; 
+						_currentIndex =4;
+						
+						break;
+					}
+					case "Resto del mundo":
+					{
+						tiempoEntregaSelected = _arrayRestoMundoTE; 
+						
+						break;
+					}
+						
+					default:
+					{
+						tiempoEntregaSelected = new TiempoEntrega();
+						_currentIndex =5;
+						break;
+					}
+				}
+				
+				if (tiempoEntregaSelected)
+				{
+					
+					recibeTiempoEntrega(tiempoEntregaSelected);
+					
+				}
+				
+			}
+			
+			public function recibeTiempoEntrega($tiempoEn:TiempoEntrega):void
+			{
+				datosTE_NR = new DatosTiempoEntrega();
+				datosTE_ReqNoTiene = new DatosTiempoEntrega()
+				datosTE_ReqSiTiene = new DatosTiempoEntrega();
+				
+				if ($tiempoEn.requierePNo)
+					datosTE_NR = UtilsFecha.obtenerDias($tiempoEn.requierePNo);
+				
+				
+				if ($tiempoEn.requierePNoExiste)
+					datosTE_ReqNoTiene = UtilsFecha.obtenerDias($tiempoEn.requierePNoExiste);
+				
+				
+				if ($tiempoEn.requierePExiste)
+					datosTE_ReqSiTiene = UtilsFecha.obtenerDias($tiempoEn.requierePExiste);
+			}
+			
+			private var _arrButton:ArrayCollection = new ArrayCollection( [  { valor:' PRECIO', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:16, icono:'precioChico' }, 
+				{ valor:' TIEMPO ENTREGA', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:16, icono:'tiempoEntrega' },
+			] );
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				/*botoneraBarra.dataProvider = _arrButton;*/
+				cmbNRPTiempoEntrega.dataProvider = _dias;
+				cmbTENoTiene.dataProvider = _dias;
+				cmbTESiTiene.dataProvider = _dias;
+			}
+			
+			
+			
+			public function reviceInformacion($datos:ArrayCollection):void
+			{
+				
+			}
+			
+			protected function resizeHandler(event:ResizeEvent):void
+			{
+				sizeFontBig = (22 / 1370) * (unscaledWidth);
+				
+				sizeFont = (17 / 1370) * (unscaledWidth);
+				sizeFont = sizeFont > 17 ? 17:sizeFont;
+				sizeFont = sizeFont < 11 ? 11:sizeFont;
+			
+				sizeFontLittle = (17 / 1370) * (unscaledWidth);
+				sizeFontLittle = sizeFontLittle > 17 ? 17:sizeFontLittle;
+				sizeFontLittle = sizeFontLittle < 9 ? 9:sizeFontLittle;
+				
+			
+				setTimeout(cambiarResize,300);
+			}
+			
+			private function cambiarResize():void
+			{
+				
+			}
+			
+			
+			
+			
+			protected function cancelarCambios(event:MouseEvent):void
+			{
+				var evtCE:EventoCatClientesContratos = new EventoCatClientesContratos(EventoCatClientesContratos.CERRAR_VISTA_AUX_CONTRATOS);
+				dispatchEvent(evtCE);
+				
+				
+			}
+			
+			private var indiceSeleccionadoAnteriorBotonera:int = 0;
+			/*protected function botoneraBarra_clickHandler():void
+			{
+				
+		
+				grpEntrega.visible = grpEntrega.includeInLayout = false;
+				grpPrecio.visible = grpPrecio.includeInLayout = false;
+				
+				
+				if(botoneraBarra.selectedIndex == 1)
+				{
+					
+					grpEntrega.visible = grpEntrega.includeInLayout = true;
+				}
+				else{
+					grpPrecio.visible = grpPrecio.includeInLayout = true;
+					
+					
+				}
+			}*/
+			
+			protected function validarTiempoEntrega($chekbox:IVisualElement ,$campo0:IVisualElement,$campo1:IVisualElement,$campo2:IVisualElement,$combo:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				var conteoErrores:Array = new Array();
+				var currentElement:TextInput;
+				var currentElement1:TextInput;
+				
+				if ($chekbox is CheckBox && $campo0 is TextInput && $campo1 is TextInput && $campo2 is TextInput && $combo is ComboCatalogos )
+				{
+					($campo0 as TextInput).errorString = '';
+					($campo1 as TextInput).errorString = '';
+					($campo2 as TextInput).errorString = '';
+					if (($chekbox as CheckBox).selected)
+					{
+						if ( parseInt( ($campo1 as TextInput).text) == 0 || parseInt( ($campo2 as TextInput).text) ==0)
+						{
+							if (($campo1 as TextInput).text == '0')
+							{
+								($campo1 as TextInput).errorString = "El valor tiene que ser mayor a 0."
+							}
+							else
+							{
+								($campo2 as TextInput).errorString = "El valor tiene que ser mayor a 0."
+							}
+							conteoErrores.push(false);
+						}
+						else
+						{
+							if ( parseInt( ($campo1 as TextInput).text) > parseInt( ($campo2 as TextInput).text))
+							{
+								($campo1 as TextInput).errorString = "El valor tiene que ser menor a " + ($campo2 as TextInput).text;
+								($campo2 as TextInput).errorString = "El valor tiene que ser mayor a " + ($campo1 as TextInput).text;
+								conteoErrores.push(false);
+							}
+							else
+							{
+								currentElement = $campo1 as TextInput; 
+								currentElement1 = $campo2 as TextInput; 
+								if (($combo as ComboCatalogos).selectedItem.valor == 'MESES')
+								{
+									if(currentElement is TextInput)
+									{
+										
+									}
+									if(currentElement1 is TextInput)
+									{
+										
+									}
+								}
+								else
+								{
+									if(currentElement is TextInput)
+									{
+										
+									}
+									if(currentElement1 is TextInput)
+									{
+										
+									}
+								}
+							}
+						}
+					}
+					else
+					{
+						currentElement = $campo0 as TextInput; 
+						if (($combo as ComboCatalogos).selectedItem.valor == 'MESES')
+						{
+							if($campo0 is TextInput)
+							{
+								/*validarTexMaximoMeses.listener = currentElement;
+								error = validarTexMaximoMeses.validate(currentElement.text);
+								conteoErrores.push(error == null || error.results == null ? true:false);*/
+							}
+						}
+						else
+						{
+							if($campo0 is TextInput)
+							{
+								/*validarTextInputTiempoEntrega.listener = currentElement;
+								error = validarTextInputTiempoEntrega.validate(currentElement.text);
+								conteoErrores.push(error == null || error.results == null ? true:false);*/
+							}
+						}
+					}
+				}
+				else
+				{
+					conteoErrores.push(false);
+				}
+				
+				
+				for (var i:int = 0; i < conteoErrores.length; i++) 	
+				{
+					if(!conteoErrores[i])
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+			
+			
+			private function guardarValoresTiempoEntrega($indice:Number):void
+			{
+				switch($indice)
+				{
+					case 0:
+					{
+						_arrayLocalTE.ruta = 'Local';
+						_arrayLocalTE.idConfiguracionPrecio = _configuracion.idConfiguracion;
+						_arrayLocalTE.requierePExiste = generarConceptoTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)
+						_arrayLocalTE.requierePNoExiste = generarConceptoTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)
+						_arrayLocalTE.requierePNo = generarConceptoTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega);
+						break;
+					}
+					case 1:
+					{
+						_arrayGuadalajaraTE.ruta = 'Guadalajara';
+						_arrayGuadalajaraTE.idConfiguracionPrecio = _configuracion.idConfiguracion;
+						_arrayGuadalajaraTE.requierePExiste = generarConceptoTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)
+						_arrayGuadalajaraTE.requierePNoExiste = generarConceptoTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)
+						_arrayGuadalajaraTE.requierePNo = generarConceptoTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega);
+						break;
+					}
+					case 2:
+					{
+						_arrayForaneolTE.ruta = 'Foraneo';
+						_arrayForaneolTE.idConfiguracionPrecio = _configuracion.idConfiguracion;
+						_arrayForaneolTE.requierePExiste = generarConceptoTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)
+						_arrayForaneolTE.requierePNoExiste = generarConceptoTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)
+						_arrayForaneolTE.requierePNo = generarConceptoTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega);
+						break;
+					}
+					case 3:
+					{
+						_arrayCentroATE.ruta = 'Centroamérica';
+						_arrayCentroATE.idConfiguracionPrecio = _configuracion.idConfiguracion;
+						_arrayCentroATE.requierePExiste = generarConceptoTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)
+						_arrayCentroATE.requierePNoExiste = generarConceptoTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)
+						_arrayCentroATE.requierePNo = generarConceptoTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega);
+						break;
+					}
+					case 4:
+					{
+						_arraySudaTE.ruta = 'Sudamérica';
+						_arraySudaTE.idConfiguracionPrecio = _configuracion.idConfiguracion;
+						_arraySudaTE.requierePExiste = generarConceptoTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)
+						_arraySudaTE.requierePNoExiste = generarConceptoTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)
+						_arraySudaTE.requierePNo = generarConceptoTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega);
+						break;
+					}
+					case 5:
+					{
+						_arrayRestoMundoTE.ruta = 'Resto del mundo';
+						_arrayRestoMundoTE.idConfiguracionPrecio = _configuracion.idConfiguracion;
+						_arrayRestoMundoTE.requierePExiste = generarConceptoTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)
+						_arrayRestoMundoTE.requierePNoExiste = generarConceptoTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)
+						_arrayRestoMundoTE.requierePNo = generarConceptoTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega);
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+			} 
+			
+			
+			
+			
+			private function generarConceptoTiempoEntrega($chekbox:IVisualElement ,$campo0:IVisualElement,$campo1:IVisualElement,$campo2:IVisualElement,$combo:IVisualElement):String
+			{
+				var _concepto:String = "";
+				var _check:CheckBox = $chekbox as CheckBox;
+				var _campo0:TextInput = $campo0 as TextInput;
+				var _campo1:TextInput = $campo1 as TextInput;
+				var _campo2:TextInput = $campo2 as TextInput;
+				var _combo:ComboCatalogos = $combo as ComboCatalogos;
+				
+				if (_check.selected)
+				{
+					_concepto = _campo1.text +' a '+ _campo2.text +' '+ _combo.selectedItem.valor2;
+				}
+				else
+				{
+					_concepto = _campo0.text +' '+ _combo.selectedItem.valor2;
+				}
+				
+				return _concepto;
+			}
+			
+			
+			protected function validarPorcetajeNegativoNoVacio($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if($txtInput != null && $txtInput is txtInputBlancoDefaultPQNet)
+				{
+					var currentTxtInput:txtInputBlancoDefaultPQNet = $txtInput as txtInputBlancoDefaultPQNet;
+					validatorPorcentajeNegativo.listener = currentTxtInput;
+					error = validatorPorcentajeNegativo.validate(currentTxtInput.text);
+				}
+				
+				if(error == null || error.results == null)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			private var indiceSeleccionadoAnterior:int = 0;
+			protected function aceptarCambios(event:MouseEvent):void
+			{
+				
+				var evt:EventoCatClientesContratos = new EventoCatClientesContratos(EventoCatClientesContratos.ACTUALIZAR_DATA_CONFIGUARACION);
+				
+				
+				var  config:ConfiguracionPrecioProducto = new ConfiguracionPrecioProducto();
+				var tentrega:TiempoEntrega = new TiempoEntrega();
+				config = ObjectUtil.copy(_configuracion) as ConfiguracionPrecioProducto;	
+				/*almenosUnFactorPrivado = false;*/
+				var arrayAllIsValid:Array = new Array;
+				
+				arrayAllIsValid.push(validarPorcetajeNegativoNoVacio(txtFactor));
+				arrayAllIsValid.push(validarPorcetajeNegativoNoVacio(txtCostoFijo));
+				arrayAllIsValid.push (validarTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega));
+				
+				
+				//TIEMPO ENTREGA ============== TIEMPO ENTREGA ============== TIEMPO ENTREGA ============== TIEMPO ENTREGA ============== TIEMPO ENTREGA ============== TIEMPO ENTREGA ============== TIEMPO ENTREGA ==============
+				var valores:ArrayCollection = new ArrayCollection();
+				if(_encuentraRuta)
+				{
+					guardarValoresTiempoEntrega(_currentIndex);
+					valores.addItem(_arrayLocalTE );
+					valores.addItem(_arrayGuadalajaraTE );
+					valores.addItem(_arrayForaneolTE );
+					valores.addItem(_arrayCentroATE );
+					valores.addItem(_arraySudaTE );
+					valores.addItem(_arrayRestoMundoTE ); 
+				}
+				
+				for (var i:int = 0; i < arrayAllIsValid.length; i++) 	
+				{
+					if(!arrayAllIsValid[i])
+					{
+						alertaSingleton.show("Algunos de los datos que se han introducido no son válidos, favor de verificarlos.",catalogoAlertas.ADV_informacionIncompleta);
+						return;
+					}
+				}
+				
+				evt.factorCliente = Number(txtFactor.text);
+				evt.factorCostoFijo = Number(txtCostoFijo.text);
+				evt.checkCostoFijo = true;
+				evt.checkFactorUtilidad = true;
+				/*seEstaEditando=true;
+				editarInfo();*/
+				config.tentregaProducto = tentrega;
+				evt.configuracionPrecioProducto = new ConfiguracionPrecioProducto();
+				evt.configuracionPrecioProducto = config;
+				evt.configuracionPrecioProducto.tiempoEntregaRuta = valores;
+				evt.IdConfiguracionPProducto = _configuracion.idConfiguracionPrecioProducto;
+				evt.nivel = CatClientesContratos.nivelActual_Contrato;
+				evt.idProveedor = CatClientesContratos.ProveedorActual_Contratos.idProveedor;
+				evt.precioListaAnterior = false;
+				/*indiceSeleccionadoAnterior = botoneraBarra.selectedIndex;*/
+				
+				dispatchEvent(evt);
+				
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+		<s:HGroup width="100%" height="100%" paddingBottom="20" paddingTop="20" gap="30"  paddingLeft="20" paddingRight="20" verticalAlign="middle" >
+		
+			
+			<s:VGroup width="40%" height="100%" id="grpPrecio" >
+				
+				<s:HGroup width="100%"  verticalAlign="middle" >
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().precioCirculoVerde}" height="40" width="40	" horizontalAlign="right"  />
+					<s:Label styleName="tab_texto_12_Helvetica"  fontSize="18" color="#257d92" text="PRECIOS"  fontFamily="Helvetica" fontWeight="bold"  width="100%"/>
+				</s:HGroup>  
+				
+				
+				<s:VGroup width="100%" height="50%" top="5" >
+					<s:Label styleName="tab_texto_12_Helvetica"  fontSize="19" color="#257d92" text="Factor de costo fijo" fontFamily="Helvetica" fontWeight="bold"  width="100%"/>
+					
+					<s:HGroup width="100%" >
+						<s:Label styleName="tab_texto_12_Helvetica"  id="txtCostoFijo"  fontSize="25" color="#424242" text="" fontFamily="Helvetica" fontWeight="bold"  />
+						<s:Label styleName="tab_texto_12_Helvetica"  fontSize="25" color="#424242" text="%" fontFamily="Helvetica" fontWeight="bold"  />
+					</s:HGroup>  
+					
+				</s:VGroup>  
+				
+				
+				<s:VGroup width="100%" height="50%"  >
+					
+					<s:VGroup height="100%" >
+						<s:Label styleName="tab_texto_12_Helvetica"  fontSize="19" color="#257d92" text="Utilidad"  fontFamily="Helvetica" fontWeight="bold"  width="100%"/>
+						<s:HGroup width="100%" height="100%"  >
+							<s:Label styleName="tab_texto_12_Helvetica"  fontSize="25" color="#424242" text="AA+"  fontFamily="Helvetica" fontWeight="bold" />
+							<textinput:txtInputBlancoDefaultPQNet id="txtFactor" text="" width="150" restrict="{/[0-9]+\.?[0-9]/}"  textAlign="center" />
+							<s:Label styleName="tab_texto_12_Helvetica"  fontSize="25" color="#424242" text="%" fontFamily="Helvetica" fontWeight="bold" />
+							
+						</s:HGroup>
+					</s:VGroup>  
+					
+					
+					
+				</s:VGroup>  
+				
+				<s:Spacer height="20" />
+				
+				<s:HGroup width="50%" height="26" horizontalAlign="left" gap="20" click="aceptarCambios(event)">
+					
+					<s:Group width="100%" height="26" buttonMode="true" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#008894" />
+							</s:fill>
+						</s:Rect>
+						<s:Label fontSize="{sizeFontBig}" fontWeight="bold" color="#FFFFFF" fontFamily="Novecento" 
+								 text="ACEPTAR" height="100%" width="100%" textAlign="center" verticalAlign="middle" />
+						
+					</s:Group>
+					
+				</s:HGroup>	
+				
+				
+			</s:VGroup>  
+			
+			<otros:VDivisionDelgada height="90%" width="2"  />
+			
+			
+			<s:VGroup width="60%" height="100%"  verticalAlign="middle"  gap="0" id="grpEntrega"  >
+					
+				<s:HGroup width="100%" height="40"  verticalAlign="middle" >
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().tiempoVerde}" height="40" width="40" horizontalAlign="right"  />
+					<s:Label styleName="tab_texto_12_Helvetica"  fontSize="18" color="#257d92" text="TIEMPO DE ENTREGA"  fontFamily="Helvetica" fontWeight="bold"  width="100%"/>
+				</s:HGroup>  
+				
+					<s:VGroup width="100%" gap="10"  height="100%">
+						
+						<!--ESTE ES EL BLOQUE CUANDO NO REQUIERE PERMISO-->
+						
+						<s:HGroup width="100%" verticalAlign="middle">
+							<label:Titulo_16_pTop10 text="NO REQUIERE PERMISO:" fontSize="14" width="100%" />
+							<chekbox:CheckBoxPq labelLeft="Fijo" labelRight="intervalo" id="chkTENorequiere"  width="150" change="(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega)" />
+						</s:HGroup>  
+						
+							<s:VGroup width="100%" height="100%" >
+								<s:HGroup width="100%"  verticalAlign="middle">
+									<s:Group visible="{!chkTENorequiere.selected}" includeInLayout="{!chkTENorequiere.selected}">
+										<textinput:txtInputBlancoDefaultPQNet id="txtConceptoFE"  text="{datosTE_NR.dia1}"  width="50" restrict="0-9" change="validarTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega)"/> 
+									</s:Group>
+									<s:Group  visible="{chkTENorequiere.selected}" includeInLayout="{chkTENorequiere.selected}">
+										<s:HGroup width="100%" verticalAlign="middle" >
+											<label:Titulo text="De:" paddingTop="0" />
+											<textinput:txtInputBlancoDefaultPQNet id="txtFE"  text="{datosTE_NR.dia1}"  width="50" restrict="0-9" change="validarTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega)"/>
+											<label:Titulo text="A:" paddingTop="0" />
+											<textinput:txtInputBlancoDefaultPQNet id="txtFE1"  text="{datosTE_NR.dia2}"    width="50" restrict="0-9" change="validarTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega)"/>
+										</s:HGroup>
+									</s:Group>
+									<combos:ComboCatalogos id="cmbNRPTiempoEntrega"  width="157" change="validarTiempoEntrega(chkTENorequiere,txtConceptoFE,txtFE,txtFE1,cmbNRPTiempoEntrega)"/>
+								</s:HGroup>
+							</s:VGroup> 
+						
+					</s:VGroup>
+					
+			<s:Spacer height="10" />
+					
+				<otros:division width="100%" height="1" bottom="0" colorLinea="grisMasObscuro" id="vivisionEntrega" />
+				
+					<s:VGroup width="100%" id="grpTiempoEReqPermiso" paddingTop="10" gap="10"  height="100%" verticalAlign="middle">
+							
+						<label:Titulo_16_pTop10 text="REQUIERE PERMISO:" fontSize="14"/>
+						
+							<s:VGroup width="100%" height="100%"  >
+								
+								<s:HGroup width="100%" gap="10" >
+									<s:Label styleName="tab_texto_12_Helvetica" fontSize="12" text="No se tiene permiso:" color="#257d92" paddingTop="0"  width="100%" />
+									<chekbox:CheckBoxPq labelLeft="Fijo" labelRight="intervalo" id="chkTENoTiene"  selected="{datosTE_ReqNoTiene.fijo}"  width="150" change="validarTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)" />
+								</s:HGroup>
+								
+								<s:VGroup width="100%" >
+									<s:HGroup width="100%"  verticalAlign="middle">
+										<s:Group visible="{!chkTENoTiene.selected}" includeInLayout="{!chkTENoTiene.selected}" >
+											<textinput:txtInputBlancoDefaultPQNet id="txtConceptoTENoTiene"  text="{datosTE_ReqNoTiene.dia1}"  width="50" restrict="0-9" change="validarTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)"/> 
+										</s:Group>
+										<s:Group  visible="{chkTENoTiene.selected}" includeInLayout="{chkTENoTiene.selected}">
+											<s:HGroup width="100%" verticalAlign="middle" >
+												<label:Titulo text="De:" paddingTop="0" />
+												<textinput:txtInputBlancoDefaultPQNet id="txtTENoTiene"  text="{datosTE_ReqNoTiene.dia1}"   width="50" restrict="0-9" change="validarTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)"/>
+												<label:Titulo text="A:" paddingTop="0" />
+												<textinput:txtInputBlancoDefaultPQNet id="txtTENoTiene_1"  text="{datosTE_ReqNoTiene.dia2}"   width="50" restrict="0-9" change="validarTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)"/>
+											</s:HGroup>
+										</s:Group>
+										<combos:ComboCatalogos id="cmbTENoTiene" selectedIndex="{datosTE_ReqNoTiene.meses}"   width="157" change="validarTiempoEntrega(chkTENoTiene,txtConceptoTENoTiene,txtTENoTiene,txtTENoTiene_1,cmbTENoTiene)"/>
+									</s:HGroup>
+								</s:VGroup>  
+							
+								<s:Spacer height="20" />
+								<s:HGroup width="100%" gap="10" >
+									<s:Label styleName="tab_texto_12_Helvetica" fontSize="12" text="Se cuenta con permiso:" color="#257d92" paddingTop="0"  width="100%" />
+									<chekbox:CheckBoxPq labelLeft="Fijo"   selected="{datosTE_ReqSiTiene.fijo}" labelRight="intervalo" id="chkTESiTiene"    width="150" change="validarTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)"/>
+								</s:HGroup>
+								<s:VGroup width="100%" >
+									<s:HGroup width="100%" verticalAlign="middle">
+										<s:Group visible="{!chkTESiTiene.selected}" includeInLayout="{!chkTESiTiene.selected}">
+											<textinput:txtInputBlancoDefaultPQNet id="txtConceptoTESiTiene" text="{datosTE_ReqSiTiene.dia1}"  width="50"  restrict="0-9" change="validarTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)"/> 
+										</s:Group>
+										<s:Group  visible="{chkTESiTiene.selected}" includeInLayout="{chkTESiTiene.selected}">
+											<s:HGroup width="100%" verticalAlign="middle">
+												<label:Titulo text="De:" paddingTop="0" />
+												<textinput:txtInputBlancoDefaultPQNet id="txtTESiTiene"  text="{datosTE_ReqSiTiene.dia1}"   width="50"  restrict="0-9" change="validarTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)"/>
+												<label:Titulo text="A:" paddingTop="0" />
+												<textinput:txtInputBlancoDefaultPQNet id="txtTESiTiene_1" text="{datosTE_ReqSiTiene.dia2}"  width="50" restrict="0-9" change="validarTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)"/>
+											</s:HGroup>
+										</s:Group>
+										<combos:ComboCatalogos id="cmbTESiTiene"  selectedIndex="{datosTE_ReqSiTiene.meses}"    width="157" change="validarTiempoEntrega(chkTESiTiene,txtConceptoTESiTiene,txtTESiTiene,txtTESiTiene_1,cmbTESiTiene)"/>
+									</s:HGroup>
+									
+								</s:VGroup>  
+								
+							</s:VGroup>  
+						
+					</s:VGroup>  
+				
+				<s:Spacer height="20" />
+				
+				<s:HGroup width="100%" horizontalAlign="right" gap="20" click="cancelarCambios(event)">
+					<s:Group width="35%" height="26" buttonMode="true" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#008894" />
+							</s:fill>
+						</s:Rect>
+						<s:Label fontSize="{sizeFontBig}" fontWeight="bold" color="#FFFFFF" fontFamily="Novecento" 
+								 text="CANCELAR" height="100%" width="100%" textAlign="center" verticalAlign="middle" />
+						
+					</s:Group>
+					
+				</s:HGroup>
+				
+			</s:VGroup>  
+			
+		</s:HGroup>  
+	
+	
+
+		
+</s:VGroup>

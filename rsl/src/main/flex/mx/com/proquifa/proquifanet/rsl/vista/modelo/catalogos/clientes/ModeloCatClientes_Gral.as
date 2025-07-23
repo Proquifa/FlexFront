@@ -1,0 +1,663 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.clientes
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contrato;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Corporativo;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Direccion;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.EntregaCatClientes;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Modificacion;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.ObjectUtil;
+	
+	public class ModeloCatClientes_Gral extends EventDispatcher
+	{
+		//public _modif:Modificacion;
+		
+		public function ModeloCatClientes_Gral(target:IEventDispatcher=null)
+		{
+			super(target);//para inicializar todo lo que estas heredando del objeto que extiendes
+		}
+		
+		
+		/**
+		 ************************************************************** ACTUALIZA LAS MODIFICACIONES REALIZADAS  **************************************************************
+		 */ 
+		private var _modificaciones:Boolean;
+		public function setUpdateModificaiones($update:Boolean):void{
+			this._modificaciones = $update;
+			dispatchEvent(new Event ("actualizaLasModificacionesRealizadasModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="actualizaLasModificacionesRealizadasModeloCatClientes_Gral")]
+		public function get updateModificaciones():Boolean{
+			return this._modificaciones;
+		}
+		
+		/**
+		 ************************************************************** LISTA Clientes HABILITADOS **************************************************************
+		 */ 
+		private var _listaClientes:ArrayCollection;
+		public function setListaClientes(datos:ArrayCollection):void{
+			if(datos.length > 0)
+				this._listaClientes = datos;
+			else
+				_listaClientes = new ArrayCollection();
+			
+			dispatchEvent(new Event ("listaClientesModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="listaClientesModeloCatClientes_Gral")]
+		public function get listaClientes():ArrayCollection{
+			return this._listaClientes;
+		}
+		
+		
+		/**
+		 ************************************************************** LISTA Clientes DISPONIBLES **************************************************************
+		 */ 
+		private var _listaClientesDisponibles:ArrayCollection;
+		public function setListaClientesDisponibles(datos:ArrayCollection):void{
+			if (datos != null)
+			{
+				for (var num:Number=0; num < datos.length; num++)
+				{
+					(datos[num] as Cliente).numeroBusqueda = num;
+				}
+				
+				this._listaClientesDisponibles = datos;
+			}
+			else
+				this._listaClientesDisponibles = new ArrayCollection();
+			
+			dispatchEvent(new Event ("listaClientesDisponiblesModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="listaClientesDisponiblesModeloCatClientes_Gral")]
+		public function get listaClientesDisponibles():ArrayCollection{
+			return this._listaClientesDisponibles;
+		}
+		
+		
+		/**
+		 ************************************************************** CORPORATIVO INSERTADO **************************************************************
+		 */ 
+		private var _insertoCorporativo:Boolean;
+		public function setinsertoCorporativo(datos:Boolean):void{
+			this._insertoCorporativo = datos;
+			dispatchEvent(new Event ("corporativoInsertadoModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="corporativoInsertadoModeloCatClientes_Gral")]
+		public function get insertoCorporativo():Boolean{
+			return this._insertoCorporativo;
+		}
+		
+		
+		/**
+		 ************************************************************** CORPORATIVO ELIMINADO **************************************************************
+		 */ 
+		private var _borradoCorporativo:Boolean;
+		public function setborradoCorporativo(datos:Boolean):void{
+			this._borradoCorporativo = datos;
+			dispatchEvent(new Event ("corporativoEliminadoModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="corporativoEliminadoModeloCatClientes_Gral")]
+		public function get borradoCorporativo():Boolean{
+			return this._borradoCorporativo;
+		}
+		
+		
+		/**
+		 ************************************************************** LISTA Clientes REFRESHHH **************************************************************
+		 */ 
+		private var _listaRefres:ArrayCollection;
+		public function setListaClientesRefresh(datos:ArrayCollection):void{
+			this._listaRefres = datos;
+			dispatchEvent(new Event ("listaRefreshModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="listaRefreshModeloCatClientes_Gral")]
+		public function get listaClientesRefresh():ArrayCollection{
+			return this._listaRefres;
+		}
+		
+		
+		/**
+		 ************************************************************** ACTUALIZA Clientes  **************************************************************
+		 */ 
+		private var _seActualiza:Boolean;
+		public function setUpdateCiente($update:Boolean):void{
+			this._seActualiza = $update;
+			dispatchEvent(new Event ("actualizaClienteModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="actualizaClienteModeloCatClientes_Gral")]
+		public function get UpdateCliente():Boolean{
+			return this._seActualiza;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** INSERTA  Clientes  **************************************************************
+		 */ 
+		private var _seInserto:Number;
+		public function setInsertCiente($insert:Number):void{
+			this._seInserto = $insert;
+			dispatchEvent(new Event ("insertaClienteModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="insertaClienteModeloCatClientes_Gral")]
+		public function get InsertCliente():Number{
+			return this._seInserto;
+		}
+		
+		
+		/**
+		 ************************************************************** ENVIA  Clientes  **************************************************************
+		 */ 
+		
+		private var _cliente:Cliente;
+		public function setEnviaCliente(evt:EventoCatClientes_General):void{
+			this._cliente = evt.clienteSeleccionado;
+			dispatchEvent(new Event("clienteEnviadoModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="clienteEnviadoModeloCatClientes_Gral")]
+		public function get enviaCliente():Cliente{
+			return this._cliente;
+		}
+		
+		/**
+		 ************************************************************** Recibe lista de nivel de ingreso   **************************************************************
+		 */ 
+		
+		private var _listaDeClasificacionesNI:ArrayCollection;
+		public function setRecibeListaClasificacionNI($listaClasifNI:ArrayCollection):void{
+			_listaDeClasificacionesNI = $listaClasifNI;
+			dispatchEvent(new Event("mandarListaDeClasificacionesDeNivelDeIngresoModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarListaDeClasificacionesDeNivelDeIngresoModeloCatClientes_Gral")]
+		public function get enviaListaDeClasificacionDeNivelDeIngreso():ArrayCollection{
+			return _listaDeClasificacionesNI;
+		}
+		
+		/**
+		 ************************************************************** guarda lista de nivel de ingreso   **************************************************************
+		 */ 
+		
+		private var _confirmacionDeActualizarListaNI:Boolean;
+		public function setRecibeConfirmacionDeActualizarClasificacionNI($confirmacion:Boolean):void
+		{
+			_confirmacionDeActualizarListaNI = $confirmacion;
+			dispatchEvent(new Event("mandarConfirmacionDeActualizarDeNivelDeIngresoModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarConfirmacionDeActualizarDeNivelDeIngresoModeloCatClientes_Gral")]
+		public function get enviaConfirmacionDeActualizarListaNivelDeIngreso():Boolean
+		{
+			return _confirmacionDeActualizarListaNI;
+		}
+		
+		
+		
+		
+		
+		
+		/**
+		 ************************************************************** RECIBE lista de objetivos de crecimiento por nivel de ingreso   **************************************************************
+		 */ 
+		
+		private var _objetivosCremiento:ArrayCollection;
+		public function setRecibeListaObjetivosDeCrecimientoPorNI($objetivos:ArrayCollection):void
+		{
+			_objetivosCremiento = $objetivos;
+			dispatchEvent(new Event("mandarObjetivosDeCremientoPorNivelDeIngresoModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarObjetivosDeCremientoPorNivelDeIngresoModeloCatClientes_Gral")]
+		public function get enviaObjetivosCremientoNi():ArrayCollection
+		{
+			return _objetivosCremiento;
+		}
+		
+		
+			
+		private var _objetivosCremientoParaVistaEmpresa:ArrayCollection;
+		public function setRecibeListaObjetivosDeCrecimientoParaVistaEmpresa($objetivos:ArrayCollection):void
+		{
+			_objetivosCremientoParaVistaEmpresa = $objetivos;
+			dispatchEvent(new Event("mandarObjetivosDeCremientoParaVistaEmpresaModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarObjetivosDeCremientoParaVistaEmpresaModeloCatClientes_Gral")]
+		public function get enviaObjetivosCremientoParaVistaEmpresa():ArrayCollection
+		{
+			return _objetivosCremientoParaVistaEmpresa;
+		}
+		
+		/**
+		 ************************************************************** RECIBE OBJETIVOS DE NIVEL DE INGRESO ACTUALES   **************************************************************
+		 */ 
+		
+		private var _objetivosCremientoActuales:ArrayCollection;
+		public function setRecibeListaObjetivosActuales($objetivos:ArrayCollection):void
+		{
+			_objetivosCremientoActuales = $objetivos;
+			dispatchEvent(new Event("mandarObjetivosDeCremientoPorNivelDeIngresoActualesModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarObjetivosDeCremientoPorNivelDeIngresoActualesModeloCatClientes_Gral")]
+		public function get enviaObjetivosCremientoNiActuales():ArrayCollection
+		{
+			return _objetivosCremientoActuales;
+		}
+		
+		/**
+		 ************************************************************** guarda lista de de objetivos de crecimiento por nivel de ingreso  **************************************************************
+		 */ 
+		
+		private var _confirmacionDeActualizarObjetivosCrecimiento:Boolean;
+		public function setRecibeConfirmacionDeActualizarObjetivosCreciNI($confirmacion:Boolean):void
+		{
+			_confirmacionDeActualizarObjetivosCrecimiento = $confirmacion;
+			dispatchEvent(new Event("mandarConfirmacionDeActualizarObjetivosDeCrecimientoPorNIModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarConfirmacionDeActualizarObjetivosDeCrecimientoPorNIModeloCatClientes_Gral")]
+		public function get enviaConfirmacionDeActualizarObjetivosCreciNI():Boolean
+		{
+			return _confirmacionDeActualizarObjetivosCrecimiento;
+		}
+		
+		
+		/**
+		 ************************************************************** TRAE LISTA DE CORPORATIVOS  **************************************************************
+		 */ 
+		
+		private var _listaCorporativos:ArrayCollection;
+		private var _listaFinalCorporativos:ArrayCollection;
+		private var _sql:Query;
+		public function setRecibeCorporativos($lista:ArrayCollection):void
+		{
+			_listaCorporativos = ObjectUtil.copy( $lista ) as ArrayCollection;
+			_sql = new Query(_listaCorporativos,["idCorporativo","nombre","fua"]);
+			var nombres:Array = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("nombre");
+			
+			_listaFinalCorporativos = new ArrayCollection();
+			for (var i:Number = 0; i<nombres.length; i++)
+			{
+				var current:Corporativo = new Corporativo();
+				var punterosCurrent:Array = _sql.getPunteros([null,nombres[i]],"nombre");
+				var idCorp:Array = _sql.getValoresCampoOmitiendoRepetidos("idCorporativo",punterosCurrent);
+				var fua:Array = _sql.getValoresCampoOmitiendoRepetidos("fua",punterosCurrent);
+				var areaCorp:Array = _sql.getValoresCampoOmitiendoRepetidos("areaCorporativo",punterosCurrent);
+				
+				current.nombre = nombres[i];
+				current.idCorporativo = idCorp[0];
+				current.fua = fua[0];
+				current.indexSel = i;
+				current.areaCorporativo = areaCorp[0];
+				
+				var listaClientes:ArrayCollection = new ArrayCollection();
+				for (var j:Number=0; j<_listaCorporativos.length; j++)
+				{
+					var corp:Corporativo = _listaCorporativos[j];
+					if (corp.nombre == current.nombre)
+					{
+						listaClientes.addItem( corp.cliente );
+						current.industrias = ObjectUtil.copy( corp.industrias ) as ArrayCollection;
+					}
+				}
+				
+				current.clientes = listaClientes;
+				
+				_listaFinalCorporativos.addItem(current);
+			}
+			
+			
+			dispatchEvent(new Event("enviarListaCorporativosModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="enviarListaCorporativosModeloCatClientes_Gral")]
+		public function get enviaListaCorporativos():ArrayCollection
+		{
+			return _listaFinalCorporativos;
+		}
+		
+		
+		/**
+		 ************************************************************** RECIBE lista de objetivos de crecimiento por nivel de ingreso   **************************************************************
+		 */ 
+		
+		private var _industrias:ArrayCollection;
+		public function setRecibeIndustrias($industrias:ArrayCollection):void
+		{
+			_industrias = $industrias;
+			dispatchEvent(new Event("recibeIndustriasModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="recibeIndustriasModeloCatClientes_Gral")]
+		public function get enviaIndustrias():ArrayCollection
+		{
+			return _industrias;
+		}
+		
+		
+		/**
+		 ************************************************************** RECIBE CLIENTE   **************************************************************
+		 */ 
+		
+		
+		
+		private var _clientexId:Cliente
+		public function setRecibeClientexId($cliente:Cliente):void
+		{
+			_clientexId = $cliente;
+			dispatchEvent(new Event("recibeClienteXIdModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="recibeClienteXIdModeloCatClientes_Gral")]
+		public function get enviaClientexId():Cliente
+		{
+			return _clientexId;
+		}
+		
+		
+		/**
+		 ************************************************************** RECIBE Comentarios   **************************************************************
+		 */ 
+		
+		
+		
+		private var clienteComentarios:Cliente
+		public function setRecibeComenarios($dato:ArrayCollection,$cliente:Cliente):void
+		{
+			clienteComentarios = $cliente;
+			clienteComentarios.listaComentarios = $dato;
+			dispatchEvent(new Event("recibeComentarioClienteModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="recibeComentarioClienteModeloCatClientes_Gral")]
+		public function get enviaComentarios():Cliente
+		{
+			return clienteComentarios;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** RECIBE DIRECCION   **************************************************************
+		 */ 
+		
+		private var clienteDireccion:Cliente
+		public function setRecibeDireccion($dato:ArrayCollection,$cliente:Cliente):void
+		{
+			clienteDireccion = $cliente;
+			for each (var direccion:Direccion in $dato) 
+			{
+				if (direccion.tipo == "Empresa"){
+					clienteDireccion.direccion = direccion;
+				}
+				else if(direccion.tipo == "Facturacion"){
+					clienteDireccion.direccionFacturacion = direccion;
+				}
+			}
+			
+			dispatchEvent(new Event("recibeDireccionClienteModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="recibeDireccionClienteModeloCatClientes_Gral")]
+		public function get enviaDireccion():Cliente
+		{
+			return clienteDireccion;
+		}
+		
+		
+		private var clienteDireccionxPais:Direccion
+		public function setRecibeDireccionxPais($dato:ArrayCollection):void
+		{
+			clienteDireccionxPais = new Direccion;
+			if ($dato != null && $dato.length > 0){
+				var currentSQL:Query = new Query($dato,['estado','municipio','colonia']);
+				var colonias:Array = currentSQL.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("colonia");
+				
+				var final:Array = new Array();
+				if(colonias.length > 0)
+				{
+					for (var i:int = 0; i < colonias.length; i++) 
+					{
+						var obj:Object = new Object;
+						obj.valor = colonias[i];
+						final.push(obj);
+					}
+				}
+				
+				clienteDireccionxPais.lstColonias = new ArrayCollection(final);
+				clienteDireccionxPais.estado = $dato[0].estado;
+				clienteDireccionxPais.municipio = $dato[0].municipio;
+				//clienteDireccionxPais.colonia =$dato[0].colonia;
+			}
+			
+			dispatchEvent(new Event("recibeDireccionxPaisClienteModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="recibeDireccionxPaisClienteModeloCatClientes_Gral")]
+		public function get enviaDireccionxPais():Direccion
+		{
+			return clienteDireccionxPais;
+		}
+		
+		
+		/**
+		 ************************************************************** RECIBE OBJETIVOS DE NIVEL DE INGRESO ANTERIORES   **************************************************************
+		 */ 
+		
+		private var _objetivosCremientoAnteriores:ArrayCollection;
+		public function setRecibeListaObjetivosAnteriores($objetivos:ArrayCollection):void
+		{
+			_objetivosCremientoAnteriores = $objetivos;
+			dispatchEvent(new Event("mandarObjetivosDeCremientoPorNivelDeIngresoAnterioresModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="mandarObjetivosDeCremientoPorNivelDeIngresoAnterioresModeloCatClientes_Gral")]
+		public function get enviaObjetivosCremientoNiAnteriores():ArrayCollection
+		{
+			return _objetivosCremientoAnteriores;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** RECIBE CONFIRMACION DE COMPARATIVA DE CORPORATIVOS   **************************************************************
+		 */ 
+		
+		private var _confirmacionComparativa:Boolean;
+		public function setRecibeConfirmacionComparacionCorporativos($resuk:Boolean):void
+		{
+			_confirmacionComparativa = $resuk;
+			dispatchEvent(new Event("envioCompartivaCorporativossModeloCatClientes_Gral"));
+		}
+		
+		[Bindable(event="envioCompartivaCorporativossModeloCatClientes_Gral")]
+		public function get enviaComparativaCorp():Boolean
+		{
+			return _confirmacionComparativa;
+		}
+		
+		
+		
+		
+		/**
+		 ************************************************************** RECIBE CONFIRMACION ACTUALIZAR DATOS ENTREGA   **************************************************************
+		 */ 
+		
+		private var _confirmacionactulizadatosEn:Boolean;
+		public function setRecibeConfirmacionActualizaEntregaCliente($resuk:Boolean):void
+		{
+			_confirmacionactulizadatosEn = $resuk;
+			dispatchEvent(new Event("envioRespuestaActulizacionEntregaCliente"));
+		}
+		
+		[Bindable(event="envioRespuestaActulizacionEntregaCliente")]
+		public function get enviaRepuestaActulizacionEntregaCliente():Boolean
+		{
+			return _confirmacionactulizadatosEn;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** RECIBE CONFIRMACION REGISTRO DE CONTRATO  **************************************************************
+		 */ 
+		
+		private var _contratoGuardado:Contrato;
+		public function setRecibeConfirmacionRegistroContrato($resuk:Contrato):void
+		{
+			_contratoGuardado = $resuk;
+			dispatchEvent(new Event("envioRespuestaRegistroContacto"));
+		}
+		
+		[Bindable(event="envioRespuestaRegistroContacto")]
+		public function get enviaRepuestaregistroContrato():Contrato
+		{
+			return _contratoGuardado;
+		}
+		
+		
+		/**
+		 ************************************************************** LISTA DE CONTRATOS DEL CLIENTE **************************************************************
+		 */ 
+		private var _listaContratoCliente:ArrayCollection;
+		public function setListaContratosClientes(datos:ArrayCollection):void{
+			if(datos.length > 0)
+			{
+				
+				for (var i:int = 0; i < datos.length; i++) 
+				{
+					datos[i].numMarcas = datos[i].marcas.length;
+				}
+				this._listaContratoCliente = datos;
+			}
+				
+			else
+				_listaContratoCliente = new ArrayCollection();
+			
+			dispatchEvent(new Event ("listaContratosClientes"));
+		}
+		
+		[Bindable(event="listaContratosClientes")]
+		public function get listaContratosClientes():ArrayCollection{
+			return this._listaContratoCliente;
+		}
+		
+		/**
+		 ************************************************************** CONFIRMACION DE ELIMINAR CONTRATO DEL CLIENTE **************************************************************
+		 */ 
+		
+		private var _confirmacionEliminarContrato:Boolean;
+		public function setRecibeRespuestaEliminarContrato($resuk:Boolean):void
+		{
+			_confirmacionEliminarContrato = $resuk;
+			dispatchEvent(new Event("envioConfirmacionEliminarContrato"));
+		}
+		
+		[Bindable(event="envioConfirmacionEliminarContrato")]
+		public function get enviaRepuestaEliminarContrato():Boolean
+		{
+			return _confirmacionEliminarContrato;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** RECIBE INFORMACION ENTREGA CLIENTES  **************************************************************
+		 */ 
+		
+		private var entregaCliente:EntregaCatClientes;
+		public function setRecibeInformacionEntregaCliente($info:EntregaCatClientes):void
+		{
+			entregaCliente = $info;
+			dispatchEvent(new Event("enviarInformacionEntregaCliente"));
+		}
+		
+		[Bindable(event="enviarInformacionEntregaCliente")]
+		public function get enviaInformacionEntregaCliente():EntregaCatClientes
+		{
+			return entregaCliente;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** LISTA VALIDA   **************************************************************
+		 */ 
+			
+		
+		
+		
+	
+		private var _listaPass:ArrayCollection = new ArrayCollection();
+		public function setListaValida(respuesta:ArrayCollection):void{
+			if(respuesta == null || respuesta.length == 0)
+				_listaPass = new ArrayCollection();	
+			else
+				_listaPass = respuesta;
+			dispatchEvent(new Event ("regresaListaValidaCLI"));
+		}
+		[Bindable(event="regresaListaValidaCLI")]
+		public function get regresaListaValida():ArrayCollection{
+			return this._listaPass;
+		}
+		
+	
+		/**
+		 ************************************************************** RESPUESTA  **************************************************************
+		 */ 
+		
+		private var validaEmpleado:Boolean;
+		
+		public function setValidaEmpleado( resultado:Boolean ):void{
+		   validaEmpleado = resultado;
+			dispatchEvent ( new Event("cambioEmpleadoValido") );
+		}
+		
+		[Bindable(event="cambioEmpleadoValido")]
+		public function get ValidaEmpleado():Boolean{
+			return validaEmpleado;
+		}
+		
+	
+		
+		/**
+		 ************************************************************** REALIZO MODIFICACION  **************************************************************
+		 */ 
+		
+		public function realizarModificaciones($modif:Modificacion):void
+		{
+			
+			trace ('*****************************************************************   llego');
+		}
+		
+	
+		
+		
+		/**
+		 ************************************************************** error **************************************************************
+		 */
+		public function error(objeto:Object):void{
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+	}
+	
+}

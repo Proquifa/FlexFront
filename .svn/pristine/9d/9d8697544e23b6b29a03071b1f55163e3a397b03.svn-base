@@ -1,0 +1,610 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:todos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.compras.analisisCompras.todos.*"
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%" height="100%" 
+		 creationComplete="init()" 
+		 >
+	
+	<fx:Script>
+		
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.ajustes.Ajustes_OrdenDespacho;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.consolidado.Consolidado_OrdenDespacho;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.documentacion.DocumentacionDefault_OrdenDespacho;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.popUp.GestorCResumen_popUpGenerarOC;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.resumen.ResumenOrdenDespacho;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			
+			public var vistaConsolidado:Consolidado_OrdenDespacho;
+			private var vistaAjustes:Ajustes_OrdenDespacho;
+			private var vistaDocumentacion:DocumentacionDefault_OrdenDespacho;
+			private var vistaResumen:ResumenOrdenDespacho;
+			
+			private var oldCurrent:String = "despacho_Ajustes";
+			private var progresoVista:String = "despacho_Ajustes";
+			private var varFolio:String = "";
+			private var varIdOrden:String = "0";
+			public var renovado:Boolean = false;
+			
+			public var infoGeneral:OrdenDespacho = new OrdenDespacho();
+			
+			public function limpiarTodo($cargaEditado:Boolean = false):void
+			{
+				if(!$cargaEditado)
+					vistaAjustes.resetAll();
+				
+				vistaConsolidado.resetAll();
+				vistaDocumentacion.resetAll();
+				
+				oldCurrent = "despacho_Ajustes";
+				progresoVista = "despacho_Ajustes";
+				varFolio = "";
+				varIdOrden = "0";
+				renovado = false;
+				infoGeneral = new OrdenDespacho();
+				
+				EventoGestorCompras.completadoAjustes = false;
+				EventoGestorCompras.completadoConsolidado = false;
+				EventoGestorCompras.completadoDocumentacion = false;
+				EventoGestorCompras.completadoResumen = false;
+				
+				generarDespacho.itemClick = oldCurrent;
+				generarDespacho.selecionarBoton(oldCurrent);
+				generarDespacho.resetAll();
+				
+			}
+			
+			protected function init():void
+			{
+				generarDespacho.buttonBarSeccion.addEventListener("clicMenuProgresoGestor",valida,false,0,true);
+				
+				vistaAjustes = new Ajustes_OrdenDespacho();
+				vistaConsolidado = new Consolidado_OrdenDespacho();
+				vistaDocumentacion = new DocumentacionDefault_OrdenDespacho();
+				vistaResumen = new ResumenOrdenDespacho();
+				
+				var arreglo:ArrayCollection = new ArrayCollection();
+				arreglo.addItem(vistaAjustes);
+				arreglo.addItem(vistaConsolidado);
+				arreglo.addItem(vistaDocumentacion);
+				arreglo.addItem(vistaResumen);
+				generarDespacho.insertarVistas(arreglo);
+				
+				vistaAjustes.addEventListener(EventoGestorCompras.ENVIAR_INFORMACION_AJUSTES,enviarInfoAjustes);
+				addEventListener(EventoGestorCompras.OBTENER_INFORMACION_ORDEN_DESPACHO,guardarInfoOrden);
+				addEventListener("GenerarOrdenDespachoParcialEvento",muestraPopUpOc);
+				addEventListener("EnviarDocumentosConArchivosCargados",pedirDocumentosURL);
+				addEventListener(EventoGestorCompras.CAMBIAR_COLOR_BOTON_ORDEN_DESPACHO,cambiarColor,false,0,true);
+				
+				vistaConsolidado.addEventListener("clicMenuProgresoGestor",valida,false,0,true);
+				popOc.addEventListener("cerrarPopUpOC",cerrarPopUpOC);
+				popOc.addEventListener("generarOCompra",generarOrdenCompra);
+			}
+			
+			protected function enviarInfoAjustes(evt:EventoGestorCompras):void
+			{
+				var eventoAjuste:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ENVIAR_INFORMACION_AJUSTES);
+				eventoAjuste.montoMax = evt.montoMax;
+				eventoAjuste.montoMin = evt.montoMin;
+				vistaConsolidado.dispatchEvent(eventoAjuste);
+			}
+			
+			protected function guardarInfoOrden(ewvt:EventoGestorCompras):void
+			{
+				getAjustes();
+				getConsolidado();
+				getDocumentacion();
+				
+				if(varFolio == "" && varIdOrden == "0" && infoGeneral.documentos && infoGeneral.documentos.length > 0)
+				{
+					var folio:String = (infoGeneral.documentos[0] as DocumentoOrdenDespacho).folio; 
+					var idOrden:Number = (infoGeneral.documentos[0] as DocumentoOrdenDespacho).idOrdenDespacho; 
+					
+					infoGeneral.folio = folio;
+					infoGeneral.idOrdenDespacho = idOrden;
+				}
+				else if(varFolio != "" && varIdOrden != "" )
+				{
+					infoGeneral.folio = varFolio;
+					infoGeneral.idOrdenDespacho = Number(varIdOrden);
+				}
+				
+				infoGeneral.progresoVista = progresoVista;
+				var evt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.GUARDAR_INFORMACION_ORDEN_DESPACHO);
+				evt.ordenDespacho = new OrdenDespacho();
+				evt.ordenDespacho = infoGeneral;
+				/*evt.ordenDespacho.tipoVista = "materiales";*/
+				evt.ordenDespacho.usuario = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent(evt);
+				if(progresoVista == "despacho_Documentacion"){
+					/*dispararDocumentos();*/
+				}
+				//dispatchEvent(new Event("irTodasOrdenesGuardadas",true));
+				alertaSingleton.show("La Orden ha sido guardada exitosamente.",catalogoAlertas.TIT_CONF_operacionExitosa);
+			}
+			
+			private var popOc:GestorCResumen_popUpGenerarOC = new GestorCResumen_popUpGenerarOC();
+			protected function muestraPopUpOc(evtw:Event):void
+			{
+				if(popOc == null)
+				{
+					popOc = new GestorCResumen_popUpGenerarOC();
+					popOc = GestorCResumen_popUpGenerarOC(PopUpManager.createPopUp( this, GestorCResumen_popUpGenerarOC,true ));
+					PopUpManager.centerPopUp( popOc );
+					popOc.addEventListener("cerrarPopUpOC",cerrarPopUpOC);
+					popOc.addEventListener("generarOCompra",generarOrdenCompra);
+				}
+				else
+				{
+					PopUpManager.addPopUp( popOc , this, true );
+					PopUpManager.centerPopUp( popOc );
+				}
+				popOc.cargarContactos(infoGeneral.idAgenteAduanal);
+				
+			}
+			
+			private function cerrarPopUpOC(event:Event):void
+			{
+				PopUpManager.removePopUp( popOc );
+				popOc = null;
+			}
+			
+			private function generarOrdenCompra(eertvt:Event):void
+			{
+				var mail:String = "";
+				var cc:String = "";
+				var mensaje:String = "";
+				if(popOc){
+					if(popOc.cmbContacto.selectedItem)
+					mail = popOc.cmbContacto.selectedItem.EMail;
+					
+					cc = popOc.lblCC.text;
+					mensaje = popOc.txtArea.text;
+				}
+				
+				PopUpManager.removePopUp( popOc );
+				
+				getAjustes();
+				getConsolidado();
+				getDocumentacion();
+				
+				if(varFolio == "" && varIdOrden == "0" && infoGeneral.documentos && infoGeneral.documentos.length > 0)
+				{
+					var folio:String = (infoGeneral.documentos[0] as DocumentoOrdenDespacho).folio; 
+					var idOrden:Number = (infoGeneral.documentos[0] as DocumentoOrdenDespacho).idOrdenDespacho; 
+					
+					infoGeneral.folio = folio;
+					infoGeneral.idOrdenDespacho = idOrden;
+				}
+				else if(varFolio != "" && varIdOrden != "" )
+				{
+					infoGeneral.folio = varFolio;
+					infoGeneral.idOrdenDespacho = Number(varIdOrden);
+				}
+				
+				
+				infoGeneral.progresoVista = progresoVista;
+				if(isParcial)
+					infoGeneral.parcial = true;
+				else
+					infoGeneral.parcial = false;
+				
+				var evt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.GENERAR_ORDEN_DESPACHO_PARCIAL);
+				evt.ordenDespacho = new OrdenDespacho();
+				evt.ordenDespacho = infoGeneral;
+				evt.mail = mail;
+				evt.cc = cc;
+				evt.mensaje = mensaje;
+				dispatchEvent(evt);
+			}
+			
+			protected function vistaAtras(event:EventoGestorCompras):void
+			{
+				dispatchEvent( new Event("regresarVistaPrincipal",true));
+			}
+			
+			public function set recibeOrdenes($dato:String):void
+			{
+				if($dato)
+				{
+					var my_array:Array = $dato.split("_");
+					varFolio = my_array[0];
+					varIdOrden = my_array[1];
+					if(progresoVista == "despacho_Documentacion"){
+						dispararDocumentos();
+					}
+				}
+			}
+			
+			protected function valida(event:Event):void
+			{
+				funcValida();
+			}
+			
+			protected function funcValida():void
+			{
+				if( oldCurrent != generarDespacho.itemClick )
+				{
+					progresoVista = generarDespacho.itemClick;
+					switch(oldCurrent)
+					{
+						case 'despacho_Ajustes':
+						{
+							if(vistaAjustes.validar())
+							{
+								getAjustes();
+								
+								oldCurrent = generarDespacho.itemClick;
+								vistaConsolidado.idExportador = infoGeneral.idExportador;
+								vistaAjustes.listaConsolidado = verificarConsolidadoLleno();
+									
+								if(oldCurrent == 'despacho_Consolidado' && !renovado)
+								{
+									renovado = true;
+									dispararListaOrdenes();
+								}
+								
+								if(oldCurrent == 'despacho_Documentacion')
+									if(vistaConsolidado.validar())
+									{
+										dispararListaOrdenes();
+										dispararDocumentos();
+										getDocumentacion();
+									}
+									else
+										break;
+								
+								generarDespacho.cambiarVista();
+							}
+							break;
+						}
+						case 'despacho_Consolidado':
+						{
+							vistaAjustes.primera = false;
+							vistaAjustes.listaConsolidado = verificarConsolidadoLleno();
+							if(generarDespacho.itemClick =='despacho_Ajustes')
+							{
+								oldCurrent = generarDespacho.itemClick;
+								generarDespacho.cambiarVista();
+								break;
+							}
+							
+							vistaConsolidado.validarLimites();
+							
+							if(vistaConsolidado.condicionValidacion){
+								if(vistaAjustes.validar() && vistaConsolidado.validar())
+								{
+									getAjustes();
+									getConsolidado();
+									dispararDocumentos();
+									EventoGestorCompras.completadoDocumentacion = true;
+									oldCurrent = generarDespacho.itemClick;
+									generarDespacho.cambiarVista();
+								}
+							}
+							
+							break;
+						}
+						case 'despacho_Documentacion':
+						{
+							if(generarDespacho.itemClick =='despacho_Ajustes' || generarDespacho.itemClick =='despacho_Consolidado' )
+								EventoGestorCompras.completadoDocumentacion = false;
+							
+							if(generarDespacho.itemClick =='despacho_GOrden' )
+							{
+								if(!EventoGestorCompras.alertaoDocumentacion)
+								{
+									EventoGestorCompras.completadoResumen = true;
+									dispararPartidasOrdenResumen();
+								}
+								else
+								{
+									alertaSingleton.show("No se puede continuar al siguiente paso\n por falta de facturas en Listas de Arribo \n asociadas a la Orden Despacho.",catalogoAlertas.TIT_ADV_atencion,"","","","","",null,false,null,true);
+									break;
+								}
+								
+							}
+							
+							oldCurrent = generarDespacho.itemClick;
+							generarDespacho.cambiarVista();
+							break;
+						}
+						case 'despacho_GOrden':
+						{
+							EventoGestorCompras.completadoResumen = false;
+							oldCurrent = generarDespacho.itemClick;
+							generarDespacho.cambiarVista();
+							break;
+						}
+					}
+					
+					if(oldCurrent == "despacho_GOrden")
+					{
+						enviarOrdenResumen();
+					}
+				}
+			}
+			
+			private function dispararPartidasOrdenResumen():void
+			{
+				var res:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_PARTIDAS_ORDEN_DESPACHO_RESUMEN);
+				res.idOC = Number(varIdOrden);
+				dispatchEvent( res );
+			}
+			
+			private function dispararDocumentos():void
+			{
+				var ert:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_DOCUMENTACION);
+				infoGeneral.idOrdenDespacho = Number(varIdOrden);
+				if(varFolio != "")
+					infoGeneral.folio = varFolio;
+				
+				if(vistaDocumentacion.documentos.length > 0)
+					getDocumentacion();
+				
+				ert.ordenDespacho = infoGeneral;
+				ert.ordenDespacho.usuario = DatosGlobales.getInstance()._usuario.clave;
+				/*ert.ordenDespacho.tipoVista = "materiales";*/
+				dispatchEvent(ert);
+			}
+			
+			private function getAjustes():void
+			{
+				infoGeneral.idImportador = vistaAjustes.idImportador;
+				infoGeneral.nombreImportador = vistaAjustes.nomImport;
+				infoGeneral.idExportador = vistaAjustes.idExportador;
+				infoGeneral.nombreExportador = vistaAjustes.nomExport;
+				infoGeneral.fletera =  vistaAjustes.fleteraSelect;
+				infoGeneral.idAgenteAduanal =  vistaAjustes.idAgenteA;
+				infoGeneral.idAduana =  vistaAjustes.idAduana;
+				infoGeneral.nombreAgenteAduanal =  vistaAjustes.nomAgente;
+				infoGeneral.pakinglist =  vistaAjustes.packingSelect;
+				infoGeneral.incoterm =  vistaAjustes.incotermSelect;
+			}
+			
+			private function getConsolidado():void
+			{
+				infoGeneral.listasArribo = vistaConsolidado.listaArribo;
+				infoGeneral.listasArriboAgrupado = vistaConsolidado.listaArriboResumen;
+				///AGREGAR idProveedor
+				if(vistaConsolidado.listaArriboResumen.length > 0 && infoGeneral.idExportador == 0){
+					infoGeneral.idProveedor = vistaConsolidado.listaArriboResumen[0].idProveedor;
+				}else{
+					infoGeneral.idProveedor = NaN;
+				}
+			}
+			
+			private function getDocumentacion():void
+			{
+				infoGeneral.documentos = vistaDocumentacion.documentos;
+			}
+			
+			private function getDocumentacionResumen():void
+			{
+				infoGeneral.documentos = vistaDocumentacion.documentosResumen;
+			}
+			
+			private function dispararListaOrdenes():void
+			{
+				EventoGestorCompras.consolidado = true;
+				var ert:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_LISTAS_ORDENES_CONSOLIDADO);
+				ert.idOC = 0;
+				ert.tipoPublicaciones = false;
+				dispatchEvent(ert);
+			}
+			
+			private function enviarOrdenResumen():void
+			{
+				getAjustes();
+				getConsolidado();
+				getDocumentacionResumen();
+				vistaResumen.recibeOrdenDespacho(infoGeneral);
+			}
+			
+			private var isResumen:Boolean;
+			private var llegoDoc:OrdenDespacho;
+			public function recibeOrdenDespacho($orden:OrdenDespacho):void
+			{
+				oldCurrent="despacho_Ajustes";
+				generarDespacho.selecionarBoton("despacho_Ajustes");
+				generarDespacho.itemClick = "despacho_Ajustes";
+				var vistaFinal:String = $orden.progresoVista;
+				llegoDoc = new OrdenDespacho();
+				llegoDoc = ObjectUtil.copy($orden) as OrdenDespacho;
+				varIdOrden = $orden.idOrdenDespacho.toString();
+				varFolio = $orden.folio;
+				isResumen = false;
+				
+				if(vistaFinal == "despacho_GOrden")
+				{
+					iniciaEspera('iniciarEspera');
+					vistaAjustes.setOrdenDespacho($orden);
+					
+					generarDespacho.selecionarBoton("despacho_Consolidado");
+					generarDespacho.itemClick = "despacho_Consolidado";
+					funcValida();
+					
+					vistaConsolidado.setOrdenDespacho($orden);
+					isResumen = true;
+					
+					tiempoPr();
+				}
+				else if(vistaFinal == "despacho_Documentacion")
+				{
+					iniciaEspera('iniciarEspera');
+					vistaAjustes.setOrdenDespacho($orden);
+					
+					generarDespacho.selecionarBoton("despacho_Consolidado");
+					generarDespacho.itemClick = "despacho_Consolidado";
+					funcValida();
+					
+					vistaConsolidado.setOrdenDespacho($orden);
+					
+					tiempoPr();
+				}
+				else if(vistaFinal == "despacho_Consolidado")
+				{
+					vistaAjustes.setOrdenDespacho($orden);
+					
+					generarDespacho.selecionarBoton("despacho_Consolidado");
+					generarDespacho.itemClick = "despacho_Consolidado";
+					funcValida();
+					
+					oldCurrent="despacho_Consolidado";
+					vistaConsolidado.setOrdenDespacho($orden);
+				}
+				else if(vistaFinal == "despacho_Ajustes")
+				{
+					vistaAjustes.setOrdenDespacho($orden);
+					vistaConsolidado.setOrdenDespacho($orden);
+					vistaDocumentacion.setOrdenDespacho($orden);
+					
+					generarDespacho.selecionarBoton("despacho_Ajustes");
+					generarDespacho.itemClick = "despacho_Ajustes";
+					generarDespacho.cambiarVista();
+				}
+				vistaResumen.recibeOrdenDespacho($orden);
+			}	
+			
+			
+			private	var temporizador:Timer;
+			private function tiempoPr():void
+			{
+				temporizador = new Timer(3300+5000,0);
+				temporizador.addEventListener(TimerEvent.TIMER,final,false,0,true);
+				temporizador.start();
+			}
+			
+			
+			private	var tmpEspera:Timer;
+			private function tiempoEspera():void
+			{
+				tmpEspera = new Timer(1400+5000,0);
+				tmpEspera.addEventListener(TimerEvent.TIMER,terminaEspera,false,0,true);
+				tmpEspera.start();
+			}
+			
+			private function final(event:TimerEvent):void
+			{
+				temporizador.stop();
+				oldCurrent="despacho_Consolidado";
+				vistaDocumentacion.setOrdenDespacho(llegoDoc);
+				generarDespacho.selecionarBoton("despacho_Documentacion");
+				generarDespacho.itemClick = "despacho_Documentacion";
+				funcValida();
+				tiempoEspera();
+			}
+			
+			private function terminaEspera(event:TimerEvent):void
+			{
+				tmpEspera.stop();
+				if(!isResumen)
+					iniciaEspera('terminaEspera');
+				else
+				{
+					oldCurrent = "despacho_Documentacion";
+					generarDespacho.selecionarBoton("despacho_GOrden");
+					generarDespacho.itemClick = "despacho_GOrden";
+					funcValida();
+					iniciaEspera('terminaEspera');
+				}
+			}
+			
+			
+			public function set recibeDocumentosOrdenesDespacho($documentos:ArrayCollection):void
+			{
+				if(!$documentos || $documentos.length == 0)
+					return;
+				
+				// SE OBTIENEN LOS ID Y FOLIO, PARA QUE NO SE GENEREN MAS REGISTROS DE LOS ARCHIVOS GUARDADOSº
+				varIdOrden = ($documentos[0] as DocumentoOrdenDespacho).idOrdenDespacho.toString();
+				if(($documentos[0] as DocumentoOrdenDespacho).folio != "")
+					varFolio = ($documentos[0] as DocumentoOrdenDespacho).folio;
+				
+				vistaDocumentacion.recibeDocumentos($documentos);
+			}
+			
+			public function pedirDocumentosURL(evt:Event):void
+			{
+				getAjustes();
+				getConsolidado();
+				getDocumentacion();
+				
+				var urlImg:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_URL_IMAGEN_CARGADA);
+				infoGeneral.idOrdenDespacho = Number(varIdOrden);
+				infoGeneral.folio = varFolio;
+				urlImg.ordenDespacho = infoGeneral;
+				urlImg.ordenDespacho.usuario = DatosGlobales.getInstance()._usuario.clave;
+				/*urlImg.ordenDespacho.tipoVista = "materiales";*/
+				dispatchEvent(urlImg);
+			}
+			
+			
+			private function iniciaEspera(mensaje:String):void
+			{
+				if(mensaje == "iniciarEspera")
+				{
+					
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+				}
+				else if (mensaje == "terminaEspera" )
+				{
+					alertaSingleton.remove(true);
+				}
+			}
+			
+			private var isParcial:Boolean;
+			private function cambiarColor(evt:Event):void
+			{
+				if((evt as EventoGestorCompras).completadaOrden == true)
+				{
+					generarDespacho.buttonBarSeccion.btnGenerar.cambiarColor("#9abb26");
+					isParcial = false;
+				}
+				else
+				{
+					generarDespacho.buttonBarSeccion.btnGenerar.cambiarColor("#ffa703");
+					isParcial = true;
+				}
+				
+			}
+			
+			private function verificarConsolidadoLleno():Boolean
+			{
+				if(vistaConsolidado && vistaConsolidado.gpLimitesConsolidacion && vistaConsolidado.gpLimitesConsolidacion.listPanelOrdenDespacho
+				&& vistaConsolidado.gpLimitesConsolidacion.listPanelOrdenDespacho.dataProvider){
+					if(vistaConsolidado.gpLimitesConsolidacion.listPanelOrdenDespacho.dataProvider.length > 1) 
+						return true;
+					else
+						return false;
+				}else
+					return false;
+					
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" >
+		
+		<!--<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="PLANIFICAR DESPACHO · MATERIALES" vistaAnterior="vistaAtras(event)" isVisble="true" visible="false" includeInLayout="false"/>-->
+		<s:VGroup gap="0" width="100%" height="100%" paddingLeft="10" paddingRight="20" paddingBottom="20" paddingTop="15">
+			<plantilla:Plantilla_GenerarDespacho id="generarDespacho" width="100%" height="100%" />
+		</s:VGroup>
+	</s:VGroup>  
+	
+</s:Group>

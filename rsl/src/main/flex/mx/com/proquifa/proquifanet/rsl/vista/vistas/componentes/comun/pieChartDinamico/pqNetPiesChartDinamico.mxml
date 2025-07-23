@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:Fade id="fxFade" duration="800"/>
+		<!--<s:Resize id="fxResize" duration="400" />-->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.charts.PieChart;
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.PieSeries;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.pieChartDinamico.PieDinamico;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			
+			import skins.botones.grafica.botonPopUp;
+			import skins.skin.graficas.pieSeriesPqNet;
+			import skins.skin.graficas.pieSeriesVS;
+			
+			import spark.components.HGroup;
+			import spark.components.Label;
+			import spark.components.VGroup;
+			
+			[Bindable]	private var _arregloDePies:ArrayCollection = null;
+			/**
+			 * Recibe un arreglo de objetos tipo PieDinamico.as
+			 */
+			public function iniciarGraficas($arrayPies:ArrayCollection = null):void{
+				this.removeAllElements();
+				this._fadeTargets = new Array();
+				var totalFilas:int=0;
+				this._arregloDePies = $arrayPies;
+				var _seriesss:pieSeriesVS;
+				var _seriesss2:pieSeriesPqNet;
+				for(var f:int=0; f<$arrayPies.length; f++){
+					if($arrayPies[f].fila > totalFilas) totalFilas = $arrayPies[f].fila;
+				}
+				var cuenta:int=0;
+				while(cuenta < totalFilas+1){
+					var contenedorPrincipal:HGroup = new HGroup();
+					contenedorPrincipal.id = "grpPrincipal";
+					contenedorPrincipal.percentHeight = 100;
+					contenedorPrincipal.percentWidth = 100;
+					var margenGeneralLeft:int=0;
+					var margenGeneralRight:int=0;
+					for( var g:int = 0; g < _arregloDePies.length; g++){
+						if(_arregloDePies[g].fila == cuenta){
+							if((_arregloDePies[g] as PieDinamico).tipoPie == 1){
+								_seriesss = new pieSeriesVS();
+								_seriesss.nameField = "tipo";
+								_seriesss.field = "total";
+								_seriesss.id = "serie"+[g];
+								if( (_arregloDePies[g] as PieDinamico).posicionLabel == 1 ) _seriesss.labelField = "tipo";
+								if( (_arregloDePies[g] as PieDinamico).posicionLabel == 1 ) _seriesss.setStyle( "labelPosition", "insideWithCallout");
+							}else{
+								_seriesss2 = new pieSeriesPqNet();
+								_seriesss2.nameField = "tipo";
+								_seriesss2.field = "total";
+								_seriesss2.id = "serie"+[g];
+								if( (_arregloDePies[g] as PieDinamico).posicionLabel == 1 ) _seriesss2.setStyle( "labelPosition", "insideWithCallout");
+								if( (_arregloDePies[g] as PieDinamico).posicionLabel == 1 ) _seriesss2.labelField = "tipo";
+							}
+							var _chart:PieChart = new PieChart();
+							_chart.percentWidth = 100;
+							_chart.percentHeight = 100;
+							_chart.id = g.toString(); //"graficoPie"+[g];
+							_chart.visible = false;
+							_chart.showDataTips = true;
+							_chart.dataProvider = (_arregloDePies[g] as PieDinamico).arregloAlimentador;
+							_chart.series = [(_arregloDePies[g].tipoPie == 1 ? _seriesss : _seriesss2)];
+							_chart.dataTipFunction = dtFunc;
+							var botonInfo:botonPopUp = new botonPopUp();
+							botonInfo.icono = "infopopup";
+							botonInfo.id = g.toString();
+							botonInfo.alpha = 0;
+							/* botonInfo.width = 0;
+							botonInfo.height = 0; */
+							botonInfo.botonCircular = true;
+							botonInfo.horizontalCenter = 0;
+							botonInfo.verticalCenter = 0;
+							//grpAlgo.addElement( _chart );
+							if( (_arregloDePies[g] as PieDinamico).popUpHabilitado == true ){
+								//_chart.addEventListener(ChartItemEvent.ITEM_CLICK, despliegaPopUp );
+								_chart.addEventListener(MouseEvent.MOUSE_OVER, showBtnInfo );
+								_chart.addEventListener(MouseEvent.MOUSE_OUT, ocultaBtnInfo );
+								botonInfo.addEventListener( MouseEvent.CLICK, showPopUp );
+								//_chart.addEventListener(ChartItemEvent.ITEM_CLICK, rebanadas);
+							}else{
+								_chart.addEventListener(ChartItemEvent.ITEM_CLICK, rebanadas);
+							}
+							_chart.addEventListener(FlexEvent.CREATION_COMPLETE, pieCreado);
+							var lbltitulo:Label = new Label();
+							lbltitulo.text = (_arregloDePies[g] as PieDinamico).lblTitulo;
+							lbltitulo.horizontalCenter = 0;
+							lbltitulo.maxDisplayedLines = 2;
+							lbltitulo.setStyle("fontFamily","bankGothic");
+							lbltitulo.setStyle("fontWeight", "bold");
+							lbltitulo.setStyle("fontSize", (_arregloDePies[g] as PieDinamico).tituloSize);
+							lbltitulo.setStyle("color", (_arregloDePies[g] as PieDinamico).tituloColor);
+							lbltitulo.setStyle("textAlign", (_arregloDePies[g] as PieDinamico).horizontalAlign  );
+							var contenedor:*;
+							var grpAlgo:*;
+							if( (_arregloDePies[g] as PieDinamico).orientacion == "vertical"){
+								contenedor = new VGroup();
+								grpAlgo = new HGroup();
+								grpAlgo.paddingRight = -36;
+								//lbltitulo.setStyle("paddingLeft", "36");
+								//grpAlgo.percentWidth = 100;
+							}else if( (_arregloDePies[g] as PieDinamico).orientacion == "horizontal"){
+								contenedor = new HGroup();
+								grpAlgo = new VGroup();
+								//lbltitulo.setStyle("paddingBottom", "36");
+								//grpAlgo.percentHeight = 100;
+							}
+							grpAlgo.id = "gChart"+g.toString();
+							grpAlgo.horizontalAlign = "center";
+							grpAlgo.verticalAlign = "middle";
+							//grpAlgo.addElement( lbltitulo );
+							contenedor.id = "contenedor"+g.toString();
+							contenedor.paddingLeft = (_arregloDePies[g] as PieDinamico).margenLeft;
+							contenedor.paddingRight = (_arregloDePies[g] as PieDinamico).margenRight;
+							contenedor.paddingTop = (_arregloDePies[g] as PieDinamico).margenTop;
+							contenedor.paddingBottom = (_arregloDePies[g] as PieDinamico).margenBottom;
+							contenedor.verticalAlign = (_arregloDePies[g] as PieDinamico).verticalAlign;
+							contenedor.horizontalAlign = (_arregloDePies[g] as PieDinamico).horizontalAlign;
+							contenedor.percentHeight = 100;
+							contenedor.percentWidth = Math.round( 100 / _arregloDePies.length )*2;
+							contenedor.id = "grpContenedor";
+							this._fadeTargets.push( botonInfo );
+							/* var relleno:Button = new Button();
+							relleno.width = 36;
+							relleno.visible = false;
+							grpAlgo.addElement( relleno ); */
+							if( (_arregloDePies[g] as PieDinamico).ordenTitulo == 1 ){
+								//contenedor.addElement(_chart);
+								if( (_arregloDePies[g] as PieDinamico).sinTitulo == false ) grpAlgo.addElement(lbltitulo);
+								grpAlgo.addElement( botonInfo );
+								contenedor.addElement( _chart );
+								contenedor.addElement( grpAlgo);
+							}else if( (_arregloDePies[g] as PieDinamico).ordenTitulo == 0 ){
+								if( (_arregloDePies[g] as PieDinamico).sinTitulo == false ) grpAlgo.addElement(lbltitulo);
+								//contenedor.addElement(_chart);
+								contenedor.addElement( grpAlgo);
+								grpAlgo.addElement( botonInfo );
+								contenedor.addElement( _chart );
+							}
+							//grpAlgo.addElement( botonInfo );
+							//contenedor.addElement( _chart );
+							if(_arregloDePies[g].filaMargenIzquierdo > margenGeneralLeft) margenGeneralLeft = _arregloDePies[g].filaMargenIzquierdo;
+							if(_arregloDePies[g].filaMargenDerecho > margenGeneralRight) margenGeneralRight = _arregloDePies[g].filaMargenDerecho;
+							contenedorPrincipal.addElement(contenedor);
+						}
+					}
+					contenedorPrincipal.paddingLeft = margenGeneralLeft;
+					contenedorPrincipal.paddingRight = margenGeneralRight;
+					this.addElement(contenedorPrincipal);
+					cuenta++;
+				}
+			}
+			private var _seleccionAnterior:PieSeriesItem = null;
+			private function rebanadas(evt:ChartItemEvent):void{
+			 	var item:PieSeriesItem = evt.hitData.chartItem as PieSeriesItem;
+				var degrees:Number = radiansToDegrees(item.startAngle);
+				var arr:Array = [];
+				if(_seleccionAnterior != null){
+					((this._seleccionAnterior as PieSeriesItem).element as PieSeries).perWedgeExplodeRadius = [];
+				}
+				arr[item.index] = 0.1;
+				(evt.hitData.element as PieSeries).perWedgeExplodeRadius = arr;
+				(evt.hitData.element as PieSeries).startAngle -= degrees;
+				for(var r:int = 0; r<this._arregloDePies.length; r++){
+					( (this._arregloDePies[r] as PieDinamico).arregloAlimentador as ArrayCollection).refresh();
+				}
+				this._seleccionAnterior = evt.hitData.chartItem as PieSeriesItem;
+			}
+			private function radiansToDegrees(radians:Number):Number {
+				return radians * (180 / Math.PI);
+			}
+			private function pieCreado(evt:FlexEvent):void{
+				var pieObject:PieChart = evt.currentTarget as PieChart;
+				var provider:Object = (evt.currentTarget as PieChart).dataProvider;
+				setTimeout(agregaDataProvider, ( int(pieObject.id) * 60), pieObject, provider);
+				pieObject.dataProvider = [];
+			}
+			private function agregaDataProvider($pie:PieChart, $dataProvider:Object ):void {
+				$pie.dataProvider = $dataProvider;
+				$pie.visible = true;
+			}
+			private var graficaPop:pqNetPieChartPopUp = new pqNetPieChartPopUp();
+			private function showPopUp(evt:MouseEvent):void{
+				graficaPop = PopUpManager.createPopUp( alertaSingleton.elDisplayObject, pqNetPieChartPopUp, true) as pqNetPieChartPopUp;
+				var _pieEnviado:PieDinamico = this._arregloDePies[ int(evt.currentTarget.id) ];
+				graficaPop.iniciarGrafica( _pieEnviado );
+				PopUpManager.centerPopUp( graficaPop );
+			}
+			private var _fadeTargets:Array;
+			private function ocultaBtnInfo($event:MouseEvent):void{
+				this.fxFade.alphaTo = 0;
+				this.fxFade.target = this._fadeTargets[$event.currentTarget.id];//(this._fadeTargets[$event.currentTarget.id] as FadeInstance).target;
+				this.fxFade.startDelay = 600;
+				this.fxFade.play();
+				/* this.fxResize.widthTo = 0;
+				this.fxResize.heightTo = 0;
+				this.fxResize.target = this._fadeTargets[$event.currentTarget.id];
+				this.fxResize.play(); */
+			}
+			private function showBtnInfo($event:MouseEvent):void{
+				this.fxFade.alphaTo = 100;
+				this.fxFade.target = this._fadeTargets[$event.currentTarget.id];//(this._fadeTargets[$event.currentTarget.id] as FadeInstance).target;
+				this.fxFade.startDelay = 0;
+				this.fxFade.play();
+				/* this.fxResize.widthTo = 36;
+				this.fxResize.heightTo = 36;
+				this.fxResize.target = this._fadeTargets[$event.currentTarget.id];
+				this.fxResize.play(); */
+			}
+			private function dtFunc(hd:HitData):String {
+				return 	"<B>"+hd.item.tipo+" % "+ Math.round((hd.chartItem as PieSeriesItem).percentValue*100)/100 +"</B><BR>" + 
+					hd.item.total + " " + (!hd.item.etiquetaElemento ? 'Partida(s)' :hd.item.etiquetaElemento);
+			}
+		]]>
+	</fx:Script>
+</s:VGroup>

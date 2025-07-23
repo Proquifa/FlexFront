@@ -1,0 +1,727 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contenedores:VGroupConPaddingStandardPqNet xmlns:fx="http://ns.adobe.com/mxml/2009" 
+											xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+											xmlns:s="library://ns.adobe.com/flex/spark" 
+											xmlns:mx="library://ns.adobe.com/flex/mx" 
+											xmlns:contenedores="skins.skin.contenedores.*"
+											xmlns:botonesToggle="skins.botonesToggle.*"
+											xmlns:textinput="skins.skin.textinput.*"
+											xmlns:pqNet="skins.botones.pqNet.*"
+											xmlns:label="skins.skin.label.*"
+											xmlns:otros="skins.otros.*"
+											width="100%" height="100%" 
+											gap="10"  
+											creationComplete="vgroupconpaddingstandardpqnet1_creationCompleteHandler(event)"
+											>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.acuerdos.EventoCatProAcuerdos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.MedioPago;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.InformacionPagos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.IVisualElement;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var _currentProveedor:Proveedor;
+			
+			private var currentInfoPagos:InformacionPagos;
+			private var respaldoInfoPagos:InformacionPagos;
+			private var transferencia:MedioPago;
+			private var deposito:MedioPago;
+			private var tarjeta:MedioPago;
+			
+			[Bindable]
+			private var medioPago:ArrayCollection = new ArrayCollection( [ 
+				{ valor:' TRANSFERENCIA', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14}, 
+				{ valor:' DEPÓSITO', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14},
+				{ valor:' TARJETA', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14}] );
+			
+			private var seEstaEditando:Boolean = false;
+			
+			[Bindable]
+			private var mostarTxtClabe:Boolean = false;
+			[Bindable]
+			private var mostarTxtNoCuenta:Boolean = true;
+			[Bindable]
+			private var mostarTxtSucursal:Boolean = false;
+			[Bindable]
+			private var mostarLblNoCuenta:Boolean = true;
+			[Bindable]
+			private var mostrarTxtTarjeta:Boolean = false;
+			[Bindable]
+			private var mostrarTxtSwift:Boolean = true;
+			[Bindable]
+			private var mostrarTxtABA:Boolean = true;
+			
+			
+			public function iniciarVista():void
+			{
+				limpiarContenido();
+				habilitarEdicionDelContenido(false);
+				seEstaEditando = false;
+				btnEditar.includeInLayout = btnEditar.visible = true;
+				grpGuardarCancelar.includeInLayout = grpGuardarCancelar.visible = false;
+				
+				if(_currentProveedor && !isNaN(_currentProveedor.idProveedor))
+				{
+					var solicitarInfoPago:EventoCatProAcuerdos = new EventoCatProAcuerdos(EventoCatProAcuerdos.SOLICITAR_INFORMACION_DE_PAGO_PARA_PROVEEDOR);
+					solicitarInfoPago.idProveedor  = _currentProveedor.idProveedor;
+					dispatchEvent(solicitarInfoPago);
+				}
+			}
+			
+			public function set recibeInformacionPagoProveedor($info:InformacionPagos):void
+			{
+				if($info == null)
+				{
+					return;
+				}
+				
+				respaldoInfoPagos = ObjectUtil.copy($info) as InformacionPagos;
+				currentInfoPagos = $info;
+				
+				lblFua.fecha = currentInfoPagos.fua;
+				limpiarContenido();
+				settearContenido();
+				
+				var index:IndexChangeEvent = new IndexChangeEvent(IndexChangeEvent.CHANGING);
+				index.newIndex = btneraMedioPago.selectedIndex;
+				btneraMedioPago.dispatchEvent(index);
+			}
+			
+			
+			private function settearContenido():void
+			{
+				transferencia = new MedioPago;
+				deposito = new MedioPago;
+				tarjeta = new MedioPago;
+				
+				/* 				intentosSelCmbCondicionesPago = 0;
+				intentosSelCmbBancos = 0; */
+				
+				seleccionaCmbCondicionesPago();
+				txtInputLineaCredito.text = currentInfoPagos.lineaCredito.toString();
+				txtInputLimiteLineaCredito.text = currentInfoPagos.limiteCredito.toString();
+				
+				var seleccionarTransferencia:Boolean = false;
+				var seleccionarDeposito:Boolean = false;
+				var seleccionarTarjeta:Boolean = false;
+				
+				if(currentInfoPagos.medios)
+				{
+					for (var i:int = 0; i < currentInfoPagos.medios.length; i++) 
+					{
+						var currentTipo:String = MedioPago(currentInfoPagos.medios[i]).tipo.toLowerCase();
+						var current:MedioPago = currentInfoPagos.medios[i] as MedioPago;
+						
+						if(current.tipo.toLowerCase() == "transferencia")
+						{
+							if(current.key != null && current.key != "--NINGUNO--" &&
+							current.numCuenta != null && current.numCuenta != ""){
+								seleccionarTransferencia = true;
+							}
+							transferencia = currentInfoPagos.medios[i] as MedioPago;
+						}
+						else if(current.tipo.toLowerCase() == "deposito")
+						{
+							if(current.key != null && current.key != "--NINGUNO--" &&
+								current.numCuenta != null && current.numCuenta != ""){
+								seleccionarDeposito = true;
+							}
+							deposito = currentInfoPagos.medios[i] as MedioPago;
+						}
+						else if(current.tipo.toLowerCase() == "tarjeta")
+						{
+							if(current.key != null && current.key != "--NINGUNO--" &&
+								current.numCuenta != null && current.numCuenta != ""){
+								seleccionarTarjeta = true;
+							}
+							tarjeta = currentInfoPagos.medios[i] as MedioPago;
+						}
+					}
+				}
+				
+				if (seleccionarTransferencia){
+					btneraMedioPago.selectedIndex = 0;
+				}
+				else if ( seleccionarDeposito ){
+					btneraMedioPago.selectedIndex = 1;
+				}
+				else if ( seleccionarTarjeta ){
+					btneraMedioPago.selectedIndex = 2;
+				}
+				
+				if(btneraMedioPago.selectedIndex == 0)
+				{
+					llenarContenidoPagoTipoTransferencia();
+				}
+				else if(btneraMedioPago.selectedIndex == 1)
+				{
+					llenarContenidoPagoTipoDeposito();
+				}
+				else if (btneraMedioPago.selectedIndex == 2)
+				{
+					llenarContenidoPagoTipoTarjeta();
+				}
+			}
+			
+			private function llenarContenidoPagoTipoTransferencia():void
+			{
+				if(transferencia)
+				{
+					if (_currentProveedor.pais.toUpperCase() == "MEXICO" || _currentProveedor.pais.toUpperCase() == "MÉXICO" ){
+						seleccionaCmbBancos(transferencia.banco);
+						txtBeneficiario.text = transferencia.beneficiario;
+						txtClabe.text =transferencia.clabe;
+					}
+					else{
+						seleccionaCmbBancos(transferencia.banco);
+						txtBeneficiario.text = transferencia.beneficiario;
+						txtABA.text = transferencia.clabe;
+						txtSwiftCode.text = transferencia.sucursal;
+						txtNoCuenta.text = transferencia.numCuenta;
+					}
+					
+				}
+			}
+			
+			private function llenarContenidoPagoTipoDeposito():void
+			{
+				if(deposito)
+				{
+					trace("llenarContenidoPagoTipoDeposito",deposito.banco);
+					seleccionaCmbBancos(deposito.banco);
+					txtBeneficiario.text = deposito.beneficiario;
+					txtNoCuenta.text = deposito.numCuenta;
+					txtSucursal.text = deposito.sucursal;
+				}
+			}
+			
+			private function llenarContenidoPagoTipoTarjeta():void
+			{
+				if(tarjeta)
+				{
+					trace("llenarContenidoPagoTipoDeposito",tarjeta.banco);
+					seleccionaCmbBancos(tarjeta.banco);
+					txtBeneficiario.text = tarjeta.beneficiario;
+					txtNoCuenta.text = tarjeta.numCuenta;
+					txtSucursal.text = tarjeta.sucursal;
+					txtClabe.text = tarjeta.clabe;
+				}
+			}
+			
+			/* private var intentosSelCmbBancos:int; */
+			private function seleccionaCmbBancos($banco:String):void
+			{
+				if(cmbBanco.dataProvider)
+				{
+					cmbBanco.selectedIndex = cmbBanco.seleccionarValor($banco);
+				}
+				else
+				{
+					/* if(intentosSelCmbBancos < 5)
+					{
+					intentosSelCmbBancos++; */
+					setTimeout(seleccionaCmbBancos,200);
+					/* 					}
+					*/				
+				}
+			}
+			
+			/* private var intentosSelCmbCondicionesPago:int; */
+			private function seleccionaCmbCondicionesPago():void
+			{
+				if(cmbCondicionesDePago.dataProvider)
+				{
+					if(currentInfoPagos.condicionesPago)
+					{
+						cmbCondicionesDePago.selectedIndex = cmbCondicionesDePago.seleccionarValor(currentInfoPagos.condicionesPago);
+					}
+					else
+					{
+						/* 	if(intentosSelCmbCondicionesPago < 5)
+						{ 
+						intentosSelCmbCondicionesPago ++;*/
+						setTimeout(seleccionaCmbCondicionesPago,200);
+						/* 	} */
+					}
+				}
+			}
+			
+			private function habilitarEdicionDelContenido($habilitar:Boolean):void
+			{
+				habilitarContenidoPorTipoDeObjeto(cmbCondicionesDePago,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtInputLineaCredito,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtInputLimiteLineaCredito,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(cmbBanco,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtNoCuenta,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtClabe,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtBeneficiario,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtSucursal,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtSwiftCode,$habilitar);
+				habilitarContenidoPorTipoDeObjeto(txtABA,$habilitar);
+				/* habilitarContenidoPorTipoDeObjeto(btneraMedioPago,$habilitar); */
+			}
+			
+			private function habilitarContenidoPorTipoDeObjeto($objeto:IVisualElement,$habilitar:Boolean):void
+			{
+				if($objeto != null)
+				{
+					if($objeto is ComboCatalogos)
+					{
+						ComboCatalogos($objeto).openButton.enabled = $habilitar;
+						ComboCatalogos($objeto).textInput.enabled = $habilitar;
+						ComboCatalogos($objeto).focusEnabled = $habilitar;
+					}
+					else if($objeto is txtInputBlancoDefaultPQNet)
+					{
+						($objeto as txtInputBlancoDefaultPQNet).editable = $habilitar; 
+						($objeto as txtInputBlancoDefaultPQNet).focusEnabled = $habilitar; 
+						($objeto as txtInputBlancoDefaultPQNet).mouseEnabled = $habilitar; 
+						($objeto as txtInputBlancoDefaultPQNet).mouseChildren = $habilitar; 
+					}
+					else if($objeto is ButtonBarColores)
+					{
+						ButtonBarColores($objeto).enabled = $habilitar;
+					}
+				}
+			}
+			
+			private function limpiarContenido():void
+			{
+				limpiarContenidoPorTipoDeObjeto(cmbCondicionesDePago);
+				limpiarContenidoPorTipoDeObjeto(txtInputLineaCredito);
+				limpiarContenidoPorTipoDeObjeto(txtInputLimiteLineaCredito);
+				limpiarContenidoPorTipoDeObjeto(cmbBanco);
+				limpiarContenidoPorTipoDeObjeto(txtNoCuenta);
+				limpiarContenidoPorTipoDeObjeto(txtClabe);
+				limpiarContenidoPorTipoDeObjeto(txtBeneficiario);
+				limpiarContenidoPorTipoDeObjeto(txtSucursal);
+				limpiarContenidoPorTipoDeObjeto(btneraMedioPago);
+				limpiarContenidoPorTipoDeObjeto(txtABA);
+				limpiarContenidoPorTipoDeObjeto(txtSwiftCode);
+			}
+			
+			
+			private function limpiarPorTipoDePagoSeleccionado($tipoPago:int):void
+			{
+				if($tipoPago == 0)
+				{
+					if (_currentProveedor.pais.toUpperCase() == "MEXICO" || _currentProveedor.pais.toUpperCase() == "MÉXICO" ){
+						limpiarContenidoPorTipoDeObjeto(cmbBanco);
+						limpiarContenidoPorTipoDeObjeto(txtBeneficiario);
+						limpiarContenidoPorTipoDeObjeto(txtClabe);
+					}else{
+						limpiarContenidoPorTipoDeObjeto(cmbBanco);
+						limpiarContenidoPorTipoDeObjeto(txtBeneficiario);
+						limpiarContenidoPorTipoDeObjeto(txtNoCuenta);
+						limpiarContenidoPorTipoDeObjeto(txtABA);
+						limpiarContenidoPorTipoDeObjeto(txtSwiftCode);
+					}
+					
+				}
+				else if($tipoPago == 1)
+				{
+					limpiarContenidoPorTipoDeObjeto(cmbBanco);
+					limpiarContenidoPorTipoDeObjeto(txtBeneficiario);
+					limpiarContenidoPorTipoDeObjeto(txtNoCuenta);
+					limpiarContenidoPorTipoDeObjeto(txtSucursal);
+				}
+				else if($tipoPago == 2)
+				{
+					limpiarContenidoPorTipoDeObjeto(cmbBanco);
+					limpiarContenidoPorTipoDeObjeto(txtBeneficiario);
+					limpiarContenidoPorTipoDeObjeto(txtNoCuenta);
+					limpiarContenidoPorTipoDeObjeto(txtClabe);
+					limpiarContenidoPorTipoDeObjeto(txtSucursal);
+				}
+			}
+			
+			private function limpiarContenidoPorTipoDeObjeto($objeto:IVisualElement):void
+			{
+				if($objeto != null)
+				{
+					if($objeto is ComboCatalogos)
+					{
+						ComboCatalogos($objeto).selectedIndex = 0;
+						ComboCatalogos($objeto).errorString = "";
+					}
+					else if($objeto is txtInputBlancoDefaultPQNet)
+					{
+						if(txtInputBlancoDefaultPQNet($objeto).isNumeric)
+						{
+							txtInputBlancoDefaultPQNet($objeto).text = "0";
+						}
+						else
+						{
+							txtInputBlancoDefaultPQNet($objeto).text = "";
+						}
+						txtInputBlancoDefaultPQNet($objeto).errorString = "";
+					}
+					else if($objeto is ButtonBarColores)
+					{
+						ButtonBarColores($objeto).selectedIndex = 0;
+						if (_currentProveedor.pais.toUpperCase() == "MEXICO" || _currentProveedor.pais.toUpperCase() == "MÉXICO" ){
+							mostarTxtClabe = true;
+							mostarTxtNoCuenta = false;
+							mostarLblNoCuenta = false;
+							mostrarTxtTarjeta = false;
+							mostarTxtSucursal = false;
+							mostrarTxtSwift = false;
+							mostrarTxtABA = false;
+						}else{
+							mostarTxtClabe = false;
+							mostarTxtNoCuenta = true;
+							mostarLblNoCuenta = true;
+							mostrarTxtTarjeta = false;
+							mostarTxtSucursal = false;
+							mostrarTxtSwift = true;
+							mostrarTxtABA = true;
+						}
+					}
+				}
+			}
+			protected function btnGuardar_clickHandler(event:MouseEvent):void
+			{
+				guardardatosEnLasVariblesDeAcuerdoALaVista(btneraMedioPago.selectedIndex);
+				
+				currentInfoPagos.condicionesPago = cmbCondicionesDePago.selectedItem.valor;
+				
+				var lineaCredito:Number = parseFloat(txtInputLineaCredito.text); 
+				var limiteCredito:Number = parseFloat(txtInputLimiteLineaCredito.text); 
+				
+				if( lineaCredito > limiteCredito)
+				{
+					txtInputLineaCredito.errorString = "El monto debe ser menor que el dado para límite de crédito";
+					txtInputLimiteLineaCredito.errorString = "El monto debe ser mayor que el dado para línea de crédito";
+					alertaSingleton.show("Algunos de los datos que se han introducido no son válidos, favor de verificarlos.",catalogoAlertas.ADV_informacionIncompleta);
+					return;
+				}
+				else
+				{
+					txtInputLineaCredito.errorString = "";
+					txtInputLimiteLineaCredito.errorString = "";
+				}
+				
+				currentInfoPagos.lineaCredito = lineaCredito;
+				currentInfoPagos.limiteCredito = limiteCredito;
+				
+				currentInfoPagos.medios = new ArrayCollection;
+				
+				if(transferencia.key.length > 0)
+				{
+					if(!transferencia.tipo)
+					{
+						transferencia.tipo = "Transferencia";
+						transferencia.idProveedor = currentProveedor.idProveedor;
+					}
+					
+					currentInfoPagos.medios.addItem(transferencia);
+				}
+				
+				if(deposito.key.length > 0 )
+				{
+					if(!deposito.tipo)
+					{
+						deposito.tipo = "Deposito";
+						deposito.idProveedor = currentProveedor.idProveedor;
+					}
+					currentInfoPagos.medios.addItem(deposito);
+				}
+				
+				if(tarjeta.key.length > 0 )
+				{
+					if(!tarjeta.tipo)
+					{
+						tarjeta.tipo = "Tarjeta";
+						tarjeta.idProveedor = currentProveedor.idProveedor;
+					}
+					currentInfoPagos.medios.addItem(tarjeta);
+				}
+				
+				var actualizarInfoPagoProveedor:EventoCatProAcuerdos = new EventoCatProAcuerdos(EventoCatProAcuerdos.ACTUALIZAR_INFORMACION_PAGO_PROVEEDOR);
+				actualizarInfoPagoProveedor.informacionPago = currentInfoPagos;
+				actualizarInfoPagoProveedor.ventana = "CatProveedores_Pagos (idProveedor:"+currentProveedor.idProveedor +")";
+				dispatchEvent(actualizarInfoPagoProveedor);
+				
+				seEstaEditando = false;
+				btnEditar.includeInLayout = btnEditar.visible = true;
+				grpGuardarCancelar.includeInLayout = grpGuardarCancelar.visible = false;
+				habilitarEdicionDelContenido(false);
+				
+			}
+			
+			
+			
+			public function set recibeRespuestaActualizarInfoPagoProveedor($respuesta:Boolean):void
+			{
+				if($respuesta)
+				{
+					if(_currentProveedor && !isNaN(_currentProveedor.idProveedor))
+					{
+						var solicitarInfoPago:EventoCatProAcuerdos = new EventoCatProAcuerdos(EventoCatProAcuerdos.SOLICITAR_INFORMACION_DE_PAGO_PARA_PROVEEDOR);
+						solicitarInfoPago.idProveedor  = _currentProveedor.idProveedor;
+						dispatchEvent(solicitarInfoPago);
+					}
+				}
+			}
+			
+			protected function btnCancelar_clickHandler(event:MouseEvent):void
+			{
+				limpiarContenido();
+				seEstaEditando = false;
+				btnEditar.includeInLayout = btnEditar.visible = true;
+				grpGuardarCancelar.includeInLayout = grpGuardarCancelar.visible = false;
+				habilitarEdicionDelContenido(false);
+				currentInfoPagos = respaldoInfoPagos;
+				settearContenido();
+			}
+			
+			protected function btnEditar_clickHandler(event:MouseEvent):void
+			{
+				seEstaEditando = true;
+				btnEditar.includeInLayout = btnEditar.visible = false;
+				grpGuardarCancelar.includeInLayout = grpGuardarCancelar.visible = true;
+				habilitarEdicionDelContenido(true);
+			}
+			
+			protected function btneraMedioPago_changingHandler(event:IndexChangeEvent):void
+			{
+				if(ButtonBarColores(event.currentTarget).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					if(seEstaEditando)
+					{
+						guardardatosEnLasVariblesDeAcuerdoALaVista(event.oldIndex);
+					}
+					
+					if(event.newIndex == 0)
+					{
+						if (_currentProveedor.pais.toUpperCase() == "MEXICO" || _currentProveedor.pais.toUpperCase() == "MÉXICO" ){
+							mostarTxtClabe = true;
+							mostarTxtNoCuenta = false;
+							mostarLblNoCuenta = false;
+							mostrarTxtTarjeta = false;
+							mostarTxtSucursal = false;
+							mostrarTxtSwift = false;
+							mostrarTxtABA = false;
+						}else{
+							mostarTxtClabe = false;
+							mostarTxtNoCuenta = true;
+							mostarLblNoCuenta = true;
+							mostrarTxtTarjeta = false;
+							mostarTxtSucursal = false;
+							mostrarTxtSwift = true;
+							mostrarTxtABA = true;
+						}
+						limpiarPorTipoDePagoSeleccionado(0);
+						llenarContenidoPagoTipoTransferencia();
+					}
+					else if(event.newIndex == 1)
+					{
+						mostarTxtClabe = false;
+						mostarTxtNoCuenta = true;
+						mostarLblNoCuenta = true;
+						mostrarTxtTarjeta = false;
+						mostarTxtSucursal = true;
+						mostrarTxtSwift = false;
+						mostrarTxtABA = false;
+						limpiarPorTipoDePagoSeleccionado(1);
+						llenarContenidoPagoTipoDeposito();
+					}
+					else if(event.newIndex == 2)
+					{
+						mostarTxtClabe = false;
+						mostarTxtNoCuenta = true;
+						mostarLblNoCuenta = false;
+						mostrarTxtTarjeta = true;
+						mostarTxtSucursal = false;
+						mostrarTxtSwift = false;
+						mostrarTxtABA = false;
+						limpiarPorTipoDePagoSeleccionado(2);
+						llenarContenidoPagoTipoTarjeta();
+					}
+				}
+			}
+			
+			
+			private function guardardatosEnLasVariblesDeAcuerdoALaVista($index:int):void
+			{
+				if($index == 0)
+				{
+					if(!transferencia)
+					{
+						transferencia = new MedioPago;
+					}
+					if (_currentProveedor.pais.toUpperCase() == "MEXICO" || _currentProveedor.pais.toUpperCase() == "MÉXICO" ){
+						transferencia.banco = cmbBanco.selectedItem.valor;
+						transferencia.beneficiario = txtBeneficiario.text;
+						transferencia.clabe = txtClabe.text;
+					}
+					else{
+						transferencia.banco = cmbBanco.selectedItem.valor;
+						transferencia.beneficiario = txtBeneficiario.text;
+						transferencia.clabe = txtABA.text;
+						transferencia.numCuenta = txtNoCuenta.text;
+						transferencia.sucursal = txtSwiftCode.text;
+					}
+					
+				}
+				else if($index == 1)
+				{
+					if(!deposito)
+					{
+						deposito = new MedioPago;
+					}
+					deposito.banco = cmbBanco.selectedItem.valor;
+					deposito.beneficiario = txtBeneficiario.text;
+					deposito.numCuenta = txtNoCuenta.text;
+					deposito.sucursal = txtSucursal.text;
+				}
+				else if($index == 2)
+				{
+					if(!tarjeta)
+					{
+						tarjeta = new MedioPago;
+					}
+					
+					tarjeta.banco = cmbBanco.selectedItem.valor;
+					tarjeta.beneficiario = txtBeneficiario.text;
+					tarjeta.numCuenta = txtNoCuenta.text;
+					tarjeta.sucursal = txtSucursal.text;
+					tarjeta.clabe = txtClabe.text;
+				}
+			}
+			
+			
+			
+			[Bindable]
+			public function get currentProveedor():Proveedor
+			{
+				return _currentProveedor;
+			}
+			
+			public function set currentProveedor(value:Proveedor):void
+			{
+				_currentProveedor = value;
+			}
+			
+			protected function validarLineaCredito_focusOutHandler(event:FocusEvent):void
+			{
+				var lineaCredito:Number = parseFloat(txtInputLineaCredito.text); 
+				var limiteCredito:Number = parseFloat(txtInputLimiteLineaCredito.text); 
+				
+				if( lineaCredito > limiteCredito)
+				{
+					txtInputLineaCredito.errorString = "El monto debe ser menor que el dado para límite de crédito";
+					txtInputLimiteLineaCredito.errorString = "El monto debe ser mayor que el dado para línea de crédito";
+				}
+				else
+				{
+					txtInputLineaCredito.errorString = "";
+					txtInputLimiteLineaCredito.errorString = "";
+				}
+			}
+			
+			protected function vgroupconpaddingstandardpqnet1_creationCompleteHandler(event:FlexEvent):void
+			{
+				cmbCondicionesDePago.solicitarCondicionesDePago('--NINGUNO--');
+				cmbBanco.solicitarBancosParaElPago('--NINGUNO--');
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" verticalAlign="bottom" >
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_pagosGris}"/>
+		<label:TituloBankGothic_30 text="Pagos"/>
+		<s:Spacer width="100%"/>
+		<s:HGroup height="100%" verticalAlign="bottom" horizontalAlign="right">
+			<label:Texto_13_VerdeAzul text="Última actualización: "/>
+			<label:Fecha_13_VerdeAzul id="lblFua" fecha="{null}"/>
+		</s:HGroup>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:Group width="100%" height="100%" >
+		<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" maxWidth="1050" horizontalCenter="0" gap="10">
+			<label:Titulo_16_pTop10 width="100%" text="GENERALES" textAlign="right"/>
+			<otros:division width="100%"/>
+			<s:HGroup width="100%">
+				<s:VGroup width="100%" gap="10" horizontalAlign="left" maxWidth="450"> 
+					<label:Titulo text="Condiciones de pago:" paddingTop="0" />
+					<cmbCat:ComboCatalogos id="cmbCondicionesDePago" width="100%" height="28"/>
+					<label:Titulo text="Línea de crédito:" paddingTop="0" />
+					<s:HGroup verticalAlign="middle" width="100%">
+						<textinput:txtInputBlancoDefaultPQNet id="txtInputLineaCredito" width="100%" restrict=".0-9" isNumeric="true" focusOut="validarLineaCredito_focusOutHandler(event)"/>
+						<label:Titulo text="{currentProveedor.monedaCompraAbreviatura}" paddingTop="0"/>
+					</s:HGroup>  
+				</s:VGroup>  
+				<s:Spacer width="50%"/>
+				<s:VGroup width="100%" gap="10" horizontalAlign="right" maxWidth="450">
+					<s:Spacer height="14"/>
+					<s:Spacer height="28"/>
+					<label:Titulo text="Límite de línea de crédito:" paddingTop="0" width="100%" textAlign="left"/>
+					<s:HGroup width="100%" verticalAlign="middle" >
+						<textinput:txtInputBlancoDefaultPQNet id="txtInputLimiteLineaCredito" width="100%" restrict=".0-9" isNumeric="true" focusOut="validarLineaCredito_focusOutHandler(event)"/>
+						<label:Titulo text="{currentProveedor.monedaCompraAbreviatura}" paddingTop="0"/>
+					</s:HGroup>  
+				</s:VGroup>  
+			</s:HGroup>
+			
+			<label:Titulo_16_pTop10 width="100%" text="MEDIO DE PAGO" textAlign="right" paddingTop="30"/>
+			<otros:division width="100%"/>
+			<s:VGroup width="100%" gap="0">
+				<botonesToggle:ButtonBarColores width="100%" height="40" id="btneraMedioPago" requireSelection="true" 
+												changing="btneraMedioPago_changingHandler(event)" selectedIndex="0" dataProvider="{medioPago}"/>
+				<s:Group width="100%" id="grpTxtsMediosPago">
+					<s:HGroup width="100%" height="100%" paddingTop="40">
+						<s:VGroup width="100%" gap="10" maxWidth="450">
+							<label:Titulo text="Banco:" paddingTop="0"/>
+							<cmbCat:ComboCatalogos id="cmbBanco" width="100%" height="28"/>
+							<label:Titulo text="No. de Cuenta:" paddingTop="0" visible="{mostarLblNoCuenta}" includeInLayout="{mostarLblNoCuenta}"/>
+							<label:Titulo text="No. Tarjeta:" paddingTop="0" visible="{mostrarTxtTarjeta}" includeInLayout="{mostrarTxtTarjeta}" />
+							<textinput:txtInputBlancoDefaultPQNet id="txtNoCuenta" width="100%" visible="{mostarTxtNoCuenta}" includeInLayout="{mostarTxtNoCuenta}"/>
+							<label:Titulo text="CLABE:" paddingTop="0" visible="{mostarTxtClabe}" includeInLayout="{mostarTxtClabe}"/>
+							<textinput:txtInputBlancoDefaultPQNet id="txtClabe" width="100%" visible="{mostarTxtClabe}" includeInLayout="{mostarTxtClabe}"/>
+							<label:Titulo text="Swift Code:" paddingTop="0" visible="{mostrarTxtSwift}" />
+							<textinput:txtInputBlancoDefaultPQNet id="txtSwiftCode" width="100%" visible="{mostrarTxtSwift}" />
+						</s:VGroup>  
+						<s:Spacer width="50%"/>
+						<s:VGroup width="100%" gap="10" maxWidth="450">
+							<label:Titulo text="Beneficiario:" paddingTop="0"/>
+							<textinput:txtInputBlancoDefaultPQNet id="txtBeneficiario" width="100%"/>
+							<label:Titulo text="Sucursal:" paddingTop="0" visible="{mostarTxtSucursal}" includeInLayout="{mostarTxtSucursal}"/>
+							<textinput:txtInputBlancoDefaultPQNet id="txtSucursal" width="100%" visible="{mostarTxtSucursal}" includeInLayout="{mostarTxtSucursal}" />
+							<label:Titulo text="ABA #:" paddingTop="0" visible="{mostrarTxtABA}" includeInLayout="{mostrarTxtABA}" />
+							<textinput:txtInputBlancoDefaultPQNet id="txtABA" width="100%" visible="{mostrarTxtABA}" includeInLayout="{mostrarTxtABA}" />
+						</s:VGroup>  
+					</s:HGroup>  
+				</s:Group>  	
+			</s:VGroup>  
+		</s:VGroup>
+	</s:Group>  
+	<otros:divisionGruesa width="100%"/>
+	<s:Group width="100%" id="grpBotones">
+		<s:HGroup width="100%" horizontalAlign="right" verticalAlign="middle" id="grpBotonEditar"  >
+			<pqNet:botonPqNetLargo label="Editar" id="btnEditar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="btnEditar_clickHandler(event)"/>
+		</s:HGroup>
+		<s:HGroup width="100%" id="grpGuardarCancelar" visible="false">
+			<pqNet:botonPqNetLargo label="Guardar" id="btnGuardar" click="btnGuardar_clickHandler(event)"/>
+			<s:Spacer width="100%"/>
+			<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" id="btnCancelar" click="btnCancelar_clickHandler(event)"/>
+		</s:HGroup>
+	</s:Group>
+</contenedores:VGroupConPaddingStandardPqNet>

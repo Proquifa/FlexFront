@@ -1,0 +1,965 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009"
+									  xmlns:s="library://ns.adobe.com/flex/spark" 
+									  xmlns:mx="library://ns.adobe.com/flex/mx"   
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:contenedores="skins.skin.contenedores.*"
+									  xmlns:linkButton="skins.skin.linkButton.*" 
+									  xmlns:chekbox="skins.skin.chekbox.*" 
+									  xmlns:label="skins.skin.label.*" 
+									  xmlns:otros="skins.otros.*"
+									  width="100%" height="100%"
+									  creationComplete="completeHandler()" 
+									  >
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.pagos.EventoConsultaPagos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.metodos.zip.ASZip;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.metodos.zip.CompressionMethod;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.metodos.zip.Method;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.PagosGraficaETvsFT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.PagosGraficaPagadoVsPorPagar;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.PagosGraficaTotalPagado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.PagosGraficaTotalPorPagar;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.graficosETvsFT.PagosGraficaETvsFTSecuandaria;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.graficosETvsFT.PagosGraficaPagadorETvsFT;
+			import mx.core.IVisualElement;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			[Bindable] private var _imgProveedores:Class;
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgFacturas:Class;
+			
+			private var arrProveedoresAvanzada:ArrayCollection = new ArrayCollection;
+			private var arrProveedoresRapida:ArrayCollection = new ArrayCollection;
+			private var arrInterfacturacionAvanzada:ArrayCollection = new ArrayCollection;
+			private var arrInterfacturacionRapida:ArrayCollection = new ArrayCollection;
+			
+			public static var chkBusqueda:CheckBoxPq = new CheckBoxPq;
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var graficas1erNivel:ContenedorGraficas = new ContenedorGraficas();
+			
+			private var graficaEtvsFT:PagosGraficaETvsFT;
+			
+			public function set obtenerListaPagos(_pagos:ArrayCollection):void{
+				if(_pagos == null){
+					header.btnExportar.enabled = false;
+					return;
+				}
+				gridPagos.dataProvider = new ArrayCollection(); 
+				var arrTemp:ArrayCollection = ObjectUtil.copy(_pagos) as ArrayCollection;
+				for (var i:int=0; i <arrTemp.length; i++){
+					arrTemp[i].medioPago == "NULL" ? arrTemp[i].medioPago = "": arrTemp[i].medioPago;
+				}
+				gridPagos.dataProvider = arrTemp;
+				if (actualizarVistaActual){
+					arrProveedoresAvanzada = ObjectUtil.copy(arrTemp) as ArrayCollection;
+				}
+				else{
+					arrProveedoresRapida = ObjectUtil.copy(arrTemp) as ArrayCollection;
+				}
+				
+				if (_pagos.length > 0 ){
+					header.btnExportar.enabled = true;
+					header.btnDescargar.enabled = true;
+					
+				}
+				else{
+					header.btnExportar.enabled = false;
+					header.btnDescargar.enabled = false;
+				}
+			}
+			
+			public function set obtenerListaPagosInter(_pagos:ArrayCollection):void{
+				if(_pagos == null){ 
+					header.btnExportar.enabled = false;
+					return;
+				}
+				gridPagosInterfacturacion.dataProvider = new ArrayCollection(); 
+				var arrTemp:ArrayCollection = ObjectUtil.copy(_pagos) as ArrayCollection;
+				for (var i:int=0; i <arrTemp.length; i++){
+					arrTemp[i].medioPago == "NULL" ? arrTemp[i].medioPago = "": arrTemp[i].medioPago;
+				}
+				gridPagosInterfacturacion.dataProvider = arrTemp;
+				if (actualizarVistaActual){
+					arrInterfacturacionAvanzada = ObjectUtil.copy(arrTemp) as ArrayCollection;
+				}
+				else{
+					arrInterfacturacionRapida = ObjectUtil.copy(arrTemp) as ArrayCollection;
+				}
+				
+				if (_pagos.length > 0 ){
+					header.btnExportar.enabled = true;
+				}
+				else{
+					header.btnExportar.enabled = false;
+				}
+			}
+			
+			public function set obtenerResumenConsultaPagos(resumen:ArrayCollection):void{
+				if(resumen == null) return;
+				var _monto:int = 0;
+				var _montoPasado:int = 0;
+				var _proveedor:int = 0;
+				var _proveedorPasado:int = 0;
+				var _facturas:int = 0;
+				var _facturasPasado:int = 0;
+				
+				for(var d:int = 0; d<resumen.length ; d++){
+					if(resumen[d].conceptoResultado == "MONTO" && resumen[d].etiqueta == "PAGADO"){
+						_monto += resumen[d].total;
+						this.monto.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_monto);
+					}
+					if(resumen[d].conceptoResultado == "MONTO" && resumen[d].etiqueta == "PORPAGAR"){
+						_montoPasado += resumen[d].total;
+						this.montoPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPasado);
+					}
+					if(resumen[d].conceptoResultado == "PROVEEDORES" && resumen[d].etiqueta == "PAGADO"){
+						_proveedor += resumen[d].clientes_proveedores;
+						this.numProveedores.text = _proveedor.toString();
+					}
+					if(resumen[d].conceptoResultado == "PROVEEDORES" && resumen[d].etiqueta == "PORPAGAR"){
+						_proveedorPasado += resumen[d].clientes_proveedores;
+						this.numProveedoresPasado.text = _proveedorPasado.toString();
+					}
+					if(resumen[d].conceptoResultado == "FACTURAS" && resumen[d].etiqueta == "PAGADO"){
+						_facturas += resumen[d].factura;
+						this.numFacturas.text = _facturas.toString();
+					}
+					if(resumen[d].conceptoResultado == "FACTURAS" && resumen[d].etiqueta == "PORPAGAR"){
+						_facturasPasado += resumen[d].factura;
+						this.numFacturasPasado.text = _facturasPasado.toString();
+					}
+				}
+				
+				if(_proveedor > _proveedorPasado) this._imgProveedores = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_proveedor < _proveedorPasado) this._imgProveedores = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_proveedor == _proveedorPasado) this._imgProveedores = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_monto > _montoPasado) this._imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_monto < _montoPasado) this._imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_monto == _montoPasado) this._imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_facturas > _facturasPasado) this._imgFacturas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_facturas < _facturasPasado) this._imgFacturas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_facturas == _facturasPasado) this._imgFacturas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			}
+			
+			public function set mostrarOcultarTab(tabGrafica:Boolean):void{
+				this.imgTab.visible = tabGrafica;
+				
+				if(vistaSelected == _GRAFICAS){
+					compararVistas();
+				}
+			}
+			
+			[Bindable] public var filtrosConsultaActual:Object;
+			[Bindable] public var actualizarVistaActual:Boolean;
+			
+			public function set actualizarVistaActualBotonera($boton:Boolean):void{
+				actualizarVistaActual = $boton;
+				
+				mostrarDatosGridXSwitch();
+			}
+			
+			private function mostrarDatosGridXSwitch():void{ 
+				if (actualizarVistaActual){
+					if (switchBusqueda){
+						gridPagosInterfacturacion.dataProvider = arrInterfacturacionAvanzada;
+						arrInterfacturacionAvanzada.length > 0 ? header.btnExportar.enabled = true : header.btnExportar.enabled = false;
+						arrInterfacturacionAvanzada.length > 0 ? header.btnDescargar.enabled = true : header.btnDescargar.enabled = false;
+					}
+					else{
+						gridPagos.dataProvider = arrProveedoresAvanzada;
+						arrProveedoresAvanzada.length > 0 ? header.btnExportar.enabled = true : header.btnExportar.enabled = false;
+						arrProveedoresAvanzada.length > 0 ? header.btnDescargar.enabled = true : header.btnDescargar.enabled = false;
+					}
+				}
+				else{
+					if (switchBusqueda){
+						gridPagosInterfacturacion.dataProvider = arrInterfacturacionRapida;
+						arrInterfacturacionRapida.length > 0 ? header.btnExportar.enabled = true : header.btnExportar.enabled = false;
+						arrInterfacturacionRapida.length > 0 ? header.btnDescargar.enabled = true : header.btnDescargar.enabled = false;
+					}
+					else{
+						gridPagos.dataProvider = arrProveedoresRapida;
+						arrProveedoresRapida.length > 0 ? header.btnExportar.enabled = true : header.btnExportar.enabled = false;
+						arrProveedoresRapida.length > 0 ? header.btnDescargar.enabled = true : header.btnDescargar.enabled = false;
+						
+					}
+				}
+			}
+			
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible){
+					compararVistas();
+					var seleccionarVista:EventoConsultaPagos = new EventoConsultaPagos(EventoConsultaPagos.SETTEAR_CURRENT_VISTA_SELECTED);
+					
+					//Configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					
+					if( vistaSelected == _TABLA_GRID ){
+						seleccionarVista.selectedVista = _GRAFICAS;
+						
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_RESUMEN_PAGOS");
+							dispatchEvent(eventEspera);
+							
+							var resumen:EventoConsultaPagos = new EventoConsultaPagos(EventoConsultaPagos.OBTENER_RESUMEN_PAGOS);
+							resumen.idProveedor = filtrosConsultaActual.idProveedor;
+							resumen.estado = filtrosConsultaActual.estado;
+							resumen.empresa = filtrosConsultaActual.empresa;
+							resumen.factura = filtrosConsultaActual.factura;
+							resumen.moneda = filtrosConsultaActual.moneda;
+							resumen.finicio = filtrosConsultaActual.finicio;
+							resumen.ffin = filtrosConsultaActual.ffin;
+							resumen.oc = filtrosConsultaActual.oc;
+							resumen.idUsuario = filtrosConsultaActual.idUsuario;
+							dispatchEvent(resumen);
+							
+							//Para Researt filtros
+							resetControlDeCambiosEnFiltros();
+						}
+					}else{
+						seleccionarVista.selectedVista = _TABLA_GRID;
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("BUSCA_PAGOS_POR_FOLIO");
+							dispatchEvent(eventEspera);
+							
+							var grid:EventoConsultaPagos = new EventoConsultaPagos(EventoConsultaPagos.BUSCA_PAGOS_POR_FOLIO);
+							grid.idProveedor = filtrosConsultaActual.idProveedor;
+							grid.estado = filtrosConsultaActual.estado;
+							grid.empresa = filtrosConsultaActual.empresa;
+							grid.factura = filtrosConsultaActual.factura;
+							grid.moneda = filtrosConsultaActual.moneda;
+							grid.finicio = filtrosConsultaActual.finicio;
+							grid.ffin = filtrosConsultaActual.ffin;
+							grid.oc = filtrosConsultaActual.oc;
+							grid.idUsuario = filtrosConsultaActual.idUsuario;
+							dispatchEvent(grid);
+							
+							//Para Researt filtros
+							resetControlDeCambiosEnFiltros();
+						}
+					}
+					dispatchEvent(seleccionarVista);
+				}
+			}
+			protected function completeHandler():void
+			{
+				header.btnDescargar.visible = true;
+				header.btnExportar.enabled = false;
+				gridPagosInterfacturacion.visible = gridPagosInterfacturacion.includeInLayout = false;
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new PagosGraficaTotalPagado());
+				graficas.addItem(new PagosGraficaTotalPorPagar());
+				graficas.addItem(new PagosGraficaPagadoVsPorPagar());
+				
+				graficaEtvsFT = new PagosGraficaETvsFT;
+				graficaEtvsFT.chartETvsFT.addEventListener("itemChartSelectedGraficaPieChartPagos",escucharClickItemEnGraficaETvsFT,false,0,true);
+				graficas.addItem(graficaEtvsFT);
+				graficas1erNivel.insertarGraficas(graficas);
+				agregarEspacioTrabajo(graficas1erNivel);
+				
+				var graficaETvsFTSec:PagosGraficaETvsFTSecuandaria = new PagosGraficaETvsFTSecuandaria;
+				graficaETvsFTSec.addEventListener(ChartItemEvent.ITEM_CLICK,escucharClickItemEnGraficaETvsFT,false,0,true);
+				
+				var graficas2doNivel:ContenedorGraficas = new ContenedorGraficas;
+				graficas2doNivel.tipoDeBotonBack = "flecha";
+				graficas2doNivel.addEventListener("btnRegresarConsultasGraficasPrincipal",buttonRegresar_clickEventListener,false,0,true);
+				
+				var arraygraficas:ArrayCollection = new ArrayCollection;
+				arraygraficas.addItem(graficaETvsFTSec);
+				arraygraficas.addItem(new PagosGraficaPagadorETvsFT());
+				graficas2doNivel.insertarGraficasHorizontal(arraygraficas);
+				espacioSelectedGrafica.addElement(graficas2doNivel);
+				
+				resetControlDeCambiosEnFiltros();
+				gridPagosInterfacturacion.dataProvider = new ArrayCollection;
+				
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void{
+				if(espacio == null){
+					return;
+				}
+				this.graficos.addItem(espacio);
+				if(graficos.length == 1){
+					this.espacioGraficas.removeAllElements();
+					this.espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			
+			private function escucharClickItemEnGraficaETvsFT(event:Event):void
+			{
+				if(event.type == "itemChartSelectedGraficaPieChartPagos")
+				{
+					conceptoPie.text = graficaEtvsFT.chartETvsFT.currentItemClick.hitData.item.etiqueta.toUpperCase();
+					stack.selectedIndex= 1; 
+				}
+				else if(event.type == "itemClick")
+				{
+					conceptoPie.text = (event as ChartItemEvent).hitData.item.etiqueta.toUpperCase();
+				}
+				
+				var eventoSetFiltro:EventoConsultaPagos = new EventoConsultaPagos(EventoConsultaPagos.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+				eventoSetFiltro.tipo = conceptoPie.text; 
+				dispatchEvent(eventoSetFiltro);  
+			}
+			
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			public function limpiarGrid():void
+			{
+				gridPagos.dataProvider = new ArrayCollection();
+			}
+			
+			private function compareFunction_HeaderFechaEstimada(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fechaEstimadaPago,item2.fechaEstimadaPago); 
+			}
+			
+			private function compareFunction_HeaderFechaFacturacion(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fechaFacturacion,item2.fechaFacturacion); 
+			}
+			
+			private function compareFunction_HeaderMontoOC(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoOC,item2.montoOC); 
+			}
+			
+			private function compareFunction_HeaderMontoFactura(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoDolares,item2.montoDolares); 
+			}
+			protected function buttonRegresar_clickEventListener(event:Event):void
+			{
+				stack.selectedIndex=0;
+			}
+			
+			[Bindable] public static var switchBusqueda:Boolean = false;
+			protected function cambiarswitch(event:MouseEvent):void
+			{
+				switchBusqueda = checkComboTipoFactura.selected;
+				
+				gridPagos.visible = gridPagos.includeInLayout = !switchBusqueda;
+				gridPagosInterfacturacion.visible = gridPagosInterfacturacion.includeInLayout = switchBusqueda;
+				
+				chkBusqueda.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+				
+				mostrarDatosGridXSwitch();
+			}
+			
+			protected function headerparagridconsultas1_clickExportarHandler(event:MouseEvent):void
+			{
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var arrayTemp:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				
+				
+				
+				if (checkComboTipoFactura.selected){
+					arrayTemp = ObjectUtil.copy(gridPagosInterfacturacion.dataProvider) as ArrayCollection;
+					
+					fila1 = new Array();
+					fila1[0] = hoja.addItem("#");
+					fila1[1] = hoja.addItem("Empresa Compra");
+					fila1[2] = hoja.addItem("Empresa Vende");
+					fila1[3] = hoja.addItem("OC");
+					fila1[4] = hoja.addItem("Monto OC");
+					fila1[5] = hoja.addItem("Factura");
+					fila1[6] = hoja.addItem("Monto factura");
+					fila1[7] = hoja.addItem("Fecha facturacion");
+					fila1[8] = hoja.addItem("FP");
+					fila1[9] = hoja.addItem("Medio de pago");
+					fila1[10] = hoja.addItem("Estado de pago");
+					fila1[11] = hoja.addItem("TC");
+					fila1[12] = hoja.addItem("SubTotal DLS");
+					fila1[13] = hoja.addItem("IVA DLS");
+					fila1[14] = hoja.addItem("Flete DLS");
+					fila1[15] = hoja.addItem("Total DLS");
+					fila1[16] = hoja.addItem("SubTotal MX");
+					fila1[17] = hoja.addItem("IVA MX");
+					fila1[18] = hoja.addItem("Flete MX");
+					fila1[19] = hoja.addItem("Total MX");
+					
+					for (var i:int = 0; i< arrayTemp.length; i++){
+						fila1 = new Array();
+						fila1[0] = (arrayTemp[i]).numFila;
+						fila1[1] = '"' + (arrayTemp[i] as PagoProveedor).empresa + '"';
+						fila1[2] = '"' + (arrayTemp[i] as PagoProveedor).empresaVendio + '"';
+						fila1[3] = '"' + (arrayTemp[i] as PagoProveedor).ordenCompra + '"';
+						fila1[4] = '"' + (arrayTemp[i] as PagoProveedor).montoOCFormato + '"';
+						fila1[5] = '"' + (arrayTemp[i] as PagoProveedor).noFactura + '"';
+						fila1[6] = '"' + (arrayTemp[i] as PagoProveedor).montoDolaresFormato + '"';
+						fila1[7] = '"' + (arrayTemp[i] as PagoProveedor).fechaFacturacionFormato + '"';
+						fila1[8] = '"' + (arrayTemp[i] as PagoProveedor).fechaPagoFormato + '"';
+						fila1[9] = '"' + (arrayTemp[i] as PagoProveedor).medioPago + '"';
+						fila1[10] = '"' + (arrayTemp[i] as PagoProveedor).estado + '"';
+						fila1[11] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).tipoCambio) + '"';
+						fila1[12] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).subTotalDls) + '"';
+						fila1[13] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).ivadls) + '"';
+						fila1[14] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).fletedls) + '"';
+						fila1[15] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).totaldls) + '"';
+						fila1[16] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).subTotal) + '"';
+						fila1[17] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).iva) + '"';
+						fila1[18] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).flete) + '"';
+						fila1[19] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).total) + '"';
+						
+						hoja.addItem('\r' + fila1 );
+					}
+					
+				}
+				else{
+					arrayTemp = ObjectUtil.copy(gridPagos.dataProvider) as ArrayCollection;
+					
+					fila1 = new Array();
+					fila1[0] = hoja.addItem("#");
+					fila1[1] = hoja.addItem("Empresa");
+					fila1[2] = hoja.addItem("Proveedor");
+					fila1[3] = hoja.addItem("Pagador");
+					fila1[4] = hoja.addItem("Comprador");
+					fila1[5] = hoja.addItem("OC");
+					fila1[6] = hoja.addItem("Monto OC");
+					fila1[7] = hoja.addItem("Factura");
+					fila1[8] = hoja.addItem("Monto factura");
+					fila1[9] = hoja.addItem("Fecha facturacion");
+					fila1[10] = hoja.addItem("FEP");
+					fila1[11] = hoja.addItem("FP");
+					fila1[12] = hoja.addItem("Medio de pago");
+					fila1[13] = hoja.addItem("Saldo a Favor"); //Nuevo
+					fila1[14] = hoja.addItem("NC"); // Nuevo 
+					fila1[15] = hoja.addItem("Estado de pago");
+					fila1[16] = hoja.addItem("Nacional");
+					fila1[17] = hoja.addItem("TC");
+					fila1[18] = hoja.addItem("SubTotal DLS");
+					fila1[19] = hoja.addItem("IVA DLS");
+					fila1[20] = hoja.addItem("Flete DLS");
+					fila1[21] = hoja.addItem("Total DLS");
+					fila1[22] = hoja.addItem("SubTotal MX");
+					fila1[23] = hoja.addItem("IVA MX");
+					fila1[24] = hoja.addItem("Flete MX");
+					fila1[25] = hoja.addItem("Total MX");
+					
+					for (i = 0; i< arrayTemp.length; i++){
+						fila1 = new Array();
+						fila1[0] = (arrayTemp[i]).numFila;
+						fila1[1] = '"' + (arrayTemp[i] as PagoProveedor).empresa + '"';
+						fila1[2] = '"' + (arrayTemp[i] as PagoProveedor).nombreProveedor + '"';
+						fila1[3] = '"' + (arrayTemp[i] as PagoProveedor).pagador + '"';
+						fila1[4] = '"' + (arrayTemp[i] as PagoProveedor).comprador + '"';
+						fila1[5] = '"' + (arrayTemp[i] as PagoProveedor).ordenCompra + '"';
+						fila1[6] = '"' + (arrayTemp[i] as PagoProveedor).montoOCFormato + '"';
+						fila1[7] = '"' + (arrayTemp[i] as PagoProveedor).noFactura + '"';
+						fila1[8] = '"' + (arrayTemp[i] as PagoProveedor).montoDolaresFormato + '"';
+						fila1[9] = '"' + (arrayTemp[i] as PagoProveedor).fechaFacturacionFormato + '"';
+						fila1[10] = '"' + (arrayTemp[i] as PagoProveedor).fechaEstimadaFormato + '"';
+						fila1[11] = '"' + (arrayTemp[i] as PagoProveedor).fechaPagoFormato + '"';
+						fila1[12] = '"' + (arrayTemp[i] as PagoProveedor).medioPago + '"';
+						fila1[13] = '"' + (arrayTemp[i] as PagoProveedor).montoSAFavor + '"';
+						fila1[14] = '"' + (arrayTemp[i] as PagoProveedor).montoNotaCredito + '"';
+						fila1[15] = '"' + (arrayTemp[i] as PagoProveedor).estado + '"';
+						fila1[16] = '"' + (arrayTemp[i] as PagoProveedor).nacional == true ? 'SI' : 'NO';
+						fila1[17] = '"' + '$'  + (arrayTemp[i] as PagoProveedor).tipoCambio + '"';
+						fila1[18] = '"' + '$' + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).subTotalDls) + '"';
+						fila1[19] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).ivadls) + '"';
+						fila1[20] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).fletedls) + '"';
+						fila1[21] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).totaldls) + '"';
+						fila1[22] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).subTotal) + '"';
+						fila1[23] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).iva) + '"';
+						fila1[24] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).flete) + '"';
+						fila1[25] = '"' + '$'  + UtilsFormatosNumericos.precisionADosDecimalesConComas((arrayTemp[i] as PagoProveedor).total) + '"';
+						hoja.addItem('\r' + fila1 );
+					}
+				}
+				
+				file2.save( hoja, 'ConsultaPagos-'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date() )+'.csv');
+				
+			}
+			
+			private	var file:File = new File();
+			private	var myZip:ASZip;
+			private var bloqueoGuardarZip:Boolean;
+			private var arrayTemp:ArrayCollection;
+			private var contador:int = 0;
+			private	var rutaEmpresa:String = new String();
+			private var nombreFactura:String;
+			
+			
+			private function iniciaEspera(mensaje:String):void
+			{
+				if(mensaje == "iniciarEspera")
+				{
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+				}
+				else if (mensaje == "terminaEspera" )
+				{
+					alertaSingleton.remove(true);
+				}
+			}
+			
+			private function avisaGuardadoArchivos(event:Event):void{
+				file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+				alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+			}
+			
+			private function completeErrorFile(event:Event):void
+			{
+				if( arrayTemp.length == 0){
+					if( !bloqueoGuardarZip ){
+						iniciaEspera('terminaEspera');
+						var myZipFile:ByteArray = myZip.saveZIP ( Method.LOCAL );
+						file.save( myZipFile, 'pagos'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date ) +'.zip' );	
+						bloqueoGuardarZip = true;
+					}
+				}
+				tipodeArchivos();
+			}
+			
+			private var funcionfolio:Boolean;
+			
+			private function completarevento(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+				}
+				catch (error:*){
+					trace("no existe archivo");
+				}
+				myZip.addDirectory ('PDF/'+rutaEmpresa+'/');
+				//if(bytes.length>0){}
+				myZip.addFile (bytes, 'PDF/'+rutaEmpresa+'/' + nombreFactura +'.pdf' );
+				if( arrayTemp.length == 0){
+					if( !bloqueoGuardarZip ){
+						iniciaEspera('terminaEspera');
+						var myZipFile:ByteArray = myZip.saveZIP ( Method.LOCAL );
+						file.save( myZipFile, 'pagos'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date ) +'.zip' );	
+						bloqueoGuardarZip = true;
+					}
+				}
+				tipodeArchivos();
+			}	
+			
+			
+			private function tipodeArchivos():void
+			{
+				var urlGeenral:String = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA;
+				var request:URLRequest = new URLRequest();
+				if( arrayTemp.length > 0 )
+				{
+					nombreFactura = ( arrayTemp[0] as PagoProveedor ).folioFP;
+					rutaEmpresa = ( arrayTemp[0] as PagoProveedor ).empresa;
+					if(( arrayTemp[0] as PagoProveedor ).folioFP != ""){
+					
+						var variables:URLLoader = new URLLoader();
+						variables.dataFormat = URLLoaderDataFormat.BINARY;
+						nombreFactura == null ? nombreFactura = '':null
+						
+						funcionfolio = true;
+						var rutaEmpresaFormat:String=(rutaEmpresa=="RYNDEM")?"Ryndem":rutaEmpresa.replace(" ","");
+						
+						if( contador == 0)
+						{
+							var path:Object = Util.rutaFecha(( arrayTemp[0] as PagoProveedor ).fechaFacturacion);
+							request = new URLRequest( urlGeenral + "Proveedor" +'/'+ path.ruta + nombreFactura +'.pdf' ); 
+							
+							variables.addEventListener(Event.COMPLETE, completarevento);
+							variables.addEventListener(IOErrorEvent.IO_ERROR, completeErrorFile);
+						}
+					}
+					contador++;
+					if( contador == 1 )
+					{
+						if( arrayTemp.length > 0)
+						{
+							arrayTemp.removeItemAt(0);
+						}
+						contador = 0;
+					}
+					if( rutaEmpresa != '' &&  nombreFactura != '' )
+					{
+						try
+						{
+							variables.load(request);
+						} 
+						catch (error:Error)
+						{
+							trace("Unable to load URL: " + error);
+						}
+					}
+					else {
+						tipodeArchivos();
+					}
+				}
+				else {
+					try
+					{
+						if(!funcionfolio ){
+							
+							iniciaEspera('terminaEspera');
+							alertaSingleton.show("No hubo resultados", catalogoAlertas.TIT_ADV_atencion);
+						}
+						else{
+							if( !bloqueoGuardarZip ){
+								iniciaEspera('terminaEspera');
+								var myZipFile:ByteArray = myZip.saveZIP ( Method.LOCAL );
+								file.save( myZipFile, 'pagos'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date ) +'.zip' );	
+								bloqueoGuardarZip = true;
+							}
+						}
+					} 
+					catch (error:Error)
+					{
+						trace("Unable to load URL: " + error);
+					}
+				}
+			}
+		
+			
+			
+			
+			protected function descargapdf(event:MouseEvent):void
+			{
+				
+				if (!checkComboTipoFactura.selected){
+					
+					funcionfolio = false;
+					bloqueoGuardarZip = false;
+					file = new File();
+					file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+					iniciaEspera('iniciarEspera');
+					arrayTemp = new ArrayCollection();
+					myZip = new ASZip (CompressionMethod.NONE);
+					arrayTemp = ObjectUtil.copy( gridPagos.dataProvider ) as ArrayCollection;
+					
+					tipodeArchivos();
+					contador = 0;
+				}
+				
+			}
+				
+				
+			
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+		<s:VGroup height="100%" width="100%" gap="10">
+			<s:VGroup width="100%" paddingTop="20" horizontalAlign="center">
+				<chekbox:CheckBoxPq id="checkComboTipoFactura" labelLeft="Proveedores" click="cambiarswitch(event)" selected="false"  labelRight="Interfacturación" maxWidth="212"/>
+			</s:VGroup>
+			
+			<s:VGroup width="100%" height="100%" id="gridConsultaPagos" paddingLeft="20" paddingRight="20" gap="10">
+				
+				<consultas:HeaderParaGridConsultas id="header" mostrarBtnExportar="true" clickExportar="headerparagridconsultas1_clickExportarHandler(event)" width="100%" mostrarBtnDescargar="true" clickDescargarHeaderConsultas="descargapdf(event)"/>
+				<otros:divisionGruesa width="100%"/> 
+				<s:Group width="100%" height="100%" >
+					
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter width="100%" height="100%" id="gridPagos" anchoColumnas="{['45','=','15%','=','=','=','=','=','=','=','=','13%','=','50']}" tipoDeConsulta="Pagos"
+																 disableSortableColumns="{[12]}" disableDragableColumns="{[0,12]}" disableResizableColumns="{[0,12]}" enableHeaderWordWrap="{[4,6,7,10,11]}" ><!--visible="{!switchBusqueda}" includeInLayout="{!switchBusqueda}"-->
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+											<fx:Script>
+												<![CDATA[
+													import skins.skin.AdvancedDataGrid.PQNetWhitCSS;
+													import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.pagos.EventoConsultaPagos;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+													
+													import skins.catalogos.catalogoIconosGrid;
+													
+													override public function set data(value:Object):void{
+														if( listData == value ) return;
+														super.data = value; 
+														lblIndex.setStyle("fontFamily",(automationOwner as PQNetWhitCSS).fontFamily);
+														lblIndex.setStyle("fontSize", (automationOwner as PQNetWhitCSS).fontSize);
+														lblIndex.setStyle("fontStyle",(automationOwner as PQNetWhitCSS).styleFont);
+													}
+													private function compareSaldo(data):Boolean{
+														if(data.sAFavor == 'No'){
+															return false;
+														} else {
+															return true;
+														}
+													}
+												]]>
+											</fx:Script>
+											<s:HGroup  verticalAlign="middle" horizontalAlign="right" horizontalCenter="0">
+												<s:Image source="{catalogoIconosGrid.getInstance().alerta}"  visible="{compareSaldo(data)}" includeInLayout="{compareSaldo(data)}"/>
+												<label:Texto id="lblIndex" text="{data.numFila}" textAlign="center"/>
+											</s:HGroup>	
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Empresa" dataField="empresa"/>
+							<mx:AdvancedDataGridColumn headerText="Proveedor" dataField="nombreProveedor" />
+							<mx:AdvancedDataGridColumn headerText="Comprador" dataField="comprador" />
+							<mx:AdvancedDataGridColumn headerText="OC" dataField="ordenCompra" />
+							<mx:AdvancedDataGridColumn headerText="Monto OC" dataField="montoOCFormato" sortCompareFunction="{compareFunction_HeaderMontoOC}"/>
+							<mx:AdvancedDataGridColumn headerText="Factura" dataField="noFactura" />
+							<mx:AdvancedDataGridColumn headerText="Monto Factura" dataField="montoDolaresFormato" sortCompareFunction="{compareFunction_HeaderMontoFactura}"/>
+							<mx:AdvancedDataGridColumn headerText="Fecha Facturación" dataField="fechaFacturacionFormato" sortCompareFunction="{compareFunction_HeaderFechaFacturacion}" />
+							<mx:AdvancedDataGridColumn headerText="FEP" dataField="fechaEstimadaFormato" sortCompareFunction="{compareFunction_HeaderFechaEstimada}" />
+							<mx:AdvancedDataGridColumn headerText="FP" dataField="fechaPagoFormato"/>
+							<mx:AdvancedDataGridColumn headerText="Medio de Pago" dataField="medioPago" />
+							<mx:AdvancedDataGridColumn headerText="Estado de pago" dataField="estado" />
+							<mx:AdvancedDataGridColumn headerText=" ">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.pagos.EventoConsultaPagos;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+													
+													import skins.catalogos.catalogoIconosGrid;
+													
+													public function regresaPagos():void
+													{
+														var evento:EventoConsultaPagos = new EventoConsultaPagos(EventoConsultaPagos.OBTENER_PAGOS );
+														evento.pagos = data as PagoProveedor;
+														evento.idProveedor = data.idProveedor;
+														dispatchEvent(evento);
+													}
+												]]>
+											</fx:Script>
+											<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" id="imgInfo" horizontalCenter="0" click="regresaPagos()"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+					
+					
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter width="100%" height="100%" id="gridPagosInterfacturacion" anchoColumnas="{['45','=','=','=','=','=','=','=','=','13%','=']}" tipoDeConsulta="Pagos"
+																 disableSortableColumns="{[12]}" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}" visible="false" ><!--visible="{switchBusqueda}" includeInLayout="{switchBusqueda}"-->
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+							<mx:AdvancedDataGridColumn headerText="Empresa Vende" dataField="empresa"/>
+							<mx:AdvancedDataGridColumn headerText="Empresa Compra" dataField="empresaVendio" />
+							<mx:AdvancedDataGridColumn headerText="OC" dataField="ordenCompra" >
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+													import flash.net.navigateToURL;
+													
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+													import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+													
+													public function mostrarOrdenCompra():void{
+														var path:Object = Util.rutaNueva((data as PagoProveedor).ordenCompra);
+														ver( RutasPdF.GENERAL_RUTA + RutasPdF.COMPRAS_RUTA + path.ruta + (data as PagoProveedor).ordenCompra  + "-P.pdf" );
+													}
+													
+													private function ver($ruta:String):void{
+														var request:URLRequest = new URLRequest(encodeURI($ruta));
+														navigateToURL(request);
+													}
+												]]>
+											</fx:Script>
+											<s:HGroup horizontalAlign="center" width="100%" >
+												<label:Texto_12 id="lblPendiente" text="Pendiente" visible="{(data as PagoProveedor).ordenCompra == 'Pendiente'}" includeInLayout="{(data as PagoProveedor).noFactura == 'Pendiente'}" />
+												<linkButton:LinkButtonPQNet label="{data.ordenCompra}" click="mostrarOrdenCompra()" toolTip="Ver orden de compra"/>
+											</s:HGroup>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Monto OC" dataField="montoOCFormato" sortCompareFunction="{compareFunction_HeaderMontoOC}"/>
+							<mx:AdvancedDataGridColumn headerText="Factura" dataField="noFactura" >
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+											<fx:Script>
+												<![CDATA[
+													import flash.net.navigateToURL;
+													
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+													import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+													
+													public function verFactura():void{
+														var facturadoPor:String= ((data as PagoProveedor).empresa=="RYNDEM")?"Ryndem":((data as PagoProveedor).empresa!="RM Trading")?((data as PagoProveedor).empresa.replace(" ","")):(data as PagoProveedor).empresa;
+														var path:Object = Util.rutaFecha(( data as PagoProveedor ).fechaFacturacion);
+														//console.log("Soy la variable Proforma:" ( data as PagoProveedor ).isProforma);
+													
+														if (( data as PagoProveedor ).isProforma){
+															
+															ver(RutasPdF.GENERAL_RUTA + RutasPdF.PROFORMA_IMPORTACION + (data as PagoProveedor).noFactura  + ".pdf" );	
+														}else{
+														ver(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + facturadoPor + "/" + path.ruta + (data as PagoProveedor).noFactura  + ".pdf" );
+														}
+													}
+													
+													private function ver($ruta:String):void{
+														var request:URLRequest = new URLRequest(encodeURI($ruta));
+														navigateToURL(request);
+													}
+												]]>
+											</fx:Script>
+											<s:HGroup horizontalAlign="center" width="100%" >
+												<label:Texto_12 id="lblPendiente" text="Pendiente" visible="{(data as PagoProveedor).noFactura == 'Pendiente'}" includeInLayout="{(data as PagoProveedor).noFactura == 'Pendiente'}" />
+												<linkButton:LinkButtonPQNet label="{(data as PagoProveedor).noFactura}" click="verFactura()" id="lnkFactura" visible="{(data as PagoProveedor).noFactura != 'Pendiente'}" includeInLayout="{(data as PagoProveedor).noFactura != 'Pendiente'}" />
+											</s:HGroup>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Monto Factura" dataField="montoDolaresFormato" sortCompareFunction="{compareFunction_HeaderMontoFactura}"/>
+							<mx:AdvancedDataGridColumn headerText="Fecha Facturación" dataField="fechaFacturacionFormato" sortCompareFunction="{compareFunction_HeaderFechaFacturacion}" />
+							<mx:AdvancedDataGridColumn headerText="FP" dataField="fechaPagoFormato"/>
+							<mx:AdvancedDataGridColumn headerText="Medio de Pago" dataField="medioPago" />
+							<mx:AdvancedDataGridColumn headerText="Estado de pago" dataField="estado" >
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+											<fx:Script>
+												<![CDATA[
+													import flash.net.navigateToURL;
+													
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+													import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+													
+													public function verFactura():void{
+														var path:Object = Util.rutaNueva((data as PagoProveedor).folioPC);
+														ver(RutasPdF.GENERAL_RUTA + RutasPdF.PAGOS_CLIENTE + path.ruta + (data as PagoProveedor).folioPC  + ".pdf" );
+													}
+													
+													private function ver($ruta:String):void{
+														var request:URLRequest = new URLRequest(encodeURI($ruta));
+														navigateToURL(request);
+													}
+													override public function set data(value:Object):void{
+														super.data = value;
+														muestraLink(value.estado,value.folioPC);
+														
+													}
+													private function muestraLink(estado:String,folioPC:String):void{
+														if (estado == 'Cerrado' && folioPC != null){
+															lblEstado.visible = lblEstado.includeInLayout = false;
+															lnkEstado.visible = lnkEstado.includeInLayout = true;
+														}else{
+															lblEstado.visible = lblEstado.includeInLayout = true;
+															lnkEstado.visible = lnkEstado.includeInLayout = false;
+														}
+													}
+												]]>
+											</fx:Script>
+											<s:HGroup horizontalAlign="center" width="100%" >
+												<label:Texto_12 id="lblEstado" text="{data.estado}"   />
+												<linkButton:LinkButtonPQNet id="lnkEstado" label="{(data as PagoProveedor).estado} (Ver Comprobante)" click="verFactura()" />
+											</s:HGroup>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				</s:Group>
+			</s:VGroup>
+		</s:VGroup>
+	</comun:espacioA>
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas"/>
+					<s:BorderContainer width="240" height="100%" backgroundColor="#363636">
+						<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" >
+							<s:Label width="100%" text="TOTALES" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal" paddingTop="20" />
+							<otros:divisionGruesa color="0xFFFFFF"/>
+							<s:HGroup width="100%" paddingTop="30" paddingBottom="70">
+								<s:Image source="{this._imgMonto}" />
+								<s:VGroup width="100%" paddingLeft="10">
+									<s:Label width="100%" text="Monto USD:"  color="0xFFFFFF" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									<s:Label width="100%" id="monto" color="0xFFFFFF" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									<s:Label width="100%" id="montoPasado" color="0xFFFFFF" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+								</s:VGroup>
+							</s:HGroup>
+							<s:HGroup width="100%" paddingBottom="70">
+								<s:Image source="{this._imgFacturas}" />
+								<s:VGroup width="100%" paddingLeft="10">
+									<s:Label width="100%" text="Total Facturas:" color="0xFFFFFF" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									<s:Label width="100%"  id="numFacturas" color="0xFFFFFF" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									<s:Label width="100%"  id="numFacturasPasado" color="0xFFFFFF" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+								</s:VGroup>
+							</s:HGroup>
+							<s:HGroup width="100%" paddingBottom="70">
+								<s:Image source="{this._imgProveedores}" />
+								<s:VGroup width="100%" paddingLeft="10">
+									<s:Label width="100%" text="Total Proveedores:" color="0xFFFFFF" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									<s:Label width="100%" id="numProveedores" color="0xFFFFFF" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									<s:Label width="100%" id="numProveedoresPasado" color="0xFFFFFF" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+								</s:VGroup>
+							</s:HGroup>
+						</s:VGroup>
+					</s:BorderContainer>				
+				</s:HGroup>
+			</s:VGroup>
+			<s:VGroup height="100%" width="100%" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" gap="0" paddingTop="28" paddingLeft="10" paddingRight="20">
+				<label:Titulo id="conceptoPie" maxWidth="{this.width}" paddingTop="0" paddingBottom="6"/>
+				<otros:divisionGruesa width="100%"/>
+				<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica"/>
+			</s:VGroup>
+		</pq:MobViewStack>
+	</comun:espacioB>	
+</comun:ContenedorComparacionConsultas>

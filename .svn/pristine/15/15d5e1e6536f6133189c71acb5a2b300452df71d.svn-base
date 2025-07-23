@@ -1,0 +1,1171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 xmlns:columna = "mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" xmlns:label="skins.skin.label.*" xmlns:grafica="skins.botones.grafica.*" xmlns:tabla="skins.botones.tabla.*" 
+		 xmlns:otros="skins.otros.*" creationComplete="inicio()">
+	<fx:Script>
+		<![CDATA[
+			import mx.effects.easing.Elastic;
+			
+			import spark.effects.Fade;
+			
+			import flashx.textLayout.operations.CutOperation;
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<mx:DateFormatter id="formatDate" formatString="DD-MMM-YYYY"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.sampler.NewObjectSample;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoBusquedasCR;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.compras.EventoBusquedaProdAlmacen;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ProductoAlmacen;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.menu.menucontinuo.componentes.BotonImagen;
+			import mx.events.FlexEvent;
+			import mx.events.IndexChangedEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			
+			import spark.events.GridEvent;
+			import spark.events.IndexChangeEvent;
+			
+			import skins.skin.linkButton.LinkButtonPQNet2;
+			
+			[Bindable]
+			private var _productosAlmacen:ArrayCollection;
+			[Bindable]
+			private var _productos:ArrayCollection = new ArrayCollection();
+			private var urlreq:URLRequest;
+			private var ruta:String;
+			[Bindable]
+			private var _tipoTabla:int;
+			[Bindable]
+			private var _productoAlmacen:ArrayCollection;
+			[Bindable]
+			private var _inspector:ProductoAlmacen;
+			[Bindable]
+			public var botonbar:String;
+			[Bindable]
+			public var numeroBoton:int
+			
+			/* 			public function set recibeProductoAlmacen(resultado:ProductoAlmacen):void{
+			if(resultado == null){
+			return;
+			}			
+			this._productos = new ArrayCollection();
+			this._productosAlmacen = new ArrayCollection();
+			this._productosAlmacen.addItem(resultado);
+			this._productos.addItem(resultado); 
+			}
+			
+			public function set recibeProductosAlmacen(resultado:ArrayCollection):void{
+			if(resultado == null){
+			return;
+			}		
+			this._productosAlmacen = new ArrayCollection();
+			this._productosAlmacen = resultado;
+			} */
+			// Datos con los que sellena la Grid al inicio 
+			public function set obtenerProductoAlmacen(producto:ArrayCollection):void{
+				if(producto == null){
+					return; 
+				}
+				var _totalPromedio:int = new int();
+				this._productos = new ArrayCollection();
+				//this._productoAlmacen = producto; --antesfututo
+				//this._productos = producto;		--antesfututo
+				
+				/* for(var d:int = 0 ; d<producto.length ; d++){
+				if(producto[d].estadoDespachable == "Despachable"){
+				this._productos.addItem(producto[d]);	
+				}
+				} 
+				this._productoAlmacen = _productos;*/
+				this._productoAlmacen = producto;
+				
+				var diferencia:int = 0;
+				
+				for(var m:int = 0 ; m<this._productos.length ; m++){
+					diferencia  = diferencia + this._productos[m].diferencial;
+				}
+				_totalPromedio = diferencia/this._productos.length;
+				if(_totalPromedio > 1 || _totalPromedio == 0 ){
+					var dia:String = " DÍAS";
+				}else {
+					dia = " DÍA";
+				}
+				this.promediotiempo.text = _totalPromedio.toString() + dia;
+				
+				var variable:IndexChangeEvent = new IndexChangeEvent("",false,false,-1,0);
+				variable.newIndex = 0;
+				CambioBoton(variable); 
+				
+				if(this.miButtonBar2.selectedItem == "TODO"){
+					datoGrafica();	
+				}
+			}
+			
+			public function set recibirPromedioTiempo(tiempoPromedio:String):void{
+				if(tiempoPromedio == null){
+					return;
+				}
+				this.promediotiempo.text = tiempoPromedio;
+			}
+			
+			public function set obtenerProductoAlmacenFiltrado(filtraje:ArrayCollection):void{
+				if(filtraje == null){
+					
+				}
+				this._productos = new ArrayCollection();
+				this._productos = filtraje;
+				this.miButtonBar.selectedItem = " ";
+			}
+			
+			public function set obtenerFolioDespacho(inspector:ProductoAlmacen):void{
+				if(inspector == null){
+					return;
+				}
+				this._inspector = new ProductoAlmacen();
+				this._inspector = inspector;
+				
+				this.Fdespacho.text = this._inspector.folioFD;
+				this.destino.text = this._inspector.destino;
+				this.cliente.text = this._inspector.nombreCliente;
+				
+				if(this._inspector.pcompra.fechaEstimadaEntrega != null){
+					var diaFEE:String = this._inspector.pcompra.fechaEstimadaEntrega.getDate().toString();
+					var mesFEE:int = this._inspector.pcompra.fechaEstimadaEntrega.getMonth() + 1;
+					var anoFEE:String = this._inspector.pcompra.fechaEstimadaEntrega.fullYear.toString();
+					this.fee.text = diaFEE + " / " + mesFEE + " / " + anoFEE;	
+				}else{
+					this.fee.text = "Pendiente";
+				}
+				
+				if(this._inspector.producto.control == null){
+					this.control.text = "Pendiente";
+				}else{
+					this.control.text = this._inspector.producto.control;					
+				}
+				
+				if(this._inspector.producto.manejo == null){
+					this.manejo.text = "Pendiente";
+				}else{
+					this.manejo.text = this._inspector.producto.manejo;	
+				}
+				
+				this.tipo.text = this._inspector.tipo;
+				
+				if(this._inspector.pcompra.ubicacion == null){
+					this.ubicacion.text = "Pendiente";
+				}else{
+					this.ubicacion.text = this._inspector.pcompra.ubicacion;	
+				}
+				
+				this.proquifanet.text = this._inspector.estadoProquifaNet;
+				
+				if(this._inspector.estadoDespachable == null){
+					this.Iestatus.text = "Pendiente";
+				}else{
+					this.Iestatus.text = this._inspector.estadoDespachable;
+				}
+				
+				this.Lblestatus.text = this._inspector.estadoDespachable;
+				this.Idescripcion.text = this._inspector.producto.descripcion;
+				this.proveedor.text = this._inspector.nombreProveedor;
+				
+				if(this._inspector.cantidad == 0){
+					this.Icantidad.text = "Pendiente";
+				}else{
+					this.Icantidad.text = this._inspector.cantidad.toString();	
+				}
+				
+				if(this._inspector.fechaInspeccion == null){
+					this.IFinspeccion.text = "Pendiente";
+				}else{
+					var dia:String = this._inspector.fechaInspeccion.getDate().toString(); 
+					var mes:int = this._inspector.fechaInspeccion.getMonth() + 1;
+					var year:String = this._inspector.fechaInspeccion.fullYear.toString();
+					this.IFinspeccion.text = dia + " / " + mes + " / " + year;	
+				}
+				
+				this.inspecciono.text = this._inspector.inspector;
+				this.Linspeccion.text = this._inspector.loteInspeccion;
+				this.listaempaquerelacionada.text = this._inspector.listaEmpaque;
+				
+				this.oc.text = this._inspector.ocRelacionada;
+				this.pi.text = this._inspector.piRelacionada;
+				this.referencia.text = this._inspector.folioPI;
+				this.flete.text = this._inspector.tipoFlete;
+				
+			}	
+			
+			/**
+			 * Con esta funcion se muestra la descripción del producto
+			 */
+			
+			/**
+			 * Con esta funcion se muestra el Nombre del cliente
+			 */
+			/* 	private function mostrarNombreCliente(objeto:Object, columna:GridColumn):String{
+			var ND:String = "ND";
+			var productoAlmacen:ProductoAlmacen = objeto as ProductoAlmacen;
+			var cliente:Cliente = productoAlmacen.cliente;
+			if(cliente == null){
+			return ND ;
+			}else{
+			return cliente.nombre;	
+			}						
+			} */
+			/**
+			 * Con esta funcion se muestra el tipo de una partida de compra de un Producto almacen
+			 */
+			
+			
+			/**
+			 * Con esta funcion se muestra el manejo de una partida de compra de un Producto almacen
+			 */
+			
+			
+			/**
+			 * Con esta funcion se muestra el control de una partida de compra de un Producto almacen
+			 */
+			
+			
+			/**
+			 * Con esta funcion se muestra la ubicación de una partida de compra de un Producto almacen
+			 */
+			
+			
+			
+			public function verPackingList(dato:ProductoAlmacen):void{
+				var path:Object = Util.rutaNueva(dato.packingList);
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.PACKINGLIST_RUTA + path.ruta + dato.packingList +".pdf";
+				urlreq = new URLRequest( ruta );
+				navigateToURL(urlreq);	
+			}
+			public function cambiarStack():void{
+				this.stackPAlmacen.selectedChild = this.pnlInspector;
+				
+				/* 				var evt:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.CAMBIA_VIEW_STACK);
+				evt.tabla = 2;
+				dispatchEvent(evt);
+				
+				var evento:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_PRODUCTO_ALMACEN);
+				evento.prueba = event.item.folioOC;
+				dispatchEvent(evento); */
+			}
+			
+			
+			public function set obtenerCambioTabla (tabla:int):void{
+				this._tipoTabla = tabla;
+				this.stackPAlmacen.selectedIndex = this._tipoTabla;
+			}
+			/**
+			 * Con esta funcion se muestra la fecha Inspeccion en el Grid
+			 */
+			
+			public function verInspector(folio:String):void{
+				var evt:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_INSPECTOR_POR_FD);
+				evt.folioD = folio;
+				dispatchEvent(evt);
+				this.stackPAlmacen.selectedIndex = 2;
+			}
+			
+			public function verBusquedaRapida():void{
+				/* var busquedaRapidaProductoAlmace:PopUpBusquedaRapida;
+				busquedaRapidaProductoAlmace = PopUpBusquedaRapida(PopUpManager.createPopUp(this, PopUpBusquedaRapida, true));
+				PopUpManager.centerPopUp(busquedaRapidaProductoAlmace); */
+				
+				var busquedaRapidaProductoAlmace:PopUpBusquedaRapidaLector;
+				busquedaRapidaProductoAlmace = PopUpBusquedaRapidaLector(PopUpManager.createPopUp(this, PopUpBusquedaRapidaLector, true));
+				PopUpManager.centerPopUp(busquedaRapidaProductoAlmace);
+				
+			}
+			
+			private function cerrarPopUp(event:Event):void{
+				cambiarStack();
+			}
+			
+			public function verCombosFiltro():void{
+				var comboProductoAlmacen:PopUpFiltroDatos;
+				comboProductoAlmacen = PopUpFiltroDatos(PopUpManager.createPopUp(this, PopUpFiltroDatos, true));
+				comboProductoAlmacen.reporteProducto = this._productos;
+				comboProductoAlmacen.productoUniverso = this._productoAlmacen;
+				comboProductoAlmacen.botonActual = this.numeroBoton;
+				PopUpManager.centerPopUp(comboProductoAlmacen);
+			}
+			
+			/* 		public function actualizarGrid():void{
+			var actualizar:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_PRODUCTO_ALMACEN);
+			dispatchEvent(actualizar);
+			}
+			*/
+			
+			private function enviarProductoGrafica():void{
+				var evet:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_DATO_BOTON);
+				evet.boton = botonbar;
+				dispatchEvent(evet);
+				
+				var evt:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_DATOS_GRAFICA);
+				evt.productosAlmacenGrafica = this._productos;
+				dispatchEvent(evt);
+			}
+			
+			private function recargaProductos():void{
+				_productos = new ArrayCollection();
+				this.miButtonBar.selectedItem = "TODO";
+				this.miButtonBar2.selectedItem = "FUTURO";
+				var variable:IndexChangeEvent = new IndexChangeEvent("",false,false,-1,0);
+				variable.newIndex = 0;
+				CambioBoton(variable);
+				//_productos = this._productoAlmacen;
+			}
+			
+			private function datoGrafica():void{
+				this.miButtonBar2.selectedItem = "TODO";
+				this.miButtonBar.selectedItem = "FUTURO";
+				var evet:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_DATO_BOTON);
+				evet.boton = "TODO";
+				dispatchEvent(evet);
+				var variable:IndexChangeEvent = new IndexChangeEvent("",false,false,0,0);
+				variable.newIndex = 0;
+				CambioBoton(variable);
+				var evento:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_DATOS_GRAFICA);
+				evento.productosAlmacenGrafica = this._productos//this._productoAlmacen;
+				dispatchEvent(evento);
+			}
+			
+			public function CambioBoton (event:IndexChangeEvent):void{
+				var hoy:Date=new Date();
+				var hoy2:Date = new Date();
+				var fecha1:Date = new Date();
+				var fecha2:Date = new Date();
+				var _totalPromedio:int = new int(); 
+				
+				if(this.miButtonBar.selectedItem == "TODO" || this.miButtonBar2.selectedItem == "TODO"){
+					
+					_productos = new ArrayCollection();
+					_productos = this._productoAlmacen; 
+					
+					for(var m:int = 0 ; m<this._productos.length ; m++){
+						var diferencia:int = diferencia + this._productos[m].diferencial;
+					}
+					_totalPromedio = diferencia/m;
+					if(_totalPromedio > 1 || _totalPromedio == 0){
+						var dia:String = " DÍAS";
+					}else {
+						dia = " DÍA";
+					}
+					this.promediotiempo.text = _totalPromedio.toString() + dia;
+					
+					if(this.miButtonBar2.selectedItem == "TODO"){
+						botonbar = "TODO";
+						enviarProductoGrafica()
+						/*datoGrafica();	*/
+					}
+					this.botonActual.text = "TODO";
+					numeroBoton = 9;
+					
+				}else 
+					if(this.miButtonBar.selectedItem == "PASADO" || this.miButtonBar2.selectedItem == "PASADO"){
+						
+						_productos = new ArrayCollection();
+						/* var fecha:Date = new Date(hoy.fullYear,hoy.month,hoy.date-8)
+						trace(fecha.toDateString());
+						fecha1 = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2 = new Date(hoy2.getFullYear(), hoy2.getMonth(), hoy2.getDate(),0,0,0);
+							if(fecha2.time <= fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial >= 8){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "PASADO"){
+							botonbar = new String("PASADO");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "PASADO";
+						numeroBoton = 8;
+						
+					}else if(this.miButtonBar.selectedItem == "ANTE-ANTIER" || this.miButtonBar2.selectedItem == "ANTE-ANTIER"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 7;
+						trace(hoy.toDateString());
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(), hoy.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2= new Date(hoy2.getFullYear(), hoy2.getMonth(), hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}*/
+							if(this._productoAlmacen[m].diferencial == 7){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "ANTE-ANTIER"){
+							botonbar = new String("A.-ANTIER");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "ANTE-ANTIER";
+						numeroBoton = 7;
+						
+					}else if(this.miButtonBar.selectedItem == "ANTIER" || this.miButtonBar2.selectedItem == "ANTIER"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 6;
+						trace(hoy.toDateString());
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(), hoy.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2= new Date(hoy2.getFullYear(), hoy2.getMonth(), hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial == 6){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "ANTIER"){
+							botonbar = new String("ANTIER");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "ANTIER";
+						numeroBoton = 6;
+						
+					}else if(this.miButtonBar.selectedItem == "AYER" || this.miButtonBar2.selectedItem == "AYER"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 5;
+						trace(hoy.toDateString());
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(), hoy.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2= new Date(hoy2.getFullYear(), hoy2.getMonth(), hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial == 5){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "AYER"){
+							botonbar = new String("AYER");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "AYER";
+						numeroBoton = 5;
+						
+					}else if(this.miButtonBar.selectedItem == "HOY" || this.miButtonBar2.selectedItem == "HOY"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 4;
+						trace(hoy.toDateString());
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(), hoy.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2= new Date(hoy2.getFullYear(), hoy2.getMonth(), hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial == 4){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "HOY"){
+							botonbar = new String("HOY");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "HOY";
+						numeroBoton = 4;
+						
+					}else if(this.miButtonBar.selectedItem == "MAÑANA" || this.miButtonBar2.selectedItem == "MAÑANA"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 3;
+						trace(hoy.toDateString());
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(), hoy.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2= new Date(hoy2.getFullYear(), hoy2.getMonth(), hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial == 3){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "MAÑANA"){
+							botonbar = new String("MAÑANA");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "MAÑANA";
+						numeroBoton = 3;
+						
+					}else if(this.miButtonBar.selectedItem == "PASADO MAÑANA" || this.miButtonBar2.selectedItem == "PASADO MAÑANA"){
+						
+						_productos = new ArrayCollection();
+						/* fecha = new Date(hoy.fullYear,hoy.month,hoy.date-2)
+						trace(fecha.toDateString());
+						
+						fecha1 = new Date(fecha.getFullYear(),fecha.getMonth(), fecha.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/* hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2 = new Date(hoy2.getFullYear(),hoy2.getMonth(),hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial == 2){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "PASADO MAÑANA"){
+							botonbar = new String("P. MAÑANA");
+							enviarProductoGrafica();	
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "PASADO MAÑANA";
+						numeroBoton = 2;
+						
+					}else if(this.miButtonBar.selectedItem == "POS-PASADO MAÑANA" || this.miButtonBar2.selectedItem == "POS-PASADO MAÑANA"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 1;//Restamos los dias si sumas solo cambias a + je
+						trace(hoy.toDateString());//imprime el dia de mañana
+						
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate(),0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/*	hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2 = new Date(hoy2.getFullYear(),hoy2.getMonth(),hoy2.getDate(),0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */
+							if(this._productoAlmacen[m].diferencial == 1){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							}
+						}
+						
+						if(this.miButtonBar2.selectedItem == "POS-PASADO MAÑANA"){
+							botonbar = new String("POS-P. MAÑANA");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "POS-PASADO MAÑANA";
+						numeroBoton = 1;
+						
+					}else if(this.miButtonBar.selectedItem == "FUTURO" || this.miButtonBar2.selectedItem == "FUTURO"){
+						
+						_productos = new ArrayCollection();
+						/* hoy.date -= 0;
+						trace(hoy.toDateString());
+						
+						fecha1 = new Date(hoy.getFullYear(),hoy.getMonth(), hoy.getDate(),0,0,0,0); */
+						
+						for( m = 0;  m < this._productoAlmacen.length;m++){
+							/*  hoy2 = this._productoAlmacen[m].fechaInicioInspeccionStr;
+							fecha2 = new Date(hoy2.getFullYear(),hoy2.getMonth(),hoy2.getDate(),0,0,0,0);
+							if(fecha2.time == fecha1.time){
+							this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} */ 
+							if(this._productoAlmacen[m].diferencial == 0){
+								this._productos.addItem(_productoAlmacen.getItemAt(m));
+							} 
+						}
+						
+						if(this.miButtonBar2.selectedItem == "FUTURO"){
+							botonbar = new String("FUTURO");
+							enviarProductoGrafica();
+						}
+						
+						for( m = 0 ; m<this._productos.length ; m++){
+							diferencia = diferencia + this._productos[m].diferencial;
+						}
+						_totalPromedio = diferencia/m;
+						if(_totalPromedio > 1 || _totalPromedio == 0){
+							dia = " DÍAS";
+						}else {
+							dia = " DÍA";
+						}
+						this.promediotiempo.text = _totalPromedio.toString() + dia;
+						this.botonActual.text = "FUTURO";
+						numeroBoton = 0;
+						
+					}
+				for(var q:int = 0; q<this._productos.length; q++){
+					this._productos[q].numFila = q +1;
+				}
+			}
+			
+			public function inicio():void{
+				
+				var evt:EventoBusquedaProdAlmacen = new EventoBusquedaProdAlmacen(EventoBusquedaProdAlmacen.OBTENER_PRODUCTO_ALMACEN);
+				dispatchEvent(evt);	 
+				
+				addEventListener(EventoTablero.MAXIMIZAR_GRAFICA,maximizarGraficaGenerica);
+				addEventListener(EventoTablero.VOLVER_A_TABLERO, minimizar);
+				this.miButtonBar.selectedItem = "TODO";
+				
+			}  
+			
+			private var catalogoGraficas:ArrayCollection = new ArrayCollection();
+			
+			
+			private function maximizarGraficaGenerica(event:Event):void{	
+				this.espacioGrafico.removeAllChildren();
+				this.espacioGrafico.addChild(event.target.maxGrafica as DisplayObject);
+			}
+			
+			private function minimizar(event:Event):void{
+				this.espacioGrafico.removeAllChildren();
+				this.insertarGraficas(this.catalogoGraficas);
+			}
+			
+			public function insertarGraficas(graficas:ArrayCollection):void{
+				this.catalogoGraficas =  new ArrayCollection();
+				
+				if(graficas.length > 0){
+					this.catalogoGraficas = graficas;
+					var iteraciones:int = graficas.length/2;
+					var residuo:int = graficas.length%2;
+					for(var m:int = 0; m < iteraciones ; m++){
+						var contenedor:HBox = new HBox();
+						contenedor.percentHeight = 100;
+						contenedor.percentWidth = 100;
+						contenedor.addChild(graficas[m*2]);
+						contenedor.addChild(graficas[(m*2)+1]);
+					}
+					/* 		if(residuo != 0){
+					contenedor.percentHeight = 100;
+					contenedor.percentWidth = 100;
+					contenedor.addChild(graficas[graficas.length-1]);
+					} */
+					espacioGrafico.addChild(contenedor as DisplayObject);
+				}
+			}
+			
+			private function columnaSeleccionada(renglon:ListEvent):void{
+				if(renglon.columnIndex == 1){
+					var tipoDocumento:String;
+					var folioDocumento:String;
+					var urlreq:URLRequest;
+					var ruta:String;
+					ruta = RutasPdF.GENERAL_RUTA + RutasPdF.ETIQUETAS_RUTA + renglon.currentTarget.selectedItem.folioFD +".pdf";
+					urlreq = new URLRequest (encodeURI(ruta) );		
+					navigateToURL( urlreq );
+				}
+			}
+			
+			public function verFolioFD(folio:String):void{
+				var tipoDocumento:String;
+				var folioDocumento:String;
+				var urlreq:URLRequest;
+				var ruta:String;
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.ETIQUETAS_RUTA + folio +".pdf";
+				urlreq = new URLRequest (encodeURI(ruta) );		
+				navigateToURL( urlreq );
+			}
+			
+			private function itemClickEvent():void{       	
+				var tipoDocumento:String;
+				var folioDocumento:String;
+				var urlreq:URLRequest;
+				var ruta:String;
+				var path:Object = Util.rutaNueva(this._inspector.listaEmpaque);
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.PACKINGLIST_RUTA + path.ruta + this._inspector.listaEmpaque +".pdf";
+				urlreq = new URLRequest ( ruta );		
+				navigateToURL( urlreq );
+			}
+			private function itemClickOC():void{
+				var tipoDocumento:String;
+				var folioDocumento:String;
+				var urlreq:URLRequest;
+				var ruta:String;
+				
+				var path:Object = Util.rutaNueva(this._inspector.ocRelacionada);
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.OC_RUTA + path.ruta + this._inspector.ocRelacionada +"-P.pdf";
+				urlreq = new URLRequest ( ruta );		
+				navigateToURL( urlreq );
+			}
+			private function itemClickPI():void{
+				var tipoDocumento:String;
+				var folioDocumento:String;
+				var urlreq:URLRequest;
+				var ruta:String;
+				var path:Object = Util.rutaNueva(this._inspector.piRelacionada);
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + path.ruta + this._inspector.piRelacionada +".pdf";
+				urlreq = new URLRequest ( ruta );		
+				navigateToURL( urlreq );
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<!--<mx:Spacer height="3"/>
+	<mx:HRule width="100%"/>
+	<mx:Spacer height="3"/>-->
+	
+	<mx:ViewStack id="stackPAlmacen" width="100%" height="100%" creationPolicy="all">
+		<mx:VBox width="100%" height="100%" id="pnlInicio" creationPolicy="all" >
+			<mx:HBox width="100%">
+				<!--<mx:Label text="Producto en almacén" fontSize="40" fontWeight="bold"/> -->
+				<label:labelTitulo_Otros text="Producto en almacén" />
+				<mx:Spacer width="100%"/>
+			</mx:HBox>
+			
+			<mx:Spacer height="3"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%" id="linea3"/>
+			<mx:Spacer height="3"/>
+			
+			<mx:HBox width="100%">
+				<s:Button styleName="botonNegroOld" label="Actualizar" id="btnActulizarInicio" click="inicio() "/>  <!--click="actualizarGrid()"-->
+				<mx:Spacer width="100%"/>
+				<s:ButtonBar change="CambioBoton(event)" id="miButtonBar">
+					<s:ArrayCollection>
+						<fx:String>TODO</fx:String>
+						<fx:String>PASADO</fx:String>
+						<fx:String>ANTE-ANTIER</fx:String>
+						<fx:String>ANTIER</fx:String>
+						<fx:String>AYER</fx:String>
+						<fx:String>HOY</fx:String>
+						<fx:String>MAÑANA</fx:String>
+						<fx:String>PASADO MAÑANA</fx:String>
+						<fx:String>POS-PASADO MAÑANA</fx:String>
+						<fx:String>FUTURO</fx:String>
+					</s:ArrayCollection>
+				</s:ButtonBar>
+				<mx:Spacer width="100%"/>
+				<s:Button styleName="botonNegroOld" label="Búsqueda rápida" id="btnBusquedaRapida" click="verBusquedaRapida()" width="140"/><!--icon="@Embed(source='assets/logo.jpg')"-->
+			</mx:HBox>
+			
+			<mx:Spacer height="3"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%" id="linea4"/>
+			<mx:Spacer height="3"/>
+			
+			<mx:HBox width="100%">
+				<s:Button styleName="botonNegroOld" label="Filtro de datos" id="popUpBusquedaAvanzada" click="verCombosFiltro()" width="130" /> <!--click="popUpAnc.displayPopUp =!popUpAnc.displayPopUp;"-->
+				<s:Spacer width="100%"/>
+				
+				<!--					<s:PopUpAnchor id="popUpAnc"
+				popUpPosition="below"
+				width="100%" height="100%" >
+				<s:TitleWindow close="PopUpManager.removePopUp(this)">
+				<mx:VBox width="100%">
+				<mx:HBox width="100%">
+				<s:Spacer width="100%"/>
+				</mx:HBox>
+				<mx:HBox width="100%" verticalAlign="middle">
+				
+				<s:Label  width="50" color="0x336699" text="Cliente:"/>
+				<mx:ComboBox />
+				
+				<s:Label  width="50" color="0x336699" text="Estatus:"/>
+				<mx:ComboBox dataProvider="{this.Estatus}" labelField="estatu" />
+				
+				<s:Label  width="50" color="0x336699" text="Destino:"/>
+				<mx:ComboBox dataProvider="{this.Destino}" labelField="dest" />
+				
+				<s:Label  width="50" color="0x336699" text="Manejo:"/>
+				<mx:ComboBox dataProvider="{this.Manejo}" labelField="mane"/>
+				
+				<s:Label  width="50" color="0x336699" text="Estado:"/>
+				<mx:ComboBox dataProvider="{this.Estado}" labelField="state"/>
+				</mx:HBox>
+				<mx:HBox width="100%">
+				<s:Spacer width="100%"/>
+				<s:Button styleName="botonNegroOld" label="Buscar" id="btnPopUp"/>
+				</mx:HBox>
+				</mx:VBox>	
+				</s:TitleWindow>
+				</s:PopUpAnchor>-->
+				
+				<tabla:botonTabla label="TABLA" />
+				<grafica:botonGrafica label="GRAFICA" id="stackGrafica" click="this.stackPAlmacen.selectedChild = this.pnlGrafica ; this.datoGrafica()"/>
+			</mx:HBox>
+			<mx:DataGrid id="gridPAlmacen" variableRowHeight="true"  width="100%" height="100%" dataProvider="{this._productos}">
+				<mx:columns>
+					<mx:DataGridColumn headerText="#" dataField="numFila" width="35"/>
+					<mx:DataGridColumn headerText="Folio de despacho" dataField="folioFD" width="135">
+						<mx:itemRenderer>
+							<fx:Component>
+								<mx:LinkButton click="mandarFolio()" label="{data.folioFD}" color="#0C4AFC" toolTip="Ver folio de despacho">
+									<fx:Script>
+										<![CDATA[
+											private function mandarFolio():void{
+												this['outerDocument'].verFolioFD(data.folioFD);
+											}
+										]]>
+									</fx:Script>
+								</mx:LinkButton>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Inicio Inspección" dataField="fechainicioinspeccion" width="117"/>
+					<mx:DataGridColumn headerText="Fin Inspección" dataField="fechafininspeccion" width="117"/>
+					<mx:DataGridColumn headerText="Diferencial" dataField="diferencial" width="74" />	
+					<mx:DataGridColumn headerText="Descripción" wordWrap="true" dataField="descripcionProducto"/>
+					<mx:DataGridColumn headerText="Cantidad" dataField="cantidad" width="62"/>
+					<mx:DataGridColumn headerText="Destino" dataField="destino" width="62"/>
+					<mx:DataGridColumn headerText="Cliente" dataField="nombreCliente" width="62"/>
+					<mx:DataGridColumn headerText="Manejo" dataField="manejoProducto" width="86"/>
+					<mx:DataGridColumn headerText="Control" dataField="controlProducto" width="76"/>
+					<mx:DataGridColumn headerText="Tipo" dataField="tipoProducto" width="90" />
+					<mx:DataGridColumn headerText="Ubicación" dataField="ubicacionProducto" width="75"/>
+					
+					<mx:DataGridColumn headerText="ProquifaNet" dataField="estadoProquifaNet" width="100"/>
+					<mx:DataGridColumn headerText="Flete" dataField="tipoFlete" width="100"/> <!--/antes Estado con datfield estadoDespachable--> 
+					<mx:DataGridColumn headerText="Inspector" dataField="inspector" id="InspectorD" width="74">
+						<mx:itemRenderer>
+							
+							<fx:Component>
+								
+								<mx:LinkButton click="mandarInspector()" label="{data.inspector}" color="#0C4AFC" toolTip="Ver inspector de datos" >
+									<fx:Script>
+										<![CDATA[
+											private function mandarInspector():void{
+												this['outerDocument'].verInspector(data.folioFD);
+											}
+										]]>
+									</fx:Script>
+								</mx:LinkButton>
+								
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					
+				</mx:columns>
+			</mx:DataGrid>
+			
+			<!--<s:DataGrid id="gridPAlmacen" variableRowHeight="true"  width="100%" height="100%" dataProvider="{this._productos}" >
+			<s:columns>
+			<s:ArrayList>
+			
+			<columna:GridColumnFormato headerText="#" formato="numfila"/>
+			<s:GridColumn headerText="Folio de despacho" dataField="folioFD"/>
+			<s:GridColumn headerText="Inicio Inspección" dataField="fechainicioinspeccion"/>
+			<s:GridColumn headerText="Fin Inspección" dataField="fechafininspeccion"/>
+			<s:GridColumn headerText="Diferencial" dataField="diferencial" />	
+			<s:GridColumn headerText="Descripción" dataField="descripcionProducto"/>
+			<s:GridColumn headerText="Cantidad" dataField="cantidad"/>
+			<s:GridColumn headerText="Destino" dataField="destino"/>
+			<s:GridColumn headerText="Cliente" dataField="nombreCliente"/>
+			<s:GridColumn headerText="Manejo" dataField="manejoProducto"/>
+			<s:GridColumn headerText="Control" dataField="controlProducto"/>
+			<s:GridColumn headerText="Tipo" dataField="tipoProducto"/>
+			<s:GridColumn headerText="Ubicación" dataField="ubicacionProducto"/>
+			
+			<s:GridColumn headerText="ProquifaNet" dataField="estadoProquifaNet"/>
+			<s:GridColumn headerText="Estado" dataField="estadoDespachable"/>
+			<s:GridColumn headerText="Inspector" dataField="inspector" id="InspectorD">
+			<s:itemRenderer>
+			<fx:Component>
+			<s:GridItemRenderer>
+			<mx:LinkButton click="mandarInspector()" label="{data.inspector}" color="#0C4AFC" toolTip="Ver inspector de datos" >
+			<fx:Script>
+			<![CDATA[
+			private function mandarInspector():void{
+			this['outerDocument'].verInspector(data.folioFD);
+			}
+			]]>
+			</fx:Script>
+			</mx:LinkButton>
+			</s:GridItemRenderer>
+			</fx:Component>
+			</s:itemRenderer>
+			</s:GridColumn>
+			
+			
+			</s:ArrayList>
+			</s:columns>
+			</s:DataGrid>-->
+			<mx:HBox width="100%" backgroundColor="#000000">
+				<mx:Label text="PROMEDIO DE TIEMPO DE LOS PRODUCTOS EN EL ALMACÉN: " fontSize="25" fontWeight="bold" color="#FFFFFF"/> 
+				<mx:Label  width="100%" height="100%" id="promediotiempo" color="#FFFFFF" fontSize="25"/>
+				<mx:Spacer width="100%"/>
+				<mx:Label  width="100%" height="100%" id="botonActual" color="#FFFFFF" fontSize="25" textAlign="right"/>
+			</mx:HBox>
+		</mx:VBox>
+		
+		<mx:VBox width="100%" height="100%" id="pnlGrafica" creationPolicy="all" >
+			<mx:HBox width="100%">
+				<!--<mx:Label text="Producto en almacén" fontSize="40" fontWeight="bold"/>-->
+				<label:labelTitulo_Otros text="Producto en almacén"/>
+				
+				<mx:Spacer width="100%"/>
+			</mx:HBox>
+			
+			<mx:Spacer height="3"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%" id="linea1"/>
+			<mx:Spacer height="3"/>
+			
+			<mx:HBox width="100%">
+				<mx:Spacer width="100%"/>
+				<s:ButtonBar  change="CambioBoton(event)" id="miButtonBar2">
+					<s:ArrayCollection>
+						<!--<fx:String>TODO</fx:String>-->
+						<fx:String>TODO</fx:String>
+						<fx:String>PASADO</fx:String>
+						<fx:String>ANTE-ANTIER</fx:String>
+						<fx:String>ANTIER</fx:String>
+						<fx:String>AYER</fx:String>
+						<fx:String>HOY</fx:String>
+						<fx:String>MAÑANA</fx:String>
+						<fx:String>PASADO MAÑANA</fx:String>
+						<fx:String>POS-PASADO MAÑANA</fx:String>
+						<fx:String>FUTURO</fx:String>
+					</s:ArrayCollection>
+				</s:ButtonBar>
+				<mx:Spacer width="100%"/>
+				<!--<s:Button styleName="botonNegroOld" label="BusquedaRapida" id="btnBRapidaGrafica"/>-->
+			</mx:HBox>
+			
+			<mx:Spacer height="3"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%" id="linea2"/>
+			<mx:Spacer height="3"/>
+			
+			<mx:HBox width="100%">
+				<!--<s:Button styleName="botonNegroOld" label="Resultados" id="popUpBAvanzadaGrafica" click="verCombosFiltro()" />-->
+				<s:Spacer width="100%"/>
+				<tabla:botonTabla label="TABLA" id="stackTabla" click="this.stackPAlmacen.selectedChild = this.pnlInicio, this.recargaProductos()"/>
+				<grafica:botonGrafica label="GRAFICA" />
+			</mx:HBox>
+			
+			<mx:HBox width="100%" height="90%" id="vbox1">
+				<mx:HBox id="espacioGrafico" height="100%" width="100%" />
+			</mx:HBox>
+			
+		</mx:VBox>
+		
+		<mx:VBox height="100%" width="100%" id="pnlInspector" creationPolicy="all" >
+			<mx:HBox width="100%">
+				<!--<mx:Label text="Inspector de datos" fontSize="40" fontWeight="bold"/>-->
+				<label:labelTitulo_Otros text="Inspector de datos"/>
+				<mx:Spacer width="100%"/>
+			</mx:HBox>
+			
+			<mx:Spacer height="3"/>
+			<!--<mx:HRule width="100%"/>-->
+			<otros:division width="100%" id="linea5"/>
+			<mx:Spacer height="3"/>
+			
+			<mx:HBox width="100%">
+				<!--<mx:Label text="Registro" fontSize="30" fontWeight="bold"/> -->
+				<label:labelSubtitulo text="Registro"/>
+				<mx:Spacer width="100%"/>
+			</mx:HBox>
+			
+			<!--<s:Panel width="100%" height="100%" title="INFORME"  >-->
+			<label:labelSubtitulo text="INFORME" backgroundColor="#FF9900" color="#FFFFFF" width="100%"/>
+			<mx:VBox height="100%" width="100%" >
+				<!--						<mx:Accordion height="100%" width="100%" openDuration="1500">
+				<s:NavigatorContent label="GENERALES" height="100%" width="100%" addedEffect="{Fade}" visible="true" >-->
+				
+				<s:HGroup width="100%" height="100%">
+					
+					<s:Scroller width="100%" height="100%">
+						<s:Group>
+							<mx:VBox width="100%"  backgroundColor="#666666">
+								<mx:Label text="GENERALES"  color="#FFFFFF" fontStyle="normal"/> 
+								<mx:Spacer width="100%"/>
+							</mx:VBox>
+							
+							<mx:Label  y="35" text="Folio de despacho:" textAlign="right" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="61" width="542" height="17" id="Fdespacho" fontStyle="normal"/>
+							<mx:Label  y="87" text="Destino:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="113" width="542" height="17" id="destino" fontStyle="normal"/>
+							<mx:Label  y="139" text="Cliente:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="165" width="542" height="17" id="cliente" fontStyle="normal"/>
+							<mx:Label  y="191" text="FEE:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="217" width="542" height="17" id="fee" fontStyle="normal"/>
+							<mx:Label  y="243" text="Control:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="269" width="542" height="17" id="control" fontStyle="normal"/>
+							<mx:Label  y="295" text="Manejo:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="321" width="542" height="17" id="manejo" fontStyle="normal"/>
+							<mx:Label  y="347" text="Tipo:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="373" width="542" height="17" id="tipo" fontStyle="normal"/>
+							<mx:Label  y="399" text="Ubicación:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="425" width="542" height="17" id="ubicacion" fontStyle="normal"/>	
+							<mx:Label  y="451" text="ProquifaNet:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="477" width="542" height="17" id="proquifanet" fontStyle="normal"/>	
+							
+							<mx:VBox x="0" y="512" width="100%"  backgroundColor="#666666">
+								<mx:HBox x="0" y="512" width="100%">
+									<mx:Label text="INSPECCIÓN" color="#FFFFFF" fontStyle="normal"/>
+									<mx:Spacer width="100%"/>
+									<mx:Label textAlign="right" color="#FFFFFF" id="Lblestatus" fontStyle="normal"/>
+								</mx:HBox> 
+								<mx:Spacer width="100%"/>
+							</mx:VBox>
+							
+							<mx:Label  y="547" text="Estatus:" textAlign="right" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="573" width="542" height="17" id="Iestatus" fontStyle="normal"/>
+							<mx:Label  y="599" text="Descripción:" width="128" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="625" width="100%" height="17" id="Idescripcion" fontStyle="normal"/>
+							<mx:Label  y="651" text="Proveedor:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="677" width="542" height="17" id="proveedor" fontStyle="normal"/>
+							<mx:Label  y="703" text="Cantidad:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="729" width="542" height="17" id="Icantidad" fontStyle="normal"/>
+							<mx:Label  y="755" text="Fecha de Inspección:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="781" width="542" height="17" id="IFinspeccion" fontStyle="normal"/>
+							<mx:Label  y="807" text="Inspeccionó:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="833" width="542" height="17" id="inspecciono" fontStyle="normal"/>
+							<mx:Label  y="859" text="Lote Inspección:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="885" width="542" height="17" id="Linspeccion" fontStyle="normal"/>
+							<mx:Label  y="911" text="Lista de empaque relacionada:" textAlign="left" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="937" width="542" height="17" id="listaempaquerelacionada" textDecoration="underline" color="blue" click="itemClickEvent()"/>
+							
+							<mx:VBox width="100%" x="0" y="972" backgroundColor="#666666">
+								<mx:Label text="ADICIONALES"  color="#FFFFFF" fontStyle="normal"/> 
+								<mx:Spacer width="100%"/>
+							</mx:VBox>
+							
+							<mx:Label  y="1007" text="OC Relacionada:" textAlign="right" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="1033" width="542" height="17" id="oc" textDecoration="underline" color="blue" click="itemClickOC()"/>
+							<mx:Label  y="1059" text="PI Relacionado	:" width="128" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="1085" width="542" height="17" id="pi" textDecoration="underline" color="blue" click="itemClickPI()"/>
+							<mx:Label  y="1111" text="Referencia:" width="128" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="1137" id="referencia" width="542" height="17" fontStyle="normal"/>
+							<mx:Label  y="1163" text="Flete:" width="128" fontWeight="bold" fontStyle="normal"/>
+							<mx:Label  y="1189" id="flete" width="542" height="17" fontStyle="normal"/>
+						</s:Group>
+					</s:Scroller>
+				</s:HGroup>
+			</mx:VBox>	
+			<!--</s:Panel>-->
+			
+			<mx:Spacer height="3"/>
+			
+			<mx:HBox width="100%">
+				<s:Spacer width="100%" />
+				<s:Button styleName="botonNegroOld" label="Inicio" id="btnInicio" click="this.stackPAlmacen.selectedChild = this.pnlInicio"/>
+			</mx:HBox>
+			
+		</mx:VBox>
+	</mx:ViewStack>	
+	
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%" id="linea6"/>
+	<mx:Spacer height="3"/>
+	
+</mx:VBox>

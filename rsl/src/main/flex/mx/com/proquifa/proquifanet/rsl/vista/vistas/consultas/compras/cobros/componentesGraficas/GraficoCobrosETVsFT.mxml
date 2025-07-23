@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<graficas:PieChartPqGris  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						  xmlns:s="library://ns.adobe.com/flex/spark" 
+						  xmlns:mx="library://ns.adobe.com/flex/mx" 
+						  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+						  xmlns:graficas="skins.skin.graficas.*" width="100%" height="100%" 
+						  dataProvider="{null}"
+						  itemClick="selectedVs(event)"
+						  lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+						  fondoCircular="true" fondoCircularRadius="7"
+						  showDataTips="false"  innerRadius=".5" 
+						  >
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.cobros.EventoConsultaCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoVsETFT:ArrayCollection;
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				_infoVsETFT = new ArrayCollection();
+				dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				var arrayTemp:Array = new Array();
+				arrayTemp = ObjectUtil.copy(($infoGrafica) as ArrayCollection).source;
+				
+				/**
+				 * Se obtienen los Arreglos con los Cobros que están en ET y los FT deacuerdo a ciertos criterios que estan
+				 * definidos en las funciones obtenerCobrosET y obtenerCobrosFT referirse a ellas para más información
+				 * */
+				var arrayCobrosET:Array = new Array();
+				arrayCobrosET = arrayTemp.filter(obtenerCobrosET);
+				
+				var arrayCobrosFT:Array = new Array();
+				arrayCobrosFT = arrayTemp.filter(obtenerCobrosFT);
+				
+				//Para limpiar memoria
+				arrayTemp = new Array();
+				
+				var itemResumenConsulta:ResumenConsulta;
+				if (arrayCobrosET.length == 0 && arrayCobrosFT.length != 0){
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = "ET";
+					itemResumenConsulta.etiqueta = "ETvsFT";
+					itemResumenConsulta.total = 0;
+					itemResumenConsulta.totalClientes = 0;
+					itemResumenConsulta.totalCobros = 0;
+					itemResumenConsulta.partidas = 0;
+					itemResumenConsulta.piezasTotal = 0;
+					
+					_infoVsETFT.addItem(ObjectUtil.copy(itemResumenConsulta));
+					FormarLosETyFT(arrayCobrosFT,"FT",_infoVsETFT,false);
+				}else if(arrayCobrosET.length > 0 && arrayCobrosFT.length > 0){
+					keys = new Object();
+					FormarLosETyFT(arrayCobrosFT,"FT",_infoVsETFT,true);
+					FormarLosETyFT(arrayCobrosET,"ET",_infoVsETFT,true);
+					/**
+					 * Es necesario invertir el array para poner primero los que están en ET 
+					 * para que la gráfica asocie el color verde a ET y rojo a FT
+					 * */ 
+					_infoVsETFT.addItemAt(ObjectUtil.copy(_infoVsETFT[0]),2);
+					_infoVsETFT.removeItemAt(0);
+				}else if(arrayCobrosET.length>0){
+					FormarLosETyFT(arrayCobrosET,"ET",_infoVsETFT,false);
+				}
+				
+				/**
+				 * Se copia la información construida para la gráfica ETvsFT y se pasa a la gráfica ETvsFT secundaria
+				 * */
+				var eventoPasarInfo:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.PASAR_INFO_A_ETVSFT_SECUNDARIA);
+				eventoPasarInfo.arrayTemp = (ObjectUtil.copy(_infoVsETFT) as ArrayCollection);
+				dispatchEvent(eventoPasarInfo);
+				
+				dataProvider = aplicarFormatoConsultas(_infoVsETFT,"ET vs FT","totalCobros");
+				useCursorHand = true;
+				//Liberar memoria
+				arrayCobrosET = new Array();
+				arrayCobrosFT = new Array();
+			}
+			
+			private function FormarLosETyFT(ETvsFTInfo:Array,etiqueta:String,infoETvsFT:ArrayCollection,ifDiscrimination:Boolean):void
+			{
+				var totalPartidas:int = 0;
+				var totalPiezas:int = 0;
+				var totalCobros:int = 0;
+				var totalMonto:Number = 0;
+				var totalClientes:int = 0;
+				var keysClientes:Object = new Object();
+				
+				var currentPartidaCobros:Cobros; 
+				var itemResumenConsulta:ResumenConsulta;
+				
+				for(var i:int =0; i<ETvsFTInfo.length; i++){
+					currentPartidaCobros = ETvsFTInfo[i] as Cobros;
+					
+					totalPartidas += currentPartidaCobros.partidas;
+					totalPiezas += currentPartidaCobros.piezas;
+					totalMonto += currentPartidaCobros.montoDolares;
+					
+					totalCobros++;
+					
+					/**
+					 * Para el conteo de clientes dando el peso a las clientes que están FT
+					 * */
+					if(ifDiscrimination){
+						if( etiqueta == "FT"){
+							if(!keys.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+								keys[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+								totalClientes++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentPartidaCobros.nombreCliente) && !keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+								keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+								totalClientes++;
+							}
+						}
+					}else{
+						if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+							keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+							totalClientes++;
+						} 
+					}
+				}
+				
+				itemResumenConsulta = new ResumenConsulta();
+				itemResumenConsulta.conceptoResultado = etiqueta;
+				itemResumenConsulta.etiqueta = etiqueta;
+				itemResumenConsulta.total = totalMonto;
+				itemResumenConsulta.totalClientes = totalClientes;
+				itemResumenConsulta.totalCobros = totalCobros;
+				itemResumenConsulta.partidas = totalPartidas;
+				itemResumenConsulta.piezasTotal = totalPiezas;
+				
+				infoETvsFT.addItem(ObjectUtil.copy(itemResumenConsulta));
+			}
+			private function obtenerCobrosET(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				if(item.estadoParaMostrar == 'Abierto' ){
+					if(isNaN(Number(item.diasRestantesCobro))){
+						if(item.diasRestantesCobro == 'Pendiente'){
+							return true;
+						}else{
+							return false;
+						}
+					}else if(Number(item.diasRestantesCobro) >= 0){
+						return true;
+					}else{
+						return false;
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){
+					if(item.moroso == "NO"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			private function obtenerCobrosFT(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				
+				if(item.estadoParaMostrar == 'Abierto'){ 
+					if(!isNaN(Number(item.diasRestantesCobro)))
+					{
+						if(Number(item.diasRestantesCobro) < 0){
+							return true;
+						}else{
+							return false;
+						}
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){ 
+					if(item.moroso == "SI"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			private function selectedVs(e:ChartItemEvent):void
+			{
+				var evt:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.MOSTRAR_SELECTED_GRAFICA);
+				evt.tipo = e.hitData.item.etiqueta;
+				evt.seleccionarGraficas = 1;
+				evt.valorAdicional = 'grafETVsFT';
+				dispatchEvent(evt); 
+			}
+		]]>
+	</fx:Script>
+	
+	<graficas:series>
+		<graficas:pieSeriesVS field="totalCobros"/>  <!--piezasTotal-->
+	</graficas:series>
+</graficas:PieChartPqGris>

@@ -1,0 +1,662 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*"
+		  xmlns:grafica="skins.botones.grafica.*" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" xmlns:label="skins.skin.label.*"
+		  width="100%" height="100%"
+		  creationComplete="init()" xmlns:detalle="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.visitaVentas.detalle.*" 
+		  >
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.ReportarVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			import flashx.textLayout.formats.TextAlign;
+			
+			import skins.catalogos.catalogoColores;
+			
+			private var yallegaronLasVentas:Boolean = false;
+			private var yallegaronLasVisitas:Boolean = false;
+			private var montoVentas:ArrayCollection;
+			private var visitas:ArrayCollection;
+			private var resumenVisitasVsVentasResp:ArrayCollection;
+			private var eventResp:ArrayCollection;
+			[Bindable] private var _event:EventoTableroClientes;
+			private var totalLegend:Number = 0;
+			private const _tamanioMinimo:int = 170;
+			private var llegoPrimero:String = "";
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			[Bindable] public var tamRealFontNombreUsuario:Number;
+			[Bindable] public var Padding:Number;
+			[Bindable] public var unscaledWidthAnt:Number;
+			[Bindable] public var muestraDetalles:Boolean = false;
+			private var query:Query;
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			
+			private function init():void
+			{
+				addEventListener(EventoTableroClientes.CAMBIAR_VISTA, regresaVistaSinDetalles, false, 0, true);
+				addEventListener(EventoTableroClientes.CIERRA_VISTA_DETALLES, cierraVistaDetalles, false, 0, true);
+				addEventListener(EventoTableroClientes.OBTENER_INFORMACION_TIME_LINE, enviaVisitaCliente, false, 0, true);
+				addEventListener(EventoTableroClientes.OCULTAR_TITULO, ocultarTitulo, false, 0, true);
+				
+				eventResp = ObjectUtil.copy(_event) as ArrayCollection;
+			}
+
+			private function ocultarTitulo(event:EventoTableroClientes):void
+			{
+				titulo.visible = titulo.includeInLayout = false;
+			}
+			
+			private function enviaVisitaCliente(event:EventoTableroClientes):void
+			{
+				vistaOperacion.currentCliente = event.visitaCliente;
+			}
+			
+			private function traeDatos():void
+			{
+				if(_event != null){
+					var eventCAP:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.OBTENER_RESUMEN_VISITAS_VS_VENTAS);
+					eventCAP.parametros = new ParametrosBusquedaCliente;
+					eventCAP.parametros = _event.parametros;
+					dispatchEvent(eventCAP);
+				}
+			}
+			
+			public function cierraVistaDetalles(listaADeseleccionar:EventoTableroClientes):void
+			{
+					for(var i:int=0; i<lstVisitasVSVentas.dataProvider.length;i++){
+						lstVisitasVSVentas.dataProvider.getItemAt(i).detallesAbierto = false;
+					}				
+			}
+			
+			[Bindable] var noClientes:int;
+			[Bindable] var noMeses:int;
+			[Bindable] var noVendedores:int;
+			[Bindable] var totalMontoVendido:Number;
+			[Bindable] var noTotalVisitas:int;
+			[Bindable] var noTotalVisitasLabel:String;
+			[Bindable] var noClientesLabel:String;
+			[Bindable] var noMesesLabel:String;
+			[Bindable] var noVendedoresLabel:String;
+
+			public function set recibeResumenVisitasVsVentas($lista:ArrayCollection):void {
+				
+				noClientes = 0;
+				noMeses = 0;
+				noVendedores = 0;
+				totalMontoVendido = 0;
+				noTotalVisitas = 0;
+				noClientesLabel = "";
+				noMesesLabel = "";
+				noVendedoresLabel = "";
+				noTotalVisitasLabel = "";
+				
+				if($lista == null || $lista.length == 0){
+					$lista = new ArrayCollection;
+				}
+				
+				/*query = new Query($lista, ['nombreCliente', 'mes', 'usuario']);
+				query.sinCache = true;
+				var punteros:Array = query.getPunteros(["nombreCliente"],'nombreCliente');
+				var arrayClientes:ArrayCollection = new ArrayCollection;
+				var array:Array = query.getPunteros(['nombreCliente'], 'nombreCliente');
+				var arrayMes:Array = query.getPunteros([null,'mes'], 'mes');
+				noClientes = query.getPunteros(['nombreCliente'], 'nombreCliente').length;
+				noMeses = query.getPunteros([null,'mes'], 'mes').length;
+				noVendedores = query.getPunteros([null,null,'usuario'], 'usuario').length;
+				
+				for(var i:int=0; i < punteros.length; i++){
+					for(var j:int=1; j < 13; j++){
+						var punterosCliente:Array = query.getPunteros([punteros[i],j]);
+						var resumenConsulta:ResumenConsulta = new ResumenConsulta;
+						if(punterosCliente.length > 0){
+							resumenConsulta = query.universo[punterosCliente[0]];
+							resumenConsulta.visitasDetalle = new ArrayCollection;
+							resumenConsulta.visitasDetalle = query.armarLista(punterosCliente);
+							arrayClientes.addItem(resumenConsulta);
+							
+							totalMontoVendido += resumenConsulta.visitasDetalle[0].monto
+							if(resumenConsulta.visitasDetalle[0].idVisitaCliente != null && resumenConsulta.visitasDetalle[0].idVisitaCliente != 0)
+								noTotalVisitas += punterosCliente.length;
+							
+						}
+					}
+				}*/
+				
+				var map:Object = new Object;
+				var mapMeses:Object = new Object;
+				query = new Query($lista, ['nombreCliente', 'visMes', 'facMes', 'usuario']);
+				query.sinCache = true;
+				var punteros:Array = query.getPunteros(["nombreCliente"],'nombreCliente');
+				var arrayClientes:ArrayCollection = new ArrayCollection;
+				var array:Array = query.getPunteros(['nombreCliente'], 'nombreCliente');
+				noClientes = query.getPunteros(['nombreCliente'], 'nombreCliente').length;
+				noVendedores = query.getPunteros([null,null, null,'usuario'], 'usuario').length;
+				
+				for(var i:int=0; i < punteros.length; i++){
+					for(var j:int=1; j < 13; j++){
+						var punterosCliente:Array = query.getPunteros([punteros[i],null,j]);
+						
+						var resumenConsulta:ResumenConsulta = new ResumenConsulta;
+						
+						if(punterosCliente.length > 0){
+							resumenConsulta = query.universo[punterosCliente[0]];
+							
+							if (!map.hasOwnProperty(resumenConsulta.idCliente)) {
+								map[resumenConsulta.idCliente] = new Object();
+							}
+							
+							if (!map[resumenConsulta.idCliente].hasOwnProperty(resumenConsulta.facMes)) {
+								resumenConsulta.visitasDetalle = new ArrayCollection;
+								map[resumenConsulta.idCliente][resumenConsulta.facMes] = resumenConsulta;
+								arrayClientes.addItem(resumenConsulta);								
+								totalMontoVendido += query.armarLista(punterosCliente)[0].monto;
+								
+								if(map[resumenConsulta.idCliente][resumenConsulta.facMes].facMes != 0)
+									if (!mapMeses.hasOwnProperty(resumenConsulta.facMes)){
+										mapMeses[j] = map[resumenConsulta.idCliente][resumenConsulta.facMes].facMes;
+										noMeses++;
+									}
+								
+								if(map[resumenConsulta.idCliente][resumenConsulta.facMes].visMes != 0)
+									if (!mapMeses.hasOwnProperty(resumenConsulta.facMes)){
+										mapMeses[j] = map[resumenConsulta.idCliente][resumenConsulta.facMes].visMes;
+										noMeses++;
+									}
+								
+							}
+							
+							/*resumenConsulta.visitasDetalle = query.armarLista(punterosCliente);*/
+							
+							/*totalMontoVendido += resumenConsulta.visitasDetalle[0].monto*/
+							/*if(resumenConsulta.visitasDetalle[0].idVisitaCliente != null && resumenConsulta.visitasDetalle[0].idVisitaCliente != 0)
+								noTotalVisitas += punterosCliente.length;*/
+							
+						}
+						
+						punterosCliente = query.getPunteros([punteros[i],j,null]);
+						
+						if(punterosCliente.length > 0){
+							resumenConsulta = query.universo[punterosCliente[0]];
+							
+							if (!map.hasOwnProperty(resumenConsulta.idCliente)) {
+								map[resumenConsulta.idCliente] = new Object();
+							}
+							
+							if (!map[resumenConsulta.idCliente].hasOwnProperty(resumenConsulta.visMes)) {
+								resumenConsulta.visitasDetalle = new ArrayCollection;
+								map[resumenConsulta.idCliente][resumenConsulta.visMes] = resumenConsulta;
+								arrayClientes.addItem(resumenConsulta);								
+								//totalMontoVendido += query.armarLista(punterosCliente)[0].monto;
+								
+
+								if(map[resumenConsulta.idCliente][resumenConsulta.visMes].facMes != 0)
+									if (!mapMeses.hasOwnProperty(resumenConsulta.visMes)){
+										mapMeses[j] = map[resumenConsulta.idCliente][resumenConsulta.visMes].facMes;
+										noMeses++;
+									}
+								
+								if(map[resumenConsulta.idCliente][resumenConsulta.visMes].visMes != 0)
+									if (!mapMeses.hasOwnProperty(resumenConsulta.visMes)){
+										mapMeses[j] = map[resumenConsulta.idCliente][resumenConsulta.visMes].visMes;
+										noMeses++;
+									}
+								
+								
+							} else {
+								resumenConsulta = map[resumenConsulta.idCliente][resumenConsulta.visMes];
+							}
+							
+							var arrayDetalle:ArrayCollection = query.armarLista(punterosCliente);
+							var mapVisita:Object = new Object;
+							for (var k:int = 0; k < arrayDetalle.length; k++) 
+							{
+								if (!mapVisita.hasOwnProperty(arrayDetalle[k].idVisitaCliente) ) {
+									mapVisita[arrayDetalle[k].idVisitaCliente] = new Object;
+									resumenConsulta.visitasDetalle.addItem(arrayDetalle[k]);
+								}
+							}
+							
+							noTotalVisitas += resumenConsulta.visitasDetalle.length;
+							
+							/*resumenConsulta.visitasDetalle = query.armarLista(punterosCliente);*/
+							
+							/*totalMontoVendido += resumenConsulta.visitasDetalle[0].monto*/
+							/*if(resumenConsulta.visitasDetalle[0].idVisitaCliente != null && resumenConsulta.visitasDetalle[0].idVisitaCliente != 0)
+							noTotalVisitas += punterosCliente.length;*/
+							
+						}
+						
+					}
+				}
+				
+				lstVisitasVSVentas.dataProvider = arrayClientes;
+				
+				resumenVisitasVsVentasResp = ObjectUtil.copy($lista) as ArrayCollection;
+				
+				if(noTotalVisitas == 1){
+					noTotalVisitasLabel = 'visita';
+				}else{
+					noTotalVisitasLabel = 'visitas';				
+				}
+				if(noClientes == 1){
+					noClientesLabel = 'cliente';
+				}else{
+					noClientesLabel = 'clientes';				
+				}
+				if(noMeses == 1){
+					noMesesLabel = 'mes';
+				}else{
+					noMesesLabel = 'meses';				
+				}
+				if(noVendedores == 1){
+					noVendedoresLabel = 'vendedor';
+				}else{
+					noVendedoresLabel = 'vendedores';				
+				}
+			}
+
+			public function set recibeDetallesVisitasVsVentas($objeto:ReportarVisita):void {
+				if($objeto == null)
+					return;
+				
+				vistaOperacion.recibeReportarVisitasCliente = $objeto;
+				muestraDetalles = true;
+				controlaVista();
+				
+			}
+
+			public function controlaVista():void {
+				if(muestraDetalles){
+					vistaSinDetalles.visible = false; 
+					vistaSinDetalles.includeInLayout = false; 
+					vistaConDetalles.visible = true; 
+					vistaConDetalles.includeInLayout = true; 
+				}else{
+					vistaSinDetalles.visible = true; 
+					vistaSinDetalles.includeInLayout = true; 
+					vistaConDetalles.visible = false; 
+					vistaConDetalles.includeInLayout = false; 
+				}				
+			}
+
+			public function regresaVistaSinDetalles(event:EventoTableroClientes):void {
+					vistaSinDetalles.visible = true; 
+					vistaSinDetalles.includeInLayout = true; 
+					vistaConDetalles.visible = false; 
+					vistaConDetalles.includeInLayout = false; 	
+					titulo.visible = titulo.includeInLayout = true;
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				trace(unscaledWidth);
+				if(unscaledWidth != unscaledWidthAnt){					
+					
+					tamRealFontNombreUsuario = (unscaledWidth / 2005) * 13;
+					tamRealFontNombreUsuario = tamRealFontNombreUsuario < 12 ? 12: tamRealFontNombreUsuario;
+					
+					if(tamRealFontNombreUsuario>13)
+						tamRealFontNombreUsuario = 13;
+		
+					
+					Padding = (unscaledWidth / 2005) * 50;
+					Padding = Padding < 0 ? 0 : Padding;				
+					if(unscaledWidth<815)
+						Padding=10;
+					if(unscaledWidth>2005)
+						Padding=50;
+					
+				}
+				
+				unscaledWidthAnt = unscaledWidth;
+				
+				
+				
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+			}
+			
+			public function set recibeLinealVentasPeriodo( $lista:ArrayCollection ):void{
+				if($lista == null || $lista.length == 0)
+					$lista = new ArrayCollection;
+				
+				montoVentas = ObjectUtil.copy($lista) as ArrayCollection;
+				yallegaronLasVentas = true;
+				llegoPrimero = "venta";
+			}
+			
+			public function set recibeVisitas($lista:ArrayCollection):void {
+				if($lista == null || $lista.length == 0)
+					$lista = new ArrayCollection;
+				
+				visitas = ObjectUtil.copy($lista) as ArrayCollection;
+				yallegaronLasVisitas = true;
+				llegoPrimero = "visita";
+			}
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				if (llegoPrimero == "" ) {
+					visitas = new ArrayCollection;
+					montoVentas = new ArrayCollection;
+					yallegaronLasVentas = false;
+					yallegaronLasVisitas = false;
+				}
+				
+				iniciarGrafica();
+				if(stackGeneral.selectedIndex == 0)
+					traeDatos();
+			}
+			
+			private function iniciarGrafica():void {
+				if (yallegaronLasVentas && yallegaronLasVisitas ) {
+					yallegaronLasVentas = false;
+					yallegaronLasVisitas = false;
+					llegoPrimero = "";
+					myChart.dataProvider = llenaGrafica();
+				} else
+					setTimeout(iniciarGrafica, 300);
+			}
+			
+			private function llenaGrafica():ArrayCollection {
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int = 0;
+				totalLegend = 0;
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.montoUSD_0 = 0;
+					objeto.montoUSD_1 = 0;
+					objeto.montoUSD_2 = 0;
+					objeto.montoObjetivo = 0;
+					objeto.montoFundamental = 0;
+					
+					for( m = 0; m < montoVentas.length;m++ )
+					{
+						resumen = montoVentas[m] as ResumenConsulta;
+						if( resumen.etiqueta == "VENTAS_0" || resumen.etiqueta == "NOTA_0" ){
+							objeto.montoUSD_0 += resumen.total;
+							totalLegend += resumen.total;	
+						}
+						else if( resumen.etiqueta == "VENTAS_1" || resumen.etiqueta == "NOTA_1" ){
+							objeto.montoUSD_1 += resumen.total;									
+						}
+					}
+					
+					arrReturn.addItem( objeto );
+				}
+				else
+				{
+					
+					while( cuenta < 13)
+					{
+						if(cuenta >= _event.parametros.rangoMinMes && cuenta <= _event.parametros.rangoMaxMes)
+						{
+							objeto = new Object();
+							objeto.numeroMes = cuenta;
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.montoUSD_0 = 0;
+							objeto.montoUSD_1 = 0;
+							objeto.montoUSD_2 = 0;
+							objeto.montoObjetivo = 0;
+							objeto.totalPeriodo = 0;
+							
+							for( m = 0; m < montoVentas.length;m++ )
+							{
+								resumen = montoVentas[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{
+									if( resumen.etiqueta == "VENTAS_0" || resumen.etiqueta == "NOTA_0" )
+									{
+										objeto.montoUSD_0 += resumen.total;
+										totalLegend += resumen.total;
+									} 
+								}
+							}
+							
+							arrReturn.addItem(objeto);
+						}
+						cuenta++;
+					}
+				}
+				
+				
+				for (var i:int = 0; i < arrReturn.length; i++) 
+				{
+					var monto:Object = arrReturn[i];
+					monto.visitas = 0;
+					for (var j:int = 0; j < visitas.length; j++) 
+					{
+						var resumen1:ResumenConsulta = visitas[j];
+						if (resumen1.mes == monto.numeroMes) {
+							monto.visitas = resumen1.totalVisitas;
+							visitas.removeItemAt(j);
+							break;
+						}else if (_event.parametros.periodo.toLowerCase() == "quincenal") {
+							monto.visitas = resumen1.totalVisitas;
+							monto.numeroMes = resumen1.mes;
+							visitas.removeItemAt(j);
+							break;
+						}
+					}
+					
+					if (monto.visitas == 0 ) {
+						monto.montoUSD_0 = -1;
+					}
+					
+				}
+				
+				return arrReturn;
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				var index:int = parseInt($etiqueta.toString()) - 1 >= 0 ? parseInt($etiqueta.toString()) - 1 : 0;
+				var cadena:String = "";
+				if (index < _listaMensual.length )
+					cadena = _listaMensual[index].toString().toUpperCase();
+				
+				return cadena;
+				
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			public function seleccionaTabla():void
+			{			
+				stackGeneral.selectedChild = vistaTabla;
+				
+				traeDatos();
+			}
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<componentes:TituloChartMaxTablero width="100%" text="VISITAS" id="titulo"/>
+	
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all">
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" >
+				
+				<s:VGroup id="vistaSinDetalles" width="100%" height="100%" paddingBottom="0" gap="0">
+					<s:VGroup width="100%" height="100%" paddingBottom="0" horizontalAlign="center">
+						
+						<otros:divisionGruesa width="100%"/>
+						<s:HGroup width="100%" height="100%">
+							
+							<s:VGroup width="100%" height="100%">
+								<s:Spacer height="15"/>
+								<s:HGroup width="100%" height="30" textAlign="left">
+									<s:Spacer width="{Padding}"/>
+									<s:Label paddingLeft="30" text="#" minWidth="40" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Cliente" width="30%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Mes" width="10%" textAlign="center" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Vendedor" textAlign="center" width="15%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Monto vendido" textAlign="center" width="15%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Total visitas" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold" />	
+									<s:Spacer width="10%"  minWidth="25" />
+								</s:HGroup>
+								<otros:division width="100%"/>
+									<s:List width="100%" height="100%" borderVisible="false" verticalScrollPolicy="on"
+												id="lstVisitasVSVentas" contentBackgroundAlpha="0" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.render.IR_ListaVisitasVSVentas" contentBackgroundColor="#ffffff"/>
+								<otros:division width="100%"/>
+								
+								<s:HGroup width="100%" height="60" verticalAlign="middle">
+									<s:Spacer width="{Padding}"/>
+									<s:Label paddingLeft="30" minWidth="40" text="{lstVisitasVSVentas.dataProvider.length}" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="{noClientes} {noClientesLabel}" width="30%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="{noMeses} {noMesesLabel}" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="{noVendedores} {noVendedoresLabel}" textAlign="center" width="15%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									
+									<s:HGroup width="15%" horizontalAlign="center">
+										<s:Label text="${UtilsFormatosNumericos.precisionADosDecimalesConComas(totalMontoVendido)}" textAlign="center" width="100%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									</s:HGroup>
+									
+									<s:HGroup width="10%" horizontalAlign="center">
+										<s:Label text="{noTotalVisitas} {noTotalVisitasLabel}" textAlign="center" width="100%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"  />										
+									</s:HGroup>
+									<s:Spacer width="10%" minWidth="25"/>
+								</s:HGroup>
+								<otros:division width="100%"/>
+							</s:VGroup>
+							
+							
+						</s:HGroup>
+					</s:VGroup>
+					
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+						<s:Spacer width="100%" />
+					</s:HGroup>
+				</s:VGroup>
+				<s:VGroup id="vistaConDetalles" width="100%" height="100%" visible="false" includeInLayout="false">
+					<detalle:VistaOperacionReportarVisita id="vistaOperacion"/>
+				</s:VGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%" >
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<mx:BubbleChart width="100%" height="100%" id="myChart" 
+									showDataTips="true" maxRadius="20" minRadius="1"
+									dataTipRenderer="{VisitasVsVentasToolTip}"
+									dataTipMode="single"
+									showDataTipTargets="false"
+									paddingRight="{ width > _tamanioMinimo ? 30 : 5}"
+									paddingLeft="{ width > _tamanioMinimo ? 20 : 5}"
+									>
+						<mx:series>
+							<mx:BubbleSeries id="seriaVenta" 
+											 xField="numeroMes" yField="montoUSD_0" radiusField="visitas">
+								
+							</mx:BubbleSeries>
+							<mx:BubbleSeries id="seriaVisita"
+											 xField="numeroMes" yField="montoUSD_0" radiusField="visitas">
+								
+							</mx:BubbleSeries>
+						</mx:series>
+						<!--<mx:horizontalAxis>
+							<mx:LinearAxis id="nombre" minimum="1" interval="1" />
+						</mx:horizontalAxis>-->
+						
+						<mx:horizontalAxis>
+							<mx:LinearAxis id="nombre" minimum="{_event.parametros.rangoMinMes}" maximum="{_event.parametros.rangoMaxMes}" interval="1" /> <!--FUNCIONA BIEN PERO CORTA A LA MITAD LA PRIMERA COLUMNA (ACTUAL)-->
+							<!--<mx:LinearAxis id="nombre" minimum="{_event.parametros.rangoMinMes-1}" interval="1" />-->   <!--FUNCIONA BIEN PERO SE AGREGA UN NÚMERO ANTERIOR AL MES INICIAL DEL PERIODO-->
+						</mx:horizontalAxis>
+						
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{nombre}" axisStroke="{trazoGruezo}"
+											 tickPlacement="none"
+											 tickLength="0"
+											 fontFamily="Helvetica" fontSize="11" fontStyle="normal"
+											 fontWeight="bold" labelFunction="lblFunction"
+											 >
+								<mx:tickStroke>
+									<mx:SolidColorStroke color="#000000" weight="1"/>
+								</mx:tickStroke>
+								<mx:minorTickStroke>
+									<mx:SolidColorStroke color="#000000" weight="1"/>
+								</mx:minorTickStroke>
+							</mx:AxisRenderer>
+						</mx:horizontalAxisRenderers>
+						
+						<mx:verticalAxis>
+							<mx:LinearAxis id="ventasDLS"  labelFunction="formateoEje" minimum="0"  /> 
+						</mx:verticalAxis>
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{ventasDLS}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"
+											 showLabels="{ width > _tamanioMinimo ? true : false}" >
+							</mx:AxisRenderer>
+						</mx:verticalAxisRenderers>
+						
+						
+					</mx:BubbleChart>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()"/>
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

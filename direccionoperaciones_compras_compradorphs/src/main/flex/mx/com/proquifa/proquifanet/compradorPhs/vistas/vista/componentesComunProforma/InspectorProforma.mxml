@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"  paddingBottom="30" paddingTop="30" paddingLeft="40" paddingRight="40" creationComplete="inicia()"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:azul="skins.botones.azul.*" xmlns:salir="skins.botones.salir.*" xmlns:botonesToggle="skins.botonesToggle.*" xmlns:rechazo="skins.botones.rechazo.*" xmlns:guardar="skins.botones.guardar.*" xmlns:envia="skins.botones.envia.*" xmlns:botonNegroCuadrado="skins.botones.botonNegroCuadrado.*">
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import skins.catalogos.catalogoAlertas;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.Proforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.managers.PopUpManager;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.popUps.PopUpProformaGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.NotasProforma;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaProforma;
+			import mx.utils.ObjectUtil;
+			[Bindable]
+			private var _opcionSeleccionada:PartidaProforma = new PartidaProforma;
+			[Bindable]
+			private var _partidaInformacion:PartidaProforma;
+			[Bindable]
+			private var _lista:ArrayCollection;
+			[Bindable]
+			private var _listaNotas:ArrayCollection;
+			[Bindable]
+			private var _listaNotasOcultas:ArrayCollection;
+			private var _componentePopUpProformaGeneral:PopUpProformaGeneral = null;
+			private var _proformaGeneral:Proforma;
+			private var _ultimoIndiceLista:int=0;
+			private function inicia():void{
+				this.addEventListener( EventoProforma.BORRA_NOTA, borrarNota );
+			}
+			private var _indiceSeleccionado:int = 0;
+			public function iniciaComponente( $opcionSeleccionda:PartidaProforma, $lista:ArrayCollection):void{
+				this.btnDesbloquear.visible = false;
+				_opcionSeleccionada = new PartidaProforma();
+				_lista = new ArrayCollection();
+				_opcionSeleccionada = $opcionSeleccionda;
+				_lista = $lista;
+				
+				/////////// 		PARA AGREGAR EL ULTIMO EN LA LISTA hacer esto cada vez q se actualice el dataprovider de la lista
+				var ultimoEnlaListaConTotal:PartidaProforma = new PartidaProforma();
+				ultimoEnlaListaConTotal.ultimo = this._lista.length.toString();
+				this._lista.addItem(ultimoEnlaListaConTotal);
+				/////////// 		/PARA AGREGAR EL ULTIMO EN LA LISTA hacer esto cada vez q se actualice el dataprovider de la lista
+				
+				if(_indiceSeleccionado > 0){
+					listaPartidas.selectedIndex= _indiceSeleccionado; 
+				}else{
+					listaPartidas.selectedIndex = 0;
+				}
+				_opcionSeleccionada.paisProveedor = ( this.listaPartidas.selectedItem as PartidaProforma ).paisProveedor;
+				_opcionSeleccionada.idProforma = ( this.listaPartidas.selectedItem as PartidaProforma ).idProforma; 
+				invocaProforma();
+				vizualisaPartida();
+			}
+			/**
+			 * funcion privada para invocar la proforma general
+			 */ 
+			private function invocaProforma():void{
+				var eventoProforma:EventoProforma = new EventoProforma( EventoProforma.CONSULTAR_GENERAL_PROFRMA );
+				eventoProforma.idProforma = this._opcionSeleccionada.idProforma;
+				dispatchEvent( eventoProforma ); 
+			}		
+			/**
+			 * funcion para recibir los datos dela proforma general 
+			 */ 
+			public function set recibeProformaGeneral( dato:Proforma ):void{
+				if(dato == null){
+					return;
+				}
+				_proformaGeneral = new Proforma();
+				_proformaGeneral = dato;
+				if( _proformaGeneral.abierta ){
+					this.btnDesbloquear.visible = true;
+				}else{
+					this.btnDesbloquear.visible = false;
+				}
+			}
+			/**
+			 * funcion para vizualisar la partida seleccionada
+			 */ 
+			private function vizualisaPartida():void{
+				///////////////////////////////////////////////////////////////////////  VALIDAR ULTIMA SELECCION LISTA
+				if(_ultimoIndiceLista != this.listaPartidas.selectedIndex ){
+					(this._lista[_ultimoIndiceLista] as PartidaProforma).numFila = ( _ultimoIndiceLista +1 );
+					_ultimoIndiceLista = this.listaPartidas.selectedIndex;
+				}
+				//     VALIDAR SELECCION EN LA LISTA
+				if(this.listaPartidas.selectedIndex == this._lista.length-1 ){
+					this.listaPartidas.selectedIndex  = _indiceSeleccionado;
+					return;
+				}
+				if(this.listaPartidas.selectedIndex == -1) return;
+				//     /VALIDAR SELECCION EN LA LISTA
+				if( (this._lista[this.listaPartidas.selectedIndex ] as PartidaProforma).numFila > 0){
+					(this._lista[this.listaPartidas.selectedIndex ] as PartidaProforma).numFila = (this.listaPartidas.selectedIndex +1 )* -1;
+				}
+				_indiceSeleccionado  = this.listaPartidas.selectedIndex;
+				///////////////////////////////////////////////////////////////////////  /VALIDAR ULTIMA SELECCION LISTA
+				
+				_partidaInformacion = new PartidaProforma();
+				_partidaInformacion = this.listaPartidas.selectedItem;
+				grpPublicacion.height = 0;
+				grpPublicacion.visible = false;
+				grpSinEspecificar.height = 0;
+				grpSinEspecificar.visible = false;
+				grpTodo.percentHeight = 100;
+				grpTodo.visible = true;
+				
+				grpLote.percentHeight = 100;
+				grpLote.visible = true;
+				grpCaducidad.percentHeight = 100;
+				grpCaducidad.visible = true;
+				if( (this.listaPartidas.selectedItem as PartidaProforma).tipo == "Publicaciones" ){
+					grpTodo.height = 0;
+					grpTodo.visible = false;
+					if( (this.listaPartidas.selectedItem as PartidaProforma).edicion == "ND" || (this.listaPartidas.selectedItem as PartidaProforma).edicion == "No especificado" || (this.listaPartidas.selectedItem as PartidaProforma).edicion == "NA" ){
+						grpSinEspecificar.percentHeight = 100;
+						grpSinEspecificar.visible = true;
+					}else{
+						grpPublicacion.percentHeight = 100;
+						grpPublicacion.visible = true;
+					}
+				}else{
+					var caducidadBool:Boolean= false;
+					var loteBool:Boolean= false;
+					if( (this.listaPartidas.selectedItem as PartidaProforma).caducidad =="No especificado" || (this.listaPartidas.selectedItem as PartidaProforma).caducidad =="ND" || (this.listaPartidas.selectedItem as PartidaProforma).caducidad =="NA") caducidadBool = true;
+					if( (this.listaPartidas.selectedItem as PartidaProforma).lote =="No especificado" || (this.listaPartidas.selectedItem as PartidaProforma).lote =="ND" || (this.listaPartidas.selectedItem as PartidaProforma).lote =="NA") loteBool = true;
+					if( caducidadBool == true && loteBool == true){
+						grpSinEspecificar.percentHeight = 100;
+						grpSinEspecificar.visible = true;
+						grpTodo.height = 0;
+						grpTodo.visible = false;
+					}else if( loteBool == true ){
+						grpLote.height = 0;
+						grpLote.visible = false;
+					}else if(caducidadBool == true ){
+						grpCaducidad.height = 0;
+						grpCaducidad.visible = false;
+					}
+				}
+				imgBadMorada.visible = false;
+				imgBanRoja.visible = false;
+				imgBanVer.visible = false;
+				lblNA.visible = false;
+				lblFecha.text = "";
+				lblFlete.text = "";
+				lblFecha.setStyle( "color", "0x000000");
+				lblFlete.setStyle( "color", "0x000000");
+				if( (this.listaPartidas.selectedItem as PartidaProforma).tipoCarro == "STOCK" ) {
+					lblFecha.setStyle( "color", "0x666666");
+					lblFecha.text = "NA";
+					lblFlete.text = "NA";
+					lblFlete.setStyle( "color", "0x666666");
+					lblNA.visible = true;
+				}else{
+					/* validacion para el tipo de bandera  */
+					var diferenciaDias:int = 0;
+					if ( (this.listaPartidas.selectedItem as PartidaProforma).FEE != null ){
+						if( 5 < UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), (this.listaPartidas.selectedItem as PartidaProforma).FEE) ){
+							/* color verde */
+							lblFecha.setStyle( "color", "0x339933");
+							imgBanVer.visible = true;
+						}else if( 6 > UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), (this.listaPartidas.selectedItem as PartidaProforma).FEE) &&  UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), (this.listaPartidas.selectedItem as PartidaProforma).FEE) > 0){
+							/* color rojo */
+							lblFecha.setStyle( "color", "0xCC0000");
+							imgBanRoja.visible = true;
+						}else if( 1 > UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), (this.listaPartidas.selectedItem as PartidaProforma).FEE) ){
+							/* color morado */
+							lblFecha.setStyle( "color", "0x993399");
+							imgBadMorada.visible = true;
+						}
+					}else{
+						lblFecha.text = "NA";
+					}
+					lblFecha.text = (this.listaPartidas.selectedItem as PartidaProforma).fechaFEE_Formato;
+					lblFlete.text = (this.listaPartidas.selectedItem as PartidaProforma).tipoFlete;
+				} 
+				lblOrigen.text = "";
+				lblProforma.text = "";
+				(this.listaPartidas.selectedItem as PartidaProforma).origenProforma == null ? (this.listaPartidas.selectedItem as PartidaProforma).origenProforma = "" : (this.listaPartidas.selectedItem as PartidaProforma).origenProforma = (this.listaPartidas.selectedItem as PartidaProforma).origenProforma ;
+				if( (this.listaPartidas.selectedItem as PartidaProforma).origenProforma == "" ){
+					(this.listaPartidas.selectedItem as PartidaProforma).idProforma > 0 ? (this.listaPartidas.selectedItem as PartidaProforma).origenProforma =  (this.listaPartidas.selectedItem as PartidaProforma).folioProforma : (this.listaPartidas.selectedItem as PartidaProforma).origenProforma = (this.listaPartidas.selectedItem as PartidaProforma).tipoCarro;	
+				}
+				if( (this.listaPartidas.selectedItem as PartidaProforma).origenProforma!= null && (this.listaPartidas.selectedItem as PartidaProforma).origenProforma.substring(0,3) == "PR-" ){
+					lblOrigen.text = "Proforma";
+					lblProforma.text = (this.listaPartidas.selectedItem as PartidaProforma).origenProforma;
+				}else{
+					lblOrigen.text = (this.listaPartidas.selectedItem as PartidaProforma).origenProforma
+				}
+				_listaNotas = new ArrayCollection();
+				_listaNotas = (this.listaPartidas.selectedItem as PartidaProforma).notas;
+				_listaNotasOcultas = new ArrayCollection();
+				_listaNotasOcultas = ObjectUtil.copy( (this.listaPartidas.selectedItem as PartidaProforma).notas) as ArrayCollection;
+				enumeraPartidas();
+			}
+			
+			
+			/**
+			 * funcion que recibe del mapa Mapa proforma las notas de la partida
+			 */ 
+			public function set recibeNotas(datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}
+				_listaNotas = new ArrayCollection();
+				_listaNotas = datos;
+				_listaNotasOcultas = datos;
+			}
+			protected function botonsalir1_clickHandler():void{
+				this._lista.removeItemAt( _lista.length -1 );
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs(EventoGeneralCompradorPhs.SELECCIONA_OPCION);
+				evento.idOpcionSeleccionada = "regresaANivelPlanificacionProforma";
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion que borrar una nota de la partidaProforma seleccionada 
+			 */
+			private function borrarNota( dato:EventoProforma):void{
+				this.btnOjoSauron.enabled = false;
+				for(var i:int = 0; i < _listaNotasOcultas.length; i++){
+					if(  (_listaNotasOcultas[i] as NotasProforma).folio > 0 ){
+						if( (_listaNotasOcultas[i] as NotasProforma).nota ==  (this.listaNotas.selectedItem as NotasProforma).nota ){
+							(_listaNotasOcultas[i] as NotasProforma).eliminar = true;
+						}
+					}else{
+						if( (_listaNotasOcultas[i] as NotasProforma).nota ==  (this.listaNotas.selectedItem as NotasProforma).nota ){
+							_listaNotasOcultas.removeItemAt( i );
+						}
+					}
+					
+				}
+				(this.listaPartidas.selectedItem as PartidaProforma).notas.removeItemAt( this.listaNotas.selectedIndex );
+				(this.listaPartidas.selectedItem as PartidaProforma).notasOcultas = ObjectUtil.copy( _listaNotasOcultas ) as ArrayCollection;
+				enumeraPartidas();
+			}
+			/**
+			 * funcion que agragar una nota de la partidaProforma seleccionada 
+			 */
+			 private function agregaNota():void{
+				 var nota:NotasProforma = new NotasProforma();
+				 nota.nota = this.txtNota.text;	
+				 nota.folio = 0;	
+				 (this.listaPartidas.selectedItem as PartidaProforma).notas.addItem(nota);
+				 this.txtNota.text = "";
+				 enumeraPartidas();
+				 _listaNotasOcultas.addItem(nota);
+				 (this.listaPartidas.selectedItem as PartidaProforma).notasOcultas = ObjectUtil.copy( _listaNotasOcultas ) as ArrayCollection;
+			 }
+			/**
+			 * funcionq ue enumera las notas de la partidaProforma seleccionada
+			 */ 
+			private function enumeraPartidas():void{
+				for( var i: int = 0; i < (this.listaPartidas.selectedItem as PartidaProforma).notas.length; i++ ){
+					( (this.listaPartidas.selectedItem as PartidaProforma).notas[i] as NotasProforma).numfila = i + 1;
+				}
+			}
+			/**
+			 * funcion q muestra el pop up de informacion General de un proforma 
+			 */ 
+			private function abrePopUpProformaGeneral():void{
+				if( _componentePopUpProformaGeneral == null ){
+					_componentePopUpProformaGeneral = PopUpProformaGeneral(PopUpManager.createPopUp( this, PopUpProformaGeneral, true ) );
+					_componentePopUpProformaGeneral.addEventListener( EventoProforma.SALIR_PROFORMA_GENERAL, cierraPopUpProformaGeneral );
+				}else{
+					PopUpManager.addPopUp( _componentePopUpProformaGeneral , this, true );
+				}
+				var total:int = 0;
+				total = calculatotalProforma();
+				_componentePopUpProformaGeneral.init( this._opcionSeleccionada,total,this._proformaGeneral );
+				PopUpManager.centerPopUp( _componentePopUpProformaGeneral );
+			}
+			/**
+			 * funcion para calcular el total en $$ de la proforma
+			 */ 
+			private function calculatotalProforma():int{
+				var total:int = 0;
+				for( var i:int = 0; i < (this.listaPartidas.dataProvider as ArrayCollection).length; i++ ){
+					if( !isNaN( (this.listaPartidas.dataProvider[i] as PartidaProforma).costoCDesc) && !isNaN( (this.listaPartidas.dataProvider[i] as PartidaProforma).cantidadPedida ) ){
+						total = total + ( (this.listaPartidas.dataProvider[i] as PartidaProforma).cantidadPedida * (this.listaPartidas.dataProvider[i] as PartidaProforma).costoCDesc ); 
+					}
+				}
+				return total;
+			}
+			/**
+			 * funcion que cierra el pop Up cierraPopUp proformaGeneral
+			 */ 
+			private function cierraPopUpProformaGeneral(dato:EventoProforma):void{
+				_proformaGeneral = dato.proforma;
+				dato.bloqueaBoton ? this.btnOjoSauron.enabled = false : this.btnOjoSauron.enabled = true;
+				PopUpManager.removePopUp( _componentePopUpProformaGeneral );
+			}
+			/**
+			 * funcion para guardar todos los cambios a las partidasProformas
+			 */ 
+			private function guardaCambios():void{
+				var evento:EventoProforma =  new EventoProforma( EventoProforma.ACTUALIZA_LISTA_PROFORMAS );
+				evento.idProforma = ( this.listaPartidas.selectedItem as PartidaProforma ).idProforma;
+				evento.idProveedor = this._opcionSeleccionada.proveedor;
+				evento.partidas = this.listaPartidas.dataProvider as ArrayCollection;
+				evento.partidas.removeItemAt( evento.partidas.length -1 );	
+				for( var i:int = 0; i < evento.partidas.length ; i++ ){
+					(evento.partidas[i] as PartidaProforma).notas = ObjectUtil.copy( (evento.partidas[i] as PartidaProforma).notasOcultas ) as ArrayCollection;
+				}
+				dispatchEvent( evento );
+				actualizaProformaGeneral( this._proformaGeneral.abierta );
+			}
+			/**
+			 * funcion que manda a llamar al mapaProforma la funcion para crear el pdf de la proforma, la confirmacion del servicio se recibe en este componente
+			 * en la funcion confirmaCreacionPDF
+			 */
+			private function construyePdf():void{
+				var evento:EventoProforma =  new EventoProforma( EventoProforma.CONSTRUYE_PDF );
+				evento.idProforma = _proformaGeneral.idProforma;
+				evento.partidas = ObjectUtil.copy( this.listaPartidas.dataProvider)  as ArrayCollection;
+				evento.partidas.removeItemAt( evento.partidas.length -1 );	
+				evento.folio = (_lista.getItemAt(0) as PartidaProforma).folioProforma
+				evento.idProveedor = _proformaGeneral.idProveedor;
+				evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				dispatchEvent( evento );	
+				var eventoE:EventoEsperar = new EventoEsperar(EventoEsperar.INICIA_ESPERA);
+				dispatchEvent( eventoE );
+			}
+			/**
+			 * esta funcopn recibe la confirmacion de que se ha creado correctamente el pdf
+			 */
+			public function set confirmaCreacionPDF(dato:Boolean):void{
+				if( !dato ) return;
+				var eventoE:EventoEsperar = new EventoEsperar(EventoEsperar.TERMINA_ESPERA);
+				dispatchEvent( eventoE );
+				muestraPdf();
+			}
+			/**
+			 * funcion para mostrar el pdf 
+			 */ 
+			private function muestraPdf():void{
+				var _url:URLRequest = new URLRequest();
+				_url.url = RutasPdF.GENERAL_RUTA + (_lista.getItemAt(0) as PartidaProforma).folioProforma + ".pdf";
+				navigateToURL(_url );
+			}
+			/**
+			 * Funcion que determina si se guarda los avances modificados en la requisicion  y salir del componente.
+			 */ 
+			private function warningDesbloqueaProforma():void{
+				alertaSingleton.show(catalogoAlertas.compradorPhs_warDesbloqueaPartida,catalogoAlertas.TIT_ADV_atencion,"CompPhs_USA_InspectorProforma_method1","","","SI","NO");
+			}
+			/**
+			 * funcion que recibe del mapa pop Up la respuesta elegida del popUp
+			 */ 
+			public function set recibeRespuestaAlert( $dato:ResultAlert ):void{
+				if( $dato == null ){
+					return;
+				}
+				if( $dato.vieneD == "CompPhs_USA_InspectorProforma_method1" ){
+					if( $dato.botonSeleccionado == "SI"){
+						
+						actualizaProformaGeneral( false );
+					}else{
+						return;
+					}
+				}else if($dato.vieneD == "CompPhs_USA_EspacioInspector_method2"){
+					
+				}
+			}
+			private function actualizaProformaGeneral( abierta:Boolean ):void{
+				var evento:EventoProforma = new EventoProforma( EventoProforma.ACTUALIZA_PROFORMA_GENERAL );
+				evento.proforma = _proformaGeneral;
+				evento.proforma.total = calculatotalProforma();
+				evento.proforma.abierta = abierta;
+				if( isNaN(evento.proforma.idContacto) ) evento.proforma.idContacto = 0;
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion publica que recibe la confirmacion de la actualizacion de la proforma general 
+			 */ 
+			public function set confirma(dato:Boolean):void{
+				if( !dato ){
+					return;
+				}
+				invocaProforma();
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%">
+		<s:Image />
+		<label:labelSubtitulo text="INSPECTOR"/>
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo text="[PROFORMA POR COLOCAR]" />
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<label:labelSubtitulo text="{this._opcionSeleccionada.nombreProveedor}"/>
+		<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_flechaCirculoProveedor }" verticalCenter="0"/>
+	</s:HGroup>
+	<label:labelSubtitulo text="{ _opcionSeleccionada.paisProveedor + ' . Min ' + UtilsFormatosNumericos.precisionADosDecimales(_opcionSeleccionada.minCompra) + '( +/- ' + _opcionSeleccionada.intervaloMenor +') : Max ' + UtilsFormatosNumericos.precisionADosDecimales(_opcionSeleccionada.maxCompra) + '( +/- ' + _opcionSeleccionada.intervaloMayor + ')' }" fontSize="14" fontWeight="bold" color="#666666" />
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%">
+		<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_flechaCirculoProveedor }" verticalCenter="0"/>
+		<label:labelSubtitulo id="lblDatosProforma" text="{ (_lista.getItemAt(0) as PartidaProforma).folioProforma + ' . ' + _opcionSeleccionada.monedaProveedor + ' . ' + _opcionSeleccionada.tipo } " />
+		<s:Spacer width="100%"/>
+		<pqNet:botonPqNetLargo label="GENERALES" width="120" click="abrePopUpProformaGeneral()"/>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup width="100%" height="100%">
+		<s:List id="listaPartidas" width="310" height="100%" dataProvider="{_lista}"
+				itemRenderer="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.PartidaInspectorProforma"  
+				borderVisible="false" mouseDown="vizualisaPartida()"
+				selectionColor="0x{catalogoColores.LIST_SELECTED}" rollOverColor="0x{catalogoColores.LIST_HOVERED}"
+				/>
+		<otros:VDivisionHueca height="100%" />
+		<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15">
+			<s:HGroup width="100%" >
+				<label:labelSubtitulo fontWeight="bold" fontSize="18" text="#" width="6%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="18" text="C" width="6%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="18" text="CONCEPTO" width="16%" textAlign="center" />
+				<label:labelSubtitulo fontWeight="bold" fontSize="18" text="Tipo" width="8%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="14" text="{'Peticiones \n especiales'}" width="8%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="14" text="{'Total a pagar \n con descuento'}" width="8%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="18" text="FEE" width="8%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="18" text="PI" width="8%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="14" text="Destino" width="8%" textAlign="center"/>
+				<label:labelSubtitulo fontWeight="bold" fontSize="14" text="En espera desde" width="8%" textAlign="center"/>		
+				<label:labelSubtitulo fontWeight="bold" fontSize="14" text="{'Último \norigen'}" width="8%" textAlign="center" />
+				<label:labelSubtitulo   width="8%" textAlign="center" />
+			</s:HGroup>
+			<s:HGroup width="100%" horizontalAlign="center" verticalAlign="middle">
+				<s:Label textAlign="center" text="{-(this._partidaInformacion.numFila)}"  fontStyle="normal" fontFamily="Helvetica" width="6%"/>
+				<s:Label textAlign="center" text="{this._partidaInformacion.cantidadPedida}" fontStyle="normal" fontFamily="Helvetica" width="6%"/>
+				<s:Label textAlign="center" text="{this._partidaInformacion.conceptoProducto}" fontStyle="normal" fontFamily="Helvetica" width="16%" />
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Label  textAlign="center" text="{this._partidaInformacion.tipo}"  fontStyle="normal" fontFamily="Helvetica" />
+					<s:Label  textAlign="center" text="{this._partidaInformacion.manejo}"  fontStyle="normal" fontFamily="Helvetica" />
+					<s:Label  textAlign="center" text="{this._partidaInformacion.control}"  fontStyle="normal" fontFamily="Helvetica" />
+				</s:VGroup> 
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:VGroup id="grpSinEspecificar" horizontalAlign="center">
+						<s:Label  text="Sin especificar" fontStyle="normal" fontFamily="Helvetica" />
+					</s:VGroup>
+					<s:VGroup id="grpPublicacion" horizontalAlign="center" >
+						<s:Label fontSize="10" color="#666666"  text="Edición" fontStyle="normal" fontFamily="Helvetica" horizontalCenter="0"/>
+						<s:Label fontSize="10" text="{this._partidaInformacion.edicion}" fontStyle="normal" fontFamily="Helvetica" horizontalCenter="0"/>
+					</s:VGroup>
+					<s:VGroup id="grpTodo" height="100%" horizontalAlign="center" >
+						<s:VGroup id="grpCaducidad"  height="100%" horizontalAlign="center">
+							<s:Label fontSize="10" color="#666666" text="Caducidad" horizontalCenter="0"/>
+							<s:Label fontSize="10" text="{this._partidaInformacion.caducidad}" horizontalCenter="0"/>
+						</s:VGroup>
+						<s:VGroup id="grpLote"  height="100%" horizontalAlign="center" >
+							<s:Label fontSize="10" color="#666666"  text="Lote" horizontalCenter="0" />
+							<s:Label fontSize="10" text="{this._partidaInformacion.lote}" horizontalCenter="0"/>
+						</s:VGroup>
+					</s:VGroup>
+				</s:VGroup>
+				
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Label text="{ UtilsFormatosNumericos.precisionADosDecimalesConComas( this._partidaInformacion.costoCDesc * this._partidaInformacion.cantidadPedida ) }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica"/>
+					<s:Label text="{ this._partidaInformacion.monedaProveedor }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica"/>
+					<s:Label text="{ this._partidaInformacion.descuento + '% descuento' }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica" color="#336699"/>
+				</s:VGroup>
+				
+				<s:VGroup  width="8%" horizontalAlign="center">
+					<s:Label id="lblFecha" />
+					<s:Label id="lblFlete" />
+					<mx:Canvas width="100%" >
+						<s:Label id="lblNA" text="NA" color="#666666" /> 
+						<s:Image source="{ catalogoIconosGrid.getInstance().render_banderamorada }" horizontalCenter="0" verticalCenter="0" id="imgBadMorada" />
+						<s:Image source="{ catalogoIconosGrid.getInstance().render_banderaroja }" horizontalCenter="0" verticalCenter="0" id="imgBanRoja" />
+						<s:Image source="{ catalogoIconosGrid.getInstance().render_banderaverde }" horizontalCenter="0" verticalCenter="0" id="imgBanVer" />
+					</mx:Canvas>
+				</s:VGroup>
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Label text="{  this._partidaInformacion.cpedido }"   fontStyle="normal" fontFamily="Helvetica" />
+					<s:Label textAlign="center"  fontStyle="normal" fontFamily="Helvetica" text="{  this._partidaInformacion.partidasRegulares + 'FR : ' +  this._partidaInformacion.partidasFE + ' FE : ' +  this._partidaInformacion.partidasProgramadas + ' FP' }"/>
+					<s:Label text="{  this._partidaInformacion.parciales ? lblTipoPedido.text = 'PARCIALES' : 'NO PARCIALES' }" textAlign="center" fontStyle="normal" fontFamily="Helvetica" color="#4372a8" id="lblTipoPedido"/>
+				</s:VGroup>
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Label text="{  this._partidaInformacion.destino == 'STOCK' ? lblDestino.text = 'Matriz' : lblDestino.text =  this._partidaInformacion.nombreCliente  }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica" id="lblDestino"/>
+					<s:Label text="{  this._partidaInformacion.destino }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica" color="#4372a8"/>
+				</s:VGroup>
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Label text="{ UtilsFecha.formatoFechaDDMMMYYYYHHMM(  this._partidaInformacion.fechaTramitacion ) }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica"/>
+					<s:Label text="{ UtilsFecha.regresaDiferenciaEntreFechasEnDias( this._partidaInformacion.fechaTramitacion, new Date() ) + ' días de tramitado' }" width="100%" textAlign="center"  fontStyle="normal" fontFamily="Helvetica" color="#4372a8"/>
+				</s:VGroup>
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Label id="lblOrigen"/>
+					<s:Label id="lblProforma"/>
+				</s:VGroup>	
+				
+				<s:VGroup width="8%" horizontalAlign="center">
+					<s:Image  source="{ catalogoIconosGrid.getInstance().render_informacion_render}" />
+				</s:VGroup>
+				
+			</s:HGroup>
+			<otros:divisionHueca width="100%"/>
+			<s:HGroup width="100%" height="100%">
+				<s:VGroup width="50%" height="100%" paddingRight="15">
+					<label:labelSubtitulo width="100%" textAlign="center" fontSize="18" text="Notas para la compra generadas en la tramitación" />
+					<s:Label width="100%" height="100%" id="lblNotaTramitacion" fontSize="13" text="{ (this.listaPartidas.selectedItem as PartidaProforma).comenta }"/>
+				</s:VGroup>
+				<otros:VDivisionHueca height="100%"/>
+				<s:VGroup width="50%" height="100%" paddingLeft="15">
+					<s:HGroup width="100%">
+						<label:labelSubtitulo width="100%" fontSize="14" text="Notas a partida de PROFORMA"/>
+					</s:HGroup>
+					<s:HGroup width="100%" verticalAlign="middle">
+						<s:TextInput width="100%" id="txtNota"/>
+						<pqNet:botonPqNetLargo click="agregaNota();this.btnOjoSauron.enabled = false;" icono="globoAgregaNota" width="40"/>
+					</s:HGroup>
+					<otros:division width="100%"/>
+					<s:Spacer height="3"/>
+					<s:List width="100%" height="100%" borderVisible="false" itemRenderer="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.ListaNotasInspectorProforna" 
+							dataProvider="{this._listaNotas}" id="listaNotas" />
+				</s:VGroup>
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup width="100%">
+		<salir:botonSalir click="botonsalir1_clickHandler()"/>
+		<s:Spacer width="10%"/>
+		<!--<botonesToggle:toggleGrisconLabelSolo label="Vista Previa" icono="ojoMordor"  click="construyePdf()" id="btnOjoSauron"/>-->
+		<botonNegroCuadrado:botonNegroCuadrado label="Vista Previa" icono="ojoMordor"  colorBase="0x009999" click="construyePdf()" id="btnOjoSauron"  gradientePqnet="true"/>
+		<botonNegroCuadrado:botonNegroCuadrado label="Desbloquear" icono="candadoblanco" colorBase="0xCE464B" gradientePqnet="true"  id="btnDesbloquear" click="warningDesbloqueaProforma()"/>
+		<s:Spacer width="100%"/>
+		<guardar:botonGuardar click="guardaCambios();this.btnOjoSauron.enabled = true;"/>
+		<envia:botonEnviar />
+	</s:HGroup>
+</s:VGroup>

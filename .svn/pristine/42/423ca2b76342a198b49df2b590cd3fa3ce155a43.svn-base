@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:panelCtaLineaTiempo="skins.skin.comun.consultas.panelCtaLineaTiempo.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:otros="skins.otros.*" 
+		  width="100%" height="100%"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var _arrayTemp:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var _factura:String = "";
+			[Bindable] private var _fpor:String = "";
+			[Bindable] public var _tiempoTotal:int;
+			
+			
+			// SE OBTIENE LA INFORMACION DE FACTURA Y FPOR
+			public function set recibirFacturaFpor($data:Object):void
+			{
+				if( $data == null ) return;	
+				
+				_factura = $data.factura;
+				_fpor = $data.fpor;
+			}
+			
+			// SE OBTIENE LA INFORMACION QUE VIENE DEL MODELO, ES EL ARREGLO DE LINEA DE TIEMPO
+			public function set obtenerListaLineaTiempo($facturas:ArrayCollection):void
+			{
+				if( $facturas == null ) return;	
+				_arrayTemp = $facturas;
+				_tiempoTotal = 0;
+				
+				//SE REALIZA ESTE RECORRIDO PARA OBTENER LA INFORMACIONDE FI Y FFIN DEL INSPECTOR
+				
+				for (var d:int = 0; d<_arrayTemp.length; d++)
+				{
+					if( _arrayTemp[d].etapa.toUpperCase() != 'FACTURA'  )
+						_tiempoTotal += _arrayTemp[d].totalProceso;
+				}	 
+				
+				if(_arrayTemp.length != 0)
+				{
+					
+					if( (_arrayTemp[_arrayTemp.length - 1] ).etapa.toUpperCase() == 'FACTURA'  )
+					{
+						_arrayTemp[0].tipoFechaColor = "inicio";
+						_arrayTemp[_arrayTemp.length - 2].tipoFechaColor = 'fin';
+						_arrayTemp[_arrayTemp.length - 1].totalProceso = _tiempoTotal;
+					}
+					
+					if((_arrayTemp[_arrayTemp.length - 1] ).finLista == true && (_arrayTemp[_arrayTemp.length - 1] ).etapa.toUpperCase() != 'FACTURA' )
+					{
+						var objeto:Object = new Object;
+						objeto.finLista = 'FIN';
+						_arrayTemp.addItem(objeto);
+					}
+					
+					lstLineaTiempo.dataProvider = _arrayTemp;
+					this.lstLineaTiempo.selectedIndex = 0;
+					lstLineaTiempo.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				}
+			}
+			
+			private function obtenerDetalles(e:IndexChangeEvent):void
+			{
+				if(lstLineaTiempo.selectedItem)
+				{
+					
+					if((lstLineaTiempo.selectedItem as Object).hasOwnProperty("finLista") && lstLineaTiempo.selectedItem.finLista == "FIN" )
+					{
+						e.preventDefault();
+					}
+					else
+					{
+						var itemSeleccionado:TiempoProceso =(this.lstLineaTiempo.selectedItem as TiempoProceso); 
+						
+						if (itemSeleccionado.etapa == 'FACTURACION' )
+						{
+							var evt:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_FACTURACION);
+							evt.factura = _factura;
+							evt.fpor = _fpor;
+							dispatchEvent( evt );
+						}
+						else if (itemSeleccionado.etapa == 'ENTREGA' || itemSeleccionado.etapa == 'ENVIO' )
+						{
+							var evts:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.TRASPASAR_DATOS_ENTREGAS);
+							evts.tProceso = itemSeleccionado;
+							dispatchEvent( evts ); 
+							
+							var entrega:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_ENTREGA);
+							entrega.factura = _factura;
+							entrega.fpor = _fpor;
+							dispatchEvent( entrega );
+						}
+						else if (itemSeleccionado.etapa == 'REVISION' )
+						{
+							var revision:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_REVISION);
+							revision.factura = _factura;
+							revision.fpor = _fpor;
+							dispatchEvent( revision );
+							
+							var infRevision:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.ENVIAR_INFO_REVISION);
+							infRevision.factura = _factura;
+							infRevision.fpor = _fpor;
+							dispatchEvent( infRevision );
+						}
+						else if (itemSeleccionado.etapa == 'COBRO' )
+						{
+							var cobro:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_COBRADA);
+							cobro.factura = _factura;
+							cobro.fpor = _fpor;
+							cobro.conCredito = lstLineaTiempo.selectedItem.etapaPadre; // 1 sin credito 0 con credito
+							dispatchEvent( cobro );
+						}
+						else if (itemSeleccionado.etapa == 'FACTURA REMISION' )
+						{
+							var facRem:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_FACTURAR_REMISION);
+							facRem.factura = _factura;
+							facRem.fpor = _fpor;
+							dispatchEvent( facRem );
+						}
+						else if (itemSeleccionado.etapa == 'REFACTURACION' )
+						{
+							var reFac:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_REFACTURACION);
+							reFac.factura = _factura;
+							reFac.fpor = _fpor;
+							dispatchEvent( reFac );
+						}
+						else if (itemSeleccionado.etapa == 'CANCELACION' )
+						{
+							var canc:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_CANCELACION);
+							canc.factura = _factura;
+							canc.fpor = _fpor;
+							dispatchEvent( canc );
+						}
+						else if(itemSeleccionado.etapa == 'SOLICITUD_RECOLECCION' )
+						{
+							var soli:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_DETALLES_SOLICITUD);
+							soli.factura = _factura;
+							soli.fpor = _fpor;
+							dispatchEvent( soli );
+						}
+						else if ( itemSeleccionado.etapa == 'FACTURA' )
+						{
+							var resumen:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_FACTURA_RESUMEN );
+							resumen.factura = _factura;
+							resumen.fpor = _fpor; 
+							dispatchEvent( resumen );
+						}
+						
+						var etapa:String = new String();
+						etapa = itemSeleccionado.etapa;
+						if( etapa == 'Facturación por Adelantado' || etapa == 'Envío de Factura' || etapa == 'Monitoreo de Cobro SC' || etapa == 'Factura' )
+						{
+							etapa = etapa.toUpperCase();
+							var evtPrepago:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013( EventoConsultaFacturacion2013.CONSULTAR_HISTORIAL_PREPAGO );
+							if ( itemSeleccionado.etapa.toUpperCase() == 'FACTURACIÓN POR ADELANTADO' ){
+								evtPrepago.metodo = 'obtenerResumenFacturacionXAdelantado';
+							}
+							else if( itemSeleccionado.etapa.toUpperCase() == 'ENVÍO DE FACTURA' )
+							{
+								evtPrepago.metodo = 'obtenerResumenEnvioFactura';	
+							}
+							else if( itemSeleccionado.etapa.toUpperCase() == 'MONITOREO DE COBRO SC' )
+							{
+								evtPrepago.metodo = 'obtenerResumenMonitoreoCobro';
+							}
+							else if( itemSeleccionado.etapa == 'Factura' )
+							{
+								evtPrepago.metodo = 'obtenerResumenFacturaPrepago';
+							}
+							evtPrepago.factura = _factura;
+							evtPrepago.fpor = _fpor;
+							dispatchEvent( evtPrepago );
+						}
+					}
+				}
+			} 
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" gap="0" paddingRight="15" paddingLeft="15">
+		<panelCtaLineaTiempo:HeaderSoloTexto tituloHeader="F-{_factura}"/>
+		<otros:division width="100%"/>
+		<s:List width="100%" height="100%" id="lstLineaTiempo" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.finanzas.facturacion.itemRenderer.IRConsulta2LineaTiempo"
+				changing="obtenerDetalles(event)" borderVisible="false" contentBackgroundAlpha="0" horizontalScrollPolicy="off" />
+	</s:VGroup>
+</s:VGroup>

@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		destructionPolicy="never"
+		actionBarVisible="false" 
+		xmlns:vistas="vistas.*" 
+		xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		creationComplete="init(event)" 
+		xmlns:mx="library://ns.adobe.com/flex/mx"
+		>
+	<fx:Script>
+		<![CDATA[
+			import flash.filters.BitmapFilterQuality;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			import spark.skins.mobile.TextInputSkin;
+			
+			import eventos.EventoGeneralMobilVendedor;
+			import eventos.EventoVisitasEjecucion;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			import vistas.menuPrincipalMobilVendedor;
+			import vistas.popup.popUpMobilPqNet;
+			import vistas.vistaVisitas.VistaVisitasPrincipal;
+			
+			private var _sql:Query;
+			private var universo:ArrayCollection;
+			private var universoAgrupado:ArrayCollection;
+			[Bindable]private var heightFlecha:Number = 21;/*30*/
+			[Bindable]private var widthFlecha:Number = 14;/*20*/
+			[Bindable]private var fecha:String;
+			private var meses:Array = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+			
+			[Bindable]private var tipoJustificacion:Object;
+			[Bindable]private var clienteSeleccionado:String;
+			private var currentVisita:VisitaCliente;
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener(EventoGeneralMobilVendedor.CAMBIAR_VISTA_MENU,cargarVista,true);
+				
+				var eventoVisitas:EventoVisitasEjecucion = new EventoVisitasEjecucion(EventoVisitasEjecucion.OBTENER_VISITAS_CHECK_IN);
+				eventoVisitas.usuarioId = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent(eventoVisitas);
+				
+				var fechaActual:Date = new Date();
+				fecha = fechaActual.getDate()+" "+meses[fechaActual.getMonth()]+" "+fechaActual.getFullYear();
+				
+				stackPrincipal.selectedIndex = 0;
+				
+				lstPendientes.addEventListener(EventoVisitasEjecucion.IR_VISITAS_REALIZACION,seleccionarVisitasPorClientes);
+				lstVisitas.addEventListener(EventoVisitasEjecucion.CANCELAR_ACTUALIZACION_VISITA,irJustificacionCancelacion);
+				/*lstRazonesCancelacion.addEventListener("avanzarJustificacionCancelacion",avanzarJustificacion);*/
+				lstVisitas.addEventListener(EventoVisitasEjecucion.REALIZAR_ACTUALIZACION_VISITA,actualizarVisitaRealizada);
+				
+				cargarListaRazonesCancelacion();
+			}
+			
+			private function cargarVista(event:EventoGeneralMobilVendedor):void
+			{
+				if(event.vista == 'visitas'){
+					this.navigator.pushView(VistaVisitasPrincipal);
+				}else if(event.vista == 'cierre'){
+					this.navigator.pushView(VistaVisitasEjecucion);
+				}else if(event.vista == 'inicio'){
+					this.navigator.pushView(menuPrincipalMobilVendedor);
+				}
+				if(event.vista == 'LogOut'){
+					this.navigator.popToFirstView();
+				}
+			}
+			
+			
+			public function set enviarVistitasConFechaRealizada(universo:ArrayCollection):void
+			{
+				this.universo = ObjectUtil.copy(universo) as ArrayCollection;
+				_sql= new Query(universo,["nombreCliente","nombreContacto"],false); 
+			}
+			
+			public function set enviarVisitasAgrupadas(data:ArrayCollection):void
+			{
+				universoAgrupado = ObjectUtil.copy(data) as ArrayCollection;
+				lstPendientes.dataProvider = data;
+			}
+			
+			private var alert:popUpMobilPqNet;
+			public function set recibirRespuestaActualizacion(value:int):void
+			{
+				if(value > 0 && !alert){
+					var eventoVisitas:EventoVisitasEjecucion = new EventoVisitasEjecucion(EventoVisitasEjecucion.OBTENER_VISITAS_CHECK_IN);
+					eventoVisitas.usuarioId = DatosGlobales.getInstance()._usuario.clave;
+					dispatchEvent(eventoVisitas);
+					
+					stackPrincipal.selectedIndex = 0;
+					txtAreaJustificacion.text = '';
+					
+					alert = new popUpMobilPqNet();
+					alert.mensaje = "Visita realizada";
+					alert.addEventListener("cerrarPop",cerrarPop)
+					alert.modoOk = true;
+					alert.open(this,true);
+				}
+			}
+			
+			private function cerrarPop(event:Event):void
+			{
+				alert=null;
+			}
+			
+			private function seleccionarVisitasPorClientes(event:EventoVisitasEjecucion):void
+			{
+				var arrayCliente:Array = _sql.getPunteros([event.nombreCliente]);
+				
+				var listaVisita:ArrayCollection = new ArrayCollection; 
+				
+				//TRAER TODOS LOS CLIENTES
+				/*for each (var cliente:String in arrayCliente) 
+				{
+					var visitaCliente:VisitaCliente = ObjectUtil.copy(_sql.universo.getItemAt(arrayCliente[0])) as VisitaCliente;
+					visitaCliente.numVisitas = _sql.getPunteros([cliente]).length;
+					listaVisita.addItem(visitaCliente);
+				}*/
+				
+				listaVisita = _sql.armarLista(arrayCliente);
+				lstVisitas.dataProvider = listaVisita;
+				
+				/*lblCliente.text = event.nombreCliente;*/
+				clienteSeleccionado = event.nombreCliente;
+				
+				stackPrincipal.selectedIndex = 1;
+			}
+			
+			protected function regresarPendientes(event:MouseEvent):void
+			{
+				clienteSeleccionado = '';
+				txtAreaJustificacion.text = '';
+				stackPrincipal.selectedIndex = 0;
+			}
+			
+			protected function irJustificacionCancelacion(event:EventoVisitasEjecucion):void
+			{
+				lstRazonesCancelacion.selectedIndex = -1;
+				stackPrincipal.selectedIndex = 3;
+				currentVisita = ObjectUtil.copy(event.visitaCliente) as VisitaCliente;
+			}
+			
+			/*private function avanzarJustificacion(event:Event):void
+			{
+				stackPrincipal.selectedIndex = 2;
+			}*/
+			
+			protected function actualizarVisitaRealizada(event:EventoVisitasEjecucion):void
+			{
+				var evento:EventoVisitasEjecucion = new EventoVisitasEjecucion(EventoVisitasEjecucion.ACTUALIZAR_REALIZACION_VISITA);
+				
+				var visitaTemp:VisitaCliente = ObjectUtil.copy(event.visitaCliente) as VisitaCliente;
+				visitaTemp.realizacionVisita = true;
+				evento.visitaCliente = visitaTemp;
+				dispatchEvent(evento);
+			}
+			
+			private function cargarListaRazonesCancelacion():void
+			{
+				var listaDescripciones:ArrayCollection = new ArrayCollection;
+				var objTemp:Object = new Object;
+				objTemp.titulo = "Vendedor";
+				objTemp.descripcion = "No se ha realizado por carga de trabajo, tráfico, tiempo etc...";
+				listaDescripciones.addItem(objTemp);
+				
+				objTemp = new Object;
+				objTemp.titulo = "Solicitante";
+				objTemp.descripcion = "Las instrucciones del solicitante eran incorrectas.";
+				listaDescripciones.addItem(objTemp);
+				
+				objTemp = new Object;
+				objTemp.titulo = "Cliente";
+				objTemp.descripcion = "El cliente ha provocado la no realización del evento.";
+				listaDescripciones.addItem(objTemp);
+				
+				lstRazonesCancelacion.dataProvider = listaDescripciones;
+			}
+			
+			protected function avanzarJustificacion(event:IndexChangeEvent):void
+			{
+				tipoJustificacion = lstRazonesCancelacion.selectedItem;
+				stackPrincipal.selectedIndex = 2;
+			}
+			
+			protected function actualizarRealizacionVisita(event:MouseEvent):void
+			{
+				if(txtAreaJustificacion.text != '' && StringUtil.trim(txtAreaJustificacion.text) != ''){
+					var visitaTemp:VisitaCliente = ObjectUtil.copy(currentVisita) as VisitaCliente;
+					visitaTemp.realizacionVisita = false;
+					visitaTemp.tipoCancelacion = tipoJustificacion.titulo;
+					visitaTemp.justificacionCancelacion = txtAreaJustificacion.text;
+					
+					var evento:EventoVisitasEjecucion = new EventoVisitasEjecucion(EventoVisitasEjecucion.ACTUALIZAR_REALIZACION_VISITA);
+					evento.visitaCliente = visitaTemp;
+					dispatchEvent(evento);
+				}
+			}
+			
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				lstPendientes.dataProvider = UtilsGrid.queryCampoXLike(universoAgrupado,"nombreCliente",txtBuscador.text);
+			}
+			
+			protected function txtBuscador_creationCompleteHandler(event:FlexEvent):void 
+			{
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<vistas:plantillaVendedorMobil width="100%" height="100%" >
+		<vistas:vistaPrincipal>
+			
+			
+			<s:VGroup width="100%" height="100%" gap="0">
+				<s:Group width="100%" height="7%" depth="4">
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="#FFFFFF" />
+						</s:fill>
+						<s:filters>
+							<s:DropShadowFilter alpha="0.5" angle="90" blurX="4" blurY="4" color="#000000" 
+												distance="2" knockout="false" 
+												quality="{BitmapFilterQuality.HIGH}" strength="1"/>
+						</s:filters>
+					</s:Rect>
+					
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" paddingRight="20" paddingLeft="20">
+						<s:Label text="EN EJECUCIÓN" fontFamily="Helvetica" fontWeight="bold" color="#404040" fontSize="18"/>
+						<s:Spacer width="100%" />
+						<s:Label text="{fecha}" fontFamily="Helvetica" color="#404040" fontSize="18"/>
+					</s:HGroup>  
+				</s:Group>
+				
+				<pq:MobViewStack id="stackPrincipal" width="100%" height="100%" >
+					<s:VGroup width="100%" height="100%" >
+						<!--<s:TextInput id="txtBuscador" fontSize="16" prompt="Cliente" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)" />-->
+						<s:TextInput id="txtBuscador" fontSize="16" prompt="Cliente" width="100%" change="txtBuscador_changingHandler(event)" autoCorrect="false" fontFamily="Helvetica Neue"
+									 contentBackgroundColor="#eceef0" borderVisible="false" focusColor="#FFFFFF" creationComplete="txtBuscador_creationCompleteHandler(event)" skinClass="skin.textInput.SkinTextinputDisplay">
+						</s:TextInput>
+						<!--skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" -->
+						<s:List width="100%" height="100%" id="lstPendientes" borderVisible="false" contentBackgroundColor="#FFFFFF" 
+								horizontalScrollPolicy="off" selectedIndex="0" itemRenderer="vistas.visitasEjecucion.Componentes.IR.IR_ListaVisitasEjecucion"
+								/>
+					</s:VGroup>  
+					
+					
+					<s:VGroup width="100%" height="100%" gap="0">
+						<s:Group width="100%" height="100" click="regresarPendientes(event)">
+							<s:Label text="{clienteSeleccionado}" width="100%" height="100%" verticalAlign="middle" textAlign="center" fontFamily="Helvetica" fontWeight="bold"
+									 fontSize="26" color="#008894" />
+							
+							<s:VGroup id="flecha" buttonMode="true" left="20" verticalCenter="0" >
+								<mx:Image source="{catalogoIconosBotones.getInstance().flechaIR}" alpha="0.4" width="{widthFlecha}" height="{heightFlecha}" rotation="180" />
+							</s:VGroup>
+						</s:Group>  
+						<s:Rect width="100%" height="1" bottom="0">
+							<s:fill>
+								<s:SolidColor color="#eceef0" />
+							</s:fill>
+						</s:Rect>
+						<s:List width="100%" height="100%" id="lstVisitas" borderVisible="false" contentBackgroundColor="#FFFFFF"
+								horizontalScrollPolicy="on" selectedIndex="0" itemRenderer="vistas.visitasEjecucion.Componentes.IR.IR_ListaPendientesVisitas"
+								/>
+					</s:VGroup>
+					
+					
+					
+					
+					
+					
+					
+					<s:VGroup width="100%" height="100%" gap="0" verticalAlign="middle">
+						<s:Group width="100%" height="100" click="stackPrincipal.selectedIndex = 3">
+							<s:Label text="{clienteSeleccionado}" width="100%" height="100%" verticalAlign="middle" textAlign="center" fontFamily="Helvetica" fontWeight="bold"
+									 fontSize="26" color="#008894" />
+							
+							<s:VGroup buttonMode="true" left="20" verticalCenter="0" >
+								<mx:Image source="{catalogoIconosBotones.getInstance().flechaIR}" alpha="0.4" width="{widthFlecha}" height="{heightFlecha}" rotation="180" />
+							</s:VGroup>
+						</s:Group>
+						<s:VGroup width="100%" height="100%" maxHeight="100" verticalAlign="middle" paddingLeft="20" paddingRight="20">
+							<s:Label text="{tipoJustificacion.titulo}" verticalAlign="middle" fontFamily="Helvetica" fontWeight="bold"
+									 fontSize="26" color="#008894" width="90%" maxDisplayedLines="2" />
+							
+							<s:Label text="{tipoJustificacion.descripcion}" verticalAlign="middle" fontFamily="Helvetica"
+									 fontSize="25" color="#404040" width="90%" maxDisplayedLines="2"  />
+							
+						</s:VGroup>
+						<s:Spacer height="10" />
+						<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" gap="10">
+							<s:Label text="Justificación" width="100%" verticalAlign="middle" textAlign="left" fontFamily="Helvetica" fontWeight="bold"
+									 fontSize="20" color="#008894" />
+							<s:Group width="100%" height="100%" depth="10">
+								<s:Rect top="0" bottom="0" left="0" right="0" depth="10">
+									<s:stroke>
+										<s:SolidColorStroke color="#000000" weight="1"/>
+									</s:stroke>
+								</s:Rect>
+								
+								<s:TextArea top="1" bottom="1" left="1" right="1" id="txtAreaJustificacion" contentBackgroundColor="#FFFFFF" borderVisible="false" focusAlpha="0"
+											skinClass="skin.textInput.SkinTextAreaDisplay"/>
+							</s:Group>  
+						</s:VGroup>  
+						
+						
+						<s:Group width="100%" height="100" click="actualizarRealizacionVisita(event)">
+							<s:Rect width="100%" height="100%">
+								<s:fill>
+									<s:SolidColor color="#4fa733" />
+								</s:fill>
+							</s:Rect>
+							<s:Label text="CERRAR PENDIENTE" fontFamily="Helvetica" fontSize="26" color="#FFFFFF" maxDisplayedLines="1" width="100%" height="100%"
+									 verticalAlign="middle" textAlign="center" fontWeight="bold"/>
+						</s:Group>  
+						
+					</s:VGroup>
+					
+					
+					
+					
+					
+					
+					
+					
+					<s:VGroup width="100%" height="100%" gap="0">
+						<s:Group width="100%" height="100" click="regresarPendientes(event)">
+							<s:Label text="{clienteSeleccionado}" width="100%" height="100%" verticalAlign="middle" textAlign="center" fontFamily="Helvetica" fontWeight="bold"
+									 fontSize="26" color="#008894" />
+							
+							<s:VGroup buttonMode="true" left="20" verticalCenter="0" >
+								<mx:Image source="{catalogoIconosBotones.getInstance().flechaIR}" alpha="0.4" width="{widthFlecha}" height="{heightFlecha}" rotation="180" />
+							</s:VGroup>
+						</s:Group>  
+						<s:Group width="100%" height="50" >
+							<s:Rect width="100%" height="100%">
+								<s:fill>
+									<s:SolidColor color="#e64c56" />
+								</s:fill>
+							</s:Rect>
+							<s:Label text="No Realizado" width="100%" height="100%" verticalAlign="middle" textAlign="center" fontFamily="Helvetica" fontWeight="bold"
+									 fontSize="26" color="#FFFFFF" />
+						</s:Group>  
+						
+						<s:Rect width="100%" height="1" bottom="0">
+							<s:fill>
+								<s:SolidColor color="#eceef0" />
+							</s:fill>
+						</s:Rect>
+						<s:List width="100%" height="100%" id="lstRazonesCancelacion" borderVisible="false" contentBackgroundColor="#FFFFFF"
+								horizontalScrollPolicy="off" selectedIndex="0" change="avanzarJustificacion(event)"
+								>
+							<s:itemRenderer>
+								<fx:Component>
+									<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+													xmlns:s="library://ns.adobe.com/flex/spark" 
+													xmlns:mx="library://ns.adobe.com/flex/mx" 
+													xmlns:otros="skins.otros.*"
+													autoDrawBackground="false"
+													width="100%" height="130"
+													resize="resizeHandler(event)" 
+													xmlns:ns="vista.vistas.ev_AtenderPoolDeVisitas.Componentes.checkBox.*"
+													>
+										<fx:Script>
+											<![CDATA[
+												import mx.events.ResizeEvent;
+												
+												import skins.catalogos.catalogoIconosBotones;
+												
+												[Bindable] public var sizeFont:Number;
+												[Bindable] public var widthLogo:Number;
+												[Bindable] public var heightLogo:Number;
+												
+												[Bindable] private var heightFlecha:Number = 21;/*30*/
+												[Bindable] private var widthFlecha:Number = 14;/*20*/
+												
+												override public function set data(value:Object):void{
+													super.data = value;
+												}
+												protected function resizeHandler(event:ResizeEvent):void
+												{
+													sizeFont = (18 / 637) * (unscaledWidth);
+													sizeFont = sizeFont > 18 ? 18:sizeFont;
+													sizeFont = sizeFont < 11 ? 11:sizeFont;
+													widthLogo = (20 / 1370) * (grpVistaPrincipal.width);
+													widthLogo = widthLogo > 20 ? 20:widthLogo;
+													widthLogo = widthLogo < 15 ? 15:widthLogo;
+													heightLogo = widthLogo;
+												}
+											]]>
+										</fx:Script>
+										<s:Group width="100%" height="100%" >
+											<s:VGroup id="flecha" buttonMode="true" right="20" verticalCenter="0">
+												<mx:Image source="{catalogoIconosBotones.getInstance().flechaIR}" alpha="0.4" width="{widthFlecha}" height="{heightFlecha}"/>
+											</s:VGroup>
+											<s:Rect width="100%" height="1" bottom="0">
+												<s:fill>
+													<s:SolidColor color="#eceef0" />
+												</s:fill>
+											</s:Rect>
+											
+											<s:VGroup width="100%" height="100%" id="grpVistaPrincipal" paddingBottom="10" paddingRight="20" paddingLeft="20" >
+												<s:Label text="{data.titulo}" height="100%" verticalAlign="middle" fontFamily="Helvetica" fontWeight="bold"
+														 fontSize="26" color="#008894" width="90%" maxDisplayedLines="2" />
+												
+												<s:Label text="{data.descripcion}" height="100%" verticalAlign="middle" fontFamily="Helvetica"
+														 fontSize="25" color="#404040" width="90%" maxDisplayedLines="2"  />
+												
+											</s:VGroup>  
+										</s:Group>
+									</s:ItemRenderer>
+								</fx:Component>
+							</s:itemRenderer>
+						</s:List>
+					</s:VGroup>
+					
+					
+					
+					
+					
+				</pq:MobViewStack>
+			</s:VGroup>  
+			
+		</vistas:vistaPrincipal>
+	</vistas:plantillaVendedorMobil>
+</s:View>

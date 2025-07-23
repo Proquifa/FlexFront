@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="utf-8"?>
+<platilla:PlantillaCatalogosVistaDefault xmlns:fx="http://ns.adobe.com/mxml/2009" 
+										 xmlns:platilla="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.*" 
+										 xmlns:s="library://ns.adobe.com/flex/spark" 
+										 xmlns:mx="library://ns.adobe.com/flex/mx" 
+										 xmlns:mapas="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.proveedores.*"
+										 xmlns:mapasComerciales="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.proveedores.comerciales.*"
+										 xmlns:mapasTecnicos="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.proveedores.tecnicos.*" 
+										 xmlns:mapasLogistica="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.proveedores.acuerdos.*" 
+										 xmlns:mapasEstadisticas="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.proveedores.estadisticas.*" 
+										 creationComplete="plantillacatalogosvistadefault_creationCompleteHandler(event)"
+										 width="100%" height="100%" titulo="proveedores"
+										 >
+	<fx:Declarations>
+		<mapas:MapaCatProGenerales/>
+		<mapas:MapaCatProContactos/>
+		<mapasComerciales:MapaCatProOferta/>
+		<mapasComerciales:MapaCatProMarcas/>
+		<mapasTecnicos:MapaCatProProductos/>
+		<mapasTecnicos:MapaCatProLicencias />
+		<mapasLogistica:MapaCatProLogistica />
+		<mapasTecnicos:MapaCatProClasificacion dispatcher="{this}"/>
+		<mapasLogistica:MapaCatProAcuerdos dispatcher="{this}"/>
+		<mapasEstadisticas:MapaCatProEstadisticasGenerales dispatcher="{this}"/>
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.MenuLikeCaraLibro;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.MenuLikeCaraLibroMin;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.itemMenuCatalogosClass;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.configuracion.CatProveedores_Configuracion;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			private static const MENU_MAXIMIZADO:String ="menuMaximizado";
+			private static const MENU_MINIMIZADO:String ="menuMinimizado";
+			
+			private var todosProveedores:CatProveedores_TodosLosProveedores;
+			private var vistaInformacion:CatProZonaTrabajo; 
+			private var menu:MenuLikeCaraLibro;
+			private var menuMin:MenuLikeCaraLibroMin;
+			private var respProvedor:Proveedor;
+			private var opcionSelected:String;
+			private var stateMenu:String;
+			
+			
+			private var configuracion:CatProveedores_Configuracion;
+			
+			
+			public static var currentProveedor:Proveedor;
+			
+			public function AbrirCatalogo():void
+			{
+				if(!todosProveedores)
+				{
+					todosProveedores = new CatProveedores_TodosLosProveedores();
+					todosProveedores.percentWidth = todosProveedores.percentHeight = 100;
+					todosProveedores.addEventListener(EventoCatProGeneral.ACTUALIZAR_EL_PROVEEDOR_SELECCIONADO,actualizarElProvedorEnLasVistas,false,0,true);
+					todosProveedores.addEventListener("opcionSeleccionada",opcionSeleccionada);
+					agregarVistaTodos(todosProveedores);
+				}
+				
+				if(!vistaInformacion)
+				{
+					vistaInformacion = new CatProZonaTrabajo();
+					vistaInformacion.percentWidth = vistaInformacion.percentHeight = 100;
+					//vistaInformacion.minHeight = 0;
+					agregarVistaDeInformacion(vistaInformacion); 
+				}
+				
+				if(!menu) 
+				{
+					menu = new MenuLikeCaraLibro;
+					menu.percentWidth = menu.percentHeight = 100;
+					menu.dataProvider = menuItems;
+					//menu.addEventListener( EventoCatProGeneral.CAMBIAR_VISTA_NIVEL_MENU_CAT_PROVEEDORES, cambiarVistaANivelMenu,false,0,true);
+					agregarMenuCatalogo(menu); 
+					
+				} 
+				
+				if (!configuracion)
+				{
+					configuracion = new CatProveedores_Configuracion();
+					configuracion.percentWidth = 100;
+					configuracion.percentHeight = 100;
+					agregarComponentesConfiguracion(configuracion);
+					configuracion.btnRegresarAVistaDefaultProveedores.addEventListener(MouseEvent.CLICK,escucharRegresarAVistaDefaultProveedores,false,0,true);
+				}
+				
+				/* if(!menu)
+				{
+				menu = new CatProMenu;
+				menu.cacheAsBitmap = true;
+				menu.percentWidth = menu.percentHeight = 100;
+				menu.addEventListener( EventoCatProGeneral.CAMBIAR_VISTA_NIVEL_MENU_CAT_PROVEEDORES, cambiarVistaANivelMenu,false,0,true);
+				agregarMenuCatalogo(menu); 
+				}  */
+				
+				todosProveedores.iniciarCatalogoProveedores();
+				
+				setCurrentVista("vistaTodos"); 
+			}
+			
+			private function enviaContactos($evt:EventoCatProGeneral):void
+			{
+				setNumeroContactos($evt.numeroContactos);
+				/* menu._contactos = $evt.numeroContactos;
+				menu.recibeNumeroContactos(); */
+			}
+			
+			private function actualizarElProvedorEnLasVistas($event:EventoCatProGeneral):void
+			{
+				vistaInformacion.recibeProveedorCiclo($event.proveedorSeleccionado); 
+			}
+			
+			public function cambiarVistaANivelMenu($event:EventoCatProGeneral):void
+			{
+				vistaInformacion.cambiarVistaEnCatalogoProveedores($event.componente);
+				opcionSelected = $event.componente;
+				//seleccionarBoton($event.componente);
+				//seleccionarBoton($event.tipo);
+			}
+			
+			public function cambiarEntreLasVistasDisponibles($evt:EventoCatProGeneral):void
+			{
+				if($evt.vieneDe == "vistaTodosLosProveedores" || $evt.vieneDe == "newProveedor")
+				{
+					setCurrentVista("vistaInformacion");
+					respProvedor = ObjectUtil.copy( $evt.proveedorSeleccionado ) as Proveedor;
+					contenedorMenu.recibeProveedorSeleccionado = $evt.proveedorSeleccionado; 
+					vistaInformacion.recibeProveedor($evt.proveedorSeleccionado);
+					
+					if($evt.proveedorSeleccionado.idProveedor > 0)
+						bloquearMenu(false);
+					else
+						bloquearMenu(true);
+					
+					
+					if (DatosGlobales.getInstance()._usuario.nombreFuncion == "Comprador" || DatosGlobales.getInstance()._usuario.nombreFuncion == "Gerente de Compras")
+					{
+						bloquearMenu(true,"Oferta");
+					}
+					else
+					{
+						bloquearMenu(false,"Oferta");
+					}
+					
+					opcionSelected = "generales";
+					seleccionarBoton(opcionSelected);
+					//menu.seleccionado = false; 
+				}
+				else
+				{
+					CatProZonaTrabajo._contDes = false;
+					setCurrentVista("vistaTodos");
+				}
+			}
+			
+			private function seleccionarBoton( $boton:String = "generales"):void
+			{
+				if(menuItems.length > 0)
+				{
+					for(var n:int = 0; n < menuItems.length; n++)
+					{
+						var current:itemMenuCatalogosClass = menuItems[n];
+						
+						if(current.tipoItem == "button" && current.evento == $boton)
+						{
+							current.selected = true;
+						}
+						else
+						{
+							if(current.tipoItem == "button")
+								current.selected = false;
+						}
+					}
+					
+					if(stateMenu == MENU_MINIMIZADO)
+						menuMin.dataProvider = menuItems;
+					else
+						menu.dataProvider = menuItems;
+				}
+			}
+			
+			
+			
+			[Bindable] private var menuItems:Array;  
+			protected function plantillacatalogosvistadefault_creationCompleteHandler(event:FlexEvent):void
+			{
+				this.addEventListener( EventoCatProGeneral.CAMBIA_VISTAS_NIVEL_SUPERIOR_CAT_PROVEEDORES,cambiarEntreLasVistasDisponibles,false,0,true );
+				this.addEventListener( EventoCatProGeneral.ENVIAR_NUMERO_CONTACTOS, enviaContactos,false,0,true)
+				this.addEventListener( EventoCatProGeneral.CLIC_BOTONERA_MENU, cambiarVistaANivelMenu,false,0,true)
+				this.addEventListener( "menuMinimizaCambiaBotones", cambiarBotonesMinimizado,false,0,true)
+				this.addEventListener( "menuMaximizaCambiaBotones", cambiarBotonesMaximizado,false,0,true)
+				opcionSelected = "generales";
+				
+				
+				menuItems = new Array;
+				var item:itemMenuCatalogosClass;
+				
+				item = new itemMenuCatalogosClass;
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Generales";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "empresa";
+				item.imageMax = "etiquetas_empresa";
+				item.titulo = "Empresa";
+				item.evento = "generales";
+				item.selected = true;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "contactos";
+				item.imageMax = "etiquetas_contacto";
+				item.titulo = "Contactos";
+				item.evento = "contactos";
+				item.selected = false;
+				item.esConindicador1 = true;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "direcciones";
+				item.imageMax = "etiquetas_direccion";
+				item.titulo = "Direcciones";
+				item.evento = "direcciones";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Comerciales";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "oferta";
+				item.imageMax = "etiquetas_oferta";
+				item.titulo = "Oferta";
+				item.evento = "oferta";
+				item.selected = false;
+				item.esConindicador1 = false;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "marcasP";
+				item.imageMax = "etiquetas_marca";
+				item.titulo = "Marcas";
+				item.evento = "marca";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Operativos";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "logistica";
+				item.imageMax = "etiquetas_logistica";
+				item.titulo = "Logística";
+				item.evento = "logistica";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Estadísticas";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "vistaGeneral";
+				item.imageMax = "estadisticasProveedores60x61";
+				item.titulo = "Vista General";
+				item.evento = "estadisticasGenerales";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Acuerdos";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "pagos";
+				item.imageMax = "etiquetas_pagos";
+				item.titulo = "Pagos";
+				item.evento = "pagos";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Comerciales";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "compraVenta";
+				item.imageMax = "etiquetas_compraVenta";
+				item.titulo = "Compra/Venta";
+				item.evento = "compraVenta";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Técnicos";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "productos";
+				item.imageMax = "etiquetas_productoengrane";
+				item.titulo = "Productos";
+				item.evento = "producto";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "licencia";
+				item.imageMax = "etiquetas_licencia";
+				item.titulo = "Licencia";
+				item.evento = "licencia";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "clasificacion";
+				item.imageMax = "etiquetas_verbales";
+				item.titulo = "Clasificacion";
+				item.evento = "clasificacion";
+				item.selected = false;
+				menuItems.push(item.clone());  
+				
+				
+				//   +++++ ESPACIO FINAL  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "";
+				menuItems.push(item.clone());
+				
+			}
+			
+			private function cambiarBotonesMinimizado(eve:Event):void
+			{
+				stateMenu = MENU_MINIMIZADO;
+				menuMin = new MenuLikeCaraLibroMin;
+				menuMin.percentWidth = menuMin.percentHeight = 100;
+				seleccionarBoton( opcionSelected);
+				//menuMin.dataProvider = menuItems;
+				agregarMenuCatalogoMin(menuMin);  
+			}
+			
+			private function cambiarBotonesMaximizado(eve:Event):void
+			{
+				stateMenu = MENU_MAXIMIZADO;
+				seleccionarBoton( opcionSelected);
+				contenedorMenu.recibeProveedorSeleccionado = respProvedor;
+			}
+			
+			public function bloquearMenu($valor:Boolean,$seccion:String = ""):void
+			{
+				for(var i:int = 0; i < menuItems.length; i++)
+				{
+					var current:itemMenuCatalogosClass = menuItems[i];
+					if($seccion == "")
+					{
+						if(current.tipoItem == "button")
+						{
+							current.disable = $valor;
+							current.indicador1Count = 0;
+						}
+					}
+					else
+					{
+						if(current.tipoItem == "button" && current.titulo == $seccion)
+						{
+							current.disable = $valor;
+						}
+					}
+				}
+			}
+			
+			private function setNumeroContactos($numero:int):void
+			{
+				for(var i:int = 0; i < menuItems.length; i++)
+				{
+					var current:itemMenuCatalogosClass = menuItems[i];
+					
+					if(current.tipoItem == "button" && current.esConindicador1)
+					{
+						current.indicador1Count = $numero;
+					}
+				}
+				
+				seleccionarBoton( opcionSelected );
+			}
+			
+			
+			protected function opcionSeleccionada($evt:Event):void
+			{
+				configuracion.cambiarVista(todosProveedores.currentButonClick.id);
+				setCurrentVista("vistaConfiguracion"); 
+			}
+			
+			private function escucharRegresarAVistaDefaultProveedores(event:MouseEvent):void
+			{
+				setCurrentVista("vistaTodos"); 
+			}
+			
+		]]>
+	</fx:Script>
+	
+</platilla:PlantillaCatalogosVistaDefault>

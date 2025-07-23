@@ -1,0 +1,593 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+		  titulo="reporte notificados" xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*" 
+		  creationComplete="init()"
+		  width="100%" height="100%" xmlns:otros="skins.otros.*" 
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:comboCat ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+		  xmlns:btnToggleEstados="skins.botonesToggle.btnToggleEstados.*" xmlns:botonesToggle="skins.botonesToggle.*" xmlns:pqNet="skins.botones.pqNet.*"
+		  > 
+	<fx:Script>
+		<![CDATA[
+			import com.asfusion.mate.events.DispatcherEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoCambioIndex;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.menu.EventoMenuContinuo;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.notificados.EventoReporteNotificadosNew;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.events.IndexChangeEvent;
+			[Bindable]	public var avisoCambio:Boolean = true;
+			private var _comboResponsable:Array;
+			private var _img:String = '0';
+			private var _datos:Object = new Object();
+			[Bindable] private var _datosBarra:ArrayCollection = new ArrayCollection( [{ valor:'Avanzada',llave:0 }, 
+																						{ valor:'Rapida',llave:1} ] );
+			[Bindable] private var _clickeado:String="DIA0";
+			[Bindable] private var _vistaAvanzada:Boolean = true;
+			[Bindable]	private var _esGerente:Boolean = false;
+			private var _vistaSelected:String;
+			private var _master:String;
+			private var _ev:String;
+			[Bindable]	private var _arrButton:ArrayCollection = new ArrayCollection([{label:"  Avisos de\n Cambio",  icono: "avisodecambionegro"}, // icono: "avisodecambio"},
+																					{label:"  Pedido en\n  Modificación",icono: "pedidosmodificanegro"}]); // icono: "pedidosmodifica"}]);
+		
+			[Bindable]	private var _icoGrafica:Class = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+			[Bindable]	private var _icoTabla:Class = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+			[Bindable]	private var etiqueta:String = "AVISO";
+			
+			private var _emp:Empleado = DatosGlobales.getInstance()._usuario;
+			private var $diaSeleccionado:String="";
+			[Bindable] private var etiquetaAvanzada:String ="AVISO";
+			private var time:Timer = new Timer(4600,1);
+			
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizar.png")]
+			private var imgNormal:Class;
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizarverde.png")]
+			private var imgDown:Class;
+			private var _filtroMontoLabel:String = "";
+			
+			protected function init():void
+			{
+				
+				this.imgActualizar.source = imgNormal;
+				checkCombo.visible=false;
+				checkCombo.includeInLayout = false;
+				
+				if( _emp.idFuncion == 5 || _emp.idFuncion == 7 )
+				{
+					_esGerente = false;
+					cmbCliente.cargaClientes( (_emp.idFuncion == 7 ? _emp.idEmpleado.toString(): _emp.usuario), '--TODOS--' );
+					cmbResponsable.visible = cmbResponsable.includeInLayout = false;
+					cmbResponsableLbl.visible = cmbResponsableLbl.includeInLayout = false;
+					
+					if(_emp.idFuncion == 7){
+						_ev=_emp.usuario;
+					}
+				}
+				else
+				{
+					_esGerente = true;
+					cmbCliente.cargaClientes( '--TODOS--');
+					if( _emp.usuario == "CTirado" )
+					{
+						cmbResponsable.cargarEmpleadosXTipoTablero( 'esac_master-esac-eve', '', '--TODOS--' );
+					}
+					else if( _emp.idFuncion == 3 || _emp.idFuncion == 4 )
+					{
+						_emp.idFuncion == 4 ? cmbResponsable.cargarEmpleadosXTipoTablero( 'esac', '', '--TODOS--' ) : cmbResponsable.cargarEmpleadosXTipoTablero( 'eve', '', '--TODOS--' );
+					}
+					else if( _emp.idFuncion == 37 )
+					{ // esac master
+						cmbResponsable.cargarEmpleadosXTipoTablero( "esac_master", _emp.usuario, '--TODOS--' );
+						_master=_emp.usuario;
+					}
+					else
+					{
+						cmbResponsable.cargarEmpleadosXTipoTablero( 'esac_master-esac-eve', '', '--TODOS--' );
+					}
+				}
+				
+				//etiqueta == 'AVISO' ? filtrarDatos('DIA0') : filtrarDatosModif();
+				addEventListener("clickCustomButton", escucharBotonTablaGrafica);
+				var swt:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.DATOS_SWITCH );
+				swt.swtichBotonera = "AVISO";
+				dispatchEvent( swt );
+				BusquedaRapida_Aviso.visible=false;
+				BusquedaRapida_Aviso.includeInLayout=false;
+				//filtrarDatos('DIA0');
+			}
+			
+			public function set recibicirLabelFiltroMonto($label:String):void{
+				
+				if ($label == 'TODO'){
+					_filtroMontoLabel ="";
+				}
+				if ($label == '> $10,000'){
+					_filtroMontoLabel ="> $10,000";
+				}
+				if ($label == '$2,001 - $10,000'){
+					_filtroMontoLabel ="$2,001-$10,000";
+				}
+				if ($label == '0 - $2,000'){
+					_filtroMontoLabel ="0 - $2,000";
+				}
+					
+			}
+			
+			
+			protected function escucharBotonTablaGrafica(event:Event):void
+			{
+				if (_vistaAvanzada == true){
+					var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+					eventoindex.vieneD = "reporteNotificados"; 
+					_vistaSelected = event.target.imagen;
+					if( event.target.imagen == "tabla" )
+					{
+						_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+						_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+						eventoindex.nuevoIndex = 0;
+					}
+					else if( event.target.imagen == "grafica" )
+					{
+						_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablaminigris;
+						_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficamini;
+						eventoindex.nuevoIndex = 1;
+					}
+					dispatchEvent(eventoindex);
+					
+					if( event.target.id != null )
+						var id:String = event.target.id.toString();
+					if( id == "btn0" )
+						_clickeado = "PASADO";
+					if( id == "btn1" )
+						_clickeado = "DIA-3";
+					if( id == "btn2" )
+						_clickeado = "DIA-2";
+					if( id == "btn3" )
+						_clickeado = "DIA-1";
+					if( id == "btn4" )
+						_clickeado = "DIA0";
+					if( id == "btn5" )
+						_clickeado = "DIA1";
+					if( id == "btn6" )
+						_clickeado = "DIA2";
+					if( id == "btn7" )
+						_clickeado = "DIA3";
+					if( id == "btn8" )
+						_clickeado = "FUTURO";
+					if( id == "btnTodo" )
+						_clickeado = "TODO";
+					
+					
+					if (etiqueta == 'AVISO'){
+						filtrarDatos(_clickeado); 
+					}else{
+						filtrarDatosModif(_clickeado);
+					}
+				}
+			}
+			
+			private function regresaMenu():void{
+				var evento:EventoMenuContinuo = new EventoMenuContinuo(EventoMenuContinuo.REGRESA_MENU);
+				dispatchEvent( evento );
+			}
+			
+			public function timerComplete(evet:TimerEvent):void{
+				this.imgActualizar.source = imgNormal;
+			}
+			
+	
+			private function filtrarDatos( $diaSeleccionado:String = null ):void{
+				
+				var swt:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.DATOS_SWITCH );
+				var dat:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.DATOS_BOTONERA_GENERAL );
+				var graf:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.GENERAR_GRAFICAS );
+				graf.nuevoIndex = 1;
+				dispatchEvent( graf );
+				if( $diaSeleccionado != null ) _clickeado = $diaSeleccionado;
+			//	if(  cmbResponsable.selectedItem == null ) return;					
+				var evt:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.FILTRAR_DATOS_VISTA );
+				dat.cliente = evt.cliente = cmbCliente.selectedItem == null ? "": cmbCliente.selectedItem.valor;
+				dat.tipoProducto = evt.tipoProducto = cmbTipo.selectedItem == null ? "": cmbTipo.selectedItem.valor;
+				dat.marca = evt.marca = cmbMarca.selectedItem == null ? "": cmbMarca.selectedItem.valor;
+				dat.control = evt.control = cmbControl.selectedItem == null ? "": cmbControl.selectedItem.valor;
+				if(_emp.idFuncion == 5 || _emp.idFuncion == 7){
+					if(_emp.idFuncion == 5 ){
+						dat.responsable = evt.responsable = _emp.usuario;
+					}
+					if(_emp.idFuncion == 7 ){
+						dat.responsable = evt.responsable = "";
+					}
+				}else{
+					if( cmbResponsable.selectedItem.valor.toString() == "--TODOS--"){
+						dat.responsable = evt.responsable = "";
+					}else{
+						dat.tipoResponsable = evt.tipoResponsable = cmbResponsable.selectedItem.tipoEmpleado.toString();
+						dat.responsable = evt.responsable = cmbResponsable.selectedItem.valor.toString();
+					}
+				}
+				evt.clasificacion=_filtroMontoLabel;
+				dat.swtichBotonera = evt.swtichBotonera = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				dat.diaFiltro = evt.diaFiltro = _clickeado;
+				swt.swtichBotonera = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				dispatchEvent( swt );
+				dispatchEvent( dat );
+				dispatchEvent( evt );
+				
+				time.removeEventListener(TimerEvent.TIMER,timerComplete)
+				time.addEventListener(TimerEvent.TIMER,timerComplete);
+				time.start();
+			}
+			
+			private function filtrarDatosModif( $diaSeleccionado:String = null ):void{
+				var btn:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.ETIQUETAS_BOTONERA );
+				var swt:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.DATOS_SWITCH );
+				var dat:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.DATOS_BOTONERA_GENERAL );
+				
+				if( $diaSeleccionado != null ) _clickeado = $diaSeleccionado;
+				//if(  cmbResponsable.selectedItem == null ) return;							
+				var evt:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.FILTRAR_DATOS_VISTA_MODIF );
+				evt.etiqueta="MODIF";
+				btn.etiqueta="MODIF";
+				evt.cliente = cmbCliente.selectedItem == null ? "": cmbCliente.selectedItem.valor;
+				btn.cliente = cmbCliente.selectedItem == null ? "": cmbCliente.selectedItem.valor;
+				dat.cliente = evt.cliente = cmbCliente.selectedItem == null ? "": cmbCliente.selectedItem.valor;
+				if(_emp.idFuncion == 5 || _emp.idFuncion == 7  ){
+					if(_emp.idFuncion == 5 ){
+						evt.responsable = btn.responsable = dat.responsable = _emp.usuario;
+					}
+					if(_emp.idFuncion == 7 ){
+						dat.responsable = evt.responsable = "";
+					}
+				}else{
+					if( cmbResponsable.selectedItem.valor.toString() == "--TODOS--"){
+						evt.responsable = btn.responsable = dat.responsable = "";
+					}else{
+						dat.tipoResponsable = evt.tipoResponsable = cmbResponsable.selectedItem.tipoEmpleado.toString();
+						dat.responsable = evt.responsable = cmbResponsable.selectedItem.valor.toString();
+					}
+				}
+				evt.clasificacion=_filtroMontoLabel;
+				dat.swtichBotonera = evt.swtichBotonera = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				dat.diaFiltro = evt.diaFiltro = _clickeado;
+				evt.swtichBotonera = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				btn.swtichBotonera = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				evt.diaFiltro = _clickeado;
+				btn.diaFiltro = _clickeado;
+				swt.swtichBotonera = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				
+				dispatchEvent( dat );
+				dispatchEvent( swt );
+				dispatchEvent( evt );
+				
+				time.removeEventListener(TimerEvent.TIMER,timerComplete)
+				time.addEventListener(TimerEvent.TIMER,timerComplete);
+				time.start();
+			}
+			
+			
+			
+			protected function seleccionaButtonBar(event:IndexChangeEvent):void
+			{
+				
+				if( event.currentTarget.selectedItem == null ) return;
+				if(event.currentTarget.selectedItem.llave == 0){
+					etiqueta = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+					var resul:EventoReporteNotificadosNew = new EventoReporteNotificadosNew(EventoReporteNotificadosNew.OBTENER_REPORTE_NOTIFICADOS);
+					resul.folioDoc = resul.cliente = resul.responsable = resul.folioNT="";
+					resul.etiqueta=etiqueta;
+					resul.tipoNotificacion= 2;
+					resul.master=_master== null ? '':_master;
+					resul.ev = _ev == null ? '': _ev;
+					dispatchEvent(resul);
+					_vistaAvanzada = true;
+					checkCombo.visible=false;
+					checkCombo.includeInLayout = false;
+					botoneraBarra.includeInLayout = true;
+					botoneraBarra.visible=true;
+					ultimaDivision.visible=false;
+					BusquedaRapida_Aviso.visible=false;
+					BusquedaRapida_Aviso.includeInLayout=false;
+					_vistaSelected =  "tabla";
+					if (etiqueta == 'AVISO'){
+						combos.includeInLayout=true;
+						combos1.includeInLayout=true;
+					}else{
+						combos.includeInLayout=false;
+						combos1.includeInLayout=true;
+					}
+	
+				}else{
+					_vistaAvanzada = false;
+					cmbCliente.selectedIndex = 0;
+					cmbResponsable.selectedIndex = 0;
+					cmbTipo.selectedIndex = 0;
+					cmbMarca.selectedIndex = 0;
+					cmbControl.selectedIndex = 0;
+					checkCombo.visible=true;
+					checkCombo.includeInLayout = true;
+					botoneraBarra.includeInLayout = false;
+					botoneraBarra.visible=false;
+					combos.includeInLayout=false;
+					combos1.includeInLayout=false;
+					ultimaDivision.visible=false;
+					BusquedaRapida_Aviso.visible=true;
+					BusquedaRapida_Aviso.includeInLayout=true;
+					
+					
+					if(_vistaSelected == "grafica"){
+						_vistaSelected = "tabla";
+						var eventoIndex:EventoCambioIndex = new EventoCambioIndex (EventoCambioIndex.CAMBIAR_INDEX);
+						eventoIndex.vieneD = "reporteNotificados";
+						eventoIndex.nuevoIndex = 0;
+						dispatchEvent(eventoIndex);
+					}
+					
+				}
+				etiqueta == 'AVISO' ? filtrarDatos() : filtrarDatosModif();
+			}
+			
+			
+			private function click( $diaSeleccionado:String = null ):void{
+				
+				_img = '0';
+				//_img == '0' ? this.imgActualizar.source = imgNormal : this.imgActualizar.source = imgDown;
+				
+				if( $diaSeleccionado != null ) _clickeado = $diaSeleccionado;
+				
+				if(_vistaSelected == "grafica"){
+					switch(_clickeado)
+					{
+						case "PASADO": btn0.imagen ="grafica";  break;
+						case "DIA-3": btn1.imagen ="grafica"; break;
+						case "DIA-2": btn2.imagen ="grafica"; break;
+						case "DIA-1": btn3.imagen ="grafica"; break;
+						case "DIA0": btn4.imagen ="grafica"; break;
+						case "DIA1": btn5.imagen ="grafica"; break;
+						case "DIA2": btn6.imagen ="grafica"; break;
+						case "DIA3": btn7.imagen ="grafica"; break;
+						case "FUTURO": btn8.imagen ="grafica"; break;
+						case "TODO": btnTodo.imagen ="grafica"; break;
+					}
+				}
+				
+				etiqueta = botoneraBarra.selectedItem.label == '  Avisos de\n Cambio' ? "AVISO":"MODIF";
+				if (etiqueta == 'AVISO'){
+					filtrarDatos($diaSeleccionado); 
+					combos.visible = true;
+					combos.includeInLayout = true;
+					cmbTipo.includeInLayout = true; 	
+				}else{
+					filtrarDatosModif($diaSeleccionado);
+					combos.visible = false;
+					combos.includeInLayout = false;
+					/* var eventoindex:EventoReporteNotificadosNew = new EventoReporteNotificadosNew(EventoReporteNotificadosNew.CAMBIAR_INDEX_NOTIFICADOS);
+					eventoindex.nuevoIndex = 1;
+					dispatchEvent( eventoindex );   */
+				}	
+				
+			}
+			
+			private function cambiarswitch( ):void{
+				etiquetaAvanzada = checkCombo.selected ? "MODIF": "AVISO";
+				txtBuscaRapida.text="";
+				
+			}
+			
+			private function clickAvanzada( ):void{
+			
+				 
+				 var swt:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.DATOS_SWITCH );
+				 swt.swtichBotonera = checkCombo.selected ? "MODIF": "AVISO";
+				 dispatchEvent( swt );
+				 var eventos:EventoReporteNotificadosNew;
+				 
+				 if (etiquetaAvanzada == 'MODIF'){
+					 eventos= new EventoReporteNotificadosNew(EventoReporteNotificadosNew.OBTENER_REPORTE_NOTIFICADOS_AVANZADA);
+					 eventos.folioDoc = txtBuscaRapida.text;
+					 eventos.tipoNotificacion= 1;
+					 eventos.cliente="";
+					 eventos.responsable="";
+					 eventos.folioNT="";
+					 eventos.master=_master;
+					 eventos.ev = _ev;
+					 eventos.etiqueta='MODIF';
+					 dispatchEvent(eventos);
+				 }
+				 if (etiquetaAvanzada == 'AVISO'){
+					eventos = new EventoReporteNotificadosNew(EventoReporteNotificadosNew.OBTENER_REPORTE_NOTIFICADOS);
+					 eventos.folioNT = txtBuscaRapida.text;
+					 eventos.tipoNotificacion= 0;
+					 eventos.cliente="";
+					 eventos.responsable="";
+					 eventos.folioDoc="";
+					 eventos.ev = _ev;
+					 eventos.master=_master;
+					 dispatchEvent(eventos);
+				 }
+				 
+			}
+			
+			
+			private function img():void{
+				this.imgActualizar.source = imgDown;
+				_filtroMontoLabel ="";
+				
+				if (etiqueta == 'AVISO'){
+					
+					cmbCliente.selectedIndex=0;
+					cmbResponsable.selectedIndex=0;
+					cmbMarca.selectedIndex=0;
+					cmbControl.selectedIndex=0;
+					cmbTipo.selectedIndex=0;
+					
+					var notif:EventoReporteNotificadosNew = new EventoReporteNotificadosNew(EventoReporteNotificadosNew.OBTENER_REPORTE_NOTIFICADOS);
+					notif.master = _master == null ? "" : _master;
+					notif.ev = _ev == null ? "" : _ev;
+					dispatchEvent(notif);
+					filtrarDatos('DIA0');
+					
+				}else{
+					
+					cmbCliente.selectedIndex=0;
+					cmbResponsable.selectedIndex=0;
+					cmbMarca.selectedIndex=0;
+					cmbControl.selectedIndex=0;
+					cmbTipo.selectedIndex=0;
+					
+					var modif:EventoReporteNotificadosNew = new EventoReporteNotificadosNew(EventoReporteNotificadosNew.OBTENER_REPORTE_NOTIFICADOS_MODIFICADOS);
+					modif.master = _master == null ? "" : _master;
+					modif.ev = _ev == null ? "" : _ev;
+					dispatchEvent(modif);
+					filtrarDatosModif('DIA0');
+				}
+				
+				var todo:EventoReporteNotificadosNew = new EventoReporteNotificadosNew( EventoReporteNotificadosNew.REGRESAR_A_TODOS );
+				todo.todos="1";
+				dispatchEvent( todo );
+			}
+			
+			private function combo():void{
+				
+				if( _clickeado == "PASADO")
+					btn0.currentState='seleccionado'
+				if(_clickeado == "DIA-3")
+					btn1.currentState='seleccionado'
+				if(_clickeado == "DIA-2")
+					btn2.currentState='seleccionado'
+				if( _clickeado == "DIA-1")
+					btn3.currentState='seleccionado'
+				if( _clickeado == "DIA0")
+					btn4.currentState='seleccionado'
+				if( _clickeado == "DIA1")
+					btn5.currentState='seleccionado'
+				if( _clickeado == "DIA2")
+					btn6.currentState='seleccionado'
+				if( _clickeado == "DIA3")
+					btn7.currentState='seleccionado'
+				if(_clickeado == "FUTURO")
+					btn8.currentState='seleccionado'
+				if( _clickeado == "TODO")
+					btnTodo.currentState='seleccionado'
+					
+				if (etiqueta == 'AVISO'){
+					filtrarDatos(_clickeado); 
+				}else{
+					filtrarDatosModif(_clickeado);
+				}
+			}
+			
+			public function set recibirObjLabels( $objLabel:Object ):void{
+				if( $objLabel == null )	return;
+				btn0.total = validaDisplay( $objLabel["PASADO"] );
+				btn1.total = validaDisplay( $objLabel["DIA-3"] );
+				btn2.total = validaDisplay( $objLabel["DIA-2"] );
+				btn3.total = validaDisplay( $objLabel["DIA-1"] );
+				btn4.total = validaDisplay( $objLabel["DIA0"] );
+				btn5.total = validaDisplay( $objLabel["DIA1"] );
+				btn6.total = validaDisplay( $objLabel["DIA2"] );
+				btn7.total = validaDisplay( $objLabel["DIA3"] );
+				btn8.total = validaDisplay( $objLabel["FUTURO"] );
+				btnTodo.total = validaDisplay( $objLabel["TODO"] );
+				btn3.label2 = validaDisplay( $objLabel.ayer );
+				btn4.label2 = validaDisplay( $objLabel.hoy );
+				btn5.label2 = validaDisplay( $objLabel.manana );
+				//lblTazaRealizacion.text = validaDisplay( $objLabel.tazaRealizacion );
+			}
+			
+			private function validaDisplay( $propiedad:* ):String{
+				if( $propiedad == null ) return '';
+				return $propiedad.toString();
+			}
+			
+		
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		
+	</fx:Declarations>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%" paddingTop="10" paddingLeft="3" paddingRight="4" horizontalAlign="center" >
+			<s:Spacer height="-25" />	
+			<s:Image id="imgActualizar" click="img()" />
+			<otros:divisionHueca  width="100%"/>
+			<s:Spacer height="5" />	
+			<s:ButtonBar change="seleccionaButtonBar(event)"  dataProvider="{_datosBarra}" labelField="valor" selectedIndex="0" width="100%" requireSelection="true" />
+			<s:Spacer height="5" />	
+			<otros:divisionHueca width="100%"/>	
+			<s:Spacer height="10" />
+			<botonesToggle:ButtonBarColores width="100%" id="botoneraBarra" textAlign="center" selectedIndex="0" dataProvider="{_arrButton}" change="click('DIA0')" requireSelection="true"  />
+			<chekbox:CheckBoxPq id="checkCombo" labelLeft="Avisos de Cambio" click="cambiarswitch()"  labelRight="Pedido en Modificación" visible="{this._vistaAvanzada==false}" />
+			<s:Spacer height="10" />
+			<otros:divisionHueca width="100%"/>	
+			<s:VGroup width="100%" verticalAlign="middle" id="BusquedaRapida_Aviso">
+				<s:Label text="{etiquetaAvanzada == 'AVISO' ? 'Folio de Notificado:':'Folio del Documento:'}" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal"/>
+				<s:HGroup width="100%" >
+					<s:TextInput id="txtBuscaRapida" enter="clickAvanzada()" width="100%" toolTip="# FOLIO"  fontStyle="normal"/>
+				</s:HGroup>
+				<s:Spacer height="5%"/>
+				<pqNet:botonPqNetLargo	width="100%" click="clickAvanzada()" botonRedondo="true" icono="ojomordor" />
+			</s:VGroup>
+			<s:VGroup  id="combos1" width="100%"   >	
+				<s:Label width="100%" text="{'Cliente'}:"  textAlign="left" fontWeight="bold" paddingTop="15" visible="{this._vistaAvanzada}"  />
+				<comboCat:ComboCatalogos id="cmbCliente" visible="{this._vistaAvanzada}"  change="combo()" width="100%" />
+				<s:Label width="100%" id="cmbResponsableLbl"  text="{'Responsable'}:" textAlign="left" fontWeight="bold" visible="{this._vistaAvanzada}"/>
+				<comboCat:ComboCatalogos id="cmbResponsable"  visible="{this._vistaAvanzada}" change="combo()" width="100%" />
+			</s:VGroup>	
+			<s:VGroup  id="combos" width="100%"   >	
+				<s:Label width="100%" text="{'Tipo'}:"  textAlign="left" fontWeight="bold" visible="{this._vistaAvanzada}"  />
+				<comboCat:ComboCatalogos id="cmbTipo" visible="{this._vistaAvanzada}" creationComplete="{cmbTipo.cargaTipoProducto('--TODOS--')}"  change="combo()" width="100%" />
+				<s:Label width="100%" text="{'Marca'}:"  textAlign="left" fontWeight="bold" visible="{this._vistaAvanzada}"  />
+				<comboCat:ComboCatalogos id="cmbMarca" visible="{this._vistaAvanzada}" creationComplete="{cmbMarca.cargarMarcas('--TODOS--')}"  change="combo()"  width="100%" />
+				<s:Label width="100%" text="{'Control'}:"  textAlign="left" fontWeight="bold" visible="{this._vistaAvanzada}"  />
+				<comboCat:ComboCatalogos id="cmbControl" visible="{this._vistaAvanzada}" creationComplete="{cmbControl.cargaControlProductos('--TODOS--')}" change="combo()" width="100%" />
+			</s:VGroup>	
+			<s:Spacer height="10" />
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="10" />
+			<s:HGroup width="100%" horizontalAlign="right" gap="9" paddingRight="5" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" >
+				<s:Image id="icoGrafica" source="{ this._icoGrafica }" />
+				<s:Image id="icoTabla" source="{ this._icoTabla }" />
+			</s:HGroup>
+			
+			
+			<s:Group width="100%" id="grid" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}">
+				<s:layout>
+					<btnToggleEstados:LayoutBotoneraReporteAHyM minGap="2" minWidthElement="89"/>
+				</s:layout>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="ayer" id="btn3" label1="AYER" currentState="{_clickeado == 'DIA-1' ? 'seleccionado': 'normal' }"  />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="hoy" id="btn4" label1="HOY" currentState="{_clickeado == 'DIA0' ? 'seleccionado': 'normal' }"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="manana" id="btn5" label1="MAÑANA" currentState="{_clickeado == 'DIA1' ? 'seleccionado': 'normal' }"  />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="antier" id="btn2" label1="ANTIER" currentState="{_clickeado == 'DIA-2' ? 'seleccionado': 'normal' }"  />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pasadomanana"  id="btn6" label1="PASADO MAÑANA" currentState="{_clickeado == 'DIA2' ? 'seleccionado': 'normal' }"/>
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="anteantier" id="btn1" label1="ANTE ANTIER" currentState="{_clickeado == 'DIA-3' ? 'seleccionado': 'normal' }" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="todo" id="btnTodo" label1="TODO" currentState="{_clickeado == 'TODO' ? 'seleccionado': 'normal' }" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pospasado" id="btn7" label1="POS PASADO" currentState="{_clickeado == 'DIA3' ? 'seleccionado': 'normal' }" />
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pasado" id="btn0" label1="PASADO" currentState="{_clickeado == 'PASADO' ? 'seleccionado': 'normal' }" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="futuro" id="btn8" label1="FUTURO" currentState="{_clickeado == 'FUTURO' ? 'seleccionado': 'normal' }" />
+			</s:Group>
+			
+			
+			
+			<s:Spacer height="10" />
+			<otros:divisionHueca id="ultimaDivision" width="100%"/>
+		</s:VGroup>
+	</vistas:contenido>
+	
+	
+</vistas:PanelPropiedadesPlantillas>

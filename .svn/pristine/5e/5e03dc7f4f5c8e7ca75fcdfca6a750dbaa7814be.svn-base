@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contenedores:VGroupConPaddingStandardPqNet xmlns:fx="http://ns.adobe.com/mxml/2009" 
+											xmlns:flechasiguiente="skins.botones.flechasiguiente.*" 
+											xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+											xmlns:sinicono="skins.botones.largocolor.sinicono.*" 
+											xmlns:flecharegresa="skins.botones.flecharegresa.*" 
+											xmlns:contenedores="skins.skin.contenedores.*"
+											xmlns:s="library://ns.adobe.com/flex/spark"
+											xmlns:mx="library://ns.adobe.com/flex/mx"
+											xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+											xmlns:graficas="skins.skin.graficas.*" 
+											xmlns:shaders="skins.skin.shaders.*" 
+											xmlns:label="skins.skin.label.*" 
+											xmlns:otros="skins.otros.*" 
+											width="100%" height="100%" gap="10" 
+											>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.getTimer;
+			
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoDocumentosPendientesAEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pendiente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.controls.Alert;
+			import mx.effects.easing.Elastic;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable]	public var tituloEstado:String;
+			[Bindable]	private var _listaPartidas:ArrayCollection = null;
+			[Bindable]	private var _partidasTotales:int;
+			[Bindable]	private var _datosGrafica:ArrayCollection;
+			[Bindable]	private var _partidasFT:int;
+			[Bindable]	private var _partidasET:int;
+			
+			/**
+			 * Funcion que incia el componente para la lectura de Partidas A Confirmar. Es un funcion publica q se declara desde el componente
+			 * padre (ViewStackGeneral)
+			 */ 
+			public function iniciaEstadoPartidasAConfirmar():void{
+				var evento:EventoDocumentosPendientesAEnviar = new EventoDocumentosPendientesAEnviar(  EventoDocumentosPendientesAEnviar.TOTAL_PENDIENTES_POR_ENVIAR ); //COTIZACIONES_POR_ENVIAR
+				evento.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent( evento );
+			} 
+			
+			/**
+			 * Funcionque recibe del mapa (MapaDocumentosPendientesPorEnviar.mxml) la Lista de las Partidas A Confirmar
+			 * RECORDAR Q HAY UNA FUNCION IGUAL EN ContenedorPlanificacionDocumentosSalientes.mxml
+			 */ 
+			public function set recibeDatosConsultaCotizacion( lista:ArrayCollection ):void{ 
+				if( lista == null || lista.length == 0 ){
+					//this.grpGraficas.height = 0;
+					grpGraficas.visible = grpGraficas.includeInLayout = false;
+					gridDocumentos.dataProvider = new ArrayCollection();
+					return;
+				}
+				// recibimos listadelmapa q contiene objetos tipo pendiente
+				// creamos lista de objetos tipo Correo 
+					
+				_listaPartidas= new ArrayCollection();
+				this.datosGraficaET = new ArrayCollection();
+				this.datosGraficaMedio= new ArrayCollection();
+				this.datosGraficaOrigen = new ArrayCollection();
+				this.datosGraficaTipo = new ArrayCollection();
+				for ( var f:int= 0; f < lista.length; f++){
+					var _correoTemporal:Correo = new Correo();
+					_correoTemporal= (lista.getItemAt(f) as Pendiente).correo;
+					_correoTemporal.numFila = f + 1;
+					_correoTemporal.tipo = (lista.getItemAt(f) as Pendiente).tipoPendiente;
+					_correoTemporal.folioNumerico = (lista.getItemAt(f) as Pendiente).folio;
+					_correoTemporal.FolioDocumento = (lista.getItemAt(f) as Pendiente).docto;
+					_correoTemporal.idPendiente = (lista.getItemAt( f ) as Pendiente).folio;
+					
+					this._listaPartidas.addItem(_correoTemporal );
+				}
+				gridDocumentos.dataProvider = _listaPartidas;
+				var colorRojoTextoGrid:uint = 0xFF0000; // Red
+				var colorVerdeTextoGrid:uint = 0x00FF00; // Verde
+				formarGraficas(ObjectUtil.copy(this._listaPartidas) as ArrayCollection);
+				grpGraficas.visible = grpGraficas.includeInLayout = true;
+				this.grpGraficas.percentHeight = 100;
+				gridDocumentos.percentHeight = 100;
+			}
+			[Bindable]	private var datosGraficaTipo:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var datosGraficaET:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var datosGraficaOrigen:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var datosGraficaMedio:ArrayCollection = new ArrayCollection();
+			/**
+			 * funcion para recorrer la lista y agregar el tipo dinamicamente mediante una comparacion al arreglo de la grafica Tipo
+			 */
+			private function formarGraficas(datos:ArrayCollection ):void{
+				/* arreglos temporales clones del universo de datos hechos para usar en las graficas */
+				var temp1tipo:ArrayCollection = ObjectUtil.copy(datos) as ArrayCollection;
+				var temp2Origen:ArrayCollection = ObjectUtil.copy(datos) as ArrayCollection;
+				var temp3Medio:ArrayCollection = ObjectUtil.copy(datos) as ArrayCollection;
+				var temp4ETFT:ArrayCollection = ObjectUtil.copy(datos) as ArrayCollection;
+				
+				var objeto:ResumenConsulta = new ResumenConsulta();
+				// para el tipo
+				var m:int = 0;
+				while(temp1tipo.length>0){
+					objeto = new ResumenConsulta();
+					objeto.etiqueta = temp1tipo[0].tipo; // objeto.tipo es igual a la propiedad tipo de la clase correo
+					objeto.registro = 0;
+					for( m = 0; m<temp1tipo.length;m++ ){
+						/* compara el renglon m con el tipo en [0] y si la comparacion es true elimina esa linea y agrega 1 al contador hasta q se acaban los renglones del mismo tipo y pasa al siguiente tipo*/
+						if(objeto.etiqueta == temp1tipo[m].tipo){ 
+							objeto.registro = objeto.registro +1;
+							temp1tipo.removeItemAt(m);
+							m = m-1;//regresa una linea para comparar otra vez
+						}
+					}
+					datosGraficaTipo.addItem(objeto);
+					graficoPieTipo.dataProvider = graficoPieTipo.aplicarFormatoAIESC( datosGraficaTipo,'TIPO' );
+				}
+				// para el origen
+				while(temp2Origen.length > 0 ){
+					objeto = new ResumenConsulta();
+					objeto.etiqueta = temp2Origen[0].origen;
+					objeto.registro = 0;
+					for( m = 0; m<temp2Origen.length; m++){
+						if( objeto.etiqueta == temp2Origen[m].origen){
+							objeto.registro = objeto.registro + 1;
+							temp2Origen.removeItemAt(m);
+							m = m-1;
+						}
+					}
+					datosGraficaOrigen.addItem(objeto);
+					graficoPieOrigen.dataProvider = graficoPieOrigen.aplicarFormatoAIESC( datosGraficaOrigen,'ORIGEN' );
+				}
+				// para el medio
+				while(temp3Medio.length > 0 ){
+					objeto = new ResumenConsulta();
+					objeto.etiqueta = temp3Medio[0].medio;
+					objeto.registro = 0;
+					for( m = 0; m<temp3Medio.length; m++){
+						if( objeto.etiqueta == temp3Medio[m].medio){
+							objeto.registro = objeto.registro + 1;
+							temp3Medio.removeItemAt(m);
+							m = m-1;
+						}
+					}
+					datosGraficaMedio.addItem(objeto);
+					graficoPieMedio.dataProvider = graficoPieMedio.aplicarFormatoAIESC( datosGraficaMedio,'MEDIO' );
+				}
+				// para el total de ET vs FT
+				this._partidasTotales = 0;
+				this._partidasET = 0;
+				this._partidasFT = 0;
+				var fechaDeHoy:Date = new Date();
+				objeto = new ResumenConsulta();
+				for( var h:int = 0; h < temp4ETFT.length; h++){
+					if( temp4ETFT[h].enTiempo == "ET"){
+						this._partidasET = this._partidasET + 1;
+					}else{
+						this._partidasFT = this._partidasFT + 1;
+					}
+					this._partidasTotales += 1;
+				}
+				objeto.registro = this._partidasET;
+				objeto.etiqueta = "En tiempo";
+				objeto.conceptoResultado = "Total de pendientes en tiempo"
+				this.datosGraficaET.addItem(objeto);
+				objeto = new ResumenConsulta();
+				objeto.registro = this._partidasFT;
+				objeto.etiqueta = "Fuera de tiempo";
+				objeto.conceptoResultado = "Total de pendientes fuera de tiempo"
+				this.datosGraficaET.addItem(objeto);
+				//limpiaPies();
+				
+				graficoPieVs.dataProvider = graficoPieVs.aplicarFormatoAIESC( datosGraficaET,'ET VS FT' );
+				
+				grpGraficas.percentHeight = 100;
+				gridDocumentos.percentHeight = 100;
+			}
+			
+			public function disparaEvento():void{
+				var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.SELECCIONA_OPCION);
+				evento.idOpcionSeleccionada = "espacioPlanificacion";
+				evento._listaUniverso = this._listaPartidas;
+				dispatchEvent(evento);
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="bottom">
+		<!--<label:labelTitulo width="100%" fontSize="30" fontWeight="normal" text="{this.tituloEstado}" />-->
+		<label:TituloBankGothic_30 text="{this.tituloEstado}" width="100%"/>
+		<flechasiguiente:botonFlechaSiguiente click="disparaEvento()" />
+	</s:HGroup>
+	
+	<s:VGroup width="100%" height="100%" >
+		
+		<otros:divisionHueca width="100%"/>
+		<s:HGroup width="100%" >
+			<!--<s:Label text="LISTADO" fontSize="18" fontWeight="bold" fontFamily="Bank Gothic"/>-->
+			<label:TextoBankGothic_18 text="LISTADO" fontWeight="bold"/>
+			<s:Spacer width="100%"/>
+			<label:TextoBankGothic_18 width="438" height="24" fontWeight="bold" text="{this._partidasTotales } Documentos · {this._partidasET} ET · {this._partidasFT} FT" textAlign="right"/>
+			<label:Texto fontSize="18" fontWeight="bold" id="lblTotalPartidas"/>
+		</s:HGroup>
+		<otros:divisionGruesa width="100%"/>
+		
+		
+		<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridDocumentos"  width="100%" height="100%" anchoColumnas="{['45','20%','=','=','=','=','10%']}" tipoDeConsulta="Documentos recibidos" >
+			<AdvancedDataGrid:columns>
+				<mx:AdvancedDataGridColumn headerText="#" dataField="numFila" />
+				<mx:AdvancedDataGridColumn headerText="Cliente Destino" dataField="nombreDestino" />
+				<mx:AdvancedDataGridColumn headerText="Tipo" dataField="tipo" />
+				<mx:AdvancedDataGridColumn headerText="Origen" dataField="origen" />
+				<mx:AdvancedDataGridColumn headerText="Medio de Envío" dataField="medio" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+								<fx:Script>
+									<![CDATA[
+										import mx.events.FlexEvent;
+										
+										import skins.catalogos.catalogoIconosGrid;
+										[Bindable]
+										private var normalIcon:Class;
+										[Bindable]
+										private var hoveredIcon:Class;
+										
+										override public function set data(value:Object):void{
+											super.data = value;
+											if(data.medio == "Correo electrónico"){
+												/* this.normalIcon = catalogoIconosGrid.getInstance().render_mensajeazul; */
+												this.normalIcon = catalogoIconosGrid.getInstance().render_mensajeVerde;
+												/* this.hoveredIcon = catalogoIconosGrid.getInstance().render_mensajeazulhovered; */
+												this.hoveredIcon = catalogoIconosGrid.getInstance().render_mensajeVerdehovered; 
+											}else if(data.medio == "Fax"){
+												this.normalIcon = catalogoIconosGrid.getInstance().render_faxVerde;
+												this.hoveredIcon = catalogoIconosGrid.getInstance().render_faxVerdehovered;
+											}
+										}
+									]]>
+								</fx:Script>
+								<s:states>
+									<s:State name="normal"/>
+									<s:State name="hovered"/>
+									<s:State name="selected"/>
+								</s:states>
+								<mx:Image id="imgImagen" source="{normalIcon}" source.hovered="{hoveredIcon}" source.selected="{hoveredIcon}" horizontalCenter="0"/>
+							</s:MXAdvancedDataGridItemRenderer>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>
+				<mx:AdvancedDataGridColumn headerText="En espera desde" dataField="fechaInicioFormato" />
+				<mx:AdvancedDataGridColumn headerText="Situación" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+								<fx:Script>
+									<![CDATA[
+										
+										private var colorRojoTextoGrid:uint = 0xd10c0c; // Red
+										private var colorVerdeTextoGrid:uint = 0x70a047; // Verde
+										override public function set data(value:Object):void{
+											super.data= value;
+											SeleccionaTextoColor();
+										}
+										private function SeleccionaTextoColor():void{
+											if(data.enTiempo == "ET"){
+												this.lblTextoColor.setStyle("color", colorVerdeTextoGrid );
+												this.lblTextoColor.text = "ET";
+											}
+											else{
+												this.lblTextoColor.setStyle("color", colorRojoTextoGrid );
+												this.lblTextoColor.text = "FT";
+											}
+										}
+									]]>
+								</fx:Script>
+								<s:Label id="lblTextoColor" fontWeight="bold" horizontalCenter="0"/>
+							</s:MXAdvancedDataGridItemRenderer>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>
+			</AdvancedDataGrid:columns>
+		</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		<otros:divisionGruesa width="100%"/>
+		
+		
+		
+		
+		
+		<s:HGroup id="grpGraficas" width="100%" height="100%">
+			<s:filters>
+				<shaders:sombraBevelFilter direccion="right"/>
+			</s:filters>
+			<s:VGroup width="100%" height="100%">
+				<graficas:PieChartPqGris id="graficoPieVs" width="100%" height="100%" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+										 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+					<graficas:series>
+						<graficas:pieSeriesVS field="registro"  />
+					</graficas:series>
+				</graficas:PieChartPqGris>
+				<label:TituloBankGothic_22 textAlign="center" text="ET vs FT" width="100%" height="30%" verticalAlign="middle"/>
+			</s:VGroup>
+			
+			<s:VGroup width="100%" height="100%">
+				<graficas:PieChartPqGris id="graficoPieTipo" width="100%" height="100%" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+										 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+					<graficas:series>
+						<graficas:pieSeriesPqNet field="registro"  />
+					</graficas:series>
+				</graficas:PieChartPqGris>
+				<label:TituloBankGothic_22 textAlign="center" text="Tipo" width="100%" height="30%" verticalAlign="middle"/>
+			</s:VGroup>
+			
+			<s:VGroup width="100%" height="100%">
+				<graficas:PieChartPqGris id="graficoPieOrigen" width="100%" height="100%" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+										 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+					<graficas:series>
+						<graficas:pieSeriesPqNet field="registro"  />
+					</graficas:series>
+				</graficas:PieChartPqGris>
+				<label:TituloBankGothic_22  textAlign="center" text="Origen" width="100%" height="30%" verticalAlign="middle"/>
+			</s:VGroup>
+			
+			<s:VGroup width="100%" height="100%">
+				<graficas:PieChartPqGris id="graficoPieMedio" width="100%" height="100%" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+										 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+					<graficas:series>
+						<graficas:pieSeriesPqNet field="registro"  />
+					</graficas:series>
+				</graficas:PieChartPqGris>
+				<label:TituloBankGothic_22  textAlign="center" text="Medio" width="100%" height="30%" verticalAlign="middle"/>
+			</s:VGroup>
+		</s:HGroup>
+	</s:VGroup>
+</contenedores:VGroupConPaddingStandardPqNet>

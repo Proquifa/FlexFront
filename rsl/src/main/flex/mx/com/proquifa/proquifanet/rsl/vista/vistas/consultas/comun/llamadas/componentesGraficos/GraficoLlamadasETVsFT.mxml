@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<graficas:PieChartPqGris xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" width="100%" height="100%" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 dataProvider="{null}"
+		 itemClick="selectedVs(event)"
+		 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+		 fondoCircular="true" fondoCircularRadius="7"
+		 showDataTips="false"  innerRadius=".5" 
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.comun.llamadas.EventoConsultaLLamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoVsETFT:ArrayCollection = new ArrayCollection();
+			
+			public function set recibeLlamadas($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoVsETFT = new ArrayCollection();
+				dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				var arrayTemp:Array = new Array();
+				arrayTemp = ObjectUtil.copy(($infoGrafica) as ArrayCollection).source;
+				
+				arrayTemp.forEach(setearETyFT);
+				arrayTemp.sortOn('enTiempo',Array.DESCENDING);
+				
+				/**
+				 * Se obtiene un array con ET o FT con el fin de saber si vienen los dos o sólo uno 
+				 *  sin duplicarse, que será el que controlará el for para las sumas.
+				 * */
+				keys = new Object();
+				var arrayTotalETvsFT:Array = new Array();
+				arrayTotalETvsFT = arrayTemp.filter(quitaDuplicados);
+				
+				if(arrayTotalETvsFT.length>1)
+					arrayTotalETvsFT.sortOn("enTiempo",Array.DESCENDING);
+				
+				FormarLosETvsFT(arrayTotalETvsFT,arrayTemp,_infoVsETFT);
+				
+ 				var eventoPasarInfo:EventoConsultaLLamada = new EventoConsultaLLamada(EventoConsultaLLamada.PASAR_INFO_A_ETVSFT_SECUNDARIA);
+				eventoPasarInfo.arregloExtra = (ObjectUtil.copy(_infoVsETFT) as ArrayCollection);
+				dispatchEvent(eventoPasarInfo); 
+				
+				dataProvider = aplicarFormatoConsultasDeDosEtiquetas(_infoVsETFT,"ET vs FT",'totalLlamadas');
+				useCursorHand = true;
+				
+				//Para liberar Memoria
+				arrayTemp = new Array();
+				arrayTotalETvsFT = new Array();
+				keys = new Object();
+				
+/* 				var arrTemp:ArrayCollection = ObjectUtil.copy($infoGrafica) as ArrayCollection;
+				//if(arrTemp.length > 0) arrTemp.removeItemAt(arrTemp.length - 1) ;
+				
+				arrAux = new Array();
+				for(var i:int = 0 ; i<arrTemp.length ; i++){
+					if((arrTemp[i].enTiempo == 'ET') || (arrTemp[i].enTiempo == 'NA')){
+						objetoET.estado = 'ET';
+						objetoET.total += 1;		
+						arrAux.push(arrTemp[i].empresa);
+					}
+				}
+				
+				keys = new Object();
+				var _clietesET:Array = arrAux.filter(quitaDuplicados);
+				objetoET.totalClientes = _clietesET.length;
+				
+				arrAux = new Array();
+				for(var k:int = 0 ; k<arrTemp.length ; k++){
+					if(arrTemp[k].enTiempo == 'FT'){
+						objetoFT.estado = 'FT';
+						objetoFT.total += 1;		
+						arrAux.push(arrTemp[k].empresa);
+					}
+				}
+				
+				keys = new Object();
+				var _clietesFT:Array = arrAux.filter(quitaDuplicados);
+				objetoFT.totalClientes = _clietesFT.length;
+				
+				arrTemp.length == 0 ? grpEtiqueta.visible = false : grpEtiqueta.visible = true;
+				
+				_infoVsETFT.addItem(objetoET);
+				_infoVsETFT.addItem(objetoFT);
+				
+		
+				_totalVs = objetoET.total + objetoFT.total ;
+				_clientesTotal = objetoET.totalClientes + objetoFT.totalClientes;
+				
+				this.lbldataTipBold.text ='ET VS FT';
+				this.lbldataTip.text = _clientesTotal + ' Cliente' + (_clientesTotal == 1 ? '' : 's')
+					+ '\n' + _totalVs + " Llamada" + (_totalVs == 1 ? '' : 's'); */
+			}
+			private function FormarLosETvsFT(TotalETvsFT:Array,etvsftInfo:Array,infoETvsFT:ArrayCollection):void
+			{
+				var totalLlamadas:int;
+				var totalClientes:int;
+				var keysClientesFT:Object= new Object();
+				keys = new Object();
+				
+				var currentLlamada:Llamada; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalETvsFT.length; i++){
+					j=0;
+					totalLlamadas =0;
+					totalClientes =0;
+					currentLlamada = etvsftInfo[j] as Llamada;
+					while( (TotalETvsFT[i] as Llamada).enTiempo == currentLlamada.enTiempo ){
+						
+						totalLlamadas++
+						/**
+						 * Para el conteo de cotizaciones Dando Peso a las cotizaciones que están FT
+						 * */
+						if( currentLlamada.enTiempo == "FT"){
+							if(!keysClientesFT.hasOwnProperty(currentLlamada.empresa)){
+								keysClientesFT[currentLlamada.empresa] = currentLlamada.empresa;
+								totalClientes++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentLlamada.empresa) && !keysClientesFT.hasOwnProperty(currentLlamada.empresa)){
+								keys[currentLlamada.empresa] = currentLlamada.empresa;
+								totalClientes++;
+							}
+						}
+						
+						etvsftInfo.shift();
+						if(etvsftInfo.length >0)
+							currentLlamada = etvsftInfo[j] as Llamada;
+						else
+							currentLlamada =new Llamada();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalETvsFT[i] as Llamada).enTiempo.toLocaleUpperCase();
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalLlamadas = totalLlamadas;
+					
+					infoETvsFT.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+				/**
+				 * Se necesita ordenar inversamente primero la suma de los ET y luego los FT para invertir colores en la gráfica.
+				 * */ 
+				if(infoETvsFT.length>0){
+					if(infoETvsFT.length == 1){
+						if((infoETvsFT[0] as ResumenConsulta).etiqueta == "FT"){
+							itemResumenConsulta = new ResumenConsulta();
+							itemResumenConsulta.etiqueta = "ET";
+							itemResumenConsulta.totalPedidos =0;
+							itemResumenConsulta.totalLlamadas =0;
+							infoETvsFT.addItemAt(itemResumenConsulta,0);
+						}
+					} else{
+						infoETvsFT.addItem(ObjectUtil.copy(infoETvsFT[0]));
+						infoETvsFT.removeItemAt(0);
+					} 
+				}
+			}
+			private function setearETyFT(item:Llamada, id:uint, llamadas:Array):void
+			{
+				if(item.enTiempo == 'NA' || item.enTiempo == 'ET'){
+					item.enTiempo = 'ET';
+				}
+			}
+			public function quitaDuplicados(item:Llamada, idx:uint, llamadas:Array):Boolean{
+				if (keys.hasOwnProperty(item.enTiempo)) {
+					return false;
+				} else {
+					keys[item.enTiempo] = item.enTiempo;
+					return true;
+				}
+			}
+			private function selectedVs(event:ChartItemEvent):void{
+				var evt:EventoConsultaLLamada = new EventoConsultaLLamada(EventoConsultaLLamada.MOSTRAR_SELECTED_GRAFICA);
+				evt.tipo = event.hitData.item.etiqueta;
+				evt.valorAdicional = 'grafETVsFT';
+				evt.seleccionarGraficas = 1;
+				dispatchEvent(evt);
+				
+				var eventoSetFiltro:EventoConsultaLLamada = new EventoConsultaLLamada(EventoConsultaLLamada.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+				eventoSetFiltro.tipo = evt.tipo; 
+				dispatchEvent(eventoSetFiltro); 
+			}
+		]]>
+	</fx:Script>
+	
+	<graficas:series>
+		<graficas:pieSeriesVS field="totalLlamadas"/>  <!--piezasTotal-->
+	</graficas:series>
+</graficas:PieChartPqGris>

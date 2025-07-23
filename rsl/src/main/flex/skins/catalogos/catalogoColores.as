@@ -1,0 +1,56 @@
+package skins.catalogos
+{
+	public class catalogoColores
+	{
+		public static const LABEL_ROJO:String = "d10c0c";
+		public static const LABEL_ROJO_CLARO:String = 'FF4D4C'//'FF4442';
+		public static const LABEL_VERDE:String = "70a047";
+		public static const LABEL_VERDE_AZUL:String = "257d92";
+		public static const LABEL_TEERCER_FILA_GRID:String = "257d92"; //VERDE_AZUL
+		public static const LABEL_AZUL:String = "336699";
+		public static const LABEL_AZUL_TENUE:String = "4372a8";
+		public static const LABEL_AZUL_FUERTE:String = "4082cd";// componente contacto
+		public static const LABEL_AZUL_REY:String = "398cb7";
+		public static const LABEL_AZUL_ESPECTRAL:String = "348bd8";
+		public static const LABEL_AZUL_MARINO:String = "0d1e9d";
+		public static const LABEL_BLANCO:String = "ffffff";
+		public static const LABEL_MORADO:String = "773F8C";
+		public static const LABEL_MORADO_FUERTE:String = "84037f";
+		public static const LABEL_AMARILLO:String = "e49b08";//"dd9c21";
+		public static const LABEL_AMARILLO_SEMAFORO:String = "ffcc00";//"dd9c21";
+		public static const LABEL_AMARILLO_FUERTE:String = "FFFF70"
+		public static const LABEL_NARANJA:String = "dd9c12";//tomado de la barra de color naranja en proforma.psd
+		public static const LABEL_NARANJA_AZAFRAN:String = "b76013";
+		public static const LABEL_NARANJA_TRIANGULO:String = "ff6600";
+		public static const LABEL_NEGRO:String = "000000";
+		public static const LABEL_CASI_NEGRO:String = "666666";
+		public static const LABEL_GRIS:String = "999999";
+		public static const LABEL_GRIS_B3:String = "b3b3b3";
+		public static const FONDO_TITULO_GRIS_CLARO:String = "d9d9d9";
+		public static const FONDO_TITULO_GRIS:String = "b6b6b6";
+		public static const FONDO_TITULO_GRIS_CLARO2:String = "d1d1d1";
+		public static const LABEL_VERDE_CLARO:String = "5FB404";
+		//public static const BTN_VERDE_AZUL:String = "3b98af";
+		public static const BTN_VERDE_AZUL:String = "479bac";
+		public static const BTN_VERDE:String = "008000";
+		
+		public static const GRID_HOVERED:String = "fefefe";//"bfdbfc";
+		public static const GRID_SELECTED:String = "fdfdfd";//"2b6db9";
+		public static const GRID_LBL_NORMAL:String = "000000";
+		public static const GRID_LBL_HOVERED:String = "000000";//"FFFFFF";
+		public static const GRID_LBL_SELECTED:String = "000000";//"FFFFFF";
+		
+		public static const LIST_HOVERED:String = "70b2fd";
+		public static const LIST_SELECTED:String = "5294df";
+		public static const LIST_LBL_NORMAL:String = "000000";
+		public static const LIST_LBL_HOVERED:String = "000000";//"FFFFFF";
+		public static const LIST_LBL_SELECTED:String = "000000";//"FFFFFF";
+		public static const LIST_RENDER_BARRA:String = "257d92";
+		
+		public static const TITULO_PANEL_GRIS_CLARO:String = "ababab";
+		
+		public function catalogoColores()
+		{
+		}
+	}
+}

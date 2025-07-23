@@ -1,0 +1,680 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" xmlns:incidente="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.*" 
+		 xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" initialize="funcionInicial()"
+		 creationComplete="init()" xmlns:acordeon="skins.skin.acordeon.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark">
+	<mx:Script>
+		<![CDATA[
+			import flashx.textLayout.factory.TruncationOptions;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComboCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAdministrador;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			import mx.validators.StringValidator;
+				
+			import skins.catalogos.catalogoAlertas;
+			
+			private var _estadoVentana:String;
+			[Bindable]
+			public var _usuario:String;
+			[Bindable]
+			public var _idUsuario:Number;
+			[Bindable]
+			public var _idIncidente:Number;
+			[Bindable]
+			public var _empleadoLogueado:Empleado;
+			private var _NoDeincidenteRegistrado:Incidente; 
+			[Bindable]
+			private var _listaDeReferencias:ArrayCollection = null;
+			private var _cmbSeleccionador:seleccionador = null;
+			private var _indiceSeleccionado:Number;
+			private var popUpReferencias:ReferenciasIncidente = null;
+			private var eliminaHijoGestion:Boolean = true;
+			private var validarQue:StringValidator;
+			private var validarDonde:StringValidator;
+			private var validarCuando:StringValidator;
+			private var fechaHoy:Date = null;
+			private var _incidenteRedireccionado:Boolean;
+			[Bindable]
+			private var _empleado:ArrayCollection;
+			[Bindable]
+			public var _incidente:Incidente = null;
+			[Bindable]
+			public var vieneD:String;
+			private var _esGerente:Boolean = false;
+			
+			private var productorRegistro:Producer = new Producer();
+			private var canalRegistro:AMFChannel;
+			private var canalesRegistro:ChannelSet;
+			 private function funcionInicial():void{
+				this.addEventListener( EventoComboCatalogos.AVISA_LLEGADA_DATOS, seleccionarDatoEnCombo );
+			 }
+			private function init():void{
+				this.productorRegistro.destination = "actualizacionService";
+				this.productorRegistro.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalRegistro = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesRegistro = new ChannelSet();
+				this.canalesRegistro.addChannel(canalRegistro);
+				this.productorRegistro.channelSet = this.canalesRegistro;
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de registro","Error");
+			}
+			
+			public function iniciaIncidente():void{
+				this.txtQue.text = "";
+				this.txtDonde.text = "";
+				this.txtCuando.text = "";
+				this.txtComentarios.text = "";
+				this.lnkReferencias.visible = true;
+				this.contenedorCombo.visible = false;
+				this.fechaHoy = new Date();
+				var fechaTexto:String = (formatoFecha.format( fechaHoy ) ).toString();
+				this.lblFecha.text = fechaTexto;				
+				if(this._usuario == null){
+					this._usuario = this._empleadoLogueado.usuario;
+				}
+				if(this._usuario == ""){
+					this._usuario = this._empleadoLogueado.usuario;
+				}
+				if(this._idUsuario.toString() == "NaN"){
+					this._idUsuario = this._empleadoLogueado.clave;
+				}
+				if(this._idUsuario == 0){
+					this._idUsuario = this._empleadoLogueado.clave;
+				}
+				if(this._incidente == null || this._incidente.folioIncidenteRelacionado == null || this._incidente.folioIncidenteRelacionado == ""){
+					this.lblIncAsociado.text = "NA";
+				}else{
+					this.lblIncAsociado.text = this._incidente.folioIncidenteRelacionado;
+				}
+				this._indiceSeleccionado = this._idUsuario;
+				this.lblRedacto.text = this._usuario;
+				this._listaDeReferencias = new ArrayCollection();
+				//valida el Que
+				validarQue = new StringValidator();				
+				validarQue.source = this.txtQue;
+				validarQue.property = "text";
+				validarQue.requiredFieldError = "Se debe redactar una explicacion en la pregunta: ¿Qué?";
+				//valida Donde
+				validarDonde = new StringValidator();
+				validarDonde.source = this.txtDonde;
+				validarDonde.property = "text";
+				validarDonde.requiredFieldError = "Se debe especificar el lugar en la pregunta: ¿Dónde?";
+				//valida Cuando
+				validarCuando = new StringValidator();
+				validarCuando.source = this.txtCuando;
+				validarCuando.property = "text";
+				validarCuando.requiredFieldError = "Se debe anotar un dato en la pregunta: ¿Cuándo?";
+				//viene de las mejoras para gestionar el incidente ya trae datos pecargados desde la ventana VstkGestionDelIncidente en la libreria rsl.
+				if( vieneD == "gestionarincidente"){
+					iniciaGestionIncidente();
+				}
+			}
+			
+			private function cierraAplicacion():void{
+				reset();
+				var evento:EventoIncidente = new EventoIncidente( EventoIncidente.CERRAR_POP_UP_REGISTRO_INCIDENTE );
+				dispatchEvent( evento );
+			}
+			/** Metodo para setear las variables a Nulo **/
+			private function reset():void{
+				this.txtComentarios.text = "";
+				this.txtCuando.text = "";
+				this.txtDonde.text = "";
+				this.txtQue.text = "";
+				this._listaDeReferencias = new ArrayCollection();
+				this._incidente = new Incidente();
+				this.fechaHoy = new Date();
+				this.lnkReferencias.visible = true;
+				this._incidente = new Incidente();
+				this._empleado = new ArrayCollection();
+				this._empleadoLogueado = new Empleado();
+				this._NoDeincidenteRegistrado = new Incidente();
+				this.btnEnviar.enabled = true;
+				this.cmbEmpleadosHabilitados.enabled = true;
+				this.btnGuardar.enabled = true;
+				this.btnAnalisis.enabled = true;
+				this.acordion.selectedIndex = 0;
+				if( this._cmbSeleccionador != null){
+					this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+				}
+			}
+			/**
+			 * Metodo usado para abiri las Referencias del PopUp
+			 */ 
+			private function abreReferenciasIncidente():void{
+				if( popUpReferencias == null){
+					popUpReferencias = ReferenciasIncidente( PopUpManager.createPopUp( this, ReferenciasIncidente, true ) ); 
+					popUpReferencias.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cierraReferenciasIncidente );	
+					popUpReferencias.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE, actualizaListaReferencias );		
+					if( this._listaDeReferencias.source.length > 0 ){
+						popUpReferencias.listaReferencias = ObjectUtil.copy(this._listaDeReferencias) as ArrayCollection;
+					}	
+					if( vieneD == "gestionarincidente"){
+						popUpReferencias.vieneD = "url";	
+					}
+				}else{
+					PopUpManager.addPopUp( popUpReferencias,this,true );
+					popUpReferencias.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cierraReferenciasIncidente );	
+					popUpReferencias.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE, actualizaListaReferencias );		
+					if( this._listaDeReferencias.source.length > 0 ){
+						popUpReferencias.listaReferencias = ObjectUtil.copy(this._listaDeReferencias) as ArrayCollection;
+					}
+					popUpReferencias.iniciaReferencias();		
+					if( vieneD == "gestionarincidente"){
+						popUpReferencias.vieneD = "url";	
+					}	
+				}
+			}
+			
+			/**
+			 *Metodo usado para Actualizar la lista de las Referencias  
+			 */ 
+			private function actualizaListaReferencias(evento:EventoIncidente):void{
+				if (evento.vieneD == "Aceptar" ){
+					this._listaDeReferencias = evento.listaDeArchivos; 
+				}
+				evento.vieneD = "";
+			}
+			/**
+			 * Metodo para cerrar el popUp ReferenciasIncidente.
+			 */ 
+			private function cierraReferenciasIncidente( evento:EventoIncidente ):void{
+				this.popUpReferencias.removeEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cierraReferenciasIncidente );
+				this.popUpReferencias.removeEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE, actualizaListaReferencias );
+				PopUpManager.removePopUp( popUpReferencias );
+			}
+			/**
+			 * Metodo para guardar el incidente
+			 */ 
+			private function guardaIncidente():void{
+				if( validarInfo() ){
+					registrarIncidente();
+				}else{
+					Alert.show("Debe ingresar información en los campos: ¿Qué?, ¿Dónde? y ¿Cuando?","Información incompleta",Alert.OK,this,null); 
+				}
+			}
+			/**
+			 * Metodo usado para validar la informacion
+			 */ 
+			public function validarInfo():Boolean {
+				var validacionCompleta:Boolean = new Boolean();
+				var cuando:ValidationResultEvent = this.validarCuando.validate();
+				var donde:ValidationResultEvent = this.validarDonde.validate();
+				var que:ValidationResultEvent = this.validarQue.validate();
+				if (que.type == ValidationResultEvent.VALID && cuando.type == ValidationResultEvent.VALID && donde.type == ValidationResultEvent.VALID ) {
+					return validacionCompleta = true;
+				}else{
+					return validacionCompleta = false;
+				}
+			}	
+			/**
+			 * Metodo usado para RegistrarUnIncidente con varias Referencias
+			 */ 
+			private function registrarIncidente():void{
+				this._incidente = new Incidente();
+				this._incidente.descripcion = this.txtQue.text;
+				this._incidente.lugar = this.txtDonde.text;
+				this._incidente.cuando = this.txtCuando.text;
+				this._incidente.comentarios = this.txtComentarios.text;
+				this._incidente.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+				this._incidente.fecha = this.fechaHoy;
+				if( this._listaDeReferencias == null ){
+					this._listaDeReferencias = new ArrayCollection();
+				}
+				this._incidente.referencias = this._listaDeReferencias;
+				this._incidente.incidenteRelacionadoS = "nulo";
+				var evento:EventoIncidente = new EventoIncidente (EventoIncidente.REGISTRA_INCIDENTE);
+				evento.incidente = this._incidente;
+				dispatchEvent( evento );
+				this.btnGuardar.enabled = false;
+			}
+			/**
+			 *  Metodo usado para recibir y mostrar IncidenteRegsitrado 
+			 */ 
+			public function set muestraRegistroGuardado(dato:Incidente):void{
+				if(dato == null || this._estadoVentana == "modoConsulta" ){
+					return;
+				}	     	
+				this._NoDeincidenteRegistrado = dato;
+				Alert.show( "El incidente " + this._NoDeincidenteRegistrado.folio + " fue registrado","Operación exitosa");
+				this.btnGuardar.enabled = true;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "Gestion";
+				mensaje.headers["Usuario"] = dato.gestor;
+				mensaje.headers["Nivel"] = "Gerente";
+				mensaje.body = "Mensaje";
+				this.productorRegistro.send(mensaje);
+				mensaje = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorRegistro.send(mensaje);
+				var evento:EventoIncidente = new EventoIncidente( EventoIncidente.RESET );
+				dispatchEvent( evento );
+				cierraAplicacion();
+			}
+			
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			//////////////////////////////////////////////////////// Aqui se maneja la gestion del Incidente/////////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo público que inicia este componente desde la ventana de mejoras para la Gestion del Incidente
+			 * aqui se habilitaran los componentes o se volveran visibles o no visibles segun el caso
+			 * tambien de la clase Incidente se obtendran los valores para asignarlos a los componentes de la vetana  
+			 */ 
+			public function iniciaGestionIncidente():void{
+				this.btnGuardar.enabled = true;
+				this.contenedorCombo.visible = true;
+				this.hbxGestion.height = 28;
+				this.hbxGestion.visible = true;
+				this.formIncAsociado.visible = true;
+				this.formIncAsociado.height = 25;
+				this.lblRedacto.text = this._incidente.redacto;
+				this.lblFecha.text = this.formatoFecha.format( this._incidente.fecha );
+				this.txtQue.text = this._incidente.descripcion;
+				this.txtDonde.text = this._incidente.lugar;
+				this.txtCuando.text = this._incidente.cuando;		      		
+				this.txtComentarios.text = this._incidente.comentarios;
+				this._idIncidente = this._incidente.idIncidente;
+				this._listaDeReferencias = this._incidente.referencias;
+				for( var i:int=0 ; i < this._listaDeReferencias.source.length ; i++ ){
+					( this._listaDeReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+					( this._listaDeReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaDeReferencias.getItemAt( i ) as Referencia ).folio;
+				}
+				//hacer visble los botes necesarios para la gestion
+				this.lblIdIncidente.text = this._incidente.folio.toString();
+				if( this.eliminaHijoGestion ){
+					this.vbxBotones.removeChild( this.hbxOriginal );
+					this.eliminaHijoGestion = false;
+				}
+				this.hbxSiguienteAnterior.percentHeight = 100;
+				this.hbxSiguienteAnterior.visible = true;
+				this.txtComentarios.editable = false;
+				this.txtCuando.editable = false;
+				this.txtDonde.editable = false;
+				this.txtQue.editable = false;	
+				cargarComboNavegacion();
+				cargaListaDeEmpleados();
+				verificarGestion();
+			}		 
+			/**
+			 * Metodo que carga la lista de empleados Manda el evento al Mapa. se regresa en la funcion recibeEmpleadosHablitados().
+			 */      
+			private function cargaListaDeEmpleados():void{
+			 	var invocaListaEmpleados:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.CARGA_LISTA_CONTACTOS_GESTION_INCIDENTE );  //Esta parte del proceso fue cancelada para que se mostraran los subprocesos en el combo en vez de los empleados
+				invocaListaEmpleados.nivel = "Gerente";
+				invocaListaEmpleados.valorAdicional = "";
+				dispatchEvent( invocaListaEmpleados );  	 
+			}
+			private function seleccionarDatoEnCombo( $evt:EventoComboCatalogos ):void{
+				if($evt.aviso){
+					if( this._empleadoLogueado.subproceso != null ){
+						this.cmbEmpleadosHabilitados.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._empleadoLogueado.subproceso );
+						this._indiceSeleccionado = Util.indiceSeleccionadoComoObjetoConString( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._empleadoLogueado.subproceso );
+						this.btnEnviar.enabled = false; 
+					}else{
+						this.cmbEmpleadosHabilitados.selectedIndex = 0;
+						this._indiceSeleccionado = 0;
+					}
+				}
+			}
+			/**
+			 *Metodo que usa el servicio para verificar si existe una gestion para el incidente. Esto sirve para permitir o negar el direccionamiento de un incidente.  
+			 */ 
+			private function verificarGestion():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.CARGA_GESTION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento ); 
+			}
+			/**
+			 *Metodo que recibe la gestion del Mapa la gestion
+			 */ 
+			public function set recibirGestion( datos:Gestion ):void{
+				if( datos == null ||  this._estadoVentana == "modoConsulta"){
+					this.cmbEmpleadosHabilitados.enabled = true;
+					this.btnEnviar.enabled = true;
+					return;
+				}else{
+					this.cmbEmpleadosHabilitados.enabled = false;
+					this.btnEnviar.enabled = false;
+				}
+			}
+			/**
+			 * Metodo para disparar el addEvent Listener en la Clase VstkGestionDelIncidente para avanzar a el Listado de Incidentes 
+			 */ 
+			private function regresaAListadoDeIncidentes():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente(  EventoGestionIncidente.REGRESA_A_LISTADO_INCIDENTES );
+				evento.removerDe = "registroIncidenteInterior";
+				dispatchEvent( evento );
+				reset();
+			}		       
+			/**
+			 * Metodo para disparar el addEvent Listener en la Clase VstkGestionDelIncidente para avanzar al Analisis del Incidente
+			 */ 
+			private function avanzaAlAnalisisDelIncidente():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente(  EventoGestionIncidente.AVANZA_A_ANALISIS_INCIDENTE );
+				evento.removerDe = "registroIncidenteInterior";
+				evento.incidente = this._incidente;
+				evento.empleado = this._empleadoLogueado;
+				dispatchEvent( evento );
+			}		       
+			/**
+			 * Metodo que recibe los datos del mapa para cargar los Empleados al Combo.
+			 */
+			public function set recibeEmpleadosHablitados(datos:ArrayCollection):void{
+				if( datos == null ||  this._estadoVentana == "modoConsulta" ){
+					return;
+				}
+			 	/*  this._empleado = datos;		
+				 	if( this._incidente == null || this._incidente.idGestiono == 0){
+					this.cmbEmpleadosHabilitados.selectedIndex = Util.indiceSeleccionado( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._empleadoLogueado.clave );
+					this._indiceSeleccionado = Util.indiceSeleccionado( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._empleadoLogueado.clave );
+				}else{
+					this.cmbEmpleadosHabilitados.selectedIndex = Util.indiceSeleccionado( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._incidente.idGestiono );
+					this._indiceSeleccionado = Util.indiceSeleccionado( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._incidente.idGestiono );
+				}   */
+				this.btnEnviar.enabled = false; 
+			} 
+			/**
+			 * Metodo para habilitar o deshabilitar el Boton de Enviar
+			 */
+			private function habilitarEnviar():void{
+				if( this.cmbEmpleadosHabilitados.selectedIndex == this._indiceSeleccionado){
+					this.btnEnviar.enabled = false;
+					this.btnAnalisis.enabled = true;
+				}else{
+					this.btnEnviar.enabled = true;
+					this.btnAnalisis.enabled = false;
+				}		       
+			} 
+			/**
+			 * Metodo para Designar el Incidente a otra persona
+			 */
+			private function enviaPendiente():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.REDIRECCIONAR_INCIDENTE );
+				/*   evento.responsable = this.cmbEmpleadosHabilitados..text; */    //se comenta esta linea por que se guardara un subProceso en vez de un responsable
+				  if(cmbEmpleadosHabilitados.selectedItem.llave == 0){
+					alertaSingleton.show(catalogoAlertas.INCIDENTE_ERROR_REDIRECCIONAR,catalogoAlertas.TIT_ADV_operacionImposible);
+					return;
+				}
+				evento.subProceso =  cmbEmpleadosHabilitados.selectedItem.llave ;    
+				evento.idPendiente = this._incidente.idPendiente;
+				dispatchEvent( evento );
+				_esGerente = true;
+			} 
+			/**
+			 * Metodo que recibe el pendiente Re-Direccionado
+			 */ 
+			public function set avisoPendienteEnviado( datos:Boolean ):void{
+				if (datos == false || this._estadoVentana == "modoConsulta" ){
+					return;
+				}
+				this._incidenteRedireccionado = datos;
+				if( this._incidenteRedireccionado == true && this._esGerente ){
+					Alert.show("El pendiente fue enviado a " + this.cmbEmpleadosHabilitados.textInput.text,"Operación exitosa");
+					regresaAListadoDeIncidentes();	
+					_esGerente = false
+				}
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorRegistro.send(mensaje);
+			}
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////Aqui se maneja el estado de Solo Lectura/////////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo que permite iniciar el estado de solo Lectura. Con la nevegacion a traves del combo.Se cargan los datos con un evento al Mapa y se regresan a 
+			 * cargaDatosIncidnete().
+			 */ 
+			public function iniciaModoLectura(datos:Object):void{
+				this.contenedorCombo.visible = true;
+				this._empleadoLogueado = datos.empleadoLogueado;
+				this._idIncidente = datos.idIncidente;
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.CARGA_INCIDENTE_POR_ID_INCIDENTE );
+				evento.idIncidente = this._idIncidente;
+				dispatchEvent( evento );
+				deshabilitaComponentes();
+			}
+			/**
+			 * Metodo que reibe del mapa el Incidente
+			 */ 
+			public function set obtenDatosIncidnete(datos:Incidente):void{
+				if( datos == null ||  this._estadoVentana == "modoConsulta"){
+					return;
+				}
+				if( this._incidente == null ){
+					this._incidente = new Incidente();
+				}
+				this._incidente = datos;
+				cargaDatosIncidnete();
+			}
+			/**
+			 * Metodo par deshabiliatr componentes.
+			 */
+			private function deshabilitaComponentes():void{
+				this.cmbEmpleadosHabilitados.enabled = false;
+				this.btnEnviar.enabled = false;
+				this.hbxGestion.height= 23;
+				this.hbxGestion.visible = true;
+				this.formIncAsociado.visible = true;
+				this.formIncAsociado.height = 25;
+				this.txtQue.editable = false;
+				this.txtDonde.editable = false;
+				this.txtCuando.editable = false;
+				this.txtComentarios.editable = false;
+				this.lnkReferencias.visible = false;
+				this.hbxOriginal.height = 0;
+				this.hbxSiguienteAnterior.height = 0;
+				this.hbxBotenesModoLectura.height = 23;
+				this.hbxBotenesModoLectura.visible = true;
+			}
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				if( this._listaDeReferencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._listaDeReferencias.source.length ; i++ ){
+						( this._listaDeReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._listaDeReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaDeReferencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaDeReferencias ) as ArrayCollection;
+				}
+				this._cmbSeleccionador.fechaIncidnete = this.lblFecha.text;
+				this._cmbSeleccionador.empleadoLogueado = this._empleadoLogueado;
+				this._cmbSeleccionador.idIncidente = this._idIncidente;
+				this._cmbSeleccionador.folioIncidente = this._incidente.folio;
+				this._cmbSeleccionador.vieneDe = "url";
+				this._cmbSeleccionador.origen =  "registro";
+				this.contenedorCombo.addChild( this._cmbSeleccionador );
+				this.lnkReferencias.visible = false;
+			}
+			/**
+			 * Metodo que carga los datos del incidente en la vista despues de que se obtubieron en el Mapa
+			 */ 
+			private function cargaDatosIncidnete():void{
+				this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( this._incidente.fecha );
+				this.lblRedacto.text = this._incidente.redacto;
+				this._listaDeReferencias = this._incidente.referencias;
+				this.txtQue.text = this._incidente.descripcion;
+				this.txtDonde.text = this._incidente.lugar;
+				this.txtCuando.text = this._incidente.cuando;
+				this.txtComentarios.text = this._incidente.comentarios;
+				this.lblIdIncidente.text = this._incidente.folio;
+				if(this._incidente == null || this._incidente.folioIncidenteRelacionado == null || this._incidente.folioIncidenteRelacionado == ""){
+					this.lblIncAsociado.text = "NA";
+				}else{
+					this.lblIncAsociado.text = this._incidente.folioIncidenteRelacionado;
+				}
+				cargaListaDeEmpleados();
+				if( this._estadoVentana == "modoConsulta" ){
+				}else{
+					cargarComboNavegacion();
+				}
+			}
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////Aqui se maneja el estado de Solo Consulta/////////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			
+			public function iniciaModoConsulta( incidente:Incidente ):void{
+				deshabilitaComponentes();
+				this.formIncAsociado.height = 0;
+				this.hbxGestion.height = 0;
+				this.formIncAsociado.visible = false;
+				this.hbxGestion.visible = false;
+				this.hbxBotenesModoLectura.height = 0;
+				this.barraTitulo.height = 0;
+				this._estadoVentana = "modoConsulta";
+				this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( incidente.fecha );
+				this.lblRedacto.text = incidente.redacto;
+				this.txtComentarios.text = incidente.comentarios;
+				this.txtCuando.text = incidente.cuando;
+				this.txtDonde.text = incidente.lugar;
+				this.txtQue.text = incidente.descripcion;
+			}
+			
+			////////////////////////////////////////////////////////FIN/////////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo que permitira regresar  a la ventana donde nos encontrabamos.  
+			 */ 
+			private function regresarAIndexOriginal():void{
+				regresarAEstadoOriginal();
+				var evento:EventoAdministrador = new EventoAdministrador( EventoAdministrador.REGRESA_ORIGEN );
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que al salir nos permite regresar a nuestroe stado original
+			 */ 
+			private function regresarAEstadoOriginal():void{
+				this.cmbEmpleadosHabilitados.enabled = true;
+				this.btnEnviar.enabled = true;
+				this.hbxGestion.height= 0;
+				this.hbxGestion.visible = false;
+				this.formIncAsociado.visible = false;
+				this.formIncAsociado.height = 0;
+				this.txtQue.editable = true;
+				this.txtDonde.editable = true;
+				this.txtCuando.editable = true;
+				this.txtComentarios.editable = true;
+				this.lnkReferencias.visible = true;
+				this.hbxOriginal.height = 23;
+				this.hbxSiguienteAnterior.height = 0;
+				this.hbxBotenesModoLectura.height = 0;
+				this.hbxBotenesModoLectura.visible = false;
+				this.lblIdIncidente.visible = false
+				this.lnkReferencias.visible = true;
+				reset();
+			}
+		]]>
+	</mx:Script>
+	
+	<mx:DateFormatter formatString="DD/MMM/YY" id="formatoFecha"/>
+	<mx:VBox width="100%" height="100%" horizontalAlign="center">
+		<mx:HBox width="100%" id="barraTitulo">
+			<!--<mx:Label text="Registro" fontSize="40" fontWeight="bold" />-->
+			<label:labelTitulo_Otros text="Registro" />
+			<mx:Spacer width="100%"/>			
+			<mx:Label id="lblIdIncidente" fontSize="40" color="red" visible="false"/>
+			<mx:HBox id="contenedorCombo"/>
+		</mx:HBox>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<!--<mx:Label text="Datos generales" width="100%" fontSize="24" fontWeight="bold" />-->
+		<label:labelSubtitulo text="Datos generales"  width="100%" />
+		<mx:Form width="100%">
+			<mx:FormItem label="INC-Asociado: " fontWeight="bold" width="100%"  height="0"  id="formIncAsociado" visible="false">
+				<mx:Label id="lblIncAsociado" fontWeight="normal" text="NA"  color="red" />
+			</mx:FormItem>
+			<mx:FormItem label="Fecha: " fontWeight="bold" width="100%" >
+				<mx:Label id="lblFecha" fontWeight="normal"/>
+			</mx:FormItem>
+			<mx:FormItem label="Redactó: " fontWeight="bold" width="100%">
+				<mx:Label id="lblRedacto" fontWeight="normal"/>
+			</mx:FormItem>
+			<mx:FormItem label="Gestión: " fontWeight="bold" height="0" id="hbxGestion" visible="false">
+				<mx:HBox width="100%" >				
+					<!--<mx:ComboBox id="cmbEmpleadosHabilitados" dataProvider="{this._empleado}" labelField="valor" change="habilitarEnviar()" enabled="false" />-->
+					<comboPqNet:ComboCatalogos  id="cmbEmpleadosHabilitados" creationComplete="this.cmbEmpleadosHabilitados.cargarSubProcesos('--NINGUNO--')" enabled="false" change="habilitarEnviar()"  />
+					<s:Button styleName="botonNegroOld" label="Enviar" id="btnEnviar" enabled="false" click="enviaPendiente()"/>
+				</mx:HBox>
+			</mx:FormItem>
+		</mx:Form>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<mx:HBox width="100%">
+			<!--<mx:Label text="Descripción" fontSize="20" fontWeight="bold"/>-->
+			<label:labelSubtitulo text="Descripción" />
+			<mx:Spacer width="100%"/>
+			<mx:LinkButton textDecoration="underline" label="Referencias" color="#0C4AFC" click="abreReferenciasIncidente()" id="lnkReferencias"/>
+		</mx:HBox>
+		<acordeon:acordeonPqNet width="100%" height="100%" creationPolicy="all" id="acordion" openDuration="250">
+			<mx:VBox width="100%" height="100%" label="¿Qué?" >
+				<mx:TextArea width="100%" height="100%" id="txtQue"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" label="¿Dónde?" >
+				<mx:TextArea width="100%" height="100%" id="txtDonde"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" label="¿Cuándo?" >
+				<mx:TextArea width="100%" height="100%" id="txtCuando"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" label="COMENTARIOS ADICIONALES">
+				<mx:TextArea width="100%" height="100%" id="txtComentarios"/>
+			</mx:VBox>
+		</acordeon:acordeonPqNet>
+		<mx:Spacer height="3"/>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<mx:VBox height="23" width="100%" id="vbxBotones" verticalGap="0">			
+			<mx:HBox width="100%" height="100%" id="hbxOriginal">
+				<!--<mx:Button label="Cancelar" click="cierraAplicacion()" width="80"/>-->
+				<s:Button styleName="botonNegroOld" label="Cancelar" click="cierraAplicacion();" width="80"/>
+				<mx:Spacer width="100%"	/>
+				<!--<mx:Button label="Guardar"  click="guardaIncidente()" width="80"  id="btnGuardar"/>-->
+				<s:Button styleName="botonNegroOld" label="Guardar"  click="guardaIncidente()" width="80"  id="btnGuardar"/>
+			</mx:HBox>
+			<mx:HBox width="100%" height="0" visible="false" id="hbxSiguienteAnterior">
+				<!--<mx:Button label="LISTADO" width="80" click="regresaAListadoDeIncidentes()"/>-->
+				<s:Button styleName="botonNegroOld" label="LISTADO" width="80" click="regresaAListadoDeIncidentes()"/>
+				<mx:Spacer width="100%"/>
+				<!--<mx:Button label="Análisis" width="80" click="avanzaAlAnalisisDelIncidente()" id="btnAnalisis"/>-->
+				<s:Button styleName="botonNegroOld" label="Análisis" width="80" click="avanzaAlAnalisisDelIncidente()" id="btnAnalisis"/>
+			</mx:HBox>
+			<mx:HBox width="100%" height="0" visible="false" id="hbxBotenesModoLectura">
+				<!--<mx:Button label="LISTADO" width="80" visible="false"/>-->
+				<s:Button styleName="botonNegroOld" label="LISTADO" width="80" visible="false"/>
+				<mx:Spacer width="100%"/>
+				<!--<mx:Button label="Regresar" width="80"  id="bntRegresa" click="regresarAIndexOriginal()"/>-->
+				<s:Button styleName="botonNegroOld" label="Regresar" width="80"  id="bntRegresa" click="regresarAIndexOriginal()"/>
+			</mx:HBox>
+		</mx:VBox>
+	</mx:VBox>
+</mx:VBox>

@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			public var _currentType:String;
+			private  var _infoEstatusET:ArrayCollection;
+			private  var _infoEstatusFT:ArrayCollection;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET"){
+						if(_infoEstatusET != null)							
+							myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoEstatusET);
+					}
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoEstatusFT);
+				}
+			}
+			public function set obtenerListaCompras($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoEstatusET = new ArrayCollection();
+				_infoEstatusFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				var arrayTemp:Array =  new Array();
+				arrayTemp = $infoGrafica.source; 
+				
+				/**
+				 * Se dividen todos los Estatus y/o situación que estan en tiempo vs las fuera de tiempo y se ordenan
+				 * */ 
+				var arrayEstatusET:Array = new Array();
+				var arrayEstatusFT:Array = new Array();
+				
+				arrayEstatusET = arrayTemp.filter(ObtenerTodosLosEstatusET);
+				arrayEstatusFT = arrayTemp.filter(ObtenerTodosLosEstatusFT);
+				arrayEstatusET.sortOn("estado");
+				arrayEstatusFT.sortOn("estado");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Estatus y/o situación,
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalEstatusET:Array = new Array();
+				arrayTotalEstatusET = arrayEstatusET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalEstatusFT:Array = new Array();
+				arrayTotalEstatusFT = arrayEstatusFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Estatus y/o situación
+				 * */
+				
+				FormarLosEstatus(arrayTotalEstatusET,arrayEstatusET,_infoEstatusET);
+				FormarLosEstatus(arrayTotalEstatusFT,arrayEstatusFT,_infoEstatusFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoEstatusET);
+				else
+					myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoEstatusFT);
+				
+				//Para liberar memoria
+				arrayTotalEstatusET = new Array();
+				arrayEstatusET= new Array();
+				arrayTotalEstatusFT= new Array();
+				arrayEstatusFT= new Array();
+			}
+			
+			private function FormarLosEstatus(TotalEstatus:Array,estatusInfo:Array,infoEstatus:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCompras:int;
+				var totalMonto:Number;
+				var totalProveedores:int;
+				var keysMarca:Object;
+				
+				var currentPartidaCompra:Compra; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalEstatus.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalCompras =0;
+					totalMonto =0;
+					totalProveedores =0;
+					currentPartidaCompra = estatusInfo[j] as Compra;
+					while( (TotalEstatus[i] as Compra).estado == currentPartidaCompra.estado ){
+						totalPartidas += currentPartidaCompra.totalPartidas;
+						totalPiezas += currentPartidaCompra.totalPiezas_partidas;
+						totalMonto += currentPartidaCompra.montoTotalDolares_partidas;
+						
+						if(!keys.hasOwnProperty(currentPartidaCompra.clave)){
+							keys[currentPartidaCompra.clave]= currentPartidaCompra.clave;
+							totalCompras++;
+						}
+						
+						if(!keysMarca.hasOwnProperty(currentPartidaCompra.nombreProveedor)){
+							keysMarca[currentPartidaCompra.nombreProveedor] = currentPartidaCompra.nombreProveedor;
+							totalProveedores++;
+						}
+						
+						estatusInfo.shift();
+						if(estatusInfo.length >0)
+							currentPartidaCompra = estatusInfo[j] as Compra;
+						else
+							currentPartidaCompra =new Compra();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalEstatus[i] as Compra).estado.toLocaleUpperCase();
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.clientes_proveedores = totalProveedores;
+					itemResumenConsulta.totalCompras = totalCompras;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoEstatus.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			
+			public function quitaDuplicados(item:Compra, idx:uint, _clientes:Array):Boolean{
+				if (keys.hasOwnProperty(item.estado)) {
+					return false;
+				} else {
+					keys[item.estado] = item.estado;
+					return true;
+				}
+			}
+			private function ObtenerTodosLosEstatusET(item:Compra, idx:uint, _proveedores:Array):Boolean
+			{
+				return item.inTime == "ET" ? true : false;
+			}
+			
+			private function ObtenerTodosLosEstatusFT(item:Compra, idx:uint, _proveedores:Array):Boolean
+			{
+				return item.inTime == "FT" ? true : false;
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="piezasTotal"/>  <!--piezasTotal-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="ESTADO" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

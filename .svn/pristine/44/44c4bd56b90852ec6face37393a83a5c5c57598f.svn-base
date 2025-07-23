@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:panelUnoRteEmpresa="skins.skin.comun.reportes.panelUnoRteEmpresa.*" 
+		  xmlns:botonesToggle="skins.botonesToggle.*"
+		  xmlns:otros="skins.otros.*" 
+		  paddingLeft="15" paddingRight="15" 
+		  width="100%" height="100%"
+		  gap="0" xmlns:label="skins.skin.label.*" 
+		  >
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.compras.prodAlmacen2012.EventoRepProAlmacen2012;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ProductoAlmacen;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.compras.repProdAlmacen2012.ModeloRepProdAlmacen2012;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.compras.repProdAlmacen2012.ReporteProductoAItemClientesProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable]
+			public var tituloPanel:String;
+			
+			[Bindable]
+			public var stock:Boolean;
+			
+			[Bindable]
+			public var isAvanzada:Boolean = true;
+			
+			public var estado:String = "";
+			
+			public var _listaUniverso:ArrayCollection = new ArrayCollection;
+			public var _listaTemp:ArrayCollection = new ArrayCollection;
+			public var listET:ArrayCollection = new ArrayCollection;
+			public var listFT:ArrayCollection = new ArrayCollection;
+			
+			public var ft:Boolean = false;
+			
+			[Bindable]	private var _arrButton:ArrayCollection = new ArrayCollection([{label:"TODO"},
+				{label:"ET"},
+				{label:"FT"}]);
+			
+			[Bindable]
+			private	var mostrarCliente:Boolean;
+			
+			public function set recibeListaDeClienOPro($listaClieOPro:ArrayCollection):void
+			{
+				if($listaClieOPro == null){
+					_listaUniverso = new ArrayCollection();
+					_listaTemp = new ArrayCollection();
+					listET = new ArrayCollection();
+					listFT = new ArrayCollection();
+					lstClienYPro.dataProvider = new ArrayCollection();
+					var evt:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.LIMPIAR_PANEL_TRES);
+					dispatchEvent(evt);
+					return;
+				}
+				
+				if (stock || !RepProdAlmacen2012Menu.isAvanzada){
+					botoneraBarra.selectedIndex = 0;
+				}
+				
+				mostrarCliente = true;
+				if (stock){
+					mostrarCliente = false;
+					lblTotalesProveedores.text = ($listaClieOPro[$listaClieOPro.length-1] as ReporteProductoAItemClientesProveedores).totalProveedoresString + " · " +  ($listaClieOPro[$listaClieOPro.length-1] as ReporteProductoAItemClientesProveedores).totalMontoString;
+					lblTotalPiezas.text = ($listaClieOPro[$listaClieOPro.length-1] as ReporteProductoAItemClientesProveedores).totalPiezasString;
+				}
+				
+				_listaUniverso = $listaClieOPro
+				_listaTemp = ObjectUtil.copy($listaClieOPro) as ArrayCollection;
+				//generarEnTiempo();
+				
+				listFT = ModeloRepProdAlmacen2012.fueraTiempo;
+				listET = ModeloRepProdAlmacen2012.enTiempo;
+				
+				/* lstClienYPro.dataProvider = $listaClieOPro;
+				lstClienYPro.selectedIndex = 0; */
+				bontoneraFueraTiempo();
+				/* lstClienYPro.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING)); */
+			}
+			
+			public var $botonera:Query;
+			public function generarEnTiempo():void{
+				lstClienYPro.dataProvider = new ArrayCollection;
+				_listaTemp.removeItemAt(_listaTemp.length-1);
+				$botonera = new Query(_listaTemp,["enTiempo"]);
+				listET = armarLista($botonera.getPunteros([!ft]));
+				listFT = armarLista($botonera.getPunteros([ft]));
+			}
+			
+			public function armarLista( $punteros:Array ):ArrayCollection{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				for( var h:int = 0; h < $punteros.length; h++ ){
+					var item:Object = new Object; 
+					item = _listaTemp.getItemAt( $punteros[h] );
+					item.numFila = h + 1; item.numFilaString = "#" + item.numFila;
+					arrReturn.addItem( item );
+				}
+				var ultimo:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+				ultimo.totalMonto = $botonera.getSumarCampo("monto", $punteros);
+				ultimo.totalPiezas = $botonera.getSumarCampo("numPiezas", $punteros);
+				ultimo.totalClientes = $punteros.length;
+				ultimo.isUltimoItem = true;	
+				arrReturn.addItem(ultimo);
+				return arrReturn;
+			}
+			
+			public function bontoneraFueraTiempo():void{
+				var sTotalMonto:String;
+				var sTotalPiezas:String;
+				var sTotalClientes:String;
+				lstClienYPro.dataProvider = new ArrayCollection;
+				
+				if (botoneraBarra.selectedItem.label == "ET"){
+					sTotalMonto = (listET[listET.length-1] as ReporteProductoAItemClientesProveedores).totalMontoString;
+					sTotalPiezas = (listET[listET.length-1] as ReporteProductoAItemClientesProveedores).totalPiezasString;
+					sTotalClientes = (listET[listET.length-1] as ReporteProductoAItemClientesProveedores).totalClientesString;
+					
+					var lstAux:ArrayCollection = ObjectUtil.copy(listET) as ArrayCollection;
+					lstAux.removeItemAt(lstAux.length-1); // Se elimina el ultimo registro que es el de Totales para que no lo muestre en la lista, ahora se dibuja afuera, Los Totales se recalculan en el modelo cada que se consulta
+					lstClienYPro.dataProvider = ObjectUtil.copy(lstAux) as ArrayCollection;
+					
+				}else if (botoneraBarra.selectedItem.label == "FT"){
+					sTotalMonto = (listFT[listFT.length-1] as ReporteProductoAItemClientesProveedores).totalMontoString;
+					sTotalPiezas = (listFT[listFT.length-1] as ReporteProductoAItemClientesProveedores).totalPiezasString;
+					sTotalClientes =  (listFT[listFT.length-1] as ReporteProductoAItemClientesProveedores).totalClientesString;
+					
+					var lstAux2:ArrayCollection = ObjectUtil.copy(listFT) as ArrayCollection;
+					lstAux2.removeItemAt(lstAux2.length-1); // Se elimina el ultimo registro que es el de Totales para que no lo muestre en la lista, ahora se dibuja afuera, Los Totales se recalculan en el modelo cada que se consulta
+					lstClienYPro.dataProvider = ObjectUtil.copy(lstAux2) as ArrayCollection;
+					
+				}else{
+					sTotalMonto = (_listaUniverso[_listaUniverso.length-1] as ReporteProductoAItemClientesProveedores).totalMontoString;
+					sTotalPiezas = (_listaUniverso[_listaUniverso.length-1] as ReporteProductoAItemClientesProveedores).totalPiezasString; 
+					sTotalClientes = (_listaUniverso[_listaUniverso.length-1] as ReporteProductoAItemClientesProveedores).totalClientesString;
+					
+					var lstAux3:ArrayCollection = ObjectUtil.copy(_listaUniverso) as ArrayCollection;
+					lstAux3.removeItemAt(lstAux3.length-1); // Se elimina el ultimo registro que es el de Totales para que no lo muestre en la lista, ahora se dibuja afuera, Los Totales se recalculan en el modelo cada que se consulta
+					lstClienYPro.dataProvider = ObjectUtil.copy(lstAux3) as ArrayCollection;
+				}
+				
+				lblTotalesClientes.text = sTotalClientes + " · " + sTotalMonto;				
+				lblTotalPiezas.text = sTotalPiezas;
+				
+				lstClienYPro.selectedIndex = 0;
+				if(lstClienYPro && lstClienYPro.selectedItem != undefined)
+					lstClienYPro.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				
+				//En caso de estar vacia la lista se llama al evento que carga el panelDos para limpiar el panel, por el hecho de estar vacio
+				if(lstClienYPro.dataProvider.length == 0){					
+					var evento:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.ENVIAR_PEDIDOS_SIGUIENTE_VISTA_COLUMNA_DOS);
+					if (stock ){
+						evento.clienOPro = null;
+						evento.tiempo = null;
+					}else{
+						evento.clienOPro = null
+						evento.tiempo = botoneraBarra.selectedItem.label == 'TODO' ? null : botoneraBarra.selectedItem.label;
+					}
+					dispatchEvent(evento);					
+				}
+			}
+			
+			protected function lstClienYPro_changingHandler(event:IndexChangeEvent):void{
+				var evento:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.ENVIAR_PEDIDOS_SIGUIENTE_VISTA_COLUMNA_DOS);
+				if (stock ){
+					evento.clienOPro = lstClienYPro.selectedItem.nombreProveedor;
+					evento.tiempo = null;
+				}else{
+					evento.clienOPro = lstClienYPro.selectedItem.nombreCliente;
+					evento.tiempo = botoneraBarra.selectedItem.label == 'TODO' ? null : botoneraBarra.selectedItem.label;
+				}
+				dispatchEvent(evento);
+			}
+			
+			protected function headerpaneluno1_clickExportarHandler(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Cliente");
+				
+				fila[2] = hoja.addItem("Monto del producto");
+				fila[3] = hoja.addItem("Días en almacén");
+				fila[4] = hoja.addItem("Fecha estimada de entrega");
+				fila[5] = hoja.addItem("Estatus en el sistema");
+				fila[6] = hoja.addItem("Ruta");
+				fila[7] = hoja.addItem("Tipo de control del producto");
+				
+				var lstAux:ArrayCollection = new ArrayCollection;
+				var tiempo:String = "";
+				if (botoneraBarra.selectedItem.label == "ET"){
+					lstAux = ObjectUtil.copy(listET) as ArrayCollection;
+					tiempo = "ET-";
+				} else if (botoneraBarra.selectedItem.label == "FT"){
+					lstAux = ObjectUtil.copy(listFT) as ArrayCollection;
+					tiempo = "FT-";
+				} else{
+					lstAux = ObjectUtil.copy(_listaUniverso) as ArrayCollection;
+				}
+				
+				if (stock)
+					tiempo = ""
+				
+				if (lstAux && lstAux.length > 1 ){
+					for(var i:int = 0; i < lstAux.length - 1; i++){
+						var item:Object = lstAux[i] as Object;
+						fila = new Array();
+						fila[0] = item.numFila
+						if (stock)
+							fila[1] = '"STOCK"';
+						else
+							fila[1] = '"' + item.nombreCliente + '"';
+						
+						
+						fila[2] = '"' + item.montoString + '"';
+						fila[3] = '"' + item.diasAlmacen + '"';
+						fila[4] = '"' + UtilsFecha.formatoFechaDDMMMYYYY(item.fee) + '"';
+						fila[5] = '"' + item.currentEtiqueta + '"';
+						if (stock)
+							fila[6] = '"NA"';
+						else if (item.rutaZona.toLowerCase() == 'en entrega' || item.rutaZona.toLowerCase() == 'en ruta' )
+							fila[6] = '"En Ruta"';
+						else
+							fila[6] = '"' + item.rutaZona + '"';
+						if (item.control != null && item.control != "")
+							fila[7] = '"' + item.control + '"';
+						else
+							fila[7] = '"' + 'Normal' + '"';
+						hoja.addItem('\r' + fila);
+					}
+					file.save(hoja,"ReporteAlmacen-" + estado + tiempo + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<!--<s:Group visible="{RepProdAlmacen2012Menu.isAvanzada}" includeInLayout="{RepProdAlmacen2012Menu.isAvanzada}" width="100%" bottom="5" height="60">
+	<s:VGroup width="100%" id="vbStock" horizontalAlign="center"  paddingBottom="10" visible="{!stock}" includeInLayout="{!stock}" verticalAlign="middle" height="100%">
+	<botonesToggle:ButtonBarColores width="100%" height="30" changing="bontoneraFueraTiempo()" id="botoneraBarra" selectedIndex="0" dataProvider="{_arrButton}" color="0x{catalogoColores.LABEL_GRIS }" requireSelection="true" />
+	</s:VGroup>
+	</s:Group>-->
+	
+	<s:VGroup  width="100%" gap="10" paddingTop="10" id="botoneraTODO" visible="{RepProdAlmacen2012Menu.isAvanzada}" includeInLayout="{RepProdAlmacen2012Menu.isAvanzada}" >
+		<botonesToggle:ButtonBarColores visible="{!stock}" includeInLayout="{!stock}" width="100%" height="30" changing="bontoneraFueraTiempo()" id="botoneraBarra" selectedIndex="0" dataProvider="{_arrButton}" color="0x{catalogoColores.LABEL_GRIS }" requireSelection="true" />
+		
+		<otros:divisionGruesa width="100%" id="division" visible="{!stock}" includeInLayout="{!stock}" />
+	</s:VGroup>	
+	
+	<panelUnoRteEmpresa:HeaderPanelUno label="{tituloPanel}" height="50" width="100%" clickExportar="headerpaneluno1_clickExportarHandler(event)" mostrarBtnExportar="true" />
+	<otros:divisionGruesa width="100%"/>
+	
+	<s:VGroup width="100%" height="100%" >
+		<s:List id="lstClienYPro" height="100%" width="100%" borderVisible="false"
+				itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.compras.ProductoAlmacen2012.itemRenderer.IRendererClienOProReporteProductoA" 
+				changing="lstClienYPro_changingHandler(event)" horizontalScrollPolicy="off" contentBackgroundAlpha="0"/>	
+	</s:VGroup>
+	<s:VGroup width="100%" horizontalAlign="center" paddingTop="25" paddingBottom="25" id="grpTotal" >
+		<label:TextoGrisCasiNegro id="lblTotalesClientes" visible="{mostrarCliente}" includeInLayout="{mostrarCliente}" width="100%" textAlign="center" maxDisplayedLines="2"
+								  text=""/> 
+		<label:TextoGrisCasiNegro id="lblTotalesProveedores" visible="{!mostrarCliente}" includeInLayout="{!mostrarCliente}" width="100%" textAlign="center" maxDisplayedLines="2"
+								  text=""/>
+		<label:TextoGrisCasiNegro id="lblTotalPiezas" text="" width="100%" textAlign="center" />
+		<label:TextoGris text="TOTAL"/>
+	</s:VGroup>  
+</s:VGroup>

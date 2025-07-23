@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:compProforma="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.componentesComunProforma.*" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*">
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.renderers.DiamondItemRenderer;
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.events.DragEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			[Bindable]
+			private var _proformaDrop:String;
+			[Bindable]
+			private var _listaProformas:ArrayCollection;
+			[Bindable]
+			private var _listaGrid:ArrayCollection;
+			[Bindable]
+			private var _opcionSeleccionada:PartidaProforma;
+			[Bindable]
+			private var _respaldoProformaDrag:ArrayCollection;
+			[Bindable]
+			private var _itemsDrag:ArrayCollection;
+			[Bindable]
+			private var universoPartidasProforma:ArrayCollection; 
+			[Bindable]
+			private var universoPartidasProformaPorPedido:ArrayCollection; 
+			[Bindable]
+			private var _listaComboNuevo:ArrayList = new ArrayList([ {valor:'FT',llave:0},{valor:'UR',llave:1}, {valor:'ET',llave:2} ]); 
+			private var seRegresatodo:Boolean = false;
+			private var _tipo:String = "todo";
+			private var indiceSeleccionado:int = 0;
+			/**
+			 * 	funcion publica que inicia el componente
+			 */ 
+			public function iniciaComponente( $partida:PartidaProforma):void{
+				_opcionSeleccionada = new PartidaProforma();
+				_opcionSeleccionada = $partida;
+				this.addEventListener( EventoProforma.REGRESA_ID_PROFORMA, obtenProformaSeleccionadoDragDrop );
+				this.addEventListener( EventoProforma.ABRIR_INSPECTOR, abrirInspector );
+			}
+			/**
+			 * funcion publica que recibe del mapaProforma.mxml las lista de proformas por proveedor, la funcion que manda a llamar estos datos es 
+			 * iniciaComponente()
+			 */ 
+			public function set recibeProformasPorProveedor( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				////////////////////////////////////////////////////////////////////////////////// aqui se genera la lista de proformas y tipo de carros ////////////////////////////////////////////////////
+				this._listaProformas = new ArrayCollection();
+				var _arregloProformasTemporal:ArrayCollection = new ArrayCollection();
+				universoPartidasProforma = new ArrayCollection();
+				universoPartidasProformaPorPedido = new ArrayCollection();
+				universoPartidasProformaPorPedido = ObjectUtil.copy( $datos ) as ArrayCollection;
+				var _proformasET:int = 0;
+				var _proformasFT:int = 0;
+				for( var i:int = 0; i < $datos.length; i++){
+					var relleno:int = 0;
+					/* if( ($datos[i] as PartidaProforma ).folioProforma != null && ($datos[i] as PartidaProforma ).folioProforma != "" ){ */
+					if( ($datos[i] as PartidaProforma ).idProforma > 0 ){ 
+						var _arregloInterno:ArrayCollection = new ArrayCollection();
+						if( _arregloProformasTemporal.length == 0 ){
+							_arregloInterno = new ArrayCollection();
+							_arregloInterno.addItem( $datos[i] );
+							_arregloProformasTemporal.addItem( _arregloInterno );
+						}else{
+							var encontroCoincidencia:Boolean = false;
+							for( var t:int = 0; t < _arregloProformasTemporal.length; t++ ){
+								if(!encontroCoincidencia){
+									_arregloInterno = new ArrayCollection();
+									_arregloInterno = ObjectUtil.copy( _arregloProformasTemporal[t]) as ArrayCollection;
+									if( (_arregloInterno[0] as PartidaProforma).idProforma ==  ($datos[i] as PartidaProforma ).idProforma ){
+										_arregloInterno.addItem( $datos[i] );
+										_arregloProformasTemporal[t] =  ObjectUtil.copy( _arregloInterno ) as ArrayCollection;
+										encontroCoincidencia = true;
+									}	}	}
+							if( !encontroCoincidencia ){
+								_arregloInterno = new ArrayCollection();
+								_arregloInterno.addItem( $datos[i] );
+								_arregloProformasTemporal.addItem( _arregloInterno );
+								encontroCoincidencia = false;
+							}
+						}
+						universoPartidasProforma.addItem( $datos[i] );
+					}
+				}
+				var partidaProformaVacia:PartidaProforma = new PartidaProforma();
+				if(_arregloProformasTemporal.length > 0){
+					for( var u:int = 0;  u < _arregloProformasTemporal.length; u++){
+						_listaProformas.addItem( _arregloProformasTemporal[u] );
+						var proformaReal:PartidaProforma = new PartidaProforma;
+						proformaReal = _arregloProformasTemporal[u][0];
+						if( proformaReal.fechaCierre != null ){
+							UtilsFecha.determinarFechaEnTiempoDeUnDiaAOtro( proformaReal.fechaCierre ) == "enTiempo" ? _proformasET = _proformasET + 1 : _proformasFT = _proformasFT + 1;
+						}else{
+							_proformasET = _proformasET + 1 ;
+						} 
+					}
+				}
+				var arregloExtra:ArrayCollection = new ArrayCollection();
+				var proformaExtra:PartidaProforma = new PartidaProforma();
+				proformaExtra.ultimaProforma = true;
+				_arregloProformasTemporal.length > 0 ? proformaExtra.numProformasTotales = _arregloProformasTemporal.length :  proformaExtra.numProformasTotales = 0;
+				arregloExtra.addItem( proformaExtra );
+				_listaProformas.addItem( arregloExtra );
+				this.lblTotalProformas.text = _arregloProformasTemporal.length + ' Proformas · ' + _proformasET + ' ET · ' +  _proformasFT + ' FT'; 
+				if( this.indiceSeleccionado > 0){
+					this.listProformas.selectedIndex =  this.indiceSeleccionado ;
+				}else{
+					this.listProformas.selectedIndex = 0;
+				}
+				(this.grdPartidaProforma.columns[0] as DataGridColumn).visible = false;
+				(this.grdPartidaProforma.columns[0] as DataGridColumn).width = 0;
+				(this.grdPartidaProforma.columns[1] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// #							
+				(this.grdPartidaProforma.columns[2] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// C
+				(this.grdPartidaProforma.columns[3] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.25);		// concepto
+				(this.grdPartidaProforma.columns[4] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// tipo
+				(this.grdPartidaProforma.columns[5] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// peticion especial
+				(this.grdPartidaProforma.columns[6] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// total a pagar
+				(this.grdPartidaProforma.columns[7] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// FEDB
+				(this.grdPartidaProforma.columns[8] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// FEE
+				(this.grdPartidaProforma.columns[9] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// PI
+				(this.grdPartidaProforma.columns[10] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// destino
+				(this.grdPartidaProforma.columns[11] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// En espera desde
+				(this.grdPartidaProforma.columns[12] as DataGridColumn).visible =false;										// Último origen
+				(this.grdPartidaProforma.columns[12] as DataGridColumn).width = 0;											// Último origen
+				(this.grdPartidaProforma.columns[13] as DataGridColumn).visible = false;									// imagen
+				(this.grdPartidaProforma.columns[13] as DataGridColumn).width = 0;											// imagen
+				(this.grdPartidaProforma.columns[14] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// ubicacion
+				(this.grdPartidaProforma.columns[14] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// ubicacion
+				(this.grdPartidaProforma.columns[15] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// imagen
+				(this.grdPartidaProforma.columns[15] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// imagen
+				filtraTipo( _tipo );
+			}
+			/**
+			 * funcion para filtrar el tipo de dato
+			 */ 
+			private function filtraTipo($tipo:String):void{
+				var i:int = 0;
+				var arregloFT:ArrayCollection  = new ArrayCollection();
+				var arregloUR:ArrayCollection  = new ArrayCollection();
+				var arregloET:ArrayCollection  = new ArrayCollection();
+				for(i; i < universoPartidasProforma.length; i++ ){
+					var diasDif:int = 0;
+					(universoPartidasProforma[i] as PartidaProforma).numFila = i + 1;
+					if( ( universoPartidasProforma[i] as PartidaProforma).FEE  != null){
+						diasDif = UtilsFecha.regresaDiferenciaEntreFechasEnDias(new Date, ( universoPartidasProforma[i] as PartidaProforma).FEE );
+					}
+					if( 0 < diasDif && diasDif < 5 ){
+						arregloFT.addItem( universoPartidasProforma[i] );
+					}else if( diasDif <= 0  ){
+						arregloUR.addItem( universoPartidasProforma[i] );
+					}else if( diasDif > 5){
+						arregloET.addItem( universoPartidasProforma[i] );
+					}
+				}
+				if($tipo == 'todo'){
+					_listaGrid = ObjectUtil.copy( universoPartidasProforma ) as ArrayCollection;
+				}else if( $tipo == 'ft'){
+					_listaGrid = ObjectUtil.copy( arregloFT ) as ArrayCollection;
+				}
+				else if( $tipo == 'ur'){
+					_listaGrid = ObjectUtil.copy( arregloUR ) as ArrayCollection;
+				}
+				else if( $tipo == 'et'){
+					_listaGrid = ObjectUtil.copy( arregloET ) as ArrayCollection;
+				}
+			}
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private function filtroPorTexto():void{
+				if( this.busqueda.text  != ""){
+					_listaGrid = UtilsGrid.queryCampoXLike( universoPartidasProformaPorPedido, 'cpedido', this.busqueda.text );
+				}else{
+					filtraTipo('todo');
+				}
+			}
+			/**
+			 * Funcion privada que obtiene el itemSeleccionado de la lista atraves del Drag and Drop
+			 */ 			
+			private function obtenProformaSeleccionadoDragDrop( $evt:EventoProforma ):void{
+				this._proformaDrop = "";
+				this._proformaDrop = $evt.seccionDestinoDeProforma;
+			}
+			/**
+			 * funcion que crea copias de seguridad de las partidas de la Proforma seleccionada
+			 */ 
+			protected function grdPartidaProforma_dragStartHandler(event:DragEvent):void{
+				_respaldoProformaDrag = new ArrayCollection();
+				_itemsDrag = new ArrayCollection();
+				_respaldoProformaDrag = ObjectUtil.copy( this.listProformas.selectedItem) as ArrayCollection;
+				for(var i:int = 0; i < this.grdPartidaProforma.selectedItems.length ; i++){
+					/* (this.grdPartidaProforma.selectedItems[i] as PartidaProforma).origenProforma = this.lblTipoProformaSeleccionada.text; */
+					this._itemsDrag.addItem(  this.grdPartidaProforma.selectedItems[i] );
+				}	}
+			/**
+			 * funcion que entra en accion cuando termina el drop del mouse de los elementos arrastadros desde el grid
+			 * los datos son elminados del grid de donde se arrastarn esto es en automatico esto no se puede evitar, estos datos son guardados en una variable l
+			 * lamada _itemsDrag al inciar con el 'dragStart' 
+			 */ 
+			protected function listProformas_dragDropHandler(event:DragEvent):void{
+				event.preventDefault();
+				var p:int = 0;
+				var m:int = 0;
+				var n:int = 0;
+				seRegresatodo = false;
+				if(_proformaDrop == "Vacio" || _proformaDrop == ""){
+					return;
+				}
+				for(var i:int = 0; i < _listaProformas.length; i++){
+					if( !seRegresatodo ){
+						if( (_listaProformas as ArrayCollection).length == 1 && (_listaProformas[0] as PartidaProforma).ultimaProforma  ){
+							seRegresatodo = true;
+						}else if( _proformaDrop != "STOCK" && _proformaDrop != "PROGRAMADO" && _proformaDrop != "BACKORDER" &&  !isNaN( ( _listaProformas[i][0] as PartidaProforma ).idProforma)  && ( _listaProformas[i][0] as PartidaProforma ).idProforma > 0 && ( _listaProformas[i][0] as PartidaProforma ).idProforma == parseInt(_proformaDrop) ){  
+							//validaciones monetarias para proformas
+							if( (_itemsDrag[0] as PartidaProforma).folioProforma ==  ( _listaProformas[i][0] as PartidaProforma ).folioProforma){
+								alertaSingleton.show(catalogoAlertas.ADV_elOrigenMismoDestino, catalogoAlertas.TIT_ADV_operacionImposible ); 
+								seRegresatodo = true;
+							}else{
+								//validacion para la misma proforma
+								var total:Number = 0;
+								for(m = 0; m < this._listaProformas[i].length; m++){
+									total = total +( ( _itemsDrag[n] as PartidaProforma ).costoCDesc * ( _itemsDrag[n] as PartidaProforma ).cantidadPedida ); 
+								}
+								for(n = 0; n < _itemsDrag.length; n++){
+									total = total + ( ( _itemsDrag[n] as PartidaProforma ).costoCDesc * ( _itemsDrag[n] as PartidaProforma ).cantidadPedida );
+								}
+								if( total < (this._opcionSeleccionada.maxCompra + this._opcionSeleccionada.intervaloMayor ) ){
+									for(p = 0; p<_itemsDrag.length; p++){
+										(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+									}
+								}else{
+									alertaSingleton.show(catalogoAlertas.compradorPhs_cantidadExcedeLimitesProforma, catalogoAlertas.TIT_ADV_operacionImposible ); 
+									seRegresatodo = true;
+								} 
+							}
+							
+						}
+					}
+				} 
+				if( this.grdPartidaProforma.dataProvider.length == this.grdPartidaProforma.selectedItems.length && ( _itemsDrag[0] as PartidaProforma ).idProforma > 0 ){
+					//aqui se valida si una proforma 
+					seRegresatodo= true;
+					alertaSingleton.show(catalogoAlertas.compradorPhs_proformaNoQuedaVacia, catalogoAlertas.TIT_ADV_operacionImposible ); 
+				}
+				if( !seRegresatodo ){
+					//es por que se va a eliminar
+					if( this.grdPartidaProforma.dataProvider.length == this.grdPartidaProforma.selectedItems.length){
+						if( (_itemsDrag[0] as PartidaProforma).idProforma == 0 ){
+							var partidaProformaVacia:PartidaProforma = new PartidaProforma();
+							partidaProformaVacia.cantidadPedida = 0;
+							partidaProformaVacia.idProforma = 0;
+							partidaProformaVacia.tipoCarro = (_itemsDrag[0] as PartidaProforma).tipoCarro;
+						}
+						_listaProformas[ this.listProformas.selectedIndex ] = new ArrayCollection();
+						(_listaProformas[ this.listProformas.selectedIndex ] as ArrayCollection).addItem( partidaProformaVacia );
+						this.listProformas.selectedIndex = 0; 
+						this.grdPartidaProforma.dataProvider = new ArrayCollection();
+					}
+				}
+				if(seRegresatodo){
+					this._listaProformas[ this.listProformas.selectedIndex] = ObjectUtil.copy(this._respaldoProformaDrag) as ArrayCollection;
+				}else{
+					actualizaProforma();
+				}
+				_listaProformas.refresh(); 
+			}
+			/**
+			 * esta funcion se aplica cuando se termina el drag and drop con la variable _itemsDrag que es usada en esta funcion para que por detras 
+			 * se le hagan validaciones para su destino como los datos de la var _itemsDrag son soltados en la lista se les valida 
+			 * para que no entgren directamente ahi, si no al item seleccionado
+			 */ 
+			protected function listProformas_dragCompleteHandler(event:DragEvent):void{
+				
+			} 
+			/**
+			 * funcion que dispara la actualizacion de las partidas de la proforma 
+			 */ 
+			private function actualizaProforma():void{
+				var evento:EventoProforma = new EventoProforma( EventoProforma.ACTUALIZA_LISTA_PROFORMAS_TIEMPO);
+				evento.idProforma = parseInt( _proformaDrop );
+				evento.idProveedor = this._opcionSeleccionada.proveedor;
+				evento.partidas = ObjectUtil.clone( _itemsDrag ) as ArrayCollection;
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion que recibe del mapa MapaProforma la confirmacion de que se actualizo una proforma correctamente despues haber hecho un Drag & Drop correctamente y no fue rechazado por reglas de negocio 10,391.48
+			 */ 
+			public function set confirmaActualizacionProforma(dato:Boolean):void{
+				if( !dato ){
+					return;
+				}
+				var evento:EventoProforma = new EventoProforma( EventoProforma.CONSULTAR_PROFORMAS_POR_PROVEEDOR );
+				evento.idProveedor = _opcionSeleccionada.proveedor;
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion que se activa con la barra de botones, aplica el filtro por tipo  
+			 */ 
+			protected function btnBarraPrecio_clickHandler(event:MouseEvent):void{
+				if( btnBarraPrecio.selectedIndex == 0 ){
+					filtraTipo( "ft" );
+				}else if( btnBarraPrecio.selectedIndex  == 1){
+					filtraTipo( "ur" );
+				}else if( btnBarraPrecio.selectedIndex == 2){
+					filtraTipo( "et" );
+				}
+			}
+			/**
+			 * funcion que abre el inspectoe para tiempos
+			 */ 
+			private function abrirInspector($evento:EventoProforma):void{
+				var eventoG:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+				eventoG.idOpcionSeleccionada = "seleccionaInspectorProforma";
+				eventoG.proforma = this._opcionSeleccionada;
+				eventoG.lista = new ArrayCollection();
+				for(var i:int = 0; i < universoPartidasProformaPorPedido.length; i++){
+					if( (universoPartidasProformaPorPedido[i] as PartidaProforma).idProforma == $evento.idProforma ){
+						eventoG.lista.addItem( universoPartidasProformaPorPedido[i] );
+						(eventoG.lista[eventoG.lista.length-1] as PartidaProforma).numFila = eventoG.lista.length;
+					}
+				}
+				dispatchEvent( eventoG );
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_conreq36x46}"/>
+		<label:labelSubtitulo text="TIEMPOS"/>
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo fontSize="20" fontWeight="bold" color="#666666" text="[PROFORMAS POR COLOCAR]"/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:VGroup  height="100%">
+			<s:HGroup width="100%" verticalAlign="middle">
+				<label:labelSubtitulo text="{ this._opcionSeleccionada.nombreProveedor }" fontSize="24" fontWeight="bold"/>
+				<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_flechaCirculoProveedor }" verticalCenter="0"/>
+			</s:HGroup>
+			<label:labelSubtitulo text="{ _opcionSeleccionada.paisProveedor + ' . Min ' + UtilsFormatosNumericos.precisionADosDecimales(_opcionSeleccionada.minCompra) + '( +/- ' + _opcionSeleccionada.intervaloMenor +') : Max ' + UtilsFormatosNumericos.precisionADosDecimales(_opcionSeleccionada.maxCompra) + '( +/- ' + _opcionSeleccionada.intervaloMayor + ')' }" fontSize="14" fontWeight="bold" color="#666666" />
+		</s:VGroup>
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo fontSize="18" fontWeight="bold" id="lblTotalProformas"/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="2"/>
+	<s:HGroup width="100%" height="100%">
+		<s:VGroup height="100%" width="17%">
+			<s:List height="100%" width="100%" id="listProformas" 
+					dataProvider="{this._listaProformas}" borderVisible="false" itemRenderer="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.ProformaMiniatura" 
+					dropEnabled="true" dragDrop="listProformas_dragDropHandler(event)"/>
+			<s:Spacer height="15"/>
+		</s:VGroup>
+		<s:Spacer width="7"/>
+		<otros:VDivisionHueca height="100%"/>
+		<s:Spacer width="7"/>
+		<s:VGroup width="100%" height="100%">
+			<s:HGroup width="100%">
+				<s:TextInput id="busqueda" width="100%"  skinClass="skins.textinput.busqueda.skinTextInputBusqueda" text="" click="this.btnBarraPrecio.selectedIndex = -1;" enter="filtroPorTexto()" change="filtroPorTexto()" />
+				<s:Spacer width="100%"/>
+				<s:ButtonBar dataProvider="{this._listaComboNuevo}" selectedIndex="-1" id="btnBarraPrecio" labelField="valor" click="btnBarraPrecio_clickHandler(event)"/>
+				<s:Spacer width="5%"/>
+			</s:HGroup>
+			<s:Spacer height="2"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Spacer height="2"/>
+			<compProforma:GridDragAndDropProforma  width="100%" height="100%"  wordWrap="true" allowDragSelection="true"  allowMultipleSelection="true" dragEnabled="true" dragMoveEnabled="true" 
+												   dataProvider="{_listaGrid}" variableRowHeight="true" id="grdPartidaProforma" dragStart="grdPartidaProforma_dragStartHandler(event)" dragComplete="listProformas_dragCompleteHandler(event)" />
+			<s:Spacer height="2"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Spacer height="2"/>
+			
+		</s:VGroup>
+	</s:HGroup>
+</s:VGroup>

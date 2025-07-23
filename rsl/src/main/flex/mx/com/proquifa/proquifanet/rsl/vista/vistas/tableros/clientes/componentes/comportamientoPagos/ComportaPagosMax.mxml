@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*" 
+		  xmlns:grafica="skins.botones.grafica.*"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  width="100%" height="100%"
+		  creationComplete="init()"
+		  >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="600"/>
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="2"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ComportamientoPagos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable]	private var _listadoComportamientoPagos:ArrayCollection = new ArrayCollection();
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			private var cont:Number=0;
+			private function init():void
+			{
+				cont=0;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionaTabla():void
+			{			
+				stackGeneral.selectedChild = vistaTabla;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+			}
+			
+			public function set recibeComportamientoPagos($lista:ArrayCollection):void
+			{
+				if($lista == null ) 
+					return;
+				
+				_listadoComportamientoPagos = $lista;
+				btnExportar.enabled =  _listadoComportamientoPagos.length < 1 ? false : true;
+			}
+			
+			public function set recibeLinealComportamientoPagos( $lista:ArrayCollection ):void
+			{
+				if($lista == null )
+					return;
+				_linealArrGrafica = $lista;
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COMPORTAMIENTO_PAGOS_0") );
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object = new Object();
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int;
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.montoPorCobrar = 0;
+					objeto.montoCobrado = 0;
+					objeto.tasaCobranza = 0;
+					
+					for( m = 0; m < $lista.length; m++ )
+					{
+						resumen = $lista[m] as ResumenConsulta;
+						if( resumen.conceptoResultado == "Por Cobrar")
+						{
+							objeto.montoPorCobrar += resumen.total;
+						}
+						else if( resumen.conceptoResultado == "Cobrada")
+						{
+							objeto.montoCobrado += resumen.total;
+						}
+					}
+					
+					objeto.tasaCobranza = ( objeto.montoCobrado /(objeto.montoCobrado+objeto.montoPorCobrar))*100;
+					if( isNaN( objeto.tasaCobranza ) )
+					{
+						objeto.tasaCobranza = 0;	
+					}
+					arrReturn.addItem(objeto);
+				}
+				else
+				{
+					while( cuenta < 13)
+					{
+						if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+						{
+							objeto = new Object();
+							objeto.numeroMes = cuenta;
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.montoPorCobrar = 0;
+							objeto.montoCobrado = 0;
+							objeto.tasaCobranza = 0;
+							
+							for(m = 0; m < $lista.length; m++ )
+							{
+								resumen = $lista[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{ 
+									if( resumen.conceptoResultado == "Por Cobrar")
+									{
+										objeto.montoPorCobrar += resumen.total;
+									}
+									else if( resumen.conceptoResultado == "Cobrada")
+									{
+										objeto.montoCobrado += resumen.total;
+									}
+								}
+							}
+							
+							objeto.tasaCobranza = ( objeto.montoCobrado /(objeto.montoCobrado+objeto.montoPorCobrar))*100;
+							if( isNaN( objeto.tasaCobranza ) )
+							{
+								objeto.tasaCobranza = 0;	
+							}
+							arrReturn.addItem(objeto);
+						}
+						cuenta++;
+					}
+				}
+				return arrReturn;
+			}
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				cont++;
+				
+				if (cont >1)
+				{
+					validarLlenarGrid();
+				}
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COMPORTAMIENTO_PAGOS_0") );
+			}
+			
+			private function formateoEje($valor:Number, valorPrevio:Object, eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function gridItemClickEvent(event:ListEvent):void
+			{
+				var urlreq:URLRequest;
+				var ruta:String;
+				if (event.columnIndex == 2 )
+				{
+					var path:Object = Util.rutaFecha(_event.parametros.anio);
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.FACTURAS_RUTA+(event.currentTarget.selectedItem as ComportamientoPagos).empresa+'/' + path.ruta + (event.currentTarget.selectedItem as ComportamientoPagos).factura + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}	 
+			}
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			private function generaArchivo():void
+			{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Empresa");
+				fila1[2] = hoja.addItem("Factura");
+				fila1[3] = hoja.addItem("Monto");
+				fila1[4] = hoja.addItem("T.Cambio");
+				fila1[5] = hoja.addItem("A tiempo");
+				fila1[6] = hoja.addItem("DRC");
+				fila1[7] = hoja.addItem("Estado");
+				
+				for(var i:int = 0 ; i< _listadoComportamientoPagos.length ; i++ )
+				{
+					fila1 = new Array();	
+					fila1[0] = (_listadoComportamientoPagos[i] as ComportamientoPagos).numFila;
+					fila1[1] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).empresa+'"';
+					fila1[2] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).factura+'"';
+					fila1[3] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).montoString+'"';
+					fila1[4] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).TCambioString+'"';
+					fila1[5] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).aTiempoString+'"';
+					fila1[6] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).diasRestantesDeCredito+'"';
+					fila1[7] = '"'+(_listadoComportamientoPagos[i] as ComportamientoPagos).estado+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Comportamiento_Pagos.csv"); 
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			private var _keyAnterior:String = "";
+			protected function validarLlenarGrid():void
+			{
+				grpComportamientoLabels.visible = grpComportamientoLabels.includeInLayout = false;
+				if( stackGeneral.selectedChild == vistaTabla ){
+					if( _event != null) 
+					{
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.idButtons = [];
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("CONSULTA_GRID_COMPORTAMIENTO_PAGOS");
+						dispatchEvent(eventEspera);
+						
+						var parametros:ParametrosBusquedaCliente = new ParametrosBusquedaCliente();
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_COMPORTAMIENTO_PAGOS );
+						evet.rangoMinMes = _event.parametros.rangoMinMes;
+						evet.rangoMaxMes = _event.parametros.rangoMaxMes;
+						evet.parametros = _event.parametros;
+						dispatchEvent( evet );
+						cont++;
+						_keyAnterior = _event.keyConsulta;
+					}
+				}
+				else
+				{
+					grpComportamientoLabels.visible = grpComportamientoLabels.includeInLayout = true;
+				}
+			}
+			
+			private function compareFunction_monto(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.monto, item2.monto);
+			}
+			
+			private function compareFunction_Tcambio(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.TCambio, item2.TCambio);
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup>
+		<componentes:TituloChartMaxTablero width="100%" text="COMPORTAMIENTO PAGOS" />
+		<s:HGroup id="grpComportamientoLabels" visible="false" includeInLayout="false" paddingLeft="10" >
+			<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+				<s:fill>
+					<s:SolidColor color="0x{catalogoColores.LABEL_ROJO}"/>
+				</s:fill>		
+			</s:Ellipse>
+			<componentes:TituloChartMaxTablero text="POR COBRAR" paddingRight="5" />
+			<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+				<s:fill>
+					<s:SolidColor color="0x{catalogoColores.LABEL_VERDE}"/>
+				</s:fill>		
+			</s:Ellipse>
+			<componentes:TituloChartMaxTablero text="COBRADA" paddingRight="5"/>
+			<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+				<s:fill>
+					<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+				</s:fill>		
+			</s:Ellipse>
+			<componentes:TituloChartMaxTablero text="TASA DE COBRANZA" />
+		</s:HGroup>
+	</s:HGroup>
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" change="validarLlenarGrid()" >
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="0">
+				<otros:divisionGruesa width="100%" />
+				<pqNet:dataGridPqNet id="tablaGrid" itemClick="gridItemClickEvent(event)"  rowHeight="40" width="100%" height="100%" 
+									 dataProvider="{ _listadoComportamientoPagos}" horizontalScrollPolicy="auto" porcentajesColumnasPq="[7,25,10,15,12,12,8,8]">
+					<pqNet:columns>
+						<mx:DataGridColumn headerText="#" dataField="numFila"/>
+						<mx:DataGridColumn headerText="Empresa" dataField="empresa"/>
+						<mx:DataGridColumn headerText="Factura" dataField="factura">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ComportamientoPagos;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<mx:LinkButton label="{(data as ComportamientoPagos).factura }" color="0x257d92" toolTip="Ver factura" textDecoration.selected="underline" horizontalCenter="0"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="Monto" dataField="montoString" sortCompareFunction="compareFunction_monto">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ComportamientoPagos;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:Label text="{ (data as ComportamientoPagos).montoString}" horizontalCenter="0"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="T. Cambio" dataField="TCambioString" sortCompareFunction="compareFunction_Tcambio">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ComportamientoPagos;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<!--<s:HGroup width="100%" paddingRight="20" horizontalAlign="center">-->
+										<s:Label width="50%" text="{ (data as ComportamientoPagos).TCambioString}" horizontalCenter="0"/>
+										<!--</s:HGroup>-->
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="A tiempo" dataField="aTiempoString"/>
+						<mx:DataGridColumn headerText="DRC" dataField="diasRestantesDeCredito" />
+						<mx:DataGridColumn headerText="Estado" dataField="estado" />
+					</pqNet:columns>
+				</pqNet:dataGridPqNet>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet1:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<mx:ColumnChart height="100%" width="100%" id="myChart" 
+									dataTipRenderer="{ComportaPagosToolTip}"
+									mouseSensitivity="5" 
+									showDataTips="true"
+									showDataTipTargets="false"
+									dataTipMode="single"
+									paddingRight="30" paddingLeft="20" paddingTop="20"
+									paddingBottom="40"
+									seriesFilters="[]"
+									fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal"
+									>
+						<mx:series>
+							<mx:ColumnSet type="stacked">
+								<mx:ColumnSeries id="serieCantidad" 
+												 yField="montoPorCobrar"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRedRenderer"
+												 showDataEffect="{fxInterpolateIn}"
+												 />
+								<mx:ColumnSeries id="serieCobradas" 
+												 yField="montoCobrado" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarGreenRenderer"
+												 />
+							</mx:ColumnSet>
+							<mx:LineSeries 
+								id="myChartLine"
+								yField="tasaCobranza"
+								lineStroke="{s1}"
+								showDataEffect="{fxInterpolateIn}" >
+								<mx:verticalAxis>
+									<mx:LinearAxis id="v1"/>
+								</mx:verticalAxis>
+							</mx:LineSeries>
+							<mx:PlotSeries yField="tasaCobranza"  showDataEffect="{fxInterpolateIn}">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXItemRenderer>
+											<fx:Script>
+												<![CDATA[
+													import mx.charts.series.items.PlotSeriesItem;
+													import skins.catalogos.catalogoColores;
+													
+												]]>
+											</fx:Script>
+											<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+												</s:fill>
+											</s:Ellipse>
+										</s:MXItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+								<mx:verticalAxis>
+									<mx:LinearAxis id="v2"/>
+								</mx:verticalAxis>
+							</mx:PlotSeries>
+						</mx:series>
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="pagosMes" categoryField="mes" />
+						</mx:horizontalAxis>
+						<mx:verticalAxis>
+							<mx:LinearAxis id="ventasDLS" labelFunction="formateoEje" autoAdjust="false" padding="1"  minimum="0"/>
+						</mx:verticalAxis>
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{pagosMes}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}"
+											 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+							<mx:AxisRenderer axis="{v1}" showLine="false" showLabels="false"/>
+							<mx:AxisRenderer axis="{v2}" showLine="false" showLabels="false"/>
+						</mx:horizontalAxisRenderers>
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{ventasDLS}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"/>
+							<mx:AxisRenderer axis="{v1}" showLine="false" showLabels="false" tickPlacement="none" />
+							<mx:AxisRenderer axis="{v2}" showLine="false" showLabels="false" tickPlacement="none" />
+						</mx:verticalAxisRenderers>
+					</mx:ColumnChart>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="stackGeneral.selectedChild = vistaTabla" />
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

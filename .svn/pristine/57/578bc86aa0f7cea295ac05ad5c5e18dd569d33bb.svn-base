@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionTableroProductos xmlns:fx="http://ns.adobe.com/mxml/2009" 
+											 xmlns:s="library://ns.adobe.com/flex/spark" 
+											 xmlns:mx="library://ns.adobe.com/flex/mx" 
+											 xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*" 
+											 width="100%" height="100%" xmlns:chekbox="skins.skin.chekbox.*"
+											 creationComplete="inicio(event)"
+											 >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;			
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barAzulRenderer;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barGrisRenderer;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.dataTipRendererCotPorcentaje;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.skin.chekbox.CheckBoxPq;			
+			import skins.catalogos.catalogoColores;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);			
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();			
+			public static var chkAux:CheckBoxPq = new CheckBoxPq;
+			
+			protected function inicio(event:FlexEvent):void
+			{				
+				chkAux.selected = checkCotizado.selected;
+				chkAux.addEventListener(Event.CHANGE,seleccionarChkCotizado,false,0,true);
+			}
+			
+			public function set recibeCotPedido( $lista:ArrayCollection ):void
+			{
+				if( $lista == null ) 
+					return;
+				
+				_linealArrGrafica = $lista;
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COT=PED_0") );
+				var arrMinisChart:ArrayCollection = filtrarPeriodos( _linealArrGrafica );
+				myChart1.dataProvider = arrMinisChart;
+				//trace("Switch : " + checkCotizado.selected);
+			}
+			
+			private function filtrarPeriodos( $lista:ArrayCollection ):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objetoPeriodo1:Object = generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "COT=PED_0") );
+				var objetoPeriodo2:Object = generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "COT=PED_1") );
+				var objetoPeriodo3:Object = generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "COT=PED_2") );
+				var objetoPeriodo4:Object = generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "COT=PED_3") );
+				var objetoPeriodo5:Object = generateObjectItemBarChart( UtilsGrid.queryCampoX( $lista, "etiqueta", "COT=PED_4") );
+				objetoPeriodo1.etiquetaX = _event.labelPeriodo1;
+				objetoPeriodo2.etiquetaX = _event.labelPeriodo2;
+				objetoPeriodo3.etiquetaX = _event.labelPeriodo3;
+				objetoPeriodo4.etiquetaX = _event.labelPeriodo4;
+				objetoPeriodo5.etiquetaX = _event.labelPeriodo5;
+				arrReturn.addItem( objetoPeriodo5 );
+				arrReturn.addItem( objetoPeriodo4 );
+				arrReturn.addItem( objetoPeriodo3 );
+				arrReturn.addItem( objetoPeriodo2 );
+				arrReturn.addItem( objetoPeriodo1 );
+				return arrReturn;
+			}
+			
+			private function generateObjectItemBarChart( $lista:ArrayCollection ):Object
+			{
+				var pedido:Number = 0;
+				var cotizado:Number = 0;
+				for ( var m:int = 0; m < $lista.length; m++){
+					var  resumen:ResumenConsulta = $lista[m] as ResumenConsulta;
+					if( resumen.conceptoResultado == "PEDIDA") pedido += resumen.total;
+					if( resumen.conceptoResultado == "COTIZADA") cotizado += resumen.total;
+				}
+				var objeto:Object = new Object();
+				objeto.nombre = "Monto cotizado / Monto pedido";
+				objeto.cotizado = cotizado;
+				objeto.pedido = pedido;
+				return objeto;
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int;				
+				
+				while( cuenta < 13)
+				{
+					if(cuenta >= this._minimoMeses && cuenta <= this._maximoMeses)
+					{
+						objeto = new Object();
+						objeto.mes = _listaMensual[cuenta -1];
+						objeto.cotizado = 0;
+						objeto.pedido = 0;
+						
+						for( m = 0; m < $lista.length;m++ )
+						{
+							resumen = $lista[m] as ResumenConsulta;
+							if(cuenta == resumen.mes)
+							{ 
+								if( resumen.conceptoResultado == "PEDIDA" )
+								{
+									objeto.pedido += resumen.total;
+								}
+								else if( resumen.conceptoResultado == "COTIZADA" )
+								{
+									objeto.cotizado += resumen.total;
+								}
+							}
+						}
+						arrReturn.addItem(objeto);
+					}
+					cuenta++;
+				}
+				
+				return arrReturn;
+			}
+			
+			//		/GRAFICA GRANDE
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroProductos;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			
+			public function set recibeFiltros( $event:EventoTableroProductos ):void
+			{
+				if( $event == null )
+					return;
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COT=PED_0") );
+				var arrMinisChart:ArrayCollection = filtrarPeriodos( _linealArrGrafica );
+				myChart1.dataProvider = arrMinisChart;				
+				checkCotizado.selected = false;
+			}
+			
+			public function set recibirFiltrosIndividual( $event:EventoTableroProductos ):void
+			{
+				if( $event == null )
+					return;
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COT=PED_0") );
+				var arrMinisChart:ArrayCollection = filtrarPeriodos( _linealArrGrafica );
+				myChart1.dataProvider = arrMinisChart;
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			protected function cambiarswitch(event:MouseEvent):void
+			{
+				var evet:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.TOTAL_COTIZACION_PEDIDO_TABPROD);
+				_event.parametros.todoCotizado = !checkCotizado.selected;
+				evet.parametros = _event.parametros;
+				dispatchEvent(evet);
+				
+				MaxCotPed_Productos.chkAux.selected = checkCotizado.selected;
+				MaxCotPed_Productos.chkAux.dispatchEvent(new Event(Event.CHANGE));
+			}			
+			
+			protected function seleccionarChkCotizado(event:Event):void{
+				checkCotizado.selected = chkAux.selected;
+			}			
+			
+		]]>
+	</fx:Script>
+	
+	<comun:contenidoA>
+		<s:HGroup width="100%" paddingTop="10" >
+			<chekbox:CheckBoxPq id="checkCotizado" labelLeft="Total cotizado" click="cambiarswitch(event)" selected="false"  labelRight="Cotizado convertido a pedido" top="0" />
+		</s:HGroup>		
+	</comun:contenidoA>
+	
+	<comun:contenido>
+		<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+			
+			<!-- CHART TODO -->
+			<mx:ColumnChart width="100%" height="100%" id="myChart"
+							showDataTips="true" 
+							mouseSensitivity="5" 
+							dataTipMode="single"
+							showDataTipTargets="false"
+							dataTipRenderer="{dataTipRendererCotPorcentaje}" 
+							paddingRight="40" paddingLeft="20" paddingTop="20"
+							>
+				<mx:series>
+					<mx:ColumnSeries
+						id="serieCET" 
+						yField="cotizado"
+						displayName="Monto cotizado"
+						showDataEffect="{fxInterpolateIn}"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barGrisRenderer"
+						/>
+					<mx:ColumnSeries 
+						id="serieAFT"
+						yField="pedido"
+						displayName="Monto pedido"
+						showDataEffect="{fxInterpolateIn}"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barAzulRenderer"
+						/>
+				</mx:series>
+				<mx:verticalAxis>
+					<mx:LinearAxis baseAtZero="true" title="Ventas en DLS" labelFunction="formateoEje" id="ventasCotPed"/>
+				</mx:verticalAxis>
+				<mx:horizontalAxis>
+					<mx:CategoryAxis id="cotPedMax" categoryField="mes" />
+					<!--title="MONTO COTIZADO / MONTO PEDIDO"-->
+				</mx:horizontalAxis>
+				<mx:horizontalAxisRenderers>
+					<mx:AxisRenderer axis="{cotPedMax}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}" 
+									 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+				</mx:horizontalAxisRenderers>
+				<mx:verticalAxisRenderers>
+					<mx:AxisRenderer axis="{ventasCotPed}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels" />
+				</mx:verticalAxisRenderers>
+			</mx:ColumnChart>
+		</s:HGroup>
+	</comun:contenido>
+	
+	<comun:espacioB>
+		<!-- CHART COMPARACION -->
+		<mx:ColumnChart width="100%" height="100%" id="myChart1"
+						showDataTips="true" 
+						mouseSensitivity="5" 
+						dataTipMode="single"
+						showDataTipTargets="false"
+						dataTipRenderer="{dataTipRendererCotPorcentaje}" 
+						paddingRight="40" paddingLeft="20" paddingTop="20"
+						paddingBottom="70"
+						>
+			<mx:series>
+				<mx:ColumnSeries
+					id="serieCET1" 
+					yField="cotizado"
+					displayName="Monto cotizado"
+					showDataEffect="{fxInterpolateIn}"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barGrisRenderer"
+					/>
+				<mx:ColumnSeries 
+					id="serieAFT1"
+					yField="pedido"
+					displayName="Monto pedido"
+					showDataEffect="{fxInterpolateIn}"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barAzulRenderer"
+					/>
+			</mx:series>
+			<mx:verticalAxis>
+				<mx:LinearAxis baseAtZero="true" title="Ventas en DLS" labelFunction="formateoEje" id="ventasCotPed1"/>
+			</mx:verticalAxis>
+			<mx:horizontalAxis>
+				<mx:CategoryAxis id="cotPedMax1" categoryField="etiquetaX" />
+			</mx:horizontalAxis>
+			<mx:horizontalAxisRenderers>
+				<mx:AxisRenderer axis="{cotPedMax1}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}" 
+								 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+			</mx:horizontalAxisRenderers>
+			<mx:verticalAxisRenderers>
+				<mx:AxisRenderer axis="{ventasCotPed1}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels" />
+			</mx:verticalAxisRenderers>
+		</mx:ColumnChart>
+	</comun:espacioB>	
+	
+</comun:ContenedorComparacionTableroProductos>

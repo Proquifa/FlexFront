@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout:ContenedorIndicador xmlns:fx="http://ns.adobe.com/mxml/2009" 
+							xmlns:s="library://ns.adobe.com/flex/spark" 
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							xmlns:componentes = "mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+							xmlns:layout="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.indicadores.layout.*"
+							xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*" 
+							xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+							xmlns:graficas="skins.skin.graficas.*" 
+							width="100%" height="100%"
+							creationComplete="group1_creationCompleteHandler(event)"
+							titulo="CIERRE DE RUTAS" 
+							
+							>
+	
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.indicadores.EventoCatIndicadores;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.indicador.Indicador;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.admon.objetos.SubProceso;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.indicadores.CatIndicadoresDefault;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			private const MINIMO:int = 170;
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = $valor.toString();
+				return strRegreso;
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				
+				super.guardar.addEventListener(MouseEvent.CLICK, guardarInfo,false,0,true);
+				
+			}
+			
+			protected function guardarInfo(evt:MouseEvent):void
+			{
+				var evento:EventoCatIndicadores = new EventoCatIndicadores(EventoCatIndicadores.GUARDAR_INDICADOR);
+				if (validar()){
+					if (saveIndicador)
+						evento.indicador = saveIndicador;
+					evento.indicador.editar = true;
+					evento.indicador.idSubProceso = idSubProceso;
+					evento.indicador.idUsuarioActualizo = DatosGlobales.getInstance()._usuario.idEmpleado;
+					evento.indicador.valor = parseFloat(super.txtPorcentaje.text);
+					//evento.indicador.segundosValorTiempo = super.cmbA.selectedItem.valor;
+					evento.indicador.segundosValorTiempo = parseFloat(super.txtA.text);
+					evento.indicador.concepto = "CIERRE RUTA";
+					dispatchEvent(evento);
+					
+					super.btnInfo.dispatchEvent(new MouseEvent(MouseEvent.MOUSE_DOWN));
+				}
+				else
+				{
+					alertaSingleton.show("Algunos de los datos que se han introducido no son válidos, favor de verificarlos.","¡Atención!");
+				}
+			}
+			
+			private function validar():Boolean
+			{
+				if (super.txtValidator_focusOutHandler(super.txtPorcentaje) &&
+					super.txtValidator_focusOutHandler(super.txtA) )
+				{
+					return true;
+				}
+				return false;
+			}
+			
+			public function set valorEnTiempo($datos:ArrayCollection):void
+			{
+				super.cmbA.dataProvider = $datos;
+			}
+			
+			private var refresca:Boolean = false;
+			public function set refrescarProceso($valor:Boolean):void
+			{
+				refresca = $valor;
+				invalidateDisplayList();
+			}
+			
+			private var saveIndicador:Indicador;
+			private var idSubProceso:Number = 0;
+			private var entro:Boolean = false;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				if (CatIndicadoresDefault.operaciones != null  && refresca)
+				{
+					entro = false;
+					for each (var subproceso:SubProceso in CatIndicadoresDefault.operaciones.subprocesos) 
+					{
+						if (subproceso && subproceso.nombre == "Despachos" )
+						{
+							idSubProceso = subproceso.idSubproceso;
+						
+							for each (var indicador:Indicador in subproceso.indicadores) 
+							{
+								if (indicador.concepto == "CIERRE RUTA" )
+								{
+									entro = true;
+									saveIndicador = indicador;
+									var array:ArrayCollection = new ArrayCollection;
+									var object:Object = new Object;
+									object.realizar = 100;
+									object.indicador = parseFloat(UtilsFormatosNumericos.precisionADosDecimales(indicador.valor));
+									object.valor = indicador.segundosValorTiempo;
+									array.addItem(object);
+									myChart.dataProvider = array;
+									myChartHours.dataProvider = array;
+									super.txtPorcentaje.text = object.indicador;
+									//seleccionarHoraA(indicador.segundosValorTiempo);
+									super.txtA.text = indicador.segundosValorTiempo.toString();
+									refresca = false;
+									myChart.invalidateSize();
+									myChart.invalidateDisplayList();
+									myChartHours.invalidateSize();
+									myChartHours.invalidateDisplayList();
+								}
+							}
+						}
+					}
+					if (!entro)
+					{
+						saveIndicador = null;
+						myChart.dataProvider = new ArrayCollection();
+						myChartHours.dataProvider = new ArrayCollection();
+						myChart.invalidateSize();
+						myChart.invalidateDisplayList();
+						myChartHours.invalidateSize();
+						myChartHours.invalidateDisplayList();
+					}
+				}
+			}
+			
+			private function seleccionarHoraA($tiempoA:String):void
+			{
+				if ( super.cmbA.dataProvider != null && super.cmbA.dataProvider.length > 0)
+				{
+					super.cmbA.selectedIndex = super.cmbA.seleccionarValor($tiempoA);
+				}
+				else
+				{
+					setTimeout(seleccionarHoraA,500,$tiempoA);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<layout:contenido>
+		<s:Group id="gpContenigo" width="100%" height="100%" >
+			
+			<s:HGroup width="100%" height="100%" paddingTop="10" paddingBottom="34" verticalAlign="bottom" horizontalAlign="center">
+				
+				<mx:ColumnChart id="myChart" width="100%" height="96%"
+								showDataTips="false"
+								seriesFilters="[]"
+								mouseSensitivity="5" 
+								dataTipMode="single" 
+								showDataTipTargets="false"
+								>
+					<mx:series>
+						<mx:ColumnSeries
+							id="serieCET" 
+							yField="realizar"
+							showDataEffect="{fxInterpolateIn}"
+							includeInLayout="false"
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.indicadores.itemrenderer.BarraIndicadorPorcentaje_IR"
+							/>
+						
+					</mx:series>
+					<mx:verticalAxis>
+						<mx:LinearAxis baseAtZero="true" id="cotReq" labelFunction="formateoEje" />
+					</mx:verticalAxis>
+					<mx:verticalAxisRenderers>
+						<mx:AxisRenderer axis="{cotReq}" visible="false" showLine="false" showLabels="{ width > MINIMO ? true : false}" tickPlacement="none" styleName="axisVerticalLabels"/>
+					</mx:verticalAxisRenderers>
+					<mx:horizontalAxis>
+						<mx:CategoryAxis id="nombre" />
+					</mx:horizontalAxis>
+					<mx:horizontalAxisRenderers>
+						<mx:AxisRenderer axis="{nombre}" visible="false" includeInLayout="false" showLine="false" showLabels="false" />
+					</mx:horizontalAxisRenderers>
+					
+					<mx:backgroundElements>
+						<mx:GridLines visible="false">
+							<mx:horizontalStroke>
+								<s:SolidColorStroke weight="0" color="0xeeeeee" />
+							</mx:horizontalStroke>
+						</mx:GridLines>
+					</mx:backgroundElements>
+				</mx:ColumnChart>
+				
+				<mx:ColumnChart id="myChartHours" width="100%" height="60%"
+								showDataTips="false"
+								seriesFilters="[]"
+								mouseSensitivity="5" 
+								dataTipMode="single" 
+								showDataTipTargets="false"
+								>
+					<mx:series>
+						<mx:ColumnSeries
+							id="serieCETHours" 
+							yField="realizar"
+							displayName="Requisicion"
+							showDataEffect="{fxInterpolateIn}"
+							includeInLayout="false"
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.indicadores.itemrenderer.BarraIndicadorGreenRed"
+							/>
+						
+					</mx:series>
+					<mx:verticalAxis>
+						<mx:LinearAxis baseAtZero="true" id="cotReqHours" labelFunction="formateoEje" />
+					</mx:verticalAxis>
+					<mx:verticalAxisRenderers>
+						<mx:AxisRenderer axis="{cotReqHours}" visible="false" showLine="false" showLabels="{ width > MINIMO ? true : false}" tickPlacement="none" styleName="axisVerticalLabels"/>
+					</mx:verticalAxisRenderers>
+					<mx:horizontalAxis>
+						<mx:CategoryAxis id="nombreHours" />
+					</mx:horizontalAxis>
+					<mx:horizontalAxisRenderers>
+						<mx:AxisRenderer axis="{cotReqHours}" visible="false" includeInLayout="false" showLine="false" showLabels="false" />
+					</mx:horizontalAxisRenderers>
+					
+					<mx:backgroundElements>
+						<mx:GridLines visible="false">
+							<mx:horizontalStroke>
+								<s:SolidColorStroke weight="0" color="0xeeeeee" />
+							</mx:horizontalStroke>
+						</mx:GridLines>
+					</mx:backgroundElements>
+				</mx:ColumnChart>
+				
+			</s:HGroup>
+		</s:Group>
+	</layout:contenido>
+</layout:ContenedorIndicador>

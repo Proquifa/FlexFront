@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _listaTotalPagos:ArrayCollection;
+			
+			public function set obtenerListaPagos($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				
+				_listaTotalPagos = new ArrayCollection();
+				chartPagos.recibirDataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				/**
+				 * Se obtienen del universo todos los pagos en estado Cerrado
+				 * */
+				var todosPagosCerrados: Array = new Array();
+				todosPagosCerrados = arrayTemp.filter(obtenerTodosLosCerrados);
+				todosPagosCerrados.sortOn('nombreProveedor');
+				
+				//Para liberar memoria
+				arrayTemp = new Array;
+				
+				/**
+				 * Se obtiene un array con todos los nombres de los Proveedores sin duplicarse, que será el que controlará el for para las sumas.
+				 * */
+				keys = new Object();
+				
+				var arrayTotaldeProve:Array = new Array();
+				arrayTotaldeProve = todosPagosCerrados.filter(quitaDuplicados);
+				
+				FormarLosPagosCerrados(arrayTotaldeProve,todosPagosCerrados,"PAGOS",_listaTotalPagos);
+				
+				chartPagos.recibirDataProvider = _listaTotalPagos;
+				
+				//Para liberar Memoria
+				arrayTotaldeProve = new Array();
+				todosPagosCerrados = new Array();
+				keys = new Object();
+			}
+			private function FormarLosPagosCerrados(TotalProveedores:Array,proveedoresInfo:Array,etiqueta:String,infoProveedores:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPagos:int;
+				var totalMonto:Number;
+				var keysMarca:Object;
+				
+				var currentPagoProveedor:PagoProveedor; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalProveedores.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPagos =0;
+					totalMonto =0;
+					currentPagoProveedor = proveedoresInfo[j] as PagoProveedor;
+					while( (TotalProveedores[i] as PagoProveedor).nombreProveedor == currentPagoProveedor.nombreProveedor ){
+						totalPartidas += currentPagoProveedor.cantidad;
+						totalPiezas += currentPagoProveedor.totalPiezas;
+						totalMonto += currentPagoProveedor.montoDolares;
+						
+						totalPagos++;
+						
+						proveedoresInfo.shift();
+						if(proveedoresInfo.length >0)
+							currentPagoProveedor = proveedoresInfo[j] as PagoProveedor;
+						else
+							currentPagoProveedor =new PagoProveedor();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalProveedores[i] as PagoProveedor).nombreProveedor.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.clientes_proveedores = 1;
+					itemResumenConsulta.totalPagos = totalPagos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					infoProveedores.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			public function quitaDuplicados(item:PagoProveedor, id:uint, _proveedores:Array):Boolean{
+				if (keys.hasOwnProperty(item.nombreProveedor)) {
+					return false;
+				} else {
+					keys[item.nombreProveedor] = item.nombreProveedor;
+					return true;
+				}
+			}
+			private function obtenerTodosLosCerrados(item:PagoProveedor, id:uint,pagos:Array):Boolean
+			{
+				if(item.estado == 'Cerrado'){
+					return true;
+				}else{
+					return false;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<!--<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="totalPagos"/>
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="PROVEEDOR TOTAL PAGADO" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>-->
+	<graficaPie:GraficaChartGrisTituloArribaConsultaPagos tituloGrafica="PROVEEDOR TOTAL PAGADO" id="chartPagos"/>
+</s:Group>

@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:IRender="asistenteCalidad.vistas.vista.proceso.IRender.*" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:otros="skins.otros.*" 
+		  width="100%" height="100%" 
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import asistenteCalidad.vistas.evento.EventoAsistenteCalidad;
+			
+			[Bindable] public var sizeFontLista:Number;
+			[Bindable] private var sizeFont:Number;
+			[Bindable] private var sizeFontProvee:Number;
+			[Bindable] public var sizeWidth:Number;
+			[Bindable] public var sizeHeight:Number;
+			[Bindable] public var sizeHeight55:Number;
+			
+			private var contactosFiltrados:ArrayCollection;
+			private var contactosFiltradosBusqueda:ArrayCollection;
+			
+			private var contactosUniverso:ArrayCollection;
+			private var contactosUniversoBusqueda:ArrayCollection;
+			private var sql:Query;
+			private var sqlUniverso:Query;
+			private var sqlContactos:Query;
+			private var nombres:Array;
+			
+			private var totalClientes:Number = 0;
+			private var totalAprox:Number = 0;
+			
+			
+			public function recibeContactos($contactos:ArrayCollection):void
+			{
+				if(!$contactos)
+				{
+					contactosFiltrados = new ArrayCollection();
+					listaClientes.dataProvider = contactosFiltrados;
+					return;
+				}
+				
+				var punteros:Array = new Array();
+				nombres = new Array();
+				contactosFiltrados = new ArrayCollection();
+				contactosFiltradosBusqueda = new ArrayCollection();
+				contactosFiltradosBusqueda = ObjectUtil.copy($contactos) as ArrayCollection;
+				totalClientes = 0;
+				totalAprox = 0;
+				
+				sqlContactos = new Query($contactos,['empresa','nombre',"EMail"],true);
+				nombres = sqlContactos.getPunteros(['empresa']);
+				
+				for (var n:int=0; n<nombres.length; n++)
+				{
+					punteros.push(sqlUniverso.getPunteros([nombres[n],null,null]));
+				}
+				
+				var arreTemp:Array = new Array();
+				for ( var i:int=0;i<punteros.length;i++)
+				{
+					if (punteros[i].length > 1)
+					{
+						for(var j:int=0; j<punteros[i].length; j++)
+						{
+							arreTemp.push(punteros[i][j]);
+						}
+					}
+					else
+						arreTemp.push(punteros[i][0]);
+				}
+				
+				var arregloTe:ArrayCollection = sqlUniverso.armarLista(removerDuplicados(arreTemp));
+				sqlContactos = new Query(arregloTe,['empresa','nombre',"EMail"],true);
+				
+				
+				txtBuscador.text = "";
+				contactosFiltrados = agruparContactos($contactos);
+				listaClientes.dataProvider = contactosFiltrados;
+				listaClientes.selectedIndex = 0;
+				botoneraAprox.selectIndex = 0; 
+				lnDiv.visible = false;
+				itemCliente();
+				
+				totalClientes = contactosFiltrados.length;
+				totalAprox = $contactos.length;
+				
+				lblTotalClientes.text = totalClientes.toString() + " Clientes";
+				lblTotalAprox.text = totalAprox.toString() + " Aproximaciones";
+			}
+			
+			public function recibeUniversoContactos($universo:ArrayCollection):void
+			{
+				contactosUniverso = new ArrayCollection();
+				
+				contactosUniversoBusqueda = new ArrayCollection();
+				contactosUniversoBusqueda = ObjectUtil.copy($universo) as ArrayCollection;
+				sqlUniverso = new Query($universo,['empresa','nombre',"EMail"],true);
+				
+				contactosUniverso = agruparContactos($universo);
+			}
+			
+			private function agruparContactos($contactos:ArrayCollection):ArrayCollection
+			{
+				var arreglo:ArrayCollection = new ArrayCollection();
+				
+				sql = new Query($contactos,['empresa','nombre',"EMail"],true);
+				var nombresEmpresa:Array = sql.getPunteros(['empresa']);
+				
+				if(nombresEmpresa.length > 0)
+				{
+					for (var i:int = 0; i < nombresEmpresa.length; i++) 
+					{
+						var tmpCliente:Cliente = new Cliente();
+						var punteros:Array = sql.getPunteros([nombresEmpresa[i]]);
+						var cantidad:Array = sqlUniverso.getPunteros([nombresEmpresa[i]]);
+						
+						var ev:Array = sql.getValoresCampo('ev',punteros);
+						var esac:Array = sql.getValoresCampo('esac',punteros);
+						var ids:Array = sql.getValoresCampo('fk02_Cliente',punteros);
+						
+						tmpCliente.idCliente = ids[0];
+						tmpCliente.nombre = (nombresEmpresa[i] as String).toUpperCase();
+						tmpCliente.vendedor =  ev[0];
+						tmpCliente.cobrador =  esac[0];
+						tmpCliente.totalClientes =  cantidad.length;
+						arreglo.addItem(tmpCliente);
+					}
+				}
+				return arreglo
+			}
+			
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				if(botoneraAprox.selectIndex == 0)
+				{
+					setTimeout(hacerBusquedaContactos,400);
+				}
+				else
+				{
+					setTimeout(hacerBusquedaUniverso,500);
+				}
+			}
+			
+			private function hacerBusquedaContactos():void
+			{
+				listaClientes.dataProvider = agruparContactos(hacerConsultaContactos(contactosFiltradosBusqueda,txtBuscador.text,false));
+				listaClientes.selectedIndex = 0;
+				itemCliente();
+			}
+			
+			private function hacerBusquedaUniverso():void
+			{
+				listaClientes.dataProvider = agruparContactos(hacerConsultaContactos(contactosUniversoBusqueda,txtBuscador.text));
+				listaClientes.selectedIndex = 0;
+				itemCliente();
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				sizeFontProvee = (22/501) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 22 ? 22:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 12 ? 12:sizeFontProvee;
+				sizeWidth = (160/501) * (unscaledWidth);
+				sizeHeight = (30/1208) * (unscaledHeight);
+				sizeHeight55 = (55/1208) * (unscaledHeight);
+				
+				sizeFont = (17/501) * (unscaledWidth);
+				
+				sizeFont = sizeFont > 17 ? 17:sizeFont;
+				sizeFont = sizeFont < 8 ? 8:sizeFont;
+			}
+			
+			
+			protected function botoneraaproximaciones1_botoneraClicHandler(event:EventoAsistenteCalidad):void
+			{
+				txtBuscador.text ="";
+				
+				if(botoneraAprox.selectIndex == 0)
+				{
+					listaClientes.dataProvider = contactosFiltrados;
+					lblTotalClientes.text = totalClientes.toString() + " Clientes";
+					lblTotalAprox.text = totalAprox.toString() + " Aproximaciones";
+				}
+				else
+				{
+					listaClientes.dataProvider = contactosUniverso;
+					lblTotalClientes.text = contactosUniverso.length.toString() + " Clientes";
+					lblTotalAprox.text =  contactosUniversoBusqueda.length.toString() + " Contactos";
+				}
+				
+				listaClientes.selectedIndex = 0;
+				itemCliente();
+			}
+			
+			
+			
+			
+			private function hacerConsultaContactos($lista:ArrayCollection,$texto:String,isUniverso:Boolean = true):ArrayCollection
+			{
+				if (StringUtil.trim( $texto ).length > 0)
+				{
+					var busqueda:String = StringUtil.trim($texto);
+					var punteroCliente:Array =  new Array();
+					var pru:Array = new Array();
+					var i:int;
+					
+					//  +++++++++++++++++++++++++++++++++++++++ BUSCA EN EMPRESA  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					if(isUniverso)
+						pru = sqlUniverso.getCampoLikeLowerCase("empresa",busqueda);
+					else
+						pru = sqlContactos.getCampoLikeLowerCase("empresa",busqueda);
+					
+					pru.sort();
+					
+					if (pru.length > 0)
+					{
+						for ( i=0; i<pru.length; i++)
+						{
+							if(isUniverso)
+								punteroCliente.push(sqlUniverso.getPunteros([pru[i],null,null]));
+							else
+								punteroCliente.push(sqlContactos.getPunteros([pru[i],null,null]));
+						}
+					}
+					
+					//  ++++++++++++++++++++++++++++++++++++  BUSCA EN CONTACTO +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					if(isUniverso)
+						pru = sqlUniverso.getCampoLikeLowerCase("nombre",busqueda);
+					else
+						pru = sqlContactos.getCampoLikeLowerCase("nombre",busqueda);
+					pru.sort();
+					
+					if (pru.length > 0)
+					{
+						for ( i=0; i<pru.length; i++)
+						{
+							if(isUniverso)
+								punteroCliente.push( sqlUniverso.getPunteros([null,pru[i],null]));
+							else
+								punteroCliente.push( sqlContactos.getPunteros([null,pru[i],null]));
+						}
+					}
+					
+					//  +++++++++++++++++++++++++++++++++++++++  BUSCA EN EMAIL  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					var pru1:Array = new Array();
+					if(isUniverso)
+						pru1 = sqlUniverso.getCampoLikeLowerCase("EMail",busqueda);
+					else
+						pru1 = sqlContactos.getCampoLikeLowerCase("EMail",busqueda);
+					
+					pru1.sort();
+					
+					if (pru1.length > 0)
+					{
+						for ( i=0; i<pru1.length; i++)
+						{
+							if(isUniverso)
+								punteroCliente.push( sqlUniverso.getPunteros([null,null,pru1[i]]));
+							else
+								punteroCliente.push( sqlContactos.getPunteros([null,null,pru1[i]]));
+						}
+					}
+					
+					//  +++++++++++++++++++++++++++++++++++++++  ORDENA Y ELIMINA REPETIDOS  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					var arreTemp:Array = new Array()
+					for ( i=0;i<punteroCliente.length;i++)
+					{
+						if (punteroCliente[i].length > 1)
+						{
+							for(var j:int=0; j<punteroCliente[i].length; j++)
+							{
+								arreTemp.push(punteroCliente[i][j]);
+							}
+						}
+						else
+							arreTemp.push(punteroCliente[i][0]);
+					}
+					var arregloTe:ArrayCollection = new ArrayCollection();
+					
+					if(isUniverso)
+						arregloTe = sqlUniverso.armarLista(removerDuplicados(arreTemp));
+					else
+						arregloTe = sqlContactos.armarLista(removerDuplicados(arreTemp));
+					
+					if(arregloTe.length > 0)
+						return arregloTe;
+					else
+						return new ArrayCollection();
+				}
+				else
+					return $lista;
+			}
+			
+			private function removerDuplicados($array:Array):Array
+			{
+				var i:int = 0;
+				$array.sort();
+				while(i < $array.length) 
+				{
+					while(i < $array.length+1 && $array[i] == $array[i+1]) 
+					{
+						$array.splice(i, 1);
+					}
+					i++;
+				}
+				return $array;
+			}
+			
+			
+			
+			protected function itemCliente():void
+			{
+				var evnt:EventoAsistenteCalidad = new EventoAsistenteCalidad(EventoAsistenteCalidad.CLIENTE_CON_CONTACTOS_SELECCIONADO);
+				if(listaClientes.dataProvider && listaClientes.dataProvider.length > 0)
+				{
+					EventoAsistenteCalidad.idClienteStatic = (listaClientes.selectedItem as Cliente).idCliente;
+					var nombreCliente:String = (listaClientes.selectedItem as Cliente).nombre.toLowerCase();
+					var punteros:Array = sqlUniverso.getPunteros([nombreCliente]);
+					var arreTemporal:ArrayCollection = sqlUniverso.armarLista(punteros);
+					
+					evnt.contactos = arreTemporal;
+				}
+				else
+				{
+					
+					evnt.contactos = new ArrayCollection();
+				}
+				dispatchEvent(evnt);
+			}
+			
+			
+			protected function clicLista(event:IndexChangeEvent):void
+			{
+				if(EventoAsistenteCalidad.vinculada)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					itemCliente();
+				}
+				
+				if(listaClientes.selectedIndex == 0)
+					lnDiv.visible = false;
+				else
+					lnDiv.visible = true;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" paddingTop="20" gap="0" paddingBottom="10">
+		
+		<s:VGroup id="grpProvee" width="100%" height="100%" gap="0">
+			
+			<s:HGroup width="100%" verticalAlign="middle" >
+				<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" fontSize="{sizeFontProvee}" text="CLIENTES" textAlign="left" paddingTop="0" />
+				<s:Spacer width="100%"/>
+				<mx:Image id="imgBtn"  visible="false" width="{sizeWidth}" height="{sizeHeight}" />
+			</s:HGroup> 
+			
+			<s:Spacer height="1%" />
+			
+			<s:TextInput id="txtBuscador" width="100%" maxWidth="{grpProvee.width}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" 
+						 changing="txtBuscador_changingHandler(event)" prompt="Cliente, nombre, e-mail" fontStyle="normal" 
+						 enabled="{!EventoAsistenteCalidad.vinculada}"/>
+			<s:Spacer height="2%" />
+			<otros:division id="lnDiv" width="100%" grueso="1" color="#404040"/>
+			
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="listaClientes" contentBackgroundAlpha="0" 
+					itemRenderer="asistenteCalidad.vistas.vista.proceso.IRender.IR_Proceso_ListaCliente"
+					changing="clicLista(event)"
+					/>
+			
+			<otros:division width="100%" grueso="1" color="#404040"/>
+			
+			<IRender:botoneraAproximaciones id="botoneraAprox" width="100%" height="{sizeHeight55}" paddingTop="8" paddingBottom="8" botoneraClic="botoneraaproximaciones1_botoneraClicHandler(event)"
+											enabled="{!EventoAsistenteCalidad.vinculada}"/>
+			
+			<otros:division width="100%" grueso="1" color="#404040"/>
+			
+			
+			<s:HGroup width="100%" paddingTop="10" paddingBottom="10" >
+				<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalClientes" fontSize="{sizeFont}" textAlign="center" width="50%" />
+				<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalAprox" fontSize="{sizeFont}" textAlign="center" width="50%" color="#008894"/>
+			</s:HGroup>  
+			
+		</s:VGroup>
+	</s:VGroup>
+</s:VGroup>

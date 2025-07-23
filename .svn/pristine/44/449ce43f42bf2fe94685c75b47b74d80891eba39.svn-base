@@ -1,0 +1,176 @@
+package mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.operativos.componentes
+{
+	
+	import flash.filters.DropShadowFilter;
+	import flash.geom.Rectangle;
+	import flash.text.TextLineMetrics;
+	
+	import mx.charts.ChartItem;
+	import mx.charts.chartClasses.LegendData;
+	import mx.charts.series.ColumnSeries;
+	import mx.charts.series.items.ColumnSeriesItem;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+	import mx.core.IDataRenderer;
+	import mx.core.UIComponent;
+	import mx.graphics.GradientEntry;
+	import mx.graphics.LinearGradient;
+	
+	import spark.components.Group;
+	import spark.components.Label;
+	import spark.primitives.Rect;
+	
+	public class BarDiferencialRenderer extends UIComponent implements IDataRenderer
+	{
+		private var label:Label;
+		private var _chartItem:ChartItem;
+		private var grpFondo:Group;
+		
+		private const SIZE_LINE:int = 15;
+		private const SPACE:int = 5;
+		
+		public function BarDiferencialRenderer()
+		{
+			super();
+		}
+		
+		override protected function createChildren():void
+		{	
+			super.createChildren();
+			if (label == null)
+			{
+				label = new Label();
+				label.setStyle("fontFamily", "Helvetica");
+				label.setStyle("fontWeight", "bold");
+				label.setStyle("fontStyle", "normal");
+				label.setStyle("fontSize", 11);
+				label.setStyle("textAlign", "center");
+				label.setStyle("backgroundColor", 0x363636 );
+				label.setStyle("backgroundAlpha", 0 );
+				label.maxDisplayedLines = 1;
+				label.depth = 1000;
+				addChild( label );
+				
+				var fillFondo:LinearGradient = new LinearGradient();
+				fillFondo.entries = [ new GradientEntry(0x707cc1), new GradientEntry( 0x59639a ) ];
+				fillFondo.rotation = 90;
+				
+				var rectFondo:Rect = new Rect();
+				rectFondo.fill = fillFondo;
+				rectFondo.percentWidth = 100;
+				rectFondo.percentHeight = 100;
+				rectFondo.filters = [new DropShadowFilter(0.7, 45, 0x000000, 0.8)];
+				
+				grpFondo = new Group();
+				grpFondo.cacheAsBitmap = true;
+				grpFondo.addElement( rectFondo );
+				addChildAt( grpFondo, 0 );
+			}
+		}
+		
+		public function set data(value:Object):void
+		{
+			if (_chartItem == value) return;
+			if (value is LegendData) 
+				return;
+			_chartItem = ChartItem(value);	        
+		}	
+		public function get data():Object
+		{
+			return _chartItem;
+		}
+		
+		override protected function updateDisplayList(unscaledWidth:Number,unscaledHeight:Number):void
+		{
+			super.updateDisplayList(unscaledWidth, unscaledHeight);
+			var rc:Rectangle = new Rectangle( 0, 0, width, height );
+			if (_chartItem == null)
+				return;
+			var cs:ColumnSeries = _chartItem.element as ColumnSeries;
+			var csi:ColumnSeriesItem = _chartItem as ColumnSeriesItem;
+			if( Number(csi.item[cs.yField]) == 0 || csi.item[cs.yField+"Label"] == null ){
+				label.visible = false;
+			}else{
+				label.visible = true;
+				label.text = csi.item[cs.yField+"Label"];
+				measureTextWidthAndResizeComponent( label.text, label );
+				label.setStyle("backgroundAlpha", 0 );					
+				if( label.width > unscaledWidth + 2 ){
+					label.text = UtilsFormatosNumericos.shortNumbersMK( csi.item[cs.yField+"Label"] );
+					measureTextWidthAndResizeComponent( label.text, label );
+				}
+				if( label.width > unscaledWidth + 9 ){
+					label.setStyle("backgroundAlpha", 0.18 );					
+				}
+				
+				var labelHeight:int = label.height = 13;
+				var barYpos:Number = csi.y;
+				var minYpos:Number = csi.min;
+				var barHeight:Number = minYpos - barYpos;
+				var labelColor:uint = 0xFFFFFF;
+				
+				label.x = unscaledWidth/2 - label.width/2;
+				
+				if( barHeight < labelHeight*2 ){
+					label.y = -( labelHeight + 2);
+					labelColor = 0x5d7320;
+					label.setStyle("backgroundAlpha", 0 );
+				}else{
+					label.y = (barHeight / 2 - labelHeight / 2)-1;
+				}
+				label.setStyle( "color", labelColor );
+			}
+			if( grpFondo != null )
+			{
+				grpFondo.width = unscaledWidth;
+				grpFondo.height = unscaledHeight;
+				grpFondo.left = 0;
+				grpFondo.bottom = 0;
+			}
+			
+			if (unscaledHeight > 0 ){
+				var i:int = 0;
+				var cont:int = 0;
+				graphics.clear();
+				graphics.beginFill(0x00FF00);
+				graphics.lineStyle(2,0x990000);
+				graphics.moveTo(0,-1);
+				while ( cont < (unscaledWidth/(SIZE_LINE + SPACE))) 
+				{
+					if (i + 20 > unscaledWidth ){
+						graphics.lineTo(i,-1);
+						graphics.lineTo(unscaledWidth,-1);
+					}
+					else{
+						graphics.lineTo(i,-1);
+						graphics.lineTo((i += SIZE_LINE),-1);
+						graphics.moveTo((i += SPACE),-1);
+					}
+					cont++;
+				}
+				graphics.endFill();
+			}
+			
+		}
+		
+		protected function measureTextWidthAndResizeComponent( text:String, container:UIComponent ):void
+		{
+			var _measuredWidth:Number = 0;
+			var  _paddingLeft:uint = 0;
+			var _paddingRight:uint = 0;
+			var _horizontalGap:uint = 0;
+			var _addedToWidth:int;
+			if(text == null)
+				return;
+			if(text.length <= 1)
+				return;
+			_paddingLeft = container.getStyle("paddingLeft");
+			_paddingRight = container.getStyle("paddingRight");
+			_horizontalGap = container.getStyle("horizontalGap");
+			_addedToWidth = int(_horizontalGap + _paddingLeft + _paddingRight);
+			var lineMetrics:TextLineMetrics = container.measureText(text);
+			_measuredWidth = (lineMetrics.width + _addedToWidth);
+			container.width = _measuredWidth;
+		}
+		
+	}
+}

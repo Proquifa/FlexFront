@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			public var _currentType:String;
+			private  var _infoProveedorET:ArrayCollection;
+			private  var _infoProveedorFT:ArrayCollection;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET"){
+						if(_infoProveedorET != null)	
+							myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoProveedorET);
+					}else if(_currentType =="FT"){
+						myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoProveedorFT);
+					}
+				}
+			}
+			
+			public function set obtenerListaCompras($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				_infoProveedorET  = new ArrayCollection();
+				_infoProveedorFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				var arrayTemp:Array =  new Array();
+				arrayTemp = $infoGrafica.source; 
+				
+				/**
+				 * Se dividen todos los clientes en Tiempo Vs los Fuera de Tiempo y se ordenan
+				 * */ 
+				
+				var arrayProveedorET:Array = new Array();
+				var arrayProveedorFT:Array = new Array();
+				
+				arrayProveedorET = arrayTemp.filter(ObtenerTodosClientesET);
+				arrayProveedorFT = arrayTemp.filter(ObtenerTodosClientesFT);
+				arrayProveedorET.sortOn("nombreProveedor");
+				arrayProveedorFT.sortOn("nombreProveedor");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada cliente,
+				 * quitando los duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalProveeET:Array = new Array();
+				arrayTotalProveeET = arrayProveedorET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalProveeFT:Array = new Array();
+				arrayTotalProveeFT = arrayProveedorFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Cliente
+				 * */
+				
+				FormarAProveedores(arrayTotalProveeET,arrayProveedorET,_infoProveedorET);
+				FormarAProveedores(arrayTotalProveeFT,arrayProveedorFT,_infoProveedorFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoProveedorET);
+				else
+					myChart.dataProvider = myChart.aplicarFormatoConsultaCompras(_infoProveedorFT); 
+				
+				//Para liberar memoria
+				arrayTotalProveeET = new Array();
+				arrayProveedorET= new Array();
+				arrayTotalProveeFT= new Array();
+				arrayProveedorFT= new Array();
+			}
+			
+			private function FormarAProveedores(TotalProveedores:Array,proveedoresInfo:Array,infoProveedor:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCompras:int;
+				var totalMonto:Number;
+				
+				var currentPartidaCompra:Compra; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalProveedores.length; i++){
+					j=0;
+					keys = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalCompras =0;
+					totalMonto =0;
+					currentPartidaCompra = proveedoresInfo[j] as Compra;
+					while( (TotalProveedores[i] as Compra).nombreProveedor == currentPartidaCompra.nombreProveedor ){
+						totalPartidas += currentPartidaCompra.totalPartidas;
+						totalPiezas += currentPartidaCompra.totalPiezas_partidas;
+						totalMonto += currentPartidaCompra.montoTotalDolares_partidas;
+						
+						if(!keys.hasOwnProperty(currentPartidaCompra.clave)){
+							keys[currentPartidaCompra.clave]= currentPartidaCompra.clave;
+							totalCompras++;
+						}
+						
+						proveedoresInfo.shift();
+						if(proveedoresInfo.length >0)
+							currentPartidaCompra = proveedoresInfo[j] as Compra;
+						else
+							currentPartidaCompra =new Compra();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalProveedores[i] as Compra).nombreProveedor.toLocaleUpperCase();;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.clientes_proveedores =1;
+					itemResumenConsulta.totalCompras = totalCompras;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoProveedor.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			
+			public function quitaDuplicados(item:Compra, idx:uint, _proveedor:Array):Boolean{
+				if (keys.hasOwnProperty(item.nombreProveedor)) {
+					return false;
+				} else {
+					keys[item.nombreProveedor] = item.nombreProveedor;
+					return true;
+				}
+			}
+			
+			private function ObtenerTodosClientesET(item:Compra, idx:uint, _proveedores:Array):Boolean
+			{
+				return item.inTime == "ET" ? true : false;
+			}
+			
+			private function ObtenerTodosClientesFT(item:Compra, idx:uint, _proveedores:Array):Boolean
+			{
+				return item.inTime == "FT" ? true : false;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="piezasTotal"/>
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="PROVEEDORES" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>

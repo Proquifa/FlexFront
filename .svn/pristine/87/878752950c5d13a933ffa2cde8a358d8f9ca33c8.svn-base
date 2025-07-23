@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%"
+		 height="100%" 
+		 
+		 xmlns:otros="skins.otros.*"
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" xmlns:botonesToggle="skins.botonesToggle.*"
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.seguimiento.EventoReporteSeguimiento;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.SeguimientoCotizacionAgrupada;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			import spark.components.ButtonBar;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]	private var etiqueta1:String = "";
+			[Bindable]	private var etiqueta2:String = "";
+			[Bindable]  private var universoPartidas:ArrayCollection;
+			
+			public var valorFiltro:String = "";
+			public function set recibirStringFiltro( $filtro:String ):void{
+				if( $filtro == null ) return;
+				_filtroLabelOld = $filtro;
+			}
+			private var _filtroLabelOld:String = '';
+			[Bindable]	private var _filtroLabel:String = '';
+			
+			
+			public function set recibirClean( $do:Boolean ):void{
+				var lastItem:SeguimientoCotizacionAgrupada = new SeguimientoCotizacionAgrupada();
+				if( $do ){
+					listaCliente.dataProvider = new ArrayCollection();
+					lastItem.ultimo = '0';
+					lastItem.monto = 0;
+					listaCliente.dataProvider.addItem( lastItem );
+				}
+			}
+			public function set recibirListaSeguimientoCotizacionAgrupada( $lista:ArrayCollection ):void{
+					if( $lista == null )		return;
+					universoPartidas = new ArrayCollection();
+					universoPartidas = ObjectUtil.copy( $lista ) as ArrayCollection;
+					listaCliente.dataProvider = $lista;
+					botoneraBarra.selectedIndex = 0;
+					if( $lista.length > 1 ){
+						this.validaOrigen();
+						/* listaCliente.selectedIndex = 0;
+						llamarCotizacionesPorCliente(); */
+					}
+					if( _origen == "Seguimiento" && listaCliente.dataProvider.length > 1 ) lblDos.text = "Seguimientos";
+					if( _origen == "Confirmación"  && listaCliente.dataProvider.length > 1 ) lblDos.text = "Confirmaciones";
+					if( _origen == "Cancelable"  && listaCliente.dataProvider.length > 1 ) lblDos.text = "Cancelables";
+			}
+			private var _origen:String = "";
+			public function set recibirObjLabels( $objLabel:Object ):void{
+				if( $objLabel == null )	return;
+				lblUno.text = validaDisplay( $objLabel.panelUnoTitulo );
+				var _origen:String = validaDisplay( $objLabel.origen );
+				var plural:String = _origen; 
+				/* 
+				if( _origen == "Seguimiento" && listaCliente.dataProvider.length > 1 ) plural = "Seguimientos";
+				if( _origen == "Confirmación"  && listaCliente.dataProvider.length > 1 ) plural = "Confirmaciones";
+				if( _origen == "Cancelable"  && listaCliente.dataProvider.length > 1 ) lblDos.text = "Cancelables";
+				
+				*/
+				lblDos.text = plural;
+			}
+			
+			private function validaDisplay( $propiedad:* ):String{
+				if( $propiedad == null ) return '';
+				return $propiedad.toString();
+			}
+			
+			protected function llamarCotizacionesPorCliente():void{
+				if( listaCliente.selectedIndex > -1 ){
+					var evt:EventoReporteSeguimiento = new EventoReporteSeguimiento(EventoReporteSeguimiento.COTIZACIONES_POR_CLIENTE);
+					/* evt.cliente = (listaCliente.selectedItem as SeguimientoCotizacionAgrupada).nombreCliente; */
+					evt.cliente = (listaCliente.selectedItem ).nombreCliente;
+					dispatchEvent( evt );
+				}
+			}
+			
+			/* [Bindable] private var _arrButton:ArrayCollection = new ArrayCollection([{label:"TODO",colorBase:'0x' + catalogoColores.LABEL_GRIS, colorTexto:'0xffffff' },
+																					 {label:"> $10,000",colorBase:'0x' + catalogoColores.LABEL_ROJO, colorTexto:'0xffffff'},
+																					 {label:"$2,001-$10,000",colorBase:'0x' + catalogoColores.LABEL_AMARILLO, colorTexto:'0xffffff'},
+																					 {label:"$0-$2,000",colorBase:'0x' + catalogoColores.LABEL_VERDE, colorTexto:'0xffffff' } ]); */
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection([{label:"TODO"},
+																					{label:"> $10,000"},
+																					{label:"$2,001-$10,000"},
+																					{label:"$0-$2,000"} ]);
+			protected function validaOrigen():void{
+				if(universoPartidas == null || universoPartidas.length == 0 ){
+					return;
+				}
+				var argumento:String = "";
+				var universoFiltrado:ArrayCollection = new ArrayCollection();
+				
+				if( botoneraBarra.selectedItem.label == "TODO" ){
+					listaCliente.dataProvider = universoPartidas;
+					argumento = 'TODO';
+				}else if( botoneraBarra.selectedItem.label == "> $10,000" ){
+					argumento = '1000';
+				}else if( botoneraBarra.selectedItem.label == "$2,001-$10,000" ){
+					argumento = '2001_10000';
+				}else if( botoneraBarra.selectedItem.label == "$0-$2,000" ){
+					argumento = '0_2000';
+				}
+				var montoTotalFitrado:Number = 0;
+				for( var i:int = 0; i < universoPartidas.length; i++ ){
+					universoPartidas[i].ultimo = "";
+					if( universoPartidas[i].nombreCliente == null){
+						universoPartidas.removeItemAt( i );
+					}else{
+						if( argumento == '1000' && universoPartidas[i].monto > 10000 ){
+							universoPartidas[i].numFila = universoFiltrado.length+1;
+							universoFiltrado.addItem( universoPartidas[i] ); 
+							montoTotalFitrado = montoTotalFitrado + universoPartidas[i].monto;
+						}else if( argumento == '2001_10000' && 2000 < universoPartidas[i].monto && universoPartidas[i].monto < 10001 ){
+							universoPartidas[i].numFila = universoFiltrado.length+1;
+							universoFiltrado.addItem( universoPartidas[i]  ); 
+							montoTotalFitrado = montoTotalFitrado + universoPartidas[i].monto;
+						}else if(argumento == '0_2000' && universoPartidas[i].monto <= 2000){
+							universoPartidas[i].numFila = universoFiltrado.length+1;
+							universoFiltrado.addItem( universoPartidas[i] ); 
+							montoTotalFitrado = montoTotalFitrado + universoPartidas[i].monto;
+						}else if (argumento == 'TODO' ){
+							universoPartidas[i].numFila = universoFiltrado.length+1;
+							universoFiltrado.addItem( universoPartidas[i] ); 
+							montoTotalFitrado = montoTotalFitrado + universoPartidas[i].monto;
+						}
+					}
+				}
+				var lastItem:SeguimientoCotizacionAgrupada = new SeguimientoCotizacionAgrupada();
+				if( universoFiltrado.length == 0 ){
+					lastItem.ultimo = '0';
+					lastItem.monto = 0;
+				}else{
+					lastItem.ultimo = ( universoFiltrado.length  ).toString();
+					lastItem.monto = montoTotalFitrado;
+				}
+				universoFiltrado.addItem( lastItem );
+				listaCliente.dataProvider = ObjectUtil.	copy( universoFiltrado ) as ArrayCollection;
+				if(universoFiltrado.length == 1){
+					var evt:EventoReporteSeguimiento = new EventoReporteSeguimiento(EventoReporteSeguimiento.LIMPIA_PANELES_POR_BOTON);
+					dispatchEvent( evt );
+				}else{
+					listaCliente.selectedIndex = 0;
+					llamarCotizacionesPorCliente();
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<!--<s:BorderContainer width="100%" height="100%" backgroundColor="0xFFFFFF" borderVisible="false"/>-->
+	
+	<s:VGroup width="100%" height="100%"  
+			  gap="0"
+			  paddingLeft="10"
+			  paddingRight="5"
+			  top="20"
+			  horizontalAlign="center">
+		<botonesToggle:ButtonBarColores width="100%" height="30" id="botoneraBarra" selectedIndex="0" requireSelection="true" 
+										dataProvider="{_arrButton}" changing="validaOrigen()"/>
+		<s:Spacer height="20"/>
+		<otros:divisionGruesa height="10" />
+		<s:HGroup width="100%" paddingBottom="10" paddingTop="15" >
+			<s:Label id="lblUno" textAlign="left" fontWeight="bold" fontSize="17"/>
+			<s:Label id="lblDos" textAlign="left" fontWeight="bold" fontSize="17"/>
+		</s:HGroup>
+		<s:Spacer height="10"/>
+		<otros:divisionGruesa height="10" />
+		<s:Spacer height="20"/>
+		<pq:ListPq id="listaCliente" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.ventas.seguimiento.renders.itemRenderPanelCotizaciones"
+				   change="llamarCotizacionesPorCliente()" />
+	</s:VGroup>
+</s:Group>

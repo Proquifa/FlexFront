@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.skin.datagrid.pqNet.*" xmlns:largo="skins.botones.largo.*" xmlns:pqNet1="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProveedoresConPAC;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.EtiquetaColorPorEstatus;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RechazoPartida;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RequisicionPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PRequisicionPh;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.ListEvent;
+			private var _requisicionesPhs:RequisicionPhs;
+			[Bindable]
+			private var _opcionSeleccionada:PartidaConfirmacion;
+			[Bindable]
+			private var _listaDeMiniRequisiciones:ArrayCollection;
+			[Bindable]
+			private var _listaPartidasConfirmacion:ArrayCollection;
+			[Bindable]
+			private var _listaUniverso:ArrayCollection;
+			[Bindable]
+			private var _medioRequisicionSeleccionada:String;
+			private var _rechazo:Boolean;
+			private var rechazoPartida:RechazoPartida;
+			/**
+			 * Este metodo publico es ejecutado desde el componente EspacioPlanificacion.mxml, desde el metodo seleccionaBoton(); y dispara un 
+			 * evento que es cacahado por el mapaProvedoressConPa.mxml, para la consulta las requisiciones por consfirmar asociadas a este proveedor.
+			 */ 
+			public function iniciaModoPartidasPorConfirmar( opcionsel:PartidaConfirmacion, $dato:Boolean ):void{
+				_rechazo = $dato;
+				_opcionSeleccionada = new PartidaConfirmacion();
+				_opcionSeleccionada = opcionsel;
+				var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.CONSULTA_REQUISICIONES_POR_CONFIRMAR );
+				evento.proveedor = _opcionSeleccionada.idProveedor;
+				evento.tipo = _opcionSeleccionada.tipoProveedor;
+				evento.rechazado = $dato;
+				dispatchEvent( evento );
+				this.toogleBar.selectedIndex = 0;
+			}
+			/**
+			 * Funcion Publica que recibe del MapaProveedoresConPac.mxml las lista de requisiciones por confirmar lista(objetos tipo requisicionPhs.as)
+			 */
+			public function set recibeRequisicionesPorConfirmar( datos:ArrayCollection ):void{
+				if( datos == null ){
+					return;
+				}
+				this._listaUniverso = new ArrayCollection();
+				this._listaUniverso = datos;
+				_medioRequisicionSeleccionada = "";
+				filtraTipo('Todos',datos);
+			}
+			/**
+			 * Funcion que e activada desde el tooglebutonBar para determianr el tipo de filtro que se va a hacer
+			 */ 
+			private function determinarFiltro( evento:IndexChangeEvent ):void{
+				var datos:ArrayCollection = new ArrayCollection();
+				datos = ObjectUtil.copy( this._listaUniverso ) as ArrayCollection;
+				if( evento.currentTarget.selectedIndex == 0 ){
+					filtraTipo('Todos',datos);
+				}else if( evento.currentTarget.selectedIndex == 1 ){
+					filtraTipo('Email',datos);
+				}else{
+					filtraTipo('Telefono',datos);
+				}
+			}
+			/**
+			 * funcion que filtra por tipo de Requisicion y su medio
+			 */ 
+			private function filtraTipo( filtro:String, lista:ArrayCollection):void{
+				if(_rechazo == false ){
+					this.lblProveedoresPAC.text = "[PROVEEDORES CON PAC]";
+					(this.dtgPAC.columns[5] as DataGridColumn).headerText = "Solicitó";
+					(this.dtgPAC.columns[0] as DataGridColumn).width = (this.dtgPAC.width * 0.05);
+					(this.dtgPAC.columns[1] as DataGridColumn).width = (this.dtgPAC.width * 0.1);
+					(this.dtgPAC.columns[2] as DataGridColumn).width = (this.dtgPAC.width * 0.40);//55
+					(this.dtgPAC.columns[3] as DataGridColumn).width = (this.dtgPAC.width * 0.05);//45
+					(this.dtgPAC.columns[4] as DataGridColumn).width = (this.dtgPAC.width * 0.1);
+					(this.dtgPAC.columns[5] as DataGridColumn).width = (this.dtgPAC.width * 0.1);
+					(this.dtgPAC.columns[6] as DataGridColumn).width = 0;
+					(this.dtgPAC.columns[6] as DataGridColumn).visible = false;
+					(this.dtgPAC.columns[7] as DataGridColumn).width = 0;
+					(this.dtgPAC.columns[7] as DataGridColumn).visible = false;
+					(this.dtgPAC.columns[8] as DataGridColumn).width = (this.dtgPAC.width * 0.1); 
+					(this.dtgPAC.columns[8] as DataGridColumn).visible = true;
+					(this.dtgPAC.columns[9] as DataGridColumn).width = 0;
+					(this.dtgPAC.columns[9] as DataGridColumn).visible = false; 
+					(this.dtgPAC.columns[10] as DataGridColumn).width = (this.dtgPAC.width * 0.1);
+				}else{
+					this.lblProveedoresPAC.text = "[PROVEEDORES CON PAC RECHAZADOS]";
+					(this.dtgPAC.columns[5] as DataGridColumn).headerText = "Rechazó";
+					(this.dtgPAC.columns[0] as DataGridColumn).width = (this.dtgPAC.width * 0.05);
+					(this.dtgPAC.columns[1] as DataGridColumn).width = (this.dtgPAC.width * 0.08);
+					(this.dtgPAC.columns[2] as DataGridColumn).width = (this.dtgPAC.width * 0.38);
+					(this.dtgPAC.columns[3] as DataGridColumn).width = (this.dtgPAC.width * 0.05);
+					(this.dtgPAC.columns[4] as DataGridColumn).width = (this.dtgPAC.width * 0.09);
+					(this.dtgPAC.columns[5] as DataGridColumn).width = (this.dtgPAC.width * 0.09);
+					(this.dtgPAC.columns[6] as DataGridColumn).width = (this.dtgPAC.width * 0.07);
+					(this.dtgPAC.columns[6] as DataGridColumn).visible = true;
+					(this.dtgPAC.columns[7] as DataGridColumn).width = (this.dtgPAC.width * 0.05);
+					(this.dtgPAC.columns[7] as DataGridColumn).visible = true;
+					(this.dtgPAC.columns[8] as DataGridColumn).width = 0;
+					(this.dtgPAC.columns[8] as DataGridColumn).visible = false; 
+					(this.dtgPAC.columns[9] as DataGridColumn).width = (this.dtgPAC.width * 0.07);
+					(this.dtgPAC.columns[9] as DataGridColumn).visible = true; 
+					(this.dtgPAC.columns[10] as DataGridColumn).width = (this.dtgPAC.width * 0.07);
+				}
+				_listaDeMiniRequisiciones = new ArrayCollection();
+				var _totalRequisiciones:int = 0;
+				var _totalRequisicionessET:int = 0;
+				var _totalRequisicionesFT:int = 0;
+				var datos:ArrayCollection = new ArrayCollection();
+				if(filtro == 'Todos'){
+					datos = ObjectUtil.copy( lista ) as ArrayCollection;
+				}else {
+					for(var r:int = 0; r < lista.length; r++){
+						if( lista[r].medio == filtro){
+							datos.addItem( lista[r] );
+						}
+					}
+				}
+				for( var i:int = 0; i < datos.length; i++ ){
+					var _totalPartidasET:int = 0;
+					var _totalPartidasFT:int = 0;
+					var _totalPartidas:int = 0;
+					//se le hace un barrido a la lista de Partidas q se encuentran dentro de c/Requisicion
+					//son partidas de tipo PartidaConfirmacion.as, ademas se les da un formato para el Grid
+					for( var p:int = 0; p < datos[i].partidas.length; p++){
+						(datos[i].partidas[p] as PartidaConfirmacion).numFila = p + 1;
+						var resultadoTiempo:String = "";
+						if(_rechazo){
+							resultadoTiempo = UtilsFecha.determinarFechaEnTiempoDeUnDiaAOtro( datos[i].partidas[p].fechaInicio ) 
+						}else{
+							resultadoTiempo = UtilsFecha.determinarFechaEnTiempoDeUnDiaAOtro( datos[i].partidas[p].fechaInicio ) 
+						}
+						if( resultadoTiempo == "enTiempo" ){
+							_totalPartidasET = _totalPartidasET + 1;
+							datos[i].partidas[p].estatusTiempo = true;
+						}else{
+							_totalPartidasFT = _totalPartidasFT + 1;
+							datos[i].partidas[p].estatusTiempo = false;
+						}
+						_totalPartidas = _totalPartidas + 1;
+					}
+					(datos.getItemAt( i ) as RequisicionPhs).totalPartidas = _totalPartidas;
+					(datos.getItemAt( i ) as RequisicionPhs).totalET = _totalPartidasET;
+					(datos.getItemAt( i ) as RequisicionPhs).totalFT = _totalPartidasFT;
+					_totalRequisicionessET = _totalRequisicionessET + _totalPartidasET;
+					_totalRequisicionesFT = _totalRequisicionesFT + _totalPartidasFT;
+					_totalRequisiciones = _totalRequisicionesFT + _totalRequisicionessET;
+					if(_totalRequisiciones > 0){
+						lblTotalPartidas.text = _totalRequisiciones + " Partidas  ·  " + _totalRequisicionessET + " ET  · " + _totalRequisicionesFT + " FT";
+					}else{
+						lblTotalPartidas.text = _totalRequisiciones + " Partida  ·  " + _totalRequisicionessET + " ET  · " + _totalRequisicionesFT + " FT";
+					}
+				}	
+				_listaDeMiniRequisiciones = datos;
+				if( _listaDeMiniRequisiciones.length > 0 ){
+					//aqui se agrega una varible con a informacion del total de partidas para mostarlo al final de la lista
+					//esta variable es validada en el itemRenderer de la Lsita list;
+					var ultimaPartida:RequisicionPhs = new RequisicionPhs();
+					ultimaPartida.ultimoDatoLista =  _listaDeMiniRequisiciones.length;
+					_listaDeMiniRequisiciones.addItem( ultimaPartida );					
+					this.listRequisiciones.selectedIndex = 0;
+					visualizaRequisicion( this.listRequisiciones.selectedItem );
+					_medioRequisicionSeleccionada = this.listRequisiciones.selectedItem.medio;
+					this.listRequisiciones.setFocus();
+					if( _medioRequisicionSeleccionada == "Telefono" ){
+						this.rdbTelefono.selected = true;
+						this.rdbEMail.selected = false;
+					}else{
+						this.rdbTelefono.selected = false;
+						this.rdbEMail.selected = true;
+					}
+					this.rdbEMail.enabled = true;
+					this.rdbTelefono.enabled = true;
+				}else if( _listaDeMiniRequisiciones.length == 0 ){
+					this._listaPartidasConfirmacion = new ArrayCollection();
+					_medioRequisicionSeleccionada = "";
+					lblTotalPartidas.text = _totalRequisiciones + " Partidas  ·  " + _totalRequisicionessET + " ET  · " + _totalRequisicionesFT + " FT";
+					this.lblTotalPartidasRequisicion.text = "RPH-XXXXXX-XXXX  :  0 Partidas  ·  0 ET  ·  0 FT ";
+					this.rdbEMail.enabled = false;
+					this.rdbTelefono.enabled = false;
+					this.rdbEMail.selected = false;
+					this.rdbTelefono.selected = false;
+				}
+			}
+			/**
+			 * Funcion privada que muestra la requisicion Seleccionada
+			 */ 			
+			private function visualizaRequisicion( datos:RequisicionPhs ):void{
+				_listaPartidasConfirmacion = new ArrayCollection();
+				if( datos.totalPartidas > 0 ){
+					this.lblTotalPartidasRequisicion.text = datos.folio + "  :  "  + datos.totalPartidas + " Partidas  ·  " + datos.totalET + " ET  ·  " + datos.totalFT + " FT ";				
+				}else{
+					this.lblTotalPartidasRequisicion.text = datos.folio + "  :  "  + datos.totalPartidas + " Partida  ·  " + datos.totalET + " ET  ·  " + datos.totalFT + " FT ";
+				}
+				_listaPartidasConfirmacion = datos.partidas;
+				if( datos.medio == "Telefono" ){
+					this.rdbTelefono.selected = true;
+					this.rdbEMail.selected = false;
+				}else{
+					this.rdbTelefono.selected = false;
+					this.rdbEMail.selected = true;
+				}
+				this.rdbEMail.enabled = true;
+				this.rdbTelefono.enabled = true;
+				this.listRequisiciones.setFocus();
+			}
+			/**
+			 * Funcion privada q pregunta si se actualiza el medio de la Requisicion a Correo 
+			 */ 
+			private function AlertParaCambioAMail():void{ //si presiono el check Mail
+					if( this.listRequisiciones.selectedItem.medio == "Telefono" ){ //se verifica q _medio trae por default la requisicion si es diferente a la Default
+						alertaSingleton.show(catalogoAlertas.compradorPhs_cambiarMedioRequisitarEmail,catalogoAlertas.TIT_ADV_atencion, "CompradorPhs_RequisicionAConfirmar_method1","","","SI","NO");
+					}
+			}
+			/**
+			 * Funcion privada q pregunta si se actualiza el medio de la Requisicion a Telefono 
+			 */ 
+			private function AlertParaCambioATelefono():void{ //si presiono el check Telefono
+				if( this.listRequisiciones.selectedItem.medio == "Email" ){//se verifica q _medio trae por default la requisicion
+					alertaSingleton.show(catalogoAlertas.compradorPhs_cambiarMedioRequisitarTelefono,catalogoAlertas.TIT_ADV_atencion, "CompradorPhs_RequisicionAConfirmar_method2","","","SI","NO");
+				}
+			}
+			/**
+			 * 
+			 */ 
+			public function set recibeRespuestaAlert( $dato:ResultAlert ):void{
+				if( $dato == null ){
+					return;
+				}
+				if( $dato.vieneD == "CompradorPhs_RequisicionAConfirmar_method1" ){
+					method1( $dato );
+				}else if($dato.vieneD == "CompradorPhs_RequisicionAConfirmar_method2" ){
+					method2( $dato );
+				}
+			}
+			/**
+			 * Funcion privada q dispara el Evento Para cambiar el tipo de medio a Email
+			 */ 
+			public function method1( $dato:ResultAlert ):void{
+				if( $dato.botonSeleccionado == "SI"){
+					var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.ACTUALIZA_MEDIO_ENVIO_REQUISICION );
+					evento.requisicion = this.listRequisiciones.selectedItem as RequisicionPhs;
+					evento.requisicion.medio = "Email";
+					evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+					evento.modificaMedio = true;
+					dispatchEvent( evento );
+				}else{
+					this.rdbTelefono.selected = true;
+					this.rdbEMail.selected = false;
+				} 
+			}
+			
+			
+			/**
+			 * Funcion privada q dispara el Evento Para cambiar el tipo de medio a Telefono
+			 */ 
+			public function method2( $dato:ResultAlert ):void{
+				if( $dato.botonSeleccionado == "SI"){
+					var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.ACTUALIZA_MEDIO_ENVIO_REQUISICION );
+					evento.requisicion = this.listRequisiciones.selectedItem as RequisicionPhs;
+					evento.requisicion.medio = "Telefono";
+					evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+					evento.modificaMedio = true;
+					dispatchEvent( evento );
+				}else{
+					this.rdbTelefono.selected = false;
+					this.rdbEMail.selected = true;
+				} 
+			}
+			/**
+			 * Funcion que dispara el evento para actualizar el medio de envio de la requisicion. Esta funcion la chacha el 
+			 * mapaProveedoresConPAC.mxml y los datos de regreso los recibe la funcion reicbeConfirmacion();
+			 */
+			private function actualizaMedio( $tipoMedio:String ):void{
+				var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.ACTUALIZA_MEDIO_ENVIO_REQUISICION );
+				evento.requisicion = this.listRequisiciones.selectedItem as RequisicionPhs;
+				evento.requisicion.medio = $tipoMedio;
+				evento.proveedor = DatosGlobales.getInstance()._usuario.idEmpleado;
+				dispatchEvent( evento )
+			}
+			/**
+			 * Funcion publica que recibe los datos del mapa mapaProveedoresConPac.mxml, confirma si una reuqisicion a sido cambiada 
+			 * su medio de requiiscion, tambien actualiza el medio de la requisicion en la variable general
+			 */ 
+			public function set reicbeConfirmacionMedioActualizado( $confirmacion:Boolean ):void{
+				if( $confirmacion == false){
+					return;
+				}
+				if( this.listRequisiciones.selectedItem.medio == "Telefono" ){
+					this.listRequisiciones.selectedItem.medio == "Telefono";
+					alertaSingleton.show(catalogoAlertas.compradorPhs_seActualizoMedioTelefono,catalogoAlertas.TIT_ADV_atencion);
+					this.rdbTelefono.selected = true;
+				}else{
+					this.listRequisiciones.selectedItem.medio == "Email";
+					alertaSingleton.show(catalogoAlertas.compradorPhs_seActualizoMedioEmail,catalogoAlertas.TIT_ADV_atencion);
+					this.rdbEMail.selected = true;
+				}
+				for(var i:int = 0; i < this._listaUniverso.length; i++){
+					if( (this.listRequisiciones.selectedItem as RequisicionPhs).folio == ( this._listaUniverso.getItemAt(i) as RequisicionPhs ).folio ){
+						( this._listaUniverso.getItemAt(i) as RequisicionPhs ).medio = this.listRequisiciones.selectedItem.medio;
+					}
+				}
+			}
+			/**
+			 * Funcion para pasar Al inspector
+			 */ 
+			private function avanzaInspector():void{
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+				evento.idOpcionSeleccionada = "seleccionaInspector";
+				evento.partidaSeleccionada = this._opcionSeleccionada; //partidaConfirmacion.as
+				evento.requisicion = this.listRequisiciones.selectedItem as RequisicionPhs;
+				evento.rechazado = this._rechazo;
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion que nos permite visualizar la reuqisicion (formato pdf) 
+			 */ 
+			private function vizualisaPdf():void{
+				var ruta:URLRequest = new URLRequest();
+				ruta.url = RutasPdF.GENERAL_RUTA + ( this.listRequisiciones.selectedItem as RequisicionPhs ).folio + ".pdf";
+				navigateToURL(ruta);
+			}
+			/**
+			 * funcion que recibe del  mapaProveedoresConPa.mxml. la confirmacion de haber guardado correctamente los cambios 
+			 * El guardado de los datros se raliza desde el componente EspacioInspector.mxlx y llega a actualizar atraves del mapa aqui 
+			 */ 
+			public function set recibeConfirmacionRequisicionActualizada(confirma:Boolean):void{
+				if( confirma == false ){
+					return;
+				}
+				iniciaModoPartidasPorConfirmar( this._opcionSeleccionada,_rechazo );
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_conreq36x46}"/>
+		<label:labelSubtitulo text="REQUISICIONES"/>
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo fontSize="20" fontWeight="bold" color="#666666" id="lblProveedoresPAC"/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%">
+		<label:labelSubtitulo text="{this._opcionSeleccionada.nombreProveedor + ' · '}" fontSize="18" fontWeight="bold"/>
+		<label:labelSubtitulo text="{this._opcionSeleccionada.tipoProveedor}" fontSize="18" fontWeight="bold" color="#666666" />
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo fontSize="18" fontWeight="bold" id="lblTotalPartidas" text="100 Partidas  ·  20 ET  ·  80 FT "/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="2"/>
+	<s:HGroup width="100%" height="100%">
+		<s:VGroup height="100%" width="17%">
+			<s:ButtonBar  width="100%" id="toogleBar" selectedIndex="0" change="determinarFiltro( event )" >
+				<s:dataProvider>
+					<s:ArrayList>
+						<fx:String>TODO</fx:String>
+						<fx:String>E-Mail</fx:String>
+						<fx:String>Teléfono</fx:String>
+					</s:ArrayList>
+				</s:dataProvider>
+			</s:ButtonBar>
+			<s:List height="100%" width="100%" id="listRequisiciones" click="visualizaRequisicion( this.listRequisiciones.selectedItem)"  change="visualizaRequisicion(this.listRequisiciones.selectedItem )"
+					borderVisible="false" dataProvider="{_listaDeMiniRequisiciones}" 
+					itemRenderer="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.RequisicionMiniatura" />
+			<s:Spacer height="15"/>
+		</s:VGroup>
+		<s:Spacer width="7"/>
+		<otros:VDivisionHueca height="100%"/>
+		<s:Spacer width="7"/>
+		<s:VGroup width="100%" height="100%">
+			<s:HGroup width="100%">
+				<label:labelSubtitulo fontSize="18" fontWeight="bold" id="lblTotalPartidasRequisicion" text="RPH-XXXXXX-XXXX  :  100 Partidas  ·  20 ET  ·  80 FT " color="#999999"/>
+			</s:HGroup>
+			<s:Spacer height="2"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Spacer height="2"/>
+			<pqNet:dataGridPqNet width="100%" height="100%" dataProvider="{_listaPartidasConfirmacion}" wordWrap="true" id="dtgPAC">
+				<pqNet:columns>
+					<mx:DataGridColumn headerText="#" dataField="numFila" />			 					<!-- 0 -->
+					<mx:DataGridColumn headerText="Cotización" dataField="folioCotizacion" />				<!-- 1 -->
+					<mx:DataGridColumn headerText="Concepto" dataField="descripcionProducto" />				<!-- 2 -->
+					<mx:DataGridColumn headerText=" "  dataField="noPiezas" >								<!-- 3 -->
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<mx:Label fontSize="15" text="{data.noPiezas + ' Pzs.'}" width="100%" textAlign="left"  fontStyle="normal" fontFamily="Helvetica" color.selected="white"/>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Tipo" dataField="tipoProducto"  />						<!-- 4 -->
+					<mx:DataGridColumn headerText="Solicitó" dataField="solicitoESAC"  />					<!-- 5 -->
+					<mx:DataGridColumn headerText="Total Rechazos" dataField="numRechazos"/>				<!-- 6 -->
+					<mx:DataGridColumn headerText="Fecha Origen"  dataField="fechaInicioFormato"/>			<!-- 7 -->
+					<mx:DataGridColumn headerText="En espera desde" dataField="fechaInicioFormato" /> 		<!-- 8  fecha para los no rechazados	-->
+					<mx:DataGridColumn headerText="En espera desde" dataField="formatoFechaEnEspera"/>  	<!-- 9  fecha para los rechazados  -->
+					<mx:DataGridColumn headerText="Situación" dataField="situacionDisponibilidad">			<!--10-->
+						<mx:itemRenderer>
+							<fx:Component>
+								<mx:Label  width="100%" textAlign="center" fontStyle="normal" fontSize="15">
+									<fx:Script >
+										<![CDATA[
+											import mx.states.SetStyle;
+											override public function set data(value:Object):void{
+												super.data = value;
+												determinaColor();
+											}
+											public function determinaColor():void{
+												if( this.data.estatusTiempo == true ){
+													this.setStyle("fontFamily","Helvetica");
+													this.setStyle("color","0x70a047");
+													this.text = "ET";	
+												}else{
+													this.setStyle("fontFamily","Helvetica");
+													this.setStyle("color","0xd10c0c")
+													this.text = "FT";
+												}
+											}
+										]]>
+									</fx:Script>
+								</mx:Label> 
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+				</pqNet:columns>
+			</pqNet:dataGridPqNet>
+			<s:Spacer height="2"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Spacer height="2"/>
+			<s:HGroup width="100%" verticalAlign="middle">
+				<pqNet1:botonPqNetLargo label="Requisición" click="vizualisaPdf()" icono="requisicion" width="190"/>
+				<s:Spacer width="100%"/>
+				<s:HGroup verticalAlign="middle"  >
+					<s:RadioButton id="rdbEMail" click="AlertParaCambioAMail()"/>
+					<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_mail32}"/>		
+					<s:Label text="E-Mail" fontSize="18" fontWeight="bold"/>	
+				</s:HGroup> 
+				<s:Spacer width="3%"/>
+				<s:HGroup  verticalAlign="middle">
+					<s:RadioButton id="rdbTelefono" click="AlertParaCambioATelefono()"/>
+					<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_telefono32}" />		
+					<s:Label text="Télefono" fontSize="18" fontWeight="bold"/>	
+				</s:HGroup> 
+				<s:Spacer width="100%"/>
+				<pqNet1:botonPqNetLargo label="Inspector" click="avanzaInspector()" icono="inspector"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+</s:VGroup>

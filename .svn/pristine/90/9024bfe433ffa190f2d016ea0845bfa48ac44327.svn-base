@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:boton="mx.com.proquifa.vista.vistas.skin.boton.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%"
+		  creationComplete="init(event)" 
+		  xmlns:principal="mx.com.proquifa.vista.vistas.cargarFaltante.principal.*" 
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.cargarFaltante.EventoCargarFaltante;
+			import mx.com.proquifa.vista.vistas.cargarFaltante.PopUpConfirmarCerificado;
+			import mx.com.proquifa.vista.vistas.gestorCompras.itemrender.ListaFacturasDoc_IR;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			[Bindable]public var universo:ArrayCollection;
+			private var _currentOrden:OrdenDespacho = new OrdenDespacho();
+			public var esAdicional:Boolean;
+			private var query:Query;
+			
+			protected function init(event:FlexEvent):void
+			{
+				lblTituloSelec.text = "TODOS";
+				botonera.addEventListener("clicBotoneraTipo",filtrarTipo);
+				cargarArchivo.addEventListener("EnviarDocumentosConArchivosCargados",recibeArchivo,false,0,true);
+				cargarArchivo.addEventListener("noDisponible",guardarValorNoDisponble,false,0,true);
+				lstDocs.addEventListener(EventoCargarFaltante.ELIMINAR_ADICIONAL,actualizarAdicional);
+				cargarArchivo.addEventListener("guardarCambiosInfo",guardarInfo);
+			}
+			
+			public function set dataProvider($od:OrdenDespacho):void
+			{
+				var faltantes:int = 0;
+				botonera.resetBotonera();
+				currentOrden = $od; 
+				var $docs:ArrayCollection = new ArrayCollection();
+				$docs = ObjectUtil.copy($od.documentos) as ArrayCollection;
+				if($docs.length > 0)
+				{
+					for(var i:int = 0;i<$docs.length;i++){
+						$docs[i].numFila = i+1;
+						if((!$docs[i].cargado) && ($docs[i].tipo != "Adicional") )
+							faltantes++;
+					}
+					lstDocs.dataProvider = $docs;
+					universo = ObjectUtil.copy($docs) as ArrayCollection;
+				}
+				botonEnviarFaltante(faltantes == 0 ? true:false);
+				
+				query = new Query(universo,["tipo","idDocumentoOrdenDespacho","disponibilidad"],true);
+				botonera.contTotal = $docs.length;
+				botonera.contCert = query.getPunteros(["certificado"]).length;
+				botonera.contCartas = query.getPunteros(["cartauso"]).length;
+				botonera.contAdicional = query.getPunteros(["adicional"]).length;
+				
+				lstDocs.selectedIndex = 0;
+				esAdicional = false;
+				cargarArchivo.currentDocumentoOrden =  lstDocs.selectedItem as DocumentoOrdenDespacho;
+				currentState = "normal";
+				lblTituloSelec.text = "TODOS";
+			}
+			
+			[Bindable] public var font22:Number = 22;
+			[Bindable] public var font16:Number = 16;
+			[Bindable] public var padding20:Number = 20;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				
+				font22 = ( 23 / 1493) * unscaledWidth;
+				font22 = font22 > 23 ? 23:font22;
+				font22 = font22 < 12 ? 12:font22;
+			}
+			public function filtrarTipo(event:Event):void
+			{
+				var tipo:String;
+				switch(botonera.tituloSelect.toLowerCase()){
+					case "todos": tipo = "";
+						currentState = "normal";
+						break;
+					case "cartas de uso": tipo = "cartaUso";
+						currentState = "normal";
+						break;
+					case "certificados": tipo = "certificado";
+						currentState = "normal";
+						break;
+					case "adicionales": tipo = "adicional";
+						currentState = "adicional";
+						break;
+					default: "";
+						
+				}
+				lstDocs.dataProvider = UtilsGrid.queryCampoXLike(universo,"tipo",tipo);
+			}
+			
+			protected function clicDocumentos(event:IndexChangeEvent):void
+			{
+				cargarArchivo.currentDocumentoOrden = lstDocs.selectedItem as DocumentoOrdenDespacho;
+				cargarArchivo.cargarImagen();
+			}
+			
+			private function recibeArchivo(evt:Event):void
+			{
+				var documentoOD:DocumentoOrdenDespacho;
+				var ordenDespacho:OrdenDespacho;
+				var indice:int;
+				if(esAdicional){
+					documentoOD = new DocumentoOrdenDespacho();
+					documentoOD.archivo = cargarArchivo.currentDocumentoOrden.archivo;
+					documentoOD.tipo = "Adicional";
+					documentoOD.usuario = DatosGlobales.getInstance()._usuario.usuario.toUpperCase();
+					documentoOD.nombreDocumento = cargarArchivo.currentDocumentoOrden.nombreDocumento; 
+					documentoOD.tituloDocumento = cargarArchivo.currentDocumentoOrden.tituloDocumento; 
+					documentoOD.notas = cargarArchivo.currentDocumentoOrden.notas; 
+					documentoOD.rutaAcceso = "ordendespacho"; 
+					
+					
+					ordenDespacho = ObjectUtil.copy(currentOrden) as OrdenDespacho;
+					ordenDespacho.documentos.addItem(documentoOD);
+				}
+				else{
+					documentoOD = ObjectUtil.copy(cargarArchivo.currentDocumentoOrden) as DocumentoOrdenDespacho;
+					ordenDespacho = ObjectUtil.copy(currentOrden) as OrdenDespacho;
+					ordenDespacho.documentos.setItemAt(documentoOD,lstDocs.selectedIndex);
+				}
+				esAdicional = false;
+				
+				var evento:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.CARGAR_ARCHIVO_ORDEN_DESPACHO_CARGAR_FALTANTE);
+				evento.ordenDespacho = ordenDespacho;
+				dispatchEvent(evento);
+			}
+			
+			public function get currentOrden():OrdenDespacho
+			{
+				return _currentOrden;
+			}
+			
+			public function set currentOrden(value:OrdenDespacho):void
+			{
+				_currentOrden = value;
+			}
+			
+			public function set recibeDocumentosCargados(value:ArrayCollection):void
+			{
+				/*if(value != null){
+				var indice:int = lstDocs.selectedIndex;
+				lstDocs.dataProvider = value;
+				lstDocs.selectedIndex = indice;
+				}*/
+				recargarArchivos();
+			}
+			
+			private function botonEnviarFaltante($value:Boolean):void
+			{
+				if($value){
+					btnGenerar.cambiarColor("#4ba92b");
+				}
+				else{
+					btnGenerar.cambiarColor("#ffa703");
+				}
+			}
+			
+			protected function guardarDocumentos(event:MouseEvent):void
+			{
+				var queryTemp:Query;
+				queryTemp = new Query(universo,["disponibilidad","autorizado"],true);
+				var temp:int = queryTemp.getPunteros(['true']).length;
+				var tempAutorizado:int = queryTemp.getPunteros([null,'true']).length;
+				if(temp > 0 && !verificarAutorizados(queryTemp)){
+					var eve:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.VERIFICAR_CERTIFICADOS);
+					eve.certificadosNoDisponibles = temp > 0 ? true : false;
+					dispatchEvent(eve);
+					var evento:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.CARGAR_VALIDACION_AUTORIZACION);
+					evento.tipoAutorizacion = "ValidarCertificadosNoDisponibles";
+					dispatchEvent(evento);
+				}
+				else{
+					enviarGuardarDocumento();
+				}
+				/*verificarCertificados();*/
+			}
+			private function verificarAutorizados(query:Query):Boolean
+			{
+				var resultado:Boolean;
+				var array:Array = query.getPunteros(['true']);
+				for (var i:int = 0; i < array.length; i++) 
+				{
+					if(!(query.universo.getItemAt(array[i]) as DocumentoOrdenDespacho).autorizado){
+						resultado = false;
+						break;
+					}else
+						resultado = true;
+					
+				}
+				return resultado;
+			}
+			
+			protected function enviarDoumentosCorreo(event:MouseEvent):void
+			{
+				var evt:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.ENVIAR_DOCUMENTOS_CARGAR_FALTANTES);
+				evt.ordenDespacho = currentOrden;
+				dispatchEvent(evt);
+			}
+			
+			protected function cargarAdicional(event:MouseEvent):void
+			{
+				cargarArchivo.cargarArchivos(event);
+				esAdicional = true;
+			}
+			
+			private function actualizarAdicional(evt:EventoCargarFaltante):void
+			{
+				var documentoOD:DocumentoOrdenDespacho;
+				var ordenDespacho:OrdenDespacho;
+				var indice:int;
+				
+				documentoOD = ObjectUtil.copy(cargarArchivo.currentDocumentoOrden) as DocumentoOrdenDespacho;
+				ordenDespacho = ObjectUtil.copy(currentOrden) as OrdenDespacho;
+				/*Quitar de la lsita */
+				for(var x:int; x < ordenDespacho.documentos.length; x++){
+					if(ordenDespacho.documentos[x].idDocumentoOrdenDespacho == evt.idDocumento){
+						ordenDespacho.documentos.removeItemAt(x);
+						break;
+					}
+				}
+				
+				var evento:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.CARGAR_ARCHIVO_ORDEN_DESPACHO_CARGAR_FALTANTE);
+				evento.ordenDespacho = ordenDespacho;
+				dispatchEvent(evento);
+			}
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				lstDocs.dataProvider = UtilsGrid.queryCampoXLike(universo,"campoBusqueda",textBusqueda.text);
+			}
+			public function recargarArchivos():void
+			{
+				var err:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.OBTENER_ORDEN_DESPACHO_FALTANTES);
+				err.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(err);
+				cargarArchivo.cargarImagen();
+			}
+			private function guardarValorNoDisponble(evt:Event):void
+			{
+				var indice:int;
+				if(cargarArchivo.chkCetificado.selected){
+					if(lstDocs.selectedItem != null)
+						(lstDocs.selectedItem as DocumentoOrdenDespacho).disponibilidad = true;
+					cargarArchivo.grpTodo.enabled = false;
+					if(lstDocs.selectedItem != null){
+						indice = query.getPunteros([null,lstDocs.selectedItem.idDocumentoOrdenDespacho])[0]
+						universo[indice].disponibilidad = true;
+					}
+				}
+				else{
+					if(lstDocs.selectedItem != null)
+						(lstDocs.selectedItem as DocumentoOrdenDespacho).disponibilidad = false;
+					cargarArchivo.grpTodo.enabled = true;
+					if(lstDocs.selectedItem != null){
+						indice = query.getPunteros([null,lstDocs.selectedItem.idDocumentoOrdenDespacho])[0]
+						universo[indice].disponibilidad = false;
+					}
+				}
+			}
+			public function enviarGuardarDocumento():void
+			{
+				asignarAutorizacion();
+				var evt:EventoCargarFaltante = new EventoCargarFaltante(EventoCargarFaltante.GUARGAR_DOCUMENTOS_CARGAR_FALTANTES);
+				//METER DISPONIBILIDAD
+				evt.ordenDespacho = currentOrden;
+				evt.ordenDespacho.documentos = universo;
+				dispatchEvent(evt);
+			}
+			private function guardarInfo(evt:Event):void
+			{
+				if(lstDocs == null)
+					return; 
+				else if(lstDocs.selectedItem < 0)
+					return;
+				
+				universo[lstDocs.selectedIndex] = ObjectUtil.copy(cargarArchivo.currentDocumentoOrden) as DocumentoOrdenDespacho;
+			}
+			private function asignarAutorizacion():void
+			{
+				var indice:int;//_autorizado
+				for (var i:int = 0; i < universo.length; i++) 
+				{
+					if(universo[i].disponibilidad == true && universo[i].autorizado == false){
+						universo[i].autorizado = true;
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="adicional" />
+	</s:states>
+	
+	
+	<!--  /////////////// LISTA  /////////////// -->
+	<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="20" paddingTop="17" >
+		
+		<s:HGroup width="100%" verticalAlign="middle" paddingBottom="10">
+			<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" fontSize="{font22}"  text="{EventoCargarFaltante.folioSelect}" textAlign="left" paddingTop="0" color="#008895" />
+			<s:Spacer width="100%" />
+			<pqNet:botonPqNetLargo id="btnGuardar"  height="30" label="GUARDAR" colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" click="guardarDocumentos(event)"/>
+			<pqNet:botonPqNetLargo id="btnGenerar" height="30" label="ENVIAR" colorBase="#ffa703" click="enviarDoumentosCorreo(event)"/>
+		</s:HGroup> 
+		<otros:divisionDegradado width="100%" />
+		
+		
+		<s:HGroup width="100%" height="100%" >
+			
+			
+			<s:VGroup width="40%" height="100%" paddingTop="20" paddingBottom="5" horizontalAlign="center" paddingRight="10">
+				
+				<boton:BotoneraDocumentosFaltantes id="botonera" width="100%" />
+				
+				
+				<s:HGroup width="100%" paddingTop="20" paddingBottom="20" verticalAlign="middle">
+					
+					<s:Label styleName="tab_texto_14_Helvetica" id="lblTituloSelec" width.normal="40%" width.adicional="100%" fontWeight="bold" fontSize="18"  text="{botonera.tituloSelect}" textAlign="left" paddingTop="0" />
+					<s:Spacer width.normal="10%" width.adicional="0%" />
+					<s:TextInput fontStyle="normal" id="textBusqueda" width="50%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D"  change="txtBuscador_changingHandler(event)"
+								 prompt="Tipo de Documento" text="" includeIn="normal" />
+					<s:HGroup width="50%" height="100%" includeIn="adicional" click="cargarAdicional(event)" horizontalAlign="right">
+						<s:HGroup id="btnCargarAdicional" width="150" height="30" horizontalAlign="center" verticalAlign="middle" includeIn="adicional" paddingRight="0">
+							<s:Group width="100%" height="100%" >
+								<s:Rect width="100%" height="100%">
+									<s:fill >
+										<s:SolidColor color="#008894" />
+									</s:fill>
+								</s:Rect>
+								<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+									<mx:Image source="{catalogoIconosBotones.getInstance().cruz_blanco_cargar}" />
+									<label:TituloNovecento_14 fontWeight="bold" color="#ffffff" text="CARGAR" textAlign="center" fontSize="18"/>
+								</s:HGroup>  
+							</s:Group>
+						</s:HGroup>  
+					</s:HGroup>  
+					
+				</s:HGroup>  
+				
+				
+				
+				<s:List width="100%" height="100%"  borderVisible="false" horizontalScrollPolicy="off" id="lstDocs" 
+						itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.ListaDocFaltantesOD_IR" 
+						changing="clicDocumentos(event)"
+						/>
+				
+				<otros:division width="100%" />
+				
+				<s:HGroup width="100%" height="40" horizontalAlign="center">
+					<label:Texto_16_Helvetica  text="{lstDocs.dataProvider.length.toString() + ' Documentos'}" color="#424242" fontSize="{font16}"/>
+				</s:HGroup>
+				
+			</s:VGroup>  
+			
+			<otros:divisionDegradadoVertical width="10" height="100%" />
+			
+			<s:HGroup width="100%" height="100%" horizontalAlign="center">
+				<principal:CargarFaltante_CargaArchivo id="cargarArchivo" width="100%" height="100%" paddingTop="20" paddingLeft="10"/>
+			</s:HGroup>
+		</s:HGroup>  
+		
+		
+		
+	</s:VGroup>  
+	
+</s:VGroup>  

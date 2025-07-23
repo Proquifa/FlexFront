@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:altos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.altos.*"
+		  xmlns:todos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.todos.*"
+		  xmlns:hd="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" 
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.utils.ObjectUtil;
+			
+			public const CLIENTE_VISTA:String = "cliente";
+			public const ESAC_VISTA:String = "esac";
+			public const EV_VISTA:String = "ev";
+			
+			public var _currentVista:String = CLIENTE_VISTA;
+			public var _nivelSeleccionado:String = "TODOS";
+			
+			[Bindable]
+			private var vistaCliente:Boolean = true;
+			
+			private var updateCalculosVCliente:Boolean = false;
+			private var updateCalculosVEsac:Boolean = false;
+			private var currentClientes:ArrayCollection;
+			private var _event:EventoTableroClientes;
+			private var _filtros:EventoTableroClientes;
+			private var altoRequerido:Number;
+			private var _sql:Query;
+			
+			//GRID
+			private var todosAltosProvider:ArrayCollection;
+			private var aaplusProvider:ArrayCollection;
+			private var aaProvider:ArrayCollection;
+			private var amProvider:ArrayCollection;
+			private var abProvider:ArrayCollection;
+			
+			public function get filtros():EventoTableroClientes
+			{
+				return _filtros;
+			}
+			
+			public function set filtros(value:EventoTableroClientes):void
+			{
+				if (!value)
+					return;
+				
+				_filtros = value;
+				altosVista_ESAC.filtros = _filtros;
+				totalesClientes.filtros = _filtros;
+				altosVista_EV.filtros = _filtros;
+			}
+			
+			public function set recibeListaResumenVentasTodosClientesAltos($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+					return;
+				
+				_sql = new Query($clientes,["nivelIVista","usuarioVista","conceptoResultado","etiqueta"]);
+				
+				hacerCalculosVistaCliente(); 
+			}
+			
+			private function hacerCalculosVistaCliente():void
+			{
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					updateCalculosVCliente = false;
+					var punterosAltos:Array = _sql.getPunteros([null,null,null,"ALTOS"]);
+					var punterosAAplus:Array = _sql.getPunteros(["AA+"]);
+					var punterosAA:Array = _sql.getPunteros(["AA"]);
+					var punterosAM:Array = _sql.getPunteros(["AM"]);
+					var punterosAB:Array = _sql.getPunteros(["AB"]);
+					
+					todosAltosProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosAltos)) as ArrayCollection,punterosAltos);
+					aaplusProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosAAplus)) as ArrayCollection,punterosAAplus);
+					aaProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosAA)) as ArrayCollection,punterosAA);
+					amProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosAM)) as ArrayCollection,punterosAM);
+					abProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosAB)) as ArrayCollection,punterosAB);
+					
+					settearGrid();
+				}
+				else
+				{
+					listAltos.dataProvider = new ArrayCollection();
+					totalesClientes.calcularTotales(new ArrayCollection()); 
+				}
+			}
+			
+			public function setEvento($arreglo:ArrayCollection,$punteros:Array):ArrayCollection
+			{
+				if(_filtros)
+				{
+					var granTotal:Number = _sql.getSumarCampo("total",$punteros);
+					var granTotalAnterior:Number = _sql.getSumarCampo("montoAnterior",$punteros);	
+					Util.sortArray($arreglo,"total",true);
+					
+					for (var u:int=0; u < $arreglo.length; u++)
+					{
+						var temp:ResumenConsulta = $arreglo[u];
+						if(u == ($arreglo.length-1))
+							temp.nivelI = "ultimo";
+						temp.eventoTabClientes = _filtros;
+						temp.numFila = (u+1);
+						temp.porcentaje = ((temp.total * 100)/granTotal);
+						temp.porcentaje2 = ((temp.montoAnterior * 100)/granTotalAnterior);
+					}
+				}
+				return $arreglo;
+			}
+			
+			public function settearGrid():void
+			{
+				switch(_nivelSeleccionado)
+				{
+					case "TODOS":
+					{
+						lblTitulo.text="ALTOS"
+						listAltos.dataProvider = todosAltosProvider;
+						totalesClientes.calcularTotales(todosAltosProvider);
+						break;
+					}
+					case "AA+":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listAltos.dataProvider = aaplusProvider;
+						totalesClientes.calcularTotales(aaplusProvider);
+						break;
+					}
+					case "AA":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listAltos.dataProvider = aaProvider;
+						totalesClientes.calcularTotales(aaProvider);
+						break;
+					}
+					case "AM":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listAltos.dataProvider = amProvider;
+						totalesClientes.calcularTotales(amProvider);
+						break;
+					}
+					case "AB":
+					{
+						lblTitulo.text = _nivelSeleccionado;
+						listAltos.dataProvider = abProvider;
+						totalesClientes.calcularTotales(abProvider); 
+						break;
+					}
+						
+					default:
+					{
+						lblTitulo.text = "";
+						listAltos.dataProvider = new ArrayCollection();
+						totalesClientes.calcularTotales(new ArrayCollection); 
+						break;
+					}
+				}
+			}
+			
+			private function selecionarVista():void
+			{
+				if (_currentVista == ESAC_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = false;
+					altosVista_ESAC.visible = altosVista_ESAC.includeInLayout = true;
+					altosVista_EV.visible = altosVista_EV.includeInLayout = false;
+				}
+				else if(_currentVista == CLIENTE_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = true;
+					altosVista_ESAC.visible = altosVista_ESAC.includeInLayout = false;					
+					altosVista_EV.visible = altosVista_EV.includeInLayout = false;
+				}
+				else if(_currentVista == EV_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = false;
+					altosVista_ESAC.visible = altosVista_ESAC.includeInLayout = false;					
+					altosVista_EV.visible = altosVista_EV.includeInLayout = true;
+				}
+			}
+			
+			protected function cambioVista(event:Event):void
+			{
+				_currentVista = checkBusqueda.selected;
+				selecionarVista();
+				
+				if (_currentVista == ESAC_VISTA)
+					lblTitulo.text="ALTOS";
+				else if (_currentVista == CLIENTE_VISTA)
+					lblTitulo.text = _nivelSeleccionado == "TODOS" ? "ALTOS":_nivelSeleccionado;
+				else if (_currentVista == EV_VISTA)
+					lblTitulo.text = "ALTOS";
+				
+				var evt:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.CAMBIOS_GRAFICA_ALTOS);
+				evt.currentVista = _currentVista;
+				dispatchEvent(evt);
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup id="grpContenedorPrincipal" width="100%" height="57"  paddingLeft="20" paddingRight="20" verticalAlign="middle" >
+		<label:Titulo_22_pTop10 id="lblTitulo" paddingTop="15"/>
+		<s:Spacer width="100%" />
+		<s:VGroup height="50" width="220" paddingTop="7" >
+			<hd:switchVentasPeriodo id="checkBusqueda" width="100%" height="100%" click="cambioVista(event)"/>
+		</s:VGroup>
+	</s:HGroup>
+	
+	
+	<!-- /////////////// ESTA ES LA PARTE DE CLIENTES  ///////////////  -->
+	<s:VGroup id="grpClientes" width="100%" height="100%">
+		<s:VGroup width="100%" height="100%" gap="0">
+			
+			<hd:AV_Header_Clientes width="100%" />
+			<s:List id="listAltos" borderVisible="false" width="100%" height="100%"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.altos.IR_AnalisisVentas_Altos_Clientes" />
+		</s:VGroup>
+		<altos:Totales_Altos_Clientes id="totalesClientes" width="100%" />
+	</s:VGroup>
+	
+	
+	<!-- /////////////// ESTA ES LA PARTE DE ESAC  ///////////////  -->
+	<altos:AnalisisVenta_areaAltos_ESAC id="altosVista_ESAC" width="100%" height="100%" visible="false" includeInLayout="false" />
+	
+	<!-- /////////////// ESTA ES LA PARTE DE EV   ///////////////  -->
+	<altos:AnalisisVenta_areaAltos_EV id="altosVista_EV" width="100%" height="100%" visible="false" includeInLayout="false" />
+	
+</s:VGroup>

@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 creationComplete="init()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.grupoEmpresarial.EventoCatalogoGrupoEmpresarial;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable]
+			public var _idempresa:Number;
+			private var _conceptos:ArrayCollection;
+			private var _idConcepto:Number;
+			private var _seEliminaConcepto:Boolean;
+			private var _universoConceptos:ArrayCollection;
+			private function init():void{
+				this.addEventListener( EventoCatalogoGrupoEmpresarial.ELIMINAR_CONCEPTOS, eliminaConceptos );
+				
+				var $evt1:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.CONSULTA_CLAVE_UNIDAD );
+				dispatchEvent( $evt1 );
+				var $evt2:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.CONSULTA_CLAVE_PROD_SERV );
+				dispatchEvent( $evt2 );
+				
+			}
+			
+			public function set ObtenConceptos( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				for( var i:int = 0; i < $datos.length; i++ ){
+					( $datos[i] as ConceptoFactura).numFila =  i+1;
+					( $datos[i] as ConceptoFactura).descClaveProdServ = cmbClaveProd.dataProvider[( $datos[i] as ConceptoFactura).claveProdServ].valor;
+					( $datos[i] as ConceptoFactura).descClaveUnidad = cmbUnidad.dataProvider[( $datos[i] as ConceptoFactura).claveUnidad].valor;
+				}
+				this.lstConceptos.dataProvider = new ArrayCollection();
+				this.lstConceptos.dataProvider = ObjectUtil.copy( $datos )as ArrayCollection;
+				_universoConceptos = new ArrayCollection();
+				_universoConceptos = ObjectUtil.copy( $datos ) as ArrayCollection;
+			}
+			
+			private function eliminaConceptos( $evt:EventoCatalogoGrupoEmpresarial ):void{
+				_seEliminaConcepto = true;
+				_idConcepto = $evt.idConcepto;
+				alertaSingleton.show( catalogoAlertas.ELIMINAR ,catalogoAlertas.TIT_ADV_atencion,'catalogoEmpresasdelGrupo','','','SI','NO')
+			}
+			
+			public function set recibeDelAlert( $dato:ResultAlert ):void{
+				if( $dato == null || $dato.vieneD == null ){
+					return;
+				}
+				if( $dato.vieneD == "catalogoEmpresasdelGrupo" ){
+					method1( $dato );
+				}
+			}
+			private function method1( $dato:ResultAlert ):void{
+				if( $dato.botonSeleccionado == "SI" && _seEliminaConcepto){
+					var evt:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.ELIMINAR_CONCEPTOSBD );
+					evt.idConcepto = _idConcepto;
+					dispatchEvent( evt );
+					_seEliminaConcepto = false;
+				}
+			}
+			
+			public function set confirmaEliminacionConcepto( $dato:Boolean ):void{
+				if( $dato == false ){
+					return;
+				}
+				Alert.show("El concepto de factura se ha eliminado");
+			}
+			
+			public function agregaConcepto():void{
+				if( this.txtDescripcion.text != '' && cmbClaveProd.selectedIndex != 0 && cmbUnidad.selectedIndex != 0){
+					var evt:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.AGREGA_CONCEPTOS );
+					evt.concepto = new ConceptoFactura();
+					evt.concepto.descripcion = this.txtDescripcion.text;
+					evt.concepto.idEmpresa = this._idempresa;
+					evt.concepto.claveUnidad = cmbUnidad.selectedIndex;
+					evt.concepto.claveProdServ = cmbClaveProd.selectedIndex;
+					dispatchEvent( evt );
+					this.txtDescripcion.text = '';
+				}else{
+					alertaSingleton.show( 'Debe escribir una descripción, seleccionar una clave unidad y una clave Prod. Serv.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				}
+			}
+			
+			private function filtroPorTexto():void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				
+					listaAFiltrar = ObjectUtil.copy( _universoConceptos ) as ArrayCollection;
+					if( busquedaConceptos.text  != "")
+					{
+						_listaVisual = UtilsGrid.queryCampoXLike( listaAFiltrar, 'descripcion', busquedaConceptos.text );
+					}
+					else
+					{
+						_listaVisual = ObjectUtil.copy( _universoConceptos ) as ArrayCollection; 
+					}
+					lstConceptos.dataProvider=_listaVisual;
+			}
+			
+			public function rellenaCombos( arrayClaveUnidad:ArrayCollection, arrayClaveProdServ:ArrayCollection):void{
+				
+				var objClaveUnidad:CatalogoItem = new CatalogoItem;
+				var objClaveProd:CatalogoItem = new CatalogoItem;
+				
+				if(arrayClaveUnidad && arrayClaveUnidad.length > 0 && arrayClaveUnidad.getItemAt(0).valor != "--SELECCIONA CLAVE UNIDAD--"){
+					objClaveUnidad.llave = 0;
+					objClaveUnidad.valor = "--SELECCIONA CLAVE UNIDAD--";
+					arrayClaveUnidad.addItemAt(objClaveUnidad, 0);
+				}
+				
+				if(arrayClaveProdServ && arrayClaveProdServ.length > 0 && arrayClaveProdServ.getItemAt(0).valor != "--SELECCIONA CLAVE PROD.--"){
+					objClaveProd.llave = 0;
+					objClaveProd.valor = "--SELECCIONA CLAVE PROD.--";
+					arrayClaveProdServ.addItemAt(objClaveProd, 0);
+				}
+				
+				cargarClaveUnidad(arrayClaveUnidad);
+				cargarClaveProd(arrayClaveProdServ);
+				
+				if(lstConceptos.selectedItem != undefined && lstConceptos.selectedItem.claveProdServ > 0)
+					cmbClaveProd.selectedIndex = cmbClaveProd.seleccionarValor(lstConceptos.selectedItem.claveProdServ);
+				else
+					cmbClaveProd.selectedIndex = 0;
+				
+				if(lstConceptos.selectedItem != undefined && lstConceptos.selectedItem.claveUnidad > 0)
+					cmbUnidad.selectedIndex = cmbUnidad.seleccionarValor(lstConceptos.selectedItem.claveUnidad);
+				else
+					cmbUnidad.selectedIndex = 0;
+			}
+			
+			private function cargarClaveUnidad(claveUnidad:ArrayCollection):void{
+				if (claveUnidad != null && claveUnidad.length > 0 ){
+					cmbUnidad.dataProvider = claveUnidad;
+				}
+			}
+			
+			private function cargarClaveProd(claveProd:ArrayCollection):void{
+				if (claveProd != null && claveProd.length > 0 ){
+					cmbClaveProd.dataProvider = claveProd;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<!--<s:Spacer height="15"/>-->
+	<s:HGroup width="100%">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_menulineas}"/>
+		<s:Label text="CATÁLOGO DE CONCEPTOS" fontSize="15" height="100%" verticalAlign="middle" fontWeight="bold"/> 
+	</s:HGroup>
+	<s:Spacer height="5"/>
+	
+	<otros:division width="100%" />
+	<s:HGroup width="100%" paddingTop="15" paddingBottom="15">
+		<s:TextInput fontStyle="normal" id="busquedaConceptos" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Concepto" text="" change="filtroPorTexto()" enter="filtroPorTexto()" />
+	</s:HGroup>
+	
+	<otros:division width="100%"/>
+	<s:Spacer height="10"/>
+	<s:HGroup width="100%">
+		<s:VGroup width="100%">
+			<s:TextInput width="100%" height="100%" verticalCenter="0" id="txtDescripcion" fontStyle="normal"/>
+			<s:Spacer width="10"/>
+			<s:HGroup width="100%">
+				<s:VGroup width="100%" >
+					<s:Label text="Clave Unidad:"  fontWeight="bold"/>
+					<cmbCat:ComboCatalogos id="cmbUnidad" fontSize="14" width="100%" height="28" />
+				</s:VGroup>
+				
+				<s:Spacer height="3"/>
+				
+				<s:VGroup width="100%" >
+					<s:Label text="Clave Producto:" fontWeight="bold"/>
+					<cmbCat:ComboCatalogos id="cmbClaveProd" fontSize="14" width="100%" height="28" />
+				</s:VGroup>
+			</s:HGroup>  
+		</s:VGroup>
+		<s:Spacer width="10"/>
+		<pqNet:botonPqNetLargo icono="agregar" click="agregaConcepto()" colorBase="0x2e99b4" gradientePqnet="true" height="83"/>
+	</s:HGroup>
+	
+	<s:Spacer height="10"/>
+	<otros:division width="100%"/>
+	<s:List width="100%" height="100%" borderVisible="false" selectionColor="#ffffff" id="lstConceptos" horizontalScrollPolicy="off"
+			itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.empresaDelGrupo.vistas.itemRenderer.CatalogoEmpresasITRConceptos"/>
+	
+</s:VGroup>

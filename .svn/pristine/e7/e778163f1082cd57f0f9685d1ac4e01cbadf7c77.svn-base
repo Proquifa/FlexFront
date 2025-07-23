@@ -1,0 +1,995 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:chekbox="skins.skin.chekbox.*" 
+		 xmlns:shaders="skins.skin.shaders.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:textinput="skins.skin.textinput.*" 
+		 xmlns:textarea="skins.skin.textarea.*"
+		 width="100%" height="100%"> 
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.CatProveedoresDefault;
+			import mx.core.IVisualElement;
+			import mx.events.EffectEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			private var activaCambios:Boolean;
+			[Bindable]
+			private var _proveedor:Proveedor;
+			private var _proveedorRespaldo:Proveedor;
+			private var _seGuardaImagen:Boolean;
+			
+			public function ocultaGrupoImagen():void
+			{
+				if( _proveedor != null )
+				{
+					
+					if( isNaN( _proveedor.idProveedor) )
+					{
+						//YA NOS E HACE NADA
+					}
+					else
+					{
+						_ocultarMostrarMenuBool = true;
+						_seGuardaImagen=false; 
+						grpInfo.percentHeight = 100;
+						grpInfo.percentWidth = 100;
+						if( btnCancelar.visible )
+						{
+							grpGuardarCancelar.visible = false;
+							btnEditar.visible = true;
+						}
+					}
+				}
+			}
+			
+			public function set recibeProveedorSeleccionado($pro:Proveedor):void
+			{
+				seEstaEditando=true;
+				if (!CatProveedoresDefault.agregarProveedor)
+					acomodaTiempo();
+				recibeProveedorFlujo( $pro );
+				rolUsuario();
+			}
+			
+			private function rolUsuario():void{
+				if ( DatosGlobales.getInstance()._usuario.nombreFuncion == "Comprador" ){
+					cmbComprador.enabled = false;
+					cmbPagador.enabled = false;
+				}
+			}
+			
+			public function recibeProveedorFlujo($pro:Proveedor):void
+			{
+				isSocioComercialAntesDeDeshabilitarlo = false
+				_proveedor = $pro;
+				_proveedorRespaldo = ObjectUtil.copy( $pro ) as Proveedor;
+				_seGuardaImagen = false;
+				activaCambios = false;
+				grpBotonEditar.visible = true;
+				
+				seleccionarEnCmbPais();
+				seleccionarEnCmbComprador();
+				seleccionarEnCmbPagador();
+				seleccionarEnCmbInspector();
+				seleccionarEnCmbRanking();
+				seleccionarEnCmbRol();
+				
+				grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = false;
+				grpBotones.visible = grpBotones.includeInLayout = false;
+				grpImagen.visible = false;
+				
+				chkHabilitado.selected = false;
+				chkSocioComercial.selected = false;
+				
+				if( isNaN( _proveedor.idProveedor ) )//es nuevo proveedor por agregar
+				{ 
+					grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = true;
+					
+					cmbPais.selectedIndex = 0;
+					cmbComprador.selectedIndex = 0;
+					cmbPagador.selectedIndex = 0;
+					cmbInspector.selectedIndex = 0;
+					
+					cmbRol.selectedIndex = 0;
+					cmbRanking.selectedIndex = 0;
+					
+					_ocultarMostrarMenuBool = true;
+					seEstaEditando=false;
+					editarInfo();
+					imagenMuestraOculta();
+					empiezaTimer();
+				}
+				else
+				{
+					habilitaTextos(false);
+					grpBotones.visible = grpBotones.includeInLayout = true;
+					
+					if( _proveedor.habilitado )
+					{
+						chkHabilitado.selected = true;
+						if( _proveedor.socioComercial )
+						{
+							chkSocioComercial.selected = true;
+						}
+					}
+				} 
+			}
+			
+			private	var temporizador:Timer;
+			private function empiezaTimer():void
+			{
+				temporizador = new Timer(500,0);
+				temporizador.removeEventListener(TimerEvent.TIMER,habilitaTextoAgregar);
+				temporizador.addEventListener(TimerEvent.TIMER,habilitaTextoAgregar,false,0,true);
+				temporizador.start();
+			}
+			
+			private function habilitaTextoAgregar(event:TimerEvent):void
+			{
+				temporizador.stop();
+				habilitaTextos(true);
+			}
+			
+			private function seleccionarEnCmbPais():void
+			{
+				if( cmbPais.dataProvider != null && cmbPais.dataProvider.length > 0 )
+				{
+					cmbPais.selectedIndex = cmbPais.seleccionarValor(_proveedor.pais);
+				}
+				else
+				{
+					setTimeout( seleccionarEnCmbPais, 500 );
+				}
+			}
+			
+			private function seleccionarEnCmbRol():void
+			{
+				if( cmbRol.dataProvider != null && cmbRol.dataProvider.length > 0 )
+				{
+					cmbRol.selectedIndex = cmbRol.seleccionarValor(_proveedor.rol);
+				}
+				else
+				{
+					setTimeout( seleccionarEnCmbRol, 500 );
+				}
+			}
+			
+			private function seleccionarEnCmbRanking():void
+			{
+				if( cmbRanking.dataProvider != null && cmbRanking.dataProvider.length > 0 )
+				{
+					cmbRanking.selectedIndex = cmbRanking.seleccionarValorPorNumero(_proveedor.ranking,'llave');
+				}
+				else
+				{
+					setTimeout( seleccionarEnCmbRanking, 500 );
+				}
+			}
+			
+			private function seleccionarEnCmbComprador():void
+			{
+				if( cmbComprador.dataProvider != null && cmbComprador.dataProvider.length > 0 )
+				{
+					cmbComprador.selectedIndex = cmbComprador.seleccionarValor(_proveedor.comprador.toString(),"llave"); 
+				}
+				else
+				{
+					setTimeout( seleccionarEnCmbComprador, 500 );
+				}
+			}
+			
+			private function seleccionarEnCmbPagador():void
+			{
+				if( cmbPagador.dataProvider != null && cmbPagador.dataProvider.length > 0 )
+				{
+					cmbPagador.selectedIndex = cmbPagador.seleccionarValor(_proveedor.pagador.toString(),"llave"); 
+				}
+				else
+				{
+					setTimeout( seleccionarEnCmbPagador, 500 );
+				}
+			}
+			
+			private function seleccionarEnCmbInspector():void
+			{
+				if( cmbInspector.dataProvider != null && cmbInspector.dataProvider.length > 0 )
+				{
+					cmbInspector.selectedIndex = cmbInspector.seleccionarValor(_proveedor.inspector.toString(),"llave"); 
+				}
+				else
+				{
+					setTimeout( seleccionarEnCmbInspector, 500 );
+				}
+			}
+			
+			private function enviaIdSeleccionado():void
+			{
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.ACTUALIZA_PROVEEDORES_DE_GENERALES );
+				evt.idProveedor = _proveedor.idProveedor;
+				//evt.habilitado = chkHabiiltado.selected;
+				dispatchEvent( evt );
+				guardaCambios();
+				var $evtP:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+				$evtP.busquedaProveedores = 'Todos';
+				$evtP.empleado = DatosGlobales.getInstance()._usuario;
+				dispatchEvent($evtP);
+			}
+			
+			private function guardaCambios( vieneDe:String = '' ):void
+			{ 
+				//se dispara el evento que regresa el proveedor al componente CatProMenu.mxml para guardar
+				
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.GUARDAR_PROVEEDOR );
+				
+				if( isNaN(_proveedor.idProveedor) )
+				{ 
+					evt = new EventoCatProGeneral( EventoCatProGeneral.CREA_NUEVO_PROVEEDOR );
+				}
+				evt.proveedorSeleccionado = _proveedor;
+				
+				if( chkHabilitado.selected )
+				{
+					evt.proveedorSeleccionado.socioComercial = chkSocioComercial.selected;
+					
+					if( txtNombre.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el nombre.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtRazonSocial.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar la razón social.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+					if( txtDireccion.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar la dirección.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+					if( cmbPais.selectedIndex < 0  )
+					{
+						alertaSingleton.show("Es necesario indicar indicar un país.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtCiudad.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar la ciudad.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtEstado.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el estado.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtCP.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el CP.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+					if( ! validarPorcetajePositivoNoVacioMayorACero(txtObjetivoCrecimiento))
+					{
+						alertaSingleton.show("Es necesario indicar un objetivo de crecimiento válido.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( ! validarPorcetajePositivoNoVacioMayorACero(txtObjetivoCrecimientoFundamental))
+					{
+						alertaSingleton.show("Es necesario indicar un objetivo de crecimiento válido.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+					if( cmbComprador.selectedIndex == 0 )
+					{
+						alertaSingleton.show("Es necesario indicar el comprador.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+					if( cmbPagador.selectedIndex == 0 )
+					{
+						alertaSingleton.show("Es necesario indicar el pagador.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+					if( cmbInspector.selectedIndex == 0 )
+					{
+						alertaSingleton.show("Es necesario indicar el inspector.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					
+				}
+				else
+				{
+					evt.proveedorSeleccionado.socioComercial = false;
+					txtObjetivoCrecimiento.errorString = "";
+				}
+				
+				
+				/* evt.proveedorSeleccionado = _proveedor; */
+				
+				
+				evt.proveedorSeleccionado.pais = cmbPais.selectedItem.valor; 
+				evt.proveedorSeleccionado.ciudad = txtCiudad.text;
+				evt.proveedorSeleccionado.cp = txtCP.text;
+				evt.proveedorSeleccionado.descripcionAmpliada = txtDescripcionAmpliada.text;
+				evt.proveedorSeleccionado.calle  = txtDireccion.text;
+				evt.proveedorSeleccionado.RSCalle  = txtDireccion.text;
+				evt.proveedorSeleccionado.estado = txtEstado.text;
+				
+				evt.proveedorSeleccionado.rol = cmbRol.selectedItem.valor;
+				evt.proveedorSeleccionado.ranking = cmbRanking.selectedItem.llave;
+				evt.proveedorSeleccionado.objetivoCrecimientoFundamental=txtObjetivoCrecimientoFundamental.text;
+				if( _seGuardaImagen)
+				{
+					evt.proveedorSeleccionado.referencia = referencia;
+					evt.proveedorSeleccionado.imagen =  referencia.extensionArchivo;
+				}
+				else
+				{
+					evt.proveedorSeleccionado.referencia = null;
+				}
+				
+				if( chkHabilitado.selected )
+				{
+					evt.proveedorSeleccionado.socioComercial = chkSocioComercial.selected;
+				}
+				else
+				{
+					evt.proveedorSeleccionado.socioComercial = false;
+				}
+				
+				evt.proveedorSeleccionado.habilitado = chkHabilitado.selected ;
+				evt.proveedorSeleccionado.nombre = txtNombre.text;
+				evt.proveedorSeleccionado.razonSocial = txtRazonSocial.text;
+				evt.proveedorSeleccionado.segundaDireccion = txtSegundaDireccion.text;
+				evt.proveedorSeleccionado.comprador = cmbComprador.selectedItem.llave;
+				evt.proveedorSeleccionado.pagador = cmbPagador.selectedItem.llave;
+				
+				//Inspector
+				evt.proveedorSeleccionado.inspector = cmbInspector.selectedItem.llave;
+				
+				evt.proveedorSeleccionado.colocarPhs = chkColocar.selected;
+				evt.proveedorSeleccionado.objectivoCrecimiento = txtObjetivoCrecimiento.text;
+				
+				if( isNaN( _proveedor.idProveedor ) )
+					evt.ventana = "CatProveedor_Empresa nuevo( Nombre:"+_proveedor.nombre+" )";
+				else
+					evt.ventana = "CatProveedor_Empresa ( idProveedor:"+_proveedor.idProveedor+" )";
+				
+				dispatchEvent( evt );
+				_proveedorRespaldo = ObjectUtil.copy(evt.proveedorSeleccionado) as Proveedor;
+				activaCambios = false;
+				seEstaEditando=true;
+				editarInfo('guardar');
+				
+				/* 	} */
+			}
+			
+			public function set confirmaGuardado(confirmaGuardado:Boolean):void
+			{
+				if( confirmaGuardado == true)
+				{
+					var evtd:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.ACTUALIZA_PROVEEDORES_DE_GENERALES );
+					evtd.idProveedor = _proveedor.idProveedor;
+					evtd.habilitado = _proveedor.habilitado;
+					dispatchEvent( evtd ); 
+					var $evtP:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+					$evtP.busquedaProveedores = 'Todos';
+					$evtP.empleado = DatosGlobales.getInstance()._usuario;
+					dispatchEvent($evtP);
+					
+					seEstaEditando=true;editarInfo('cancelar')
+				}
+			}
+			
+			public function set confirmaInsertar( $dato:Number ):void
+			{
+				if( isNaN( $dato ) )
+					return;
+				
+				grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = false;
+				
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.CAMBIA_VISTAS_NIVEL_SUPERIOR_CAT_PROVEEDORES );
+				evt.vieneDe ="newProveedor";
+				evt.proveedorSeleccionado = _proveedorRespaldo;
+				evt.proveedorSeleccionado.idProveedor = $dato;
+				dispatchEvent( evt );
+				
+				var evtd:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.ACTUALIZA_PROVEEDORES_DE_GENERALES );
+				evtd.idProveedor = $dato;
+				evtd.habilitado = _proveedor.habilitado;
+				dispatchEvent( evtd ); 
+				
+				var $evtP:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+				$evtP.busquedaProveedores = 'Todos';
+				$evtP.empleado = DatosGlobales.getInstance()._usuario;
+				dispatchEvent($evtP);
+				referencia = new Referencia();
+				_seGuardaImagen = false;
+				
+				seEstaEditando=true;editarInfo('cancelar')
+			}
+			
+			public function cancelaProveddor():void
+			{
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.ACTUALIZA_PROVEEDORES_DE_GENERALES );
+				evt.idProveedor = 0;
+				evt.habilitado = _proveedor.habilitado;
+				dispatchEvent( evt );
+				var $evtP:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+				$evtP.busquedaProveedores = 'Todos';
+				$evtP.empleado = DatosGlobales.getInstance()._usuario;
+				dispatchEvent( $evtP );
+				referencia = new Referencia();
+				_seGuardaImagen = false;
+			}
+			
+			private var _ocultarMostrarMenuBool:Boolean = true;
+			
+			/* [Bindable][Embed (source="skins/plantillaproquifa/barratitulo/assets/flechacolapse.png")]
+			public var iconoMostrar:Class;
+			[Bindable][Embed (source="skins/plantillaproquifa/barratitulo/assets/flechacolapse2.png")]
+			public var iconoOcultar:Class; */
+			
+			public function imagenMuestraOculta():void
+			{
+				if( _ocultarMostrarMenuBool)
+				{
+					_ocultarMostrarMenuBool = false;
+					grpImagen.visible = true;
+				}
+				else
+				{
+					grpInfo.percentWidth = 100;
+					grpImagen.visible = false;
+					_ocultarMostrarMenuBool = true;
+				} 
+				ocultar();
+			}
+			
+			private function ajusta():void
+			{
+				if( !_ocultarMostrarMenuBool)
+				{
+					grpInfo.width = width - ( width/3 );
+					grpImagen.width = (width / 3);
+				}
+				else
+				{
+					grpInfo.percentWidth = 100;
+				}
+			}
+			
+			/* En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			nativePath o ruta (donde se podra obtener el nombre del archivo)  y el ByteArray) */
+			private var file:File;
+			private var referencia:Referencia;
+			private function buscarArchivo():void
+			{
+				file = new File();
+				referencia = new Referencia();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				file.browse();
+			}
+			
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				trace("completeHandler: " + event);
+				creaReferencia();
+				this.btnRestablecer.includeInLayout = this.btnRestablecer.visible = true;
+			}
+			
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 * Metodo para crear una referencia (un renglon)
+			 */ 
+			private function creaReferencia():void
+			{
+				if( file.extension.toLocaleLowerCase() == 'jpeg' || file.extension.toLocaleLowerCase() == 'jpg' || 
+					file.extension.toLocaleLowerCase() == 'png' || file.extension.toLocaleLowerCase() == 'gif' )
+				{
+					referencia.bytes = file.data;
+					referencia.extensionArchivo = file.extension;
+					referencia.nombre = _proveedor.idProveedor.toString();
+					imgTemporal.source =  referencia.bytes;
+					_seGuardaImagen = true;
+				}
+				else
+				{
+					alertaSingleton.show( 'Formato de archivo no permitido', catalogoAlertas.TIT_ADV_operacionImposible );
+				}
+			}
+			
+			protected function habilitaProveedor():void
+			{
+				var evt:EventoCatProGeneral;
+				if( !isNaN( _proveedor.idProveedor ) && !_proveedor.habilitado )
+				{
+					evt = new EventoCatProGeneral( EventoCatProGeneral.HABILITA_PROVEEDOR );
+				}
+				else
+				{
+					evt = new EventoCatProGeneral( EventoCatProGeneral.DESHABILITAR_PROVEEDOR );
+				}
+				evt.idProveedor = _proveedor.idProveedor;
+				evt.ventana = "CatProveedor_Empresa  des/habilitar( idProveedor:"+_proveedor.idProveedor+" )";
+				dispatchEvent( evt);
+			}
+			
+			public function set confirmaHabilitado($dato:Boolean):void
+			{
+				if( !$dato )
+					return;
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.ACTUALIZA_PROVEEDORES_DE_GENERALES );
+				evt.idProveedor = _proveedor.idProveedor;
+				evt.habilitado = _proveedor.habilitado;
+				dispatchEvent( evt );
+				var $evtP:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+				$evtP.busquedaProveedores = 'Todos';
+				$evtP.empleado = DatosGlobales.getInstance()._usuario;
+				dispatchEvent($evtP);
+				seEstaEditando=false;
+				editarInfo()
+			}
+			public function set confirmaDeshabilitado($dato:Boolean):void
+			{
+				if( !$dato )
+					return;
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.ACTUALIZA_PROVEEDORES_DE_GENERALES );
+				evt.idProveedor = _proveedor.idProveedor;
+				evt.habilitado = _proveedor.habilitado;
+				dispatchEvent( evt );
+				var $evtP:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+				$evtP.empleado = DatosGlobales.getInstance()._usuario;
+				$evtP.busquedaProveedores = 'Todos';
+				dispatchEvent($evtP);
+			}
+			
+			private var seEstaEditando:Boolean = false;
+			protected function editarInfo($vieneDe:String = ''):void 
+			{
+				if( seEstaEditando )
+				{
+					if( $vieneDe == 'cancelar' && !_ocultarMostrarMenuBool )
+					{
+						
+						imagenMuestraOculta();
+						setTimeout( acomodaTiempo, 400 );
+						
+					}
+					else
+					{
+						grpGuardarCancelar.visible = false; 
+						btnEditar.visible = true;
+						habilitaTextos(false);
+					}
+				}
+				else
+				{
+					setTimeout( muestraLinkCancelar, 250 );
+				}  
+			}
+			
+			private function muestraLinkCancelar():void
+			{
+				grpGuardarCancelar.visible = true; 
+				btnEditar.visible = false;
+				habilitaTextos(true);
+			} 
+			
+			private function acomodaTiempo():void
+			{
+				grpGuardarCancelar.visible = false; 
+				btnEditar.visible = true;
+				habilitaTextos(false);
+			}
+			
+			private function habilitaTextos( $seHabilita:Boolean):void
+			{
+				txtCiudad.editable = $seHabilita;
+				txtCP.editable = $seHabilita;
+				txtDescripcionAmpliada.editable = $seHabilita;
+				txtDireccion.editable = $seHabilita;
+				txtEstado.editable = $seHabilita;
+				txtNombre.editable = $seHabilita;
+				txtRazonSocial.editable = $seHabilita;
+				txtSegundaDireccion.editable = $seHabilita;
+				cmbPais.openButton.enabled= $seHabilita;
+				cmbPais.textInput.enabled = $seHabilita;
+				cmbPais.focusEnabled = $seHabilita;
+				
+				cmbRol.openButton.enabled = $seHabilita;
+				cmbRol.textInput.enabled = $seHabilita;
+				cmbRol.focusEnabled = $seHabilita;
+				cmbRanking.openButton.enabled = $seHabilita;
+				cmbRanking.textInput.enabled = $seHabilita;
+				cmbRanking.focusEnabled = $seHabilita;
+				
+				cmbComprador.openButton.enabled= $seHabilita;
+				cmbComprador.textInput.enabled = $seHabilita;
+				cmbComprador.focusEnabled = $seHabilita;
+				
+				cmbPagador.openButton.enabled= $seHabilita;
+				cmbPagador.textInput.enabled = $seHabilita;
+				cmbPagador.focusEnabled = $seHabilita;
+				
+				cmbInspector.openButton.enabled= $seHabilita;
+				cmbInspector.textInput.enabled = $seHabilita;
+				cmbInspector.focusEnabled = $seHabilita;
+				chkColocar.enabled = $seHabilita;
+				txtObjetivoCrecimientoFundamental.editable = $seHabilita;
+				
+				txtObjetivoCrecimiento.editable = $seHabilita;
+				
+				if( _proveedor == null || isNaN( _proveedor.idProveedor ) )
+				{
+					chkHabilitado.enabled = chkHabilitado.selected = false;
+					chkSocioComercial.enabled = chkSocioComercial.selected = false;
+				}
+				else
+				{
+					chkHabilitado.enabled = $seHabilita;
+					chkSocioComercial.enabled = $seHabilita;
+				}
+			}
+			
+			public function cancelaGuardado():void
+			{
+				recibeProveedorFlujo( _proveedorRespaldo );
+			}
+			
+			protected function checkHabilitaLabel():void
+			{
+				if(chkHabilitado.selected)
+				{
+					chkHabilitado.selected = false;
+					chkHabilitado.enabled = false;
+					chkSocioComercial.selected = false;
+				}
+				else
+				{
+					chkHabilitado.enabled = true;
+					chkHabilitado.selected = true;
+				}
+			}
+			
+			protected function grpImagenShow_effectEndHandler(event:EffectEvent):void
+			{
+				grpInfo.percentWidth = 70;
+				grpImagen.percentWidth = 30;
+			}
+			
+			protected function grpImagenHide_effectEndHandler(event:EffectEvent):void
+			{
+				grpInfo.percentWidth = 100;
+				grpImagen.width = 0;
+			}
+			
+			private var isSocioComercialAntesDeDeshabilitarlo:Boolean = false;
+			protected function chkHabilitado_clickHandler(event:MouseEvent):void
+			{
+				if(chkHabilitado.selected)
+				{
+					if(isSocioComercialAntesDeDeshabilitarlo)
+					{
+						chkSocioComercial.selected = true;
+					}
+				}
+				else
+				{
+					if(chkSocioComercial.selected)
+					{
+						isSocioComercialAntesDeDeshabilitarlo = true;
+						chkSocioComercial.selected = false;
+					}
+				}
+			}
+			
+			protected function chkSocioComercial_clickHandler(event:MouseEvent):void
+			{
+				if(!chkSocioComercial.selected)
+				{
+					if(isSocioComercialAntesDeDeshabilitarlo)
+						isSocioComercialAntesDeDeshabilitarlo = false;
+				}
+			}
+			
+			private function ocultar():void
+			{
+				this.btnRestablecer.includeInLayout = this.btnRestablecer.visible = false;
+			}
+			
+			public function set confirmaModificacion(confirmaGuardado:Boolean):void
+			{
+				if( confirmaGuardado == true)
+					trace("Se registro la modificacion");
+			}
+			
+			
+			protected function validarPorcetajePositivoNoVacioMayorACero($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if($txtInput != null )
+				{
+					var currentTxtInput:txtInputBlancoDefaultPQNet = $txtInput as txtInputBlancoDefaultPQNet;
+					validatorPorcentajePositivoMayorACero.listener = currentTxtInput;
+					error = validatorPorcentajePositivoMayorACero.validate(currentTxtInput.text);
+				}
+				
+				if(error == null || error.results == null)
+					return true;
+				else
+					return false;
+			}
+			
+			public function inicia():void{
+				seEstaEditando=true;
+				if (!CatProveedoresDefault.agregarProveedor){
+					acomodaTiempo();
+					editarInfo('cancelar');
+				}
+				cancelaGuardado();
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		
+		<s:Parallel id="grpImagenShow" effectEnd="grpImagenShow_effectEndHandler(event)">
+			<s:Fade duration="100" alphaFrom="0" alphaTo="1" startDelay="200"/>
+			<mx:Resize duration="300" widthFrom="0" widthTo="{(grpContenedorPrincipal.width / 3)-60}"/>
+		</s:Parallel>
+		
+		<s:Parallel id="grpImagenHide" effectEnd="grpImagenHide_effectEndHandler(event)">
+			<s:Fade duration="50" alphaFrom="1" alphaTo="0"/>
+			<mx:Resize duration="300" widthFrom="{grpImagen.width}" widthTo="0"/>
+		</s:Parallel>
+		
+		
+		<s:NumberValidator id="validatorPorcentajePositivoMayorACero"
+						   allowNegative="false" 
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   minValue="1" required="true"
+						   lessThanMinError="El numero debe ser mayor a cero"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+		
+	</fx:Declarations>
+	
+	<s:HGroup width="100%" height="100%" gap="0" id="grpContenedorPrincipal">
+		
+		<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpInfo">
+			<s:BorderContainer borderVisible="false" width="100%" height="100%" backgroundColor="white" backgroundAlpha="0">
+				<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+					<s:HGroup width="100%" verticalAlign="bottom" >
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_empresaGris }"/>
+						<label:TituloBankGothic_30 text="EMPRESA"/>
+						<s:Spacer width="100%"/>
+						<s:HGroup height="100%" verticalAlign="bottom" horizontalAlign="right" visible="{ ( isNaN(_proveedor.idProveedor) ? false : true )}">
+							<label:Texto_13_VerdeAzul text="Última actualización: "/>
+							<label:Fecha_13_VerdeAzul fecha="{_proveedor.fechaActualizacion}"/>
+						</s:HGroup>
+					</s:HGroup>
+					<otros:divisionGruesa width="100%"/>
+					
+					<s:Scroller id="sclGeneral" maxWidth="1050" width="100%" height="100%" minWidth="340">
+						<s:VGroup width="100%" height="100%" id="grpGeneral" paddingLeft="3" paddingRight="3" gap="10">
+							<label:Titulo_16_pTop10  width="100%" text="GENERALES" textAlign="right"/>
+							<otros:division width="100%" />
+							
+							<s:HGroup width="100%" verticalAlign="middle" paddingTop="10">
+								<label:Titulo_22_pTop10 text="ID: " paddingTop="0"/>
+								<label:Titulo_22_RojoClaro_pTop10 text="{ isNaN(_proveedor.idProveedor) ? 'Nuevo' : _proveedor.idProveedor.toString() }" paddingTop="0" width="100%"/>
+								
+								<s:VGroup horizontalAlign="right" gap="10">
+									<chekbox:CheckRadioDefaultPQNet id="chkHabilitado" label="Habilitado" tipoCheck="cuadrado" nombreStiloFuente="default22" click="chkHabilitado_clickHandler(event)"/>
+									<chekbox:CheckRadioDefaultPQNet id="chkSocioComercial" label="Socio Comercial" tipoCheck="socioComercial" nombreStiloFuente="default22" click="chkSocioComercial_clickHandler(event)"/>
+								</s:VGroup>
+							</s:HGroup>
+							<s:HGroup width="100%" horizontalAlign="right">
+								<s:Image id="imgTemporalChica" source="{ ( _proveedor.bitsImagen != null ? _proveedor.bitsImagen : catalogoIconosBotones.getInstance().proveedoresDefault	) }" width="96" height="110" />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="20">
+								<label:Titulo text="Nombre comercial:" paddingTop="0" width="75%" />
+								<label:Titulo text="Rol:" paddingTop="0" width="25%" />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="20">
+								<textinput:txtInputBlancoDefaultPQNet text="{_proveedor.nombre}" change="activaCambios = true" id="txtNombre" width="75%"/>
+								<cmbCat:ComboCatalogos fontSize="14" width="25%" height="28" id="cmbRol" creationComplete="{cmbRol.cargaRoles('--NINGUNO--') }"/>
+							</s:HGroup>
+							<s:HGroup width="100%" gap="20">
+								<label:Titulo text="Nombre largo o legal:" paddingTop="0" width="75%"/>
+								<label:Titulo text="Ranking:" paddingTop="0" width="25%" />
+							</s:HGroup>
+							<s:HGroup width="100%" gap="20">
+								<textinput:txtInputBlancoDefaultPQNet text="{ _proveedor.razonSocial }" change="activaCambios = true" id="txtRazonSocial" width="75%"/>
+								<cmbCat:ComboCatalogos fontSize="14" width="25%" height="28" id="cmbRanking" creationComplete="{cmbRanking.cargaRanking('0') }"/>
+							</s:HGroup>
+							<label:Titulo_16_pTop10 width="100%" text="DESCRIPCIÓN AMPLIADA" textAlign="right"/>
+							<otros:division width="100%"/>
+							<textarea:txtAreaBlancoDefaultPQNet width="100%" height="100%" minHeight="50" text="{ _proveedor.descripcionAmpliada}" change="activaCambios = true" id="txtDescripcionAmpliada"/>
+							<label:Titulo_16_pTop10 width="100%" text="DIRECCIÓN" textAlign="right"/>
+							<otros:division width="100%"/>
+							<s:HGroup width="100%" paddingBottom="2">
+								<s:VGroup width="55%" height="100%" gap="10">
+									<label:Titulo text="1º linea de dirección:" paddingTop="0"/>
+									<textarea:txtAreaBlancoDefaultPQNet width="100%" height="90" text="{ _proveedor.RSCalle }" change="activaCambios = true" id="txtDireccion"/>
+									<label:Titulo text="2º linea de dirección:" paddingTop="0"/>
+									<textarea:txtAreaBlancoDefaultPQNet width="100%" height="90" text="{ _proveedor.segundaDireccion }" change="activaCambios = true" id="txtSegundaDireccion"/>
+								</s:VGroup>
+								<s:Spacer width="10"/>
+								<s:VGroup  id="vBoxCidad" width="45%" height="100%" gap="10">
+									<label:Titulo text="País:" paddingTop="0"/>
+									<cmbCat:ComboCatalogos fontSize="14" width="100%" height="28" id="cmbPais" creationComplete="{cmbPais.cargaPaises('--NINGUNO--') }"/>
+									<label:Titulo text="Ciudad:" paddingTop="0"/>
+									<textinput:txtInputBlancoDefaultPQNet text="{ _proveedor.ciudad}" id="txtCiudad" change="activaCambios = true" width="100%"/>
+									<label:Titulo text="Estado:" paddingTop="0"/>
+									<textinput:txtInputBlancoDefaultPQNet text="{_proveedor.estado}" id="txtEstado" change="activaCambios = true" width="100%"/>
+									<label:Titulo text="CP:" paddingTop="0"/>
+									<textinput:txtInputBlancoDefaultPQNet text="{_proveedor.cp}" id="txtCP" change="activaCambios = true" width="100%"/>
+								</s:VGroup>
+							</s:HGroup>
+							<label:Titulo_16_pTop10 width="100%" text="COMERCIALES" textAlign="right"/>
+							<otros:division width="100%"/>
+							
+							<s:HGroup width="100%" >
+								<s:VGroup width="265" height="100%" >
+									<label:Titulo text="Objetivo de crecimiento deseado:" paddingTop="0"/>
+									<s:HGroup width="235"  height="28">
+										<textinput:txtInputBlancoDefaultPQNet id="txtObjetivoCrecimiento" text="{_proveedor.objectivoCrecimiento}" height="100%" width="100%" restrict="0-9." focusOut="validarPorcetajePositivoNoVacioMayorACero(txtObjetivoCrecimiento)"/>
+										<label:Titulo text="%" height="100%" paddingTop="0" verticalAlign="middle"/>
+									</s:HGroup>
+								</s:VGroup>  
+								<s:Spacer width="100%"/>
+								
+								<s:VGroup width="250" gap="10">
+									<label:Titulo text="Comprador:" paddingTop="0"/>
+									<cmbCat:ComboCatalogos id="cmbComprador" height="28" width="100%" creationComplete="{cmbComprador.cargarEmpleadosPorSoloPorTipo('comprador','--NINGUNO--')}"/>  
+								</s:VGroup>
+								
+								 
+								
+								<s:Spacer width="100%" />
+								<s:HGroup width="250" height="100%" horizontalAlign="right" >								
+									<chekbox:radioDefaultPQNet id="chkColocar" label="Colocar en PHS" tipoCheck="cuadradoRadio" nombreStiloFuente="default14" layoutDirection="rtl" selected="{_proveedor.colocarPhs}"/>
+								</s:HGroup>  
+								
+								
+							</s:HGroup>  
+							
+							<s:HGroup width="100%" horizontalAlign="center" paddingBottom="10">
+								
+								<s:VGroup width="265" height="100%" >
+									<label:Titulo text="Objetivo de crecimiento fundamental:" paddingTop="0"/>
+									<s:HGroup width="100%" height="28" >
+										<textinput:txtInputBlancoDefaultPQNet id="txtObjetivoCrecimientoFundamental" text="{_proveedor.objetivoCrecimientoFundamental}" height="100%" width="100%" restrict="0-9." focusOut="validarPorcetajePositivoNoVacioMayorACero(txtObjetivoCrecimientoFundamental)"/>
+										<label:Titulo text="%" height="100%" paddingTop="0" verticalAlign="middle"/>
+									</s:HGroup>  
+									
+								</s:VGroup> 
+								<s:Spacer width="100%"/>
+								<s:VGroup width="250" gap="10">
+									<label:Titulo text="Pagador:" paddingTop="0"/>
+									<cmbCat:ComboCatalogos id="cmbPagador" height="28" width="100%" creationComplete="{cmbPagador.cargarEmpleadosPorSoloPorTipo('Contabilidad','--NINGUNO--')}"/>  
+								</s:VGroup>
+								<s:Spacer width="100%"/>
+								<s:VGroup width="250" gap="10">
+									<label:Titulo text="Inspector:" paddingTop="0"/>
+									<cmbCat:ComboCatalogos id="cmbInspector" height="28" width="100%" creationComplete="{cmbInspector.cargarInpectores('--NINGUNO--')}"/>  
+								</s:VGroup>
+							</s:HGroup>  
+						</s:VGroup>
+					</s:Scroller>
+					<s:VGroup width="100%" gap="10">
+						<otros:divisionGruesa width="100%"/>
+						<s:Group width="100%" id="grpBotones">
+							<s:HGroup width="100%" horizontalAlign="right" verticalAlign="middle" id="grpBotonEditar"  >
+								<pqNet:botonPqNetLargo label="Editar" id="btnEditar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="seEstaEditando=false;editarInfo();imagenMuestraOculta()"/>
+							</s:HGroup>
+							<s:HGroup width="100%" id="grpGuardarCancelar" visible="false">
+								<pqNet:botonPqNetLargo label="Guardar" id="btnGuardar" 
+													   click="{guardaCambios()}"/>
+								<s:Spacer width="100%"/>
+								<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" 
+													   click="{seEstaEditando=true;editarInfo('cancelar');cancelaGuardado()}" id="btnCancelar"/>
+							</s:HGroup>
+						</s:Group>
+						<s:HGroup id="grpBotonesAgrgar" width="100%">
+							<s:Spacer width="100%"/>
+							<pqNet:botonPqNetLargo icono="guardar"  click="guardaCambios()" label="AGREGAR"/>
+						</s:HGroup>
+					</s:VGroup>  
+				</s:VGroup>
+			</s:BorderContainer>
+		</contenedores:VGroupConPaddingStandardPqNet>
+		
+		<s:Group width="0" height="100%" id="grpImagen" visible="false" showEffect="{grpImagenShow}" hideEffect="{grpImagenHide}">
+			<s:Rect width="100%" height="100%" >
+				<s:filters>
+					<shaders:sombraBevelFilter direccion="left"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="#eaeaea" />
+				</s:fill>
+			</s:Rect>
+			<contenedores:VGroupConPaddingStandardPqNet>
+				<s:HGroup width="100%" verticalAlign="bottom" >
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_imagenGris }" />
+					<label:labelSubtitulo  text="LOGO"/>
+					<s:Spacer width="100%"/>
+				</s:HGroup>
+				<s:VGroup width="100%" gap="10" >
+					<otros:divisionHueca width="100%"/>
+					<s:VGroup width="100%" gap="10" verticalAlign="middle" horizontalAlign="center">
+						<s:Group width="137" height="137" toolTip="{'Formatos permitidos: JPEG, JPG, PNG, GIF'}" mouseOver="grpEtiquetaEditar.visible = true">
+							<s:Image id="imgTemporal" source="{ ( _proveedor.bitsImagen != null ? _proveedor.bitsImagen : catalogoIconosBotones.getInstance().proveedoresDefaultMax ) }" width="137" height="137" />
+							<s:Group width="{imgTemporal.width}" height="137" id="grpEtiquetaEditar" visible="false" click="buscarArchivo(); grpEtiquetaEditar.visible = false" mouseOut="grpEtiquetaEditar.visible = false" >
+								<s:Rect width="{imgTemporal.width}" height="30" verticalCenter="52" horizontalCenter="0" id="fondoAzulImagen" >
+									<s:fill>
+										<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+									</s:fill>
+								</s:Rect>
+								<s:Label color="white" id="lblEditarImagen" text="Editar" horizontalCenter="0" verticalCenter="52" />
+							</s:Group>
+						</s:Group>
+					</s:VGroup>
+					<s:HGroup width="100%"  horizontalAlign="center" id="btnRestablecer" visible="false" includeInLayout="false">
+						<pqNet:botonPqNetLargo label="Restablecer" 
+											   click="_proveedor.imagen != null  ? imgTemporal.source = _proveedor.bitsImagen : imgTemporal.source = catalogoIconosBotones.getInstance().proveedoresDefaultMax;_seGuardaImagen=false; ocultar()" />
+					</s:HGroup>
+					<otros:division width="100%"/>
+				</s:VGroup>
+			</contenedores:VGroupConPaddingStandardPqNet>
+		</s:Group>
+	</s:HGroup>
+</s:Group>

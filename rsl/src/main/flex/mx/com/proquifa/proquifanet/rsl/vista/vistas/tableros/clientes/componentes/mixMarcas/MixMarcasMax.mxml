@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		 xmlns:tabla="skins.botones.tabla.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:grafica="skins.botones.grafica.*" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:pqNet1="skins.skin.datagrid.pqNet.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.charts.HitData;
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.pieChartDinamico.PieDinamico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.MarcasCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.pieChartDinamico.pqNetPiesChartDinamico;
+			import mx.effects.easing.Elastic;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoInfoGraficas;
+			
+			public function seleccionaTabla():void{
+				stackGeneral.selectedChild = this.vistaTabla;
+			}
+			public function seleccionarGrafica():void{
+				stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			[Bindable]	private var _listadoMarcasCliente:ArrayCollection = new ArrayCollection();
+			
+			private function minimiza():void{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			public function set recibeLinealMixMarcas( $lista:ArrayCollection ):void{
+				if( $lista == null )
+					return;
+				var tempArray:ArrayCollection = Util.sortArray(convertirAResumenConsulta(UtilsGrid.queryCampoX( $lista, "etiqueta", "MixMarcas_0" )),"total",true);
+				for (var r:int = 1; r<=tempArray.length; r++)
+				{
+					(tempArray[r-1] as ResumenConsulta).rankingTableroCliente = r;
+				}
+				myChart.dataProvider = myChart.aplicarFormatoTableroClientesRanking(tempArray );
+				
+				_listadoMarcasCliente = UtilsGrid.queryCampoX( $lista, "etiqueta", "MixMarcas_0" );
+				btnExportar.enabled =  _listadoMarcasCliente.length < 1 ? false : true;
+			}
+			
+			protected function convertirAResumenConsulta( $lista:ArrayCollection ):ArrayCollection{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				for( var r:int = 0; r < $lista.length; r++ ){
+					var cItem:MarcasCliente = $lista[r] as MarcasCliente;
+					var itemResumen:ResumenConsulta = new ResumenConsulta();
+					itemResumen.etiqueta 					= cItem.nombre;
+					itemResumen.conceptoResultado 	= cItem.nombre;
+					itemResumen.total 							= cItem.montoVenta;
+					itemResumen.piezasTotal	 			= cItem.totalPiezas;
+					itemResumen.totalClientes 			= cItem.totalClientes;
+					itemResumen.totalFolios	 				= cItem.totalPartidas;
+					itemResumen.partidas	 					= cItem.totalPartidas;
+					itemResumen.totalPedidos				= cItem.totalPedidos;
+					arrReturn.addItem( itemResumen );
+				}
+				return arrReturn;
+			}
+			
+			private function generaArchivo():void{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Marca");
+				fila1[2] = hoja.addItem("Cantidad");
+				fila1[3] = hoja.addItem("Monto Compra");
+				fila1[4] = hoja.addItem("Monto Venta");
+				fila1[5] = hoja.addItem("Margen Directo");
+				for(var i:int = 0 ; i< this._listadoMarcasCliente.length ; i++ ){
+					fila1 = new Array();	
+					fila1[0] = (this._listadoMarcasCliente[i] as MarcasCliente ).numFila;
+					fila1[1] = '"'+(this._listadoMarcasCliente[i] as MarcasCliente).nombre+'"';
+					fila1[2] = '"'+(this._listadoMarcasCliente[i] as MarcasCliente).cantidad+'"';
+					fila1[3] = '"'+(this._listadoMarcasCliente[i] as MarcasCliente).montoCompraString+'"';
+					fila1[4] = '"'+(this._listadoMarcasCliente[i] as MarcasCliente).montoVentaString+'"';
+					fila1[5] = '"'+(this._listadoMarcasCliente[i] as MarcasCliente).margenDirectoString+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Marcas.csv");
+			}
+		
+			protected function myChart_itemRollOverHandler(event:ChartItemEvent):void
+			{
+				var sItem:PieSeriesItem = event.hitData.chartItem as PieSeriesItem;
+				myChart.lblDataTipBold.text = (sItem.item.nombre as String).toUpperCase();
+				myChart.lblDataTip.text = sItem.percentValue.toFixed(2) + " %" 
+					+ '\n' + sItem.item.cantidad + " Pieza" + (sItem.item.cantidad == '1' ? '' : 's')
+					+ '\n' + sItem.item.montoVentaString;
+			}
+			
+			private function compareFunction_MontoCompra(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoCompra,item2.montoCompra); 
+			}
+			
+			private function compareFunction_MontoVenta(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoVenta,item2.montoVenta); 
+			}
+			
+			private function compareFunction_margenDirecto(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.margenDirecto,item2.margenDirecto); 
+			}
+			
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero width="100%" text="MIX MARCAS" />
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all">
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="0">
+				<otros:divisionGruesa width="100%" />
+				<pqNet1:dataGridPqNet id="tablaGrid" rowHeight="40" variableRowHeight="true"  width="100%" height="100%" dataProvider="{this._listadoMarcasCliente}" horizontalScrollPolicy="auto"
+									  porcentajesColumnasPq="[7, 30, 15, 15, 15, 15]">
+					<pqNet1:columns>
+						<mx:DataGridColumn headerText="#" dataField="numFila"/>
+						<mx:DataGridColumn headerText="Marca" dataField="nombre"/>
+						<mx:DataGridColumn headerText="Cantidad" dataField="cantidad"/>
+						<mx:DataGridColumn headerText="Monto compra" dataField="montoCompraString" sortCompareFunction="compareFunction_MontoCompra">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.MarcasCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<!--<s:HGroup width="100%" paddingRight="20" horizontalAlign="center">-->
+											<s:Label  text="{(data as MarcasCliente).montoCompraString}"  horizontalCenter="0"/>
+										<!--</s:HGroup>-->
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="Monto venta" dataField="montoVentaString" sortCompareFunction="compareFunction_MontoVenta">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.MarcasCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<!--<s:HGroup width="100%" paddingRight="20" horizontalAlign="center">-->
+											<s:Label text="{(data as MarcasCliente).montoVentaString}" horizontalCenter="0"/>
+										<!--</s:HGroup>-->
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="Margen directo" sortCompareFunction="compareFunction_margenDirecto" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false" >
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.MarcasCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<!--<s:HGroup width="100%" paddingRight="20" horizontalAlign="center">-->
+											<s:Label text="{ (data as MarcasCliente).margenDirectoString}" horizontalCenter="0" />
+										<!--</s:HGroup>-->
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</pqNet1:columns>
+				</pqNet1:dataGridPqNet>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+							<otros:divisionGruesa width="100%" />
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" paddingTop="40" paddingBottom="20" dataProvider="{null}" showDataTips="false" innerRadius=".5"  
+															lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true">
+										<graficas:series>
+											<graficas:pieSeriesPqNet field="total"/>
+										</graficas:series>
+					</graficas:PieChartPqGris>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+							<otros:divisionHueca width="100%" />
+							<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+								<grafica:botonPopUp icono="tabla" click="seleccionaTabla()" />
+								<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+							</s:HGroup>
+						</s:VGroup>
+						<!--<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_CLIENTES_MIXMARCAS}" />-->
+				</s:HGroup>  
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

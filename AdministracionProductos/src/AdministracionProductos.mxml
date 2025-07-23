@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" width="100%" height="100%" 
+						applicationComplete="init();" xmlns:ns1="componentes.*" creationPolicy="all" closing="cerrarApp(event)">
+	<mx:states>
+		<mx:State name="productoPorIngresar">
+			<mx:RemoveChild target="{gridProductoCad}"/>
+			<mx:AddChild relativeTo="{hbox1}" position="lastChild">
+				<ns1:ProductoPorIngresarPend id="productoPorIngresar">
+				</ns1:ProductoPorIngresarPend>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="productoModificar">
+			<mx:RemoveChild target="{gridProductoCad}"/>
+			<mx:AddChild relativeTo="{hbox1}" position="lastChild">
+				<ns1:ProductoModificacionesPend id="productoModificar">
+				</ns1:ProductoModificacionesPend>
+			</mx:AddChild>
+			<mx:SetEventHandler target="{pendientesMod}" name="click" handler="this.currentState = 'productoModificar'"/>
+		</mx:State>
+	</mx:states>
+	<mx:Script>
+		<![CDATA[
+			import componentes.ProductoPorIngresarPend;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.channels.StreamingAMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.events.MessageEvent;
+			import mx.events.CloseEvent;
+			import mx.controls.Alert;
+			import mx.events.IndexChangedEvent;
+			import mx.collections.ArrayCollection;
+			import mx.messaging.messages.IMessage;
+			import mx.messaging.events.MessageAckEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import clases.Pendiente;	
+			//  201.161.12.60:8080
+			//  192.168.1.99:8080
+			private var blazeUrl:String = "http://192.168.1.27:8080/AdministracionProductos/messagebroker/streamingamf";   
+			/* private var blazeUrl:String = "http://201.122.140.230/AdministracionProductos/messagebroker/streamingamf"; */  
+			private var myStreamingAMF:StreamingAMFChannel;
+			private var cs:ChannelSet;  
+			private var producer:Producer;
+			private var consumer:Consumer;
+			private var producerM:Producer;
+			private var consumerM:Consumer;
+			private var producerXA:Producer;
+			private var consumerXA:Consumer;
+			[Bindable]
+			private var pendientes:ArrayCollection;
+			[Bindable]
+			private var pendientesM:ArrayCollection;
+			[Bindable]
+			private var pendientesXA:ArrayCollection;
+			public function init():void{
+				myStreamingAMF  = new StreamingAMFChannel("my-streaming-amf", blazeUrl);				  
+				cs = new ChannelSet();  
+				                var appWindow:NativeWindow = this.stage.nativeWindow;
+				appWindow.visible = true;
+				                nativeWindow.maximize();
+				var message:AsyncMessage = new AsyncMessage();
+				cs.addChannel(myStreamingAMF);  
+				message.body = "New";
+				producer = new Producer();
+				consumer = new Consumer();
+				producer.channelSet = cs;
+				consumer.channelSet = cs;
+				producer.destination = "BlazeDsServicePush";
+				consumer.destination = "BlazeDsServicePush";   
+				producerM = new Producer();
+				consumerM = new Consumer();
+				producerM.channelSet = cs;
+				consumerM.channelSet = cs;
+				producerM.destination = "BlazeDsServicePushX";
+				consumerM.destination = "BlazeDsServicePushX"; 
+				producerXA = new Producer();
+				consumerXA = new Consumer();
+				producerXA.channelSet = cs;
+				consumerXA.channelSet = cs;
+				producerXA.destination = "BlazeDsServicePushC";
+				consumerXA.destination = "BlazeDsServicePushC"; 
+				
+				producer.reconnectAttempts = 3;
+				producer.reconnectInterval = 60;
+				consumer.resubscribeAttempts = 3;
+				consumer.resubscribeInterval = 60;
+				
+				producerM.reconnectAttempts = 3;
+				producerM.reconnectInterval = 60;
+				consumerM.resubscribeAttempts = 3;
+				consumerM.resubscribeInterval = 60;
+				
+				producerXA.reconnectAttempts = 3;
+				producerXA.reconnectInterval = 60;
+				consumerXA.resubscribeAttempts = 3;
+				consumerXA.resubscribeInterval = 60; 
+				
+				consumer.addEventListener(MessageEvent.MESSAGE, onMsg);
+				producer.addEventListener(MessageAckEvent.ACKNOWLEDGE, ack);
+				consumer.addEventListener(MessageFaultEvent.FAULT, handleFault);
+				producer.addEventListener(MessageFaultEvent.FAULT, handleFaultConsumer);
+				producer.send(message); 
+				consumer.subscribe(); 
+				
+				consumerM.addEventListener(MessageEvent.MESSAGE, onMsgM);
+				producerM.addEventListener(MessageAckEvent.ACKNOWLEDGE, ackM);
+				consumerM.addEventListener(MessageFaultEvent.FAULT, handleFault);
+				producerM.addEventListener(MessageFaultEvent.FAULT, handleFaultConsumer);
+				producerM.send(message); 
+				consumerM.subscribe(); 
+				
+				consumerXA.addEventListener(MessageEvent.MESSAGE, onMsgXA);
+				producerXA.addEventListener(MessageAckEvent.ACKNOWLEDGE, ackXA);
+				consumerXA.addEventListener(MessageFaultEvent.FAULT, handleFault);
+				producerXA.addEventListener(MessageFaultEvent.FAULT, handleFaultConsumer);
+				producerXA.send(message); 
+				consumerXA.subscribe(); 
+			} 
+			
+			private function enviarUsuario():void{
+				/* 		if(this.tabNav.selectedChild.label == "Llamadas"){
+				this.CompLlamadas.nombreUsuario = this.lblUsuarioSAP.text;
+				}else if(this.tabNav.selectedChild.label == "Documentos"){
+				this.CompDocumento.nombreUsuario = this.lblUsuarioSAP.text;
+				} */
+			} 
+			
+			private function ModificacionDoc():void{
+				/* this.CompDocumento.btnCancelarModificacion.visible = true;
+				this.CompDocumento.btnGuarMod.label = "Modificar";
+				this.CompDocumento.folioDocumento = this.txtModificacion.text;
+				this.CompDocumento.limpiarCampos();
+				this.CompDocumento.solicitarDocumento();			 */
+			}
+			
+			public function cerrarApp(evt:Event):void{
+				evt.preventDefault();
+				Alert.yesLabel = "Si";
+				Alert.show("¿Realmente quiere salir?","Salir del SAP", Alert.YES | Alert.NO, null, cerrar, null, 2);
+			}
+			private function onMsg(event:MessageEvent):void{
+				pendientes = event.message.body as ArrayCollection;
+				pendientes.refresh();
+				pendientesCaduco.label = "(" + pendientes.length + ")";
+				if(this.currentState == ""){
+					desplegarPendientes();
+				}
+				
+			}
+			private function onMsgM(event:MessageEvent):void{
+				pendientesM = event.message.body as ArrayCollection;
+				pendientesM.refresh();
+				pendientesMod.label = "(" + pendientesM.length + ")";
+				if(this.currentState == "productoModificar"){
+					desplegarPendientesMod();
+				}
+				/* gridProductoCad.gridPendientes.dataProvider = pendientes; */
+				/* datagrid1.dataProvider = pendientes; */
+				//gridProductoCad.gridPendientes.dataProvider = pendientes;
+				
+			}
+			private function onMsgXA(event:MessageEvent):void{
+				pendientesXA = event.message.body as ArrayCollection;
+				pendientesXA.refresh();
+				pendientesIngresar.label = "(" + pendientesXA.length + ")";
+				/* gridProductoCad.gridPendientes.dataProvider = pendientes; */
+				/* datagrid1.dataProvider = pendientes; */
+				//gridProductoCad.gridPendientes.dataProvider = pendientes;
+			}
+			private function desplegarPendientes():void{
+				gridProductoCad.gridPendientes.dataProvider = pendientes;
+			}
+			private function desplegarPendientesMod():void{
+				productoModificar.gridPendientes.dataProvider = pendientesM;
+			}
+			private function ack(event:MessageAckEvent):void{
+				pendientes = event.message.body as ArrayCollection;
+				pendientes.refresh();
+				pendientesCaduco.label = "(" + pendientes.length + ")";
+				if(this.currentState == ""){
+					desplegarPendientes();
+				}
+			}
+			private function ackM(event:MessageAckEvent):void{
+				pendientesM = event.message.body as ArrayCollection;
+				pendientesM.refresh();
+				pendientesMod.label = "(" + pendientesM.length + ")";
+				if(this.currentState == "productoModificar"){
+					desplegarPendientesMod();
+				}	
+			}
+			private function ackXA(event:MessageAckEvent):void{
+				pendientesXA = event.message.body as ArrayCollection;
+				pendientesXA.refresh();
+				pendientesIngresar.label = "(" + pendientesXA.length + ")";
+			}
+			private function cerrar(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					this.nativeApplication.exit();
+				}
+			}
+			private function handleFault(event:MessageFaultEvent):void {
+				Alert.show(event.message.toString()); 
+			}
+			private function handleFaultConsumer(event:MessageFaultEvent):void {
+				Alert.show(event.message.toString()); 
+			}
+		]]>
+	</mx:Script>
+	<mx:Style source="css/skinPreview.css"/>	
+	<mx:Panel width="90%" height="90%" layout="vertical" horizontalCenter="0" verticalCenter="0" title="ProquifaNet" id="panelPrincipal">
+		<mx:Panel layout="horizontal" width="100%" backgroundColor="#A8DAF6" id="panel1" backgroundAlpha="1.0">
+			<mx:HBox width="100%">
+				<mx:FormItem label="Usuario:" width="100%" height="100%" id="formitem1" fontWeight="bold" fontFamily="Helvetica" fontSize="14">
+					<mx:Label text="" id="lblUsuarioSAP" fontWeight="normal" color="#2F2E2E" fontFamily="Helvetica" fontSize="14"/>
+				</mx:FormItem>
+				<mx:LinkButton label="Desconectar" color="#000000" fontSize="14" id="linkbutton1" fontWeight="bold" textDecoration="none" fontFamily="Helvetica" click="cerrarApp(event)"/>
+			</mx:HBox>
+		</mx:Panel>
+		<mx:Spacer width="17"/>
+		<mx:HBox width="100%" height="100%" horizontalAlign="right">
+			<mx:VBox width="100%" height="100%">
+				<mx:TabNavigator width="100%" height="100%" horizontalAlign="right" id="tabNav" paddingLeft="10" paddingRight="10" paddingBottom="10"  change="enviarUsuario()">
+					<mx:Canvas label="Pendientes" width="100%" height="100%">
+						<mx:HBox height="100%" width="100%" id="hbox1">
+							<mx:Accordion height="100%" width="15%">
+								<mx:Canvas label="Administrador C-Productos" id="cProductosCanvas" width="100%">
+									<mx:Grid x="0" y="0" width="100%">
+										<mx:GridRow width="100%" height="100%">
+											<mx:GridItem width="100%" height="100%">
+												<mx:Label text="Producto caduco"/>
+											</mx:GridItem>
+											<mx:GridItem width="100%" height="100%" horizontalAlign="right">
+												<mx:LinkButton label="(0)" id="pendientesCaduco" click="desplegarPendientes();this.currentState = ''"/>
+											</mx:GridItem>
+										</mx:GridRow>
+										<mx:GridRow width="100%" height="100%">
+											<mx:GridItem width="100%" height="100%">
+												<mx:Label text="Producto por ingresar"/>
+											</mx:GridItem>
+											<mx:GridItem width="100%" height="100%" horizontalAlign="right">
+												<mx:LinkButton label="(0)" id="pendientesIngresar" click="this.currentState= 'productoPorIngresar'"/>
+											</mx:GridItem>
+										</mx:GridRow>
+										<mx:GridRow width="100%" height="100%">
+											<mx:GridItem width="100%" height="100%">
+												<mx:Label text="Modificaciones"/>
+											</mx:GridItem>
+											<mx:GridItem width="100%" height="100%" horizontalAlign="right">
+												<mx:LinkButton label="(0)" id="pendientesMod"  click="this.currentState= 'productoModificar';desplegarPendientesMod()"/>
+											</mx:GridItem>
+										</mx:GridRow>
+									</mx:Grid>
+									
+								</mx:Canvas>
+								<mx:Canvas label="Administrador C-Clientes" width="100%"/>
+								<mx:Canvas label="Administrador C-Proveedores" width="100%"/>
+								<mx:Canvas label="Administrador C-Monedas" width="100%"/>
+								<mx:Canvas label="Administrador C-Bancos" width="100%"/>
+								<mx:Canvas label="Administrador C-Cuentas" width="100%"/>
+							</mx:Accordion>
+							<ns1:ProductoCaducoPendientes id="gridProductoCad" width="100%"/>
+						</mx:HBox>
+					</mx:Canvas>
+					<mx:Canvas label="Documentos" width="100%" height="100%">
+						<mx:VBox width="100%" height="100%" borderStyle="none">
+							<mx:Panel width="100%" backgroundColor="#D2D2D2" layout="horizontal" title="ENTRADA DE MODIFICACION" color="#FFFFFF" horizontalAlign="left">
+								<mx:TextInput width="100%" contentBackgroundColor="#D2D2D2" id="txtModificacion"/>
+								<mx:Button label="Buscar" width="80" click="ModificacionDoc()" id="btnDocModificable"/>
+							</mx:Panel>
+							<mx:Spacer width="15"/>
+							<!--<ns1:Documentacion id="CompDocumento">
+							</ns1:Documentacion>-->
+						</mx:VBox>
+					</mx:Canvas>
+					<mx:Canvas label="Llamadas" width="100%" height="100%" >
+						<!--<ns1:LLamadas width="100%" height="100%" id="CompLlamadas">
+						</ns1:LLamadas>-->
+					</mx:Canvas>
+					<mx:Canvas label="Reportes" width="100%" height="100%">
+						<mx:VBox width="100%" height="100%">
+							<mx:Label text="Documentos entrantes" width="100%" fontSize="30"/>
+							<mx:TextArea width="100%" height="30%"/>
+							<mx:DataGrid width="100%" height="100%">
+								<mx:columns>
+									<mx:DataGridColumn headerText="Nombre" width="70"/>
+									<mx:DataGridColumn headerText="Años" width="20"/>
+									<mx:DataGridColumn headerText="Apodo" width="50"/>
+									<mx:DataGridColumn headerText="Empleado" width="50"/>
+								</mx:columns>
+							</mx:DataGrid>
+						</mx:VBox>	
+					</mx:Canvas>
+				</mx:TabNavigator>
+			</mx:VBox>
+		</mx:HBox>
+	</mx:Panel>
+</mx:WindowedApplication>

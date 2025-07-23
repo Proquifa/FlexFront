@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:linkButton="skins.skin.linkButton.*" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*"
+		  width="100%"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Services;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.utils.StringUtil;
+			
+			import spark.components.Label;
+			import spark.events.ElementExistenceEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable] private var _infoGeneral:Facturacion;
+			private var _fpor:String;
+			[Bindable]
+			private var mostrarNotasCredito:Boolean;
+			
+			public function recibeDatos( $dato:EventoConsultaFacturacion2013, fPor:String ):void
+			{
+				if( $dato == null )
+				{
+					return;
+				}
+				_infoGeneral = $dato.listaPrepago[0];
+				
+				lnkDoctoAmpara.visible = lnkDoctoAmpara.includeInLayout = false;
+				lblDoctoAmpara.visible = lblDoctoAmpara.includeInLayout = false;
+				
+				if(_infoGeneral.fechaCobro == null)
+				{
+					lblDoctoAmpara.visible = lblDoctoAmpara.includeInLayout = true;
+					lblDoctoAmpara.text = "Pendiente";
+				}
+				else
+				{
+					if(_infoGeneral.documento == null)
+					{
+						lblDoctoAmpara.visible = lblDoctoAmpara.includeInLayout = true;
+						lblDoctoAmpara.text = "ND";
+					}
+					else
+					{
+						lnkDoctoAmpara.visible = lnkDoctoAmpara.includeInLayout = true;
+					}
+				}
+				
+				_fpor = fPor;
+				proforma = _infoGeneral.clave;
+				
+				if(_infoGeneral.folioNC && StringUtil.trim(_infoGeneral.folioNC).length > 0)
+				{
+					var arrayNotasCredito:Array = _infoGeneral.folioNC.split(",");
+					var arrayFechaNC: Array = _infoGeneral.fechaNC.split(",");
+					var enlaceDocumento:LinkButtonPQNet2;
+					grplnkNotasCredito.removeAllElements();
+					
+					mostrarNotasCredito = true;
+					
+					var etiquetaTemp:String;
+					var etiquetaFec:String;
+					for(var i:int = 0; i< arrayNotasCredito.length ; i++)
+					{
+						etiquetaTemp = arrayNotasCredito[i] as String;
+						etiquetaFec = arrayFechaNC[i] as String;
+						if(etiquetaTemp!= null && StringUtil.trim(etiquetaTemp).length>0)
+						{
+							enlaceDocumento = new LinkButtonPQNet2;
+							enlaceDocumento.label = etiquetaTemp;
+							enlaceDocumento.toolTip = "Ver documento";
+							enlaceDocumento.dateNC = etiquetaFec;
+							grplnkNotasCredito.addElement(enlaceDocumento);	
+						}
+					}
+				}
+				else
+				{
+					mostrarNotasCredito = false;
+				}
+			}
+			
+			private function httpRequestCompleteFactura( event:Event ):void 
+			{ 
+				var data:Object = JSON.parse(event.target.data);
+				var urlreq:URLRequest = new URLRequest();
+				
+				urlreq.url = data.current;
+				
+				navigateToURL( urlreq );
+			}
+			
+			private function httpRequestErrorFactura( error:ErrorEvent ):void { 
+				alertaSingleton.remove(true);
+				alertaSingleton.show( 'Ocurrio un error', catalogoAlertas.TIT_ADV_atencion );
+			}
+			
+			private function verPDF( $tipoDocumento:String ):void
+			{
+				var urlreq:URLRequest = new URLRequest();
+				var path:Object;
+				if( $tipoDocumento == 'factura' )
+				{
+					var obj:Object = new Object;
+					obj.tipo = "facturas";
+					obj.folio = this._infoGeneral.factura;
+					obj.carpeta = this._fpor;
+					
+					var body:String = JSON.stringify(obj);
+					Services.getEndPoint("comun/obtenerFecha", body, httpRequestCompleteFactura, httpRequestErrorFactura );
+					return;
+				}
+				else if( $tipoDocumento == 'otro' )
+				{
+					path = Util.rutaNueva(this._infoGeneral.documento);
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.COBROS_RUTA + path.ruta + this._infoGeneral.documento +".pdf";
+				}
+				else if( $tipoDocumento == 'proforma'){
+					path = Util.rutaNueva(_proforma);
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.PROFORMA + this._fpor +"/" + path.ruta + _proforma +".pdf";
+				}
+				navigateToURL( urlreq );
+			}
+			
+			
+			private function verNotaCredito(event:Event):void
+			{
+				var _url:URLRequest = new URLRequest();
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.NOTA_CREDITO + this._fpor +"/"+ event.target.fechaNC + event.target.label +".pdf";
+				navigateToURL(_url);
+			}
+			
+			protected function grplnkNotasCredito_elementAddHandler(event:ElementExistenceEvent):void
+			{
+				if(!(event.element is Label))
+				{
+					event.element.addEventListener(MouseEvent.CLICK,verNotaCredito);
+				}
+			}
+			
+			private var _proforma:String = "";
+			
+			[Bindable]
+			public function get proforma():String
+			{
+				return _proforma;
+			}
+			public function set proforma(value:String):void
+			{
+				_proforma = value;
+				if (value == null )
+				{
+					vgProforma.visible = vgProforma.includeInLayout = false;
+				}
+				else if (value == "" )
+				{
+					lblProformaND.visible = lblProformaND.includeInLayout = true;
+					lnkProforma.visible = lnkProforma.includeInLayout = false;
+					vgProforma.visible = vgProforma.includeInLayout = true;
+				}
+				else
+				{
+					lblProformaND.visible = lblProformaND.includeInLayout = false;
+					lnkProforma.visible = lnkProforma.includeInLayout = true;
+					vgProforma.visible = vgProforma.includeInLayout = true;
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" paddingLeft="15" paddingRight="10" paddingBottom="10">
+		<label:Titulo_w100  text="Fecha tramitación PSC:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaTramitacion}"/>
+		<label:Titulo_w100  text="Fecha asociación de pago:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaAsosiacion}"/>
+		<label:Titulo_w100  text="Fecha validación de cobro:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaCobro }"/>
+		<label:Titulo_w100  text="Factura:" />
+		<linkButton:LinkButtonPQNet2  label="{ _infoGeneral.factura }" click="verPDF('factura')" toolTip="Ver documento"/>
+		<s:VGroup width="100%" id="vgProforma" visible="false" includeInLayout="false">
+			<label:Titulo_w100 text="Proforma:" />
+			<linkButton:LinkButtonPQNet2 id="lnkProforma" label="{ proforma }" click="verPDF('proforma')" visible="false" includeInLayout="false"/>
+			<label:Texto_w100 id="lblProformaND" text="ND" />
+		</s:VGroup>
+	</s:VGroup>  
+	<panelCtaDetalle:SubHeader2 label="ASOCIACIÓN DE PAGO"/>
+	<s:VGroup width="100%" paddingLeft="15" paddingRight="10" paddingBottom="10">
+		<label:Titulo_w100  text="Monto:" />
+		<label:Texto_w100  text="{ _infoGeneral.total != 0 ? '$ '+UtilsFormatosNumericos.precisionADosDecimalesConComas( _infoGeneral.total ) +' '+ _infoGeneral.moneda : 'Pendiente' }" />
+		<label:Titulo_w100  text="Medio de pago:" />
+		<label:Texto_w100  text="{ _infoGeneral.medioPago == null ? 'Pendiente' : _infoGeneral.medioPago }" />
+		<label:Titulo_w100  text="FEP:" />
+		<label:Fecha fecha="{_infoGeneral.fep}"/>
+		<label:Titulo_w100  text="Comentarios para la validación:" />
+		<label:Texto_w100  text="{ _infoGeneral.comentarios == null ? 'Pendiente' : _infoGeneral.comentarios }" />
+	</s:VGroup>  
+	<panelCtaDetalle:SubHeader2 label="VALIDACIÓN DE COBRO SC"/>
+	<s:VGroup width="100%" paddingLeft="15" paddingRight="10" paddingBottom="10">
+		<label:Titulo_w100  text="Monto cobrado:" />
+		<label:Texto_w100  text="{  _infoGeneral.importe == 0 ? 'Pendiente' : '$ '+UtilsFormatosNumericos.precisionADosDecimalesConComas( _infoGeneral.importe ) +' '+_infoGeneral.monedaPago }" />
+		<label:Titulo_w100  text="Tipo de cambio:" />
+		<label:Texto_w100  text="{ isNaN(_infoGeneral.tcambio) || _infoGeneral.tcambio == 0 ? 'Pendiente' : _infoGeneral.tcambio }" />
+		<label:Titulo_w100  text="Fecha de pago:" />
+		<label:Fecha fecha="{_infoGeneral.fechaPago}"/>
+		<label:Titulo_w100  text="Documento que ampara:" />
+		<linkButton:LinkButtonPQNet2 id="lnkDoctoAmpara" label="Ver" click="verPDF('otro')" toolTip="Ver documento"/>
+		<label:Texto_w100 id="lblDoctoAmpara"/>
+		<label:Titulo_w100  text="Notas de crédito aplicadas:" visible="{mostrarNotasCredito}" includeInLayout="{mostrarNotasCredito}"/>
+		<s:HGroup id="grplnkNotasCredito" elementAdd="grplnkNotasCredito_elementAddHandler(event)" width="100%" visible="{mostrarNotasCredito}" includeInLayout="{mostrarNotasCredito}"/>
+	</s:VGroup>  
+</s:VGroup>

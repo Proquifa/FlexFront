@@ -1,0 +1,673 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+									  xmlns:s="library://ns.adobe.com/flex/spark"  
+									  xmlns:mx="library://ns.adobe.com/flex/mx"  
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:pqNet1="skins.botones.pqNet.*" 
+									  xmlns:label="skins.skin.label.*"
+									  xmlns:otros="skins.otros.*" 
+									  width="100%" height="100%"
+									  creationComplete="init()" 
+									  >  
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.consultaCotizaciones.EventoConsultaCotizaciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaAbiertosVsCerrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaAltaProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaESAC;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaEstados;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaMarca;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaNivelIngreso;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaTipo;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaTopClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.CotizacionGraficaTopProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.GraficaCotizacionesETVsFT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.graficosETvsFT.GraficaCotizacionesAbiertasVsCerradas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.graficosETvsFT.GraficaCotizacionesClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.graficosETvsFT.GraficaCotizacionesETVsFTSecundaria;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.graficosETvsFT.GraficaCotizacionesEstado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.componentesGraficas.graficosETvsFT.GraficaCotizacionesMarcas;
+			import mx.core.IVisualElement;
+			import mx.events.CalendarLayoutChangeEvent;
+			import mx.graphics.SolidColor;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.components.Group;
+			
+			private var _cotizaciones:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgCotizacion:Class;
+			[Bindable] private var _imgPiezas:Class;
+			[Bindable] private var _finicio:String;
+			[Bindable] private var _ffin:String;
+			[Bindable] public var _objetoTotalPeriodo:EventoConsultaCotizaciones;
+			
+			private var _montoPasado:Number = 0;
+			private var _cotizacionPasado:int = 0;
+			private var _piezaPasado:int = 0;
+			private var _montoPosPasado:Number = 0;
+			private var _cotizacionPosPasado:int = 0;
+			private var _piezaPosPasado:int = 0;
+			private var _montoTotal:Number = 0;
+			private var _piezasTotal:int = 0;
+			private var _cotizacionTotal:int = 0;
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var graficas1erNivel:ContenedorGraficas = new ContenedorGraficas();
+			
+			private function init():void{
+				headGrid.btnExportar.enabled = false;
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				actualizarVistaActual = true;
+				
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new CotizacionGraficaTopClientes());
+				graficas.addItem(new CotizacionGraficaTopProducto());
+				graficas.addItem(new CotizacionGraficaNivelIngreso());
+				graficas.addItem(new CotizacionGraficaTipo());
+				graficas.addItem(new CotizacionGraficaESAC());
+				graficas.addItem(new CotizacionGraficaMarca());
+				graficas.addItem(new CotizacionGraficaAbiertosVsCerrado());
+				graficas.addItem(new CotizacionGraficaEstados());
+				
+				var graficaEncimada:ArrayCollection = new ArrayCollection();
+				graficaEncimada.addItem(new GraficaCotizacionesETVsFT());
+				
+				graficas1erNivel.insertarGraficas(graficas,graficaEncimada);
+				agregarEspacioTrabajo(graficas1erNivel);
+				
+				var arrGraficas:ArrayCollection = new ArrayCollection();
+				
+				arrGraficas.addItem(new CotizacionGraficaAltaProducto());
+				var groupBlanco:Group = new Group();
+				groupBlanco.percentWidth = 100;
+				groupBlanco.percentHeight = 100;
+				arrGraficas.addItem(groupBlanco);
+				
+				arrGraficas.addItem(new GraficaCotizacionesAbiertasVsCerradas());
+				arrGraficas.addItem(new GraficaCotizacionesEstado());
+				arrGraficas.addItem(new GraficaCotizacionesClientes());
+				arrGraficas.addItem(new GraficaCotizacionesMarcas);
+				arrGraficas.addItem(new GraficaCotizacionesETVsFTSecundaria());
+				
+				var graficas2doNivel:ContenedorGraficas = new ContenedorGraficas();
+				graficas2doNivel.tipoDeBotonBack = "flecha";
+				graficas2doNivel.addEventListener("btnRegresarConsultasGraficasPrincipal",buttonRegresar_clickEventListener,false,0,true);
+				graficas2doNivel.insertarGraficasInverso( arrGraficas );
+				espacioSelectedGrafica.addElement( graficas2doNivel );
+				
+				addEventListener(EventoConsultaCotizaciones.MOSTRAR_SELECTED_GRAFICA, muestraOcultaSelectedGrafica);
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			[Bindable]
+			public var filtrosConsultaActual:Object;
+			[Bindable]
+			public var actualizarVistaActual:Boolean;
+			
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible)
+				{
+					compararVistas();
+					var seleccionarVista:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.SETTEAR_CURRENT_VISTA_SELECTED);
+					
+					//Configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					
+					if( vistaSelected == _TABLA_GRID )
+					{
+						seleccionarVista.selectedVista = _GRAFICAS;
+						
+						if(actualizarVistaActual)
+						{
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnTotales");
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_RESUMEN_COTIZACION_GRAFICAS");
+							eventEspera.tipoEventos.push("OBTENER_CONSULTA_TOTALES");
+							eventEspera.tipoEventos.push("OBTENER_INFO_GRAFICAS_SECUNDARIAS");
+							dispatchEvent(eventEspera);
+							
+							var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_RESUMEN_COTIZACION_GRAFICAS);
+							var eventTotales:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CONSULTA_TOTALES); 
+							var eventoGraficaETyFT:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_INFO_GRAFICAS_SECUNDARIAS);
+							var eventoGraficaAltaProducto:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_INFO_GRAFICAS_ALTA_PRODUCTO);
+							//este evento es para llevar esta información al menu de consulta de periodos individuales
+							var evParaMenuPorPeriodo:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CONSULTA_TOTALES_PERIODO); 
+							eventoGraficaAltaProducto.finicio = evParaMenuPorPeriodo.finicio = eventoGraficaETyFT.finicio =  eventTotales.finicio = evt.finicio = filtrosConsultaActual.finicio;
+							eventoGraficaAltaProducto.ffin = evParaMenuPorPeriodo.ffin = eventoGraficaETyFT.ffin = eventTotales.ffin = evt.ffin = filtrosConsultaActual.ffin;
+							eventoGraficaAltaProducto.objCotizacion.estado = evParaMenuPorPeriodo.objCotizacion.estado =  eventoGraficaETyFT.objCotizacion.estado =  eventTotales.objCotizacion.estado = evt.objCotizacion.estado =  filtrosConsultaActual.estado;
+							eventoGraficaAltaProducto.objCotizacion.nombreCliente = evParaMenuPorPeriodo.objCotizacion.nombreCliente = eventoGraficaETyFT.objCotizacion.nombreCliente =  eventTotales.objCotizacion.nombreCliente = evt.objCotizacion.nombreCliente = filtrosConsultaActual.nombreCliente;
+							eventoGraficaAltaProducto.objCotizacion.cotizo = evParaMenuPorPeriodo.objCotizacion.cotizo =  eventTotales.objCotizacion.cotizo = eventoGraficaETyFT.objCotizacion.cotizo = evt.objCotizacion.cotizo = filtrosConsultaActual.cotizo;
+							eventoGraficaAltaProducto.objCotizacion.cotizo = evParaMenuPorPeriodo.objCotizacion.cotizo = eventoGraficaETyFT.objCotizacion.MSalida =  eventTotales.objCotizacion.MSalida = evt.objCotizacion.MSalida = filtrosConsultaActual.MSalida;
+							eventoGraficaAltaProducto.idEmpleado = evParaMenuPorPeriodo.idEmpleado = eventoGraficaETyFT.idEmpleado = eventTotales.idEmpleado = evt.idEmpleado = filtrosConsultaActual.idEmpleado;
+							eventoGraficaAltaProducto.objCotizacion.folioCotizacion = evParaMenuPorPeriodo.objCotizacion.folioCotizacion = filtrosConsultaActual.folioCotizacion;
+							eventTotales.individual = false;  
+							evParaMenuPorPeriodo.individual = true;
+							dispatchEvent(evt);
+							dispatchEvent(eventTotales);
+							dispatchEvent(eventoGraficaETyFT);
+							dispatchEvent(evParaMenuPorPeriodo);
+							dispatchEvent(eventoGraficaAltaProducto);
+							
+							//Para Researt filtros
+							resetControlDeCambiosEnFiltros();
+						}
+					}
+					else
+					{
+						seleccionarVista.selectedVista = _TABLA_GRID;
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("BUSCAR_COTIZACIONES_POR_FECHA");
+							dispatchEvent(eventEspera);
+							
+							var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.BUSCAR_COTIZACIONES_POR_FECHA);
+							evento.finicio =filtrosConsultaActual.finicio;
+							evento.ffin = filtrosConsultaActual.ffin;
+							evento.objCotizacion.estado = filtrosConsultaActual.estado; 
+							evento.objCotizacion.nombreCliente =filtrosConsultaActual.nombreCliente;
+							evento.objCotizacion.cotizo = filtrosConsultaActual.cotizo;
+							evento.objCotizacion.MSalida = filtrosConsultaActual.MSalida;
+							evento.idEmpleado = filtrosConsultaActual.idEmpleado;
+							evento.objCotizacion.folioCotizacion = filtrosConsultaActual.folioCotizacion;
+							dispatchEvent(evento);
+							
+							//Para Researt filtros
+							resetControlDeCambiosEnFiltros();
+						}
+					}
+					dispatchEvent(seleccionarVista);
+				}
+			}
+			
+			private function muestraOcultaSelectedGrafica(evt:EventoConsultaCotizaciones):void
+			{
+				conceptoPie.text = evt.tipo.toUpperCase();
+				
+				if(evt.valorAdicional =="grafETVsFT")
+				{
+					stack.selectedIndex=evt.seleccionarGraficas; 
+					
+					var eventoSetFiltro:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+					eventoSetFiltro.tipo = evt.tipo; 
+					dispatchEvent(eventoSetFiltro);   
+				}
+			}
+			
+			public function set recibirCotizaciones(resultados:ArrayCollection):void
+			{
+				if(resultados == null )
+				{
+					return;
+				}
+				
+				var arrTemp:ArrayCollection = ObjectUtil.copy(resultados) as ArrayCollection;
+				_cotizaciones = new ArrayCollection();
+				_cotizaciones = arrTemp;
+					
+				dtgPqNet.dataProvider = _cotizaciones;
+				
+				if (resultados.length > 0 ){
+					headGrid.btnExportar.enabled = true;
+				}
+				else{
+					headGrid.btnExportar.enabled = false;
+				}
+			}
+			
+			public function set obtenerInfoTotales(infoTotales:ArrayCollection):void
+			{
+				if(infoTotales == null) return;
+				
+				for(var d:int = 0; d<infoTotales.length ; d++)
+				{
+					if(infoTotales[d].etiqueta	== 'Actual')
+					{
+						_montoTotal = infoTotales[d].total;
+						_cotizacionTotal = infoTotales[d].totalFolios;	//infoGraficas[d].partidas;
+						_piezasTotal = infoTotales[d].piezasTotal;
+						_finicio = UtilsFecha.formatoFecha_dia_mes_Anio(infoTotales[d].fechaInicio);
+						_ffin = UtilsFecha.formatoFecha_dia_mes_Anio(infoTotales[d].fechaFinal);
+					}
+					if(infoTotales[d].etiqueta	== 'Pasado')
+					{
+						_montoPasado = infoTotales[d].total;
+						_cotizacionPasado = infoTotales[d].totalFolios;	//infoGraficas[d].partidas;
+						_piezaPasado = infoTotales[d].piezasTotal;
+						currentDatePasadoIni = dtpFInicioPasado.selectedDate = infoTotales[d].fechaInicio;
+						currentDatePasadoFin = dtpFFinPasado.selectedDate = infoTotales[d].fechaFinal;
+					}
+					if(infoTotales[d].etiqueta	== 'Postpasado')
+					{
+						_montoPosPasado = infoTotales[d].total;
+						_cotizacionPosPasado = infoTotales[d].totalFolios;	//infoGraficas[d].partidas;
+						_piezaPosPasado = infoTotales[d].piezasTotal;
+						currentDatePostpasadoIni = dtpFInicioPosPasado.selectedDate = infoTotales[d].fechaInicio;
+						currentDatePostpasadoFin = dtpFFinPosPasado.selectedDate = infoTotales[d].fechaFinal;
+					}
+				}
+				
+				monto.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoTotal);
+				montoPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPasado);
+				montoPosPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPosPasado);
+				numCotizacion.text = _cotizacionTotal.toString();
+				numCotizacionPasado.text = _cotizacionPasado.toString();
+				numCotizacionPosPasado.text = _cotizacionPosPasado.toString();
+				numPiezas.text = _piezasTotal.toString();
+				numPiezasPasado.text = _piezaPasado.toString();
+				numPiezasPosPasado.text = _piezaPosPasado.toString();
+				
+				var _promedioCotizaciones:int = (_cotizacionPasado + _cotizacionPosPasado)/2;
+				var _promedioMontos:Number = (_montoPasado + _montoPosPasado)/2;
+				var _promedioPiezas:int = (_piezaPasado + _piezaPosPasado)/2;
+				
+				if(_cotizacionTotal > _promedioCotizaciones) _imgCotizacion = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_cotizacionTotal < _promedioCotizaciones) _imgCotizacion = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_cotizacionTotal == _promedioCotizaciones) _imgCotizacion = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_montoTotal > _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_montoTotal < _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_montoTotal == _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_piezasTotal > _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_piezasTotal < _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_piezasTotal == _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			}
+			
+			
+			private function encuentraTotalesXPeriodo():void
+			{
+				//Configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnTotales");
+				eventEspera.tipoEventos.push("OBTENER_CONSULTA_TOTALES_PASADO");
+				eventEspera.tipoEventos.push("OBTENER_CONSULTA_TOTALES_POSPASADO");
+				dispatchEvent(eventEspera);
+				
+				var event:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CONSULTA_TOTALES_PASADO);
+				event.finicio = dtpFInicioPasado.selectedDate;
+				event.ffin = dtpFFinPasado.selectedDate;
+				event.objCotizacion = _objetoTotalPeriodo.objCotizacion;
+				event.idEmpleado = _objetoTotalPeriodo.idEmpleado;
+				event.individual = _objetoTotalPeriodo.individual;
+				dispatchEvent(event);
+				
+				var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CONSULTA_TOTALES_POSPASADO);
+				evento.finicio = dtpFInicioPosPasado.selectedDate;
+				evento.ffin = dtpFFinPosPasado.selectedDate;
+				evento.objCotizacion = _objetoTotalPeriodo.objCotizacion;
+				evento.idEmpleado = _objetoTotalPeriodo.idEmpleado;
+				evento.individual = _objetoTotalPeriodo.individual;
+				dispatchEvent(evento); 
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons"))
+				{
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnTotales":
+							{
+								if(btnTotales.isCurrentButtonActualizar)
+								{
+									btnTotales.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnTotales.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			public function set mostrarOcultarTab(tabGrafica:Boolean):void
+			{
+				imgTab.visible = tabGrafica;
+				
+				if(vistaSelected == _GRAFICAS)
+				{
+					compararVistas();
+				}
+			}
+			
+			private function buttonRegresar_clickEventListener(event:Event):void
+			{
+				stack.selectedIndex=0;
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void
+			{
+				if(espacio == null)
+				{
+					return;
+				}
+				graficos.addItem(espacio);
+				if(graficos.length == 1)
+				{
+					espacioGraficas.removeAllElements();
+					espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			public function limpiarGrid():void
+			{
+				dtgPqNet.dataProvider = new ArrayCollection();
+			}
+			
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private var currentDatePasadoIni:Date;
+			private var currentDatePasadoFin:Date;
+			private var currentDatePostpasadoIni:Date;
+			private var currentDatePostpasadoFin:Date;
+			protected function fechasPasadas_changeHandler(event:CalendarLayoutChangeEvent):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicioPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoIni.time,"dtpFInicioPasado",btnTotales);break;}
+					case "dtpFFinPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoFin.time,"dtpFFinPasado",btnTotales);	break;}
+					case "dtpFInicioPosPasado":	{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoIni,"dtpFInicioPosPasado",btnTotales);break;}
+					case "dtpFFinPosPasado":{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoFin,"dtpFFinPosPasado",btnTotales);break;}
+				}
+			}
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2)
+				{
+					if(!keyModificados.hasOwnProperty($currentFiltroModif))
+					{
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}
+				else
+				{
+					if(numFiltrosModificados==1)
+					{
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}
+					else
+					{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			private function compareFunction_HeaderFecha(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fecha,item2.fecha); 
+			}
+			
+			private function compareFunction_Requisisicion(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.requisicion,item2.requisicion); 
+			}
+			
+			protected function headerGrid_clickExportarHandler(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Fecha");
+				fila[2] = hoja.addItem("Cliente");
+				fila[3] = hoja.addItem("Contacto");
+				fila[4] = hoja.addItem("Medio de Envío");
+				fila[5] = hoja.addItem("Cotizó");
+				fila[6] = hoja.addItem("Cotización");
+				fila[7] = hoja.addItem("Requisición");
+				fila[8] = hoja.addItem("Estado");
+				fila[9] = hoja.addItem("Enviado");
+				
+				for(var i:int = 0; i < dtgPqNet.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = (dtgPqNet.dataProvider[i] as Cotizacion).numFila;
+					fila[1] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).fechaString + '"';
+					fila[2] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).nombreCliente + '"';
+					fila[3] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).contacto + '"';
+					fila[4] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).MSalida + '"';
+					fila[5] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).cotizo + '"';
+					fila[6] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).folioCotizacion + '"';
+					fila[7] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).requisicion + '"';
+					fila[8] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).estado + '"';
+					fila[9] = '"' + (dtgPqNet.dataProvider[i] as Cotizacion).enTiempoFueraDeTiempo + '"';
+					hoja.addItem('\r' + fila);
+				}
+				file.save(hoja,"ConsultaCotizacion-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" id="gridConsultaCotizacion" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<consultas:HeaderParaGridConsultas id="headGrid" mostrarBtnExportar="true" clickExportar="headerGrid_clickExportarHandler(event)"/>
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="dtgPqNet" width="100%" height="100%" anchoColumnas="{ ['45','=','25%','23%','=','=','=','=','80','80','50'] }" tipoDeConsulta="Cotizaciones"
+										   disableSortableColumns="{[10]}" disableDragableColumns="{[0,10]}" disableResizableColumns="{[0,10]}">
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+					<mx:AdvancedDataGridColumn headerText="Fecha" dataField="fechaString" sortCompareFunction="{compareFunction_HeaderFecha}"/>
+					<mx:AdvancedDataGridColumn headerText="Cliente" dataField="nombreCliente"/>
+					<mx:AdvancedDataGridColumn headerText="Contacto" dataField="contacto" />
+					<mx:AdvancedDataGridColumn headerText="Medio de Envío" dataField="MSalida"/>							
+					<mx:AdvancedDataGridColumn headerText="Cotizó" dataField="cotizo"/>
+					<mx:AdvancedDataGridColumn headerText="Cotización" dataField="folioCotizacion"  />
+					<mx:AdvancedDataGridColumn headerText="Requisición" dataField="requisicion"/>
+					<mx:AdvancedDataGridColumn headerText="Estado" dataField="estado" />
+					<mx:AdvancedDataGridColumn headerText="Enviado" dataField="enTiempoFueraDeTiempo" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" >
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											import skins.skin.AdvancedDataGrid.PQNetWhitCSS;
+											
+											override public function set data(value:Object):void{
+												if( listData == value ) return;
+												super.data = value; 
+												lblTiempo.setStyle("fontFamily",(automationOwner as PQNetWhitCSS).fontFamily);
+												lblTiempo.setStyle("fontSize", (automationOwner as PQNetWhitCSS).fontSize);
+												lblTiempo.setStyle("fontStyle",(automationOwner as PQNetWhitCSS).styleFont);
+											}
+										]]>
+									</fx:Script>
+									<s:HGroup horizontalAlign="right" horizontalCenter="0" verticalAlign="middle">
+										<s:Label id="lblTiempo" text="{(data as Cotizacion).enTiempoFueraDeTiempo}"/>
+										<s:Image source="{(data as Cotizacion).enTiempoFueraDeTiempo == 'FT' ? catalogoIconosGrid.getInstance().render_circuloRojo : catalogoIconosGrid.getInstance().render_circuloVerde}"/>
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText=" ">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.consultaCotizaciones.EventoConsultaCotizaciones;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											public function regresaCotizacion():void{
+												
+												var eventoC:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_PARTIDA_COTIZACION);
+												eventoC.cotizacion = (this.data as Cotizacion).folioCotizacion;
+												dispatchEvent(eventoC); 
+												
+												var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.VISUALIZAR_COT);
+												evento.objCotizacion = data as Cotizacion;
+												dispatchEvent( evento ); 
+												
+												var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.TIPO_MONEDA);
+												evt.moneda = (this.data as Cotizacion).moneda;
+												dispatchEvent(evt);		
+												
+											}
+										]]>
+									</fx:Script>
+									<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="regresaCotizacion()" id="imgInfo" horizontalCenter="0"/>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>	
+	</comun:espacioA>
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas" />
+					<s:BorderContainer width="260" height="100%" backgroundColor="#363636"> <!--width="240"-->
+						<s:Scroller height="100%">
+							<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" >
+								
+								<s:Label width="100%" text="TOTALES" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal" paddingTop="20" />
+								<otros:divisionGruesa color="0x{catalogoColores.LABEL_BLANCO}"/>
+								
+								<s:HGroup width="100%" paddingTop="30" paddingBottom="15">
+									<s:Image source="{this._imgMonto}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Monto USD:"  color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="monto" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="montoPasado"  color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="montoPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15"> <!--paddingBottom="70"-->
+									<s:Image source="{this._imgCotizacion}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="No. Cotizaciones:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numCotizacion" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numCotizacionPasado"  color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numCotizacionPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15">
+									<s:Image source="{this._imgPiezas}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Total piezas:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezas" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezasPasado"  color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezasPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								
+								<otros:divisionHueca color="#{catalogoColores.LABEL_NEGRO}"/>
+								<s:Label text="{this._finicio == null ? '' : this._finicio} - {this._ffin == null ? '' : this._ffin}" width="100%" color="0x{catalogoColores.LABEL_BLANCO}" fontSize="14" paddingTop="15" paddingBottom="25" textAlign="center"/>
+								<s:HGroup paddingBottom="30">
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_AZUL_REY}"/>
+												</s:fill>		
+											</s:Ellipse>									
+											<mx:DateField id="dtpFInicioPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+									</s:VGroup>
+								</s:HGroup>
+								
+								<s:HGroup paddingBottom="30" >
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_MORADO_FUERTE}"/>
+												</s:fill>		
+											</s:Ellipse>
+											<mx:DateField id="dtpFInicioPosPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPosPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<pqNet1:botonPqNetLargo id="btnTotales" width="100%" click="encuentraTotalesXPeriodo()" botonRedondo="true" icono="iconoActualizarNormal"/>
+							</s:VGroup>
+						</s:Scroller>	
+					</s:BorderContainer>				
+				</s:HGroup>
+			</s:VGroup>
+			<s:VGroup height="100%" width="100%" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" gap="0" paddingTop="28" paddingLeft="10" paddingRight="20">
+				<label:Titulo fontWeight="bold" id="conceptoPie" maxWidth="{this.width}" paddingTop="0" paddingBottom="6"/>
+				<otros:divisionGruesa width="100%"/>
+				<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica"/>
+			</s:VGroup>
+		</pq:MobViewStack>
+	</comun:espacioB>
+</comun:ContenedorComparacionConsultas>

@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		xmlns:mx="library://ns.adobe.com/flex/mx" 
+		xmlns:botonProquifa="skin.botonProquifa.*" 
+		xmlns:botonCerrar="skin.botonCerrar.*" 
+		xmlns:botonTeclado="skin.botonTeclado.*"
+		
+		viewActivate="vistaActiva(event)"
+		actionBarVisible="false" 
+		removing="salirVista(event)" 
+		tabBarVisible="false"
+		title="camaraCuadrante"
+		
+		>
+	<fx:Script>
+		<![CDATA[
+			import com.google.zxing.BarcodeFormat;
+			import com.google.zxing.BinaryBitmap;
+			import com.google.zxing.BufferedImageLuminanceSource;
+			import com.google.zxing.DecodeHintType;
+			import com.google.zxing.MultiFormatReader;
+			import com.google.zxing.Result;
+			import com.google.zxing.client.result.ParsedResult;
+			import com.google.zxing.client.result.ResultParser;
+			import com.google.zxing.common.GlobalHistogramBinarizer;
+			import com.google.zxing.common.flexdatatypes.HashTable;
+			
+			import eventos.EventoMensajero;
+			
+			import modelo.objetos.Documento;
+			import modelo.singletons.datosGlobales;
+			
+			import mx.events.FlexEvent;
+			
+			import spark.events.ViewNavigatorEvent;
+			
+			private var documentoSeleccionado:Documento = new Documento();
+			
+			protected var camara:Camera;
+			private var videoDisplay:Video;
+			private var detectarCambio:Timer = new Timer(3000);
+			private var bmd:BitmapData;
+			
+			private var multiple:MultiFormatReader;
+			
+			private var sonido:Sound = new Sound();
+			private var canal:SoundChannel = new SoundChannel();
+			
+			private var contador:Timer = new Timer(1000);
+			
+			
+			protected function salirVista(event:ViewNavigatorEvent):void
+			{
+				videoDisplay = null;
+				camara=null;
+				detectarCambio.stop();
+			}
+			
+			protected function vistaActiva(event:ViewNavigatorEvent):void
+			{
+				stage.setAspectRatio(StageAspectRatio.LANDSCAPE);
+				stage.displayState= StageDisplayState.FULL_SCREEN_INTERACTIVE;
+				datosGlobales.getInstance().indexTabPendientes = 2;
+				if(Camera.isSupported)
+				{
+					videoDisplay = new Video(this.width,this.height);
+					videoDisplay.rotation = 90;
+					
+					uic.addChild(videoDisplay);
+					camara = Camera.getCamera();
+					
+					stage.align = StageAlign.TOP_LEFT;
+					stage.scaleMode = StageScaleMode.NO_SCALE;
+/*					cam = Camera.getCamera();
+					
+					cam.setMode(640, 480, 25); */
+					camara.setQuality(0,100);
+					
+					
+					
+					//camara.setMode(960,600,24);
+					camara.setMode(this.width,this.height,15,true);
+					videoDisplay.attachCamera(camara);
+					multiple = new MultiFormatReader();
+					ejecutarTimer();
+				}
+				else{
+					//errorText_txt.text = "Camara no soportada";
+				}
+				contador = new Timer(1000);
+				contador.addEventListener(TimerEvent.TIMER,funcionContador);
+				contador.start();
+			}
+			
+			public function ejecutarTimer():void{
+				detectarCambio = new Timer(3000);
+				//contador = new Timer(1000);
+				//contador.addEventListener(TimerEvent.TIMER,funcionContador);
+				detectarCambio.addEventListener(TimerEvent.TIMER,decodificarSnapShot);
+				detectarCambio.start();
+			}
+			
+			public function decodificarSnapShot(event:TimerEvent):void{
+				//bmd = new BitmapData(640,920);
+				bmd = new BitmapData(videoDisplay.width,videoDisplay.height);
+				bmd.draw(videoDisplay);
+				videoDisplay.cacheAsBitmap = true;
+				videoDisplay.cacheAsBitmapMatrix = new Matrix();
+				decodificarBitmapData(bmd,videoDisplay.width,videoDisplay.height);
+			}
+			
+			public function funcionContador(event:TimerEvent):void{
+				this.lbTimer.text = (int(this.lbTimer.text) - 1).toString();
+				if(this.lbTimer.text == "0"){
+					this.contador.stop();
+					if(detectarCambio.running == true){
+						detectarCambio.stop();
+					}
+					if(this.isActive == true){
+						this.navigator.popView();
+					}
+				}
+			}
+			
+			public function decodificarBitmapData(bmpd:BitmapData,width:int,height:int):void{
+				var lsource:BufferedImageLuminanceSource = new BufferedImageLuminanceSource(bmpd);
+				var bitmap:BinaryBitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lsource));
+				var ht:HashTable = null;
+				ht = this.getAllHints128();
+				var res:Result = null;
+				try{
+					res = multiple.decode(bitmap,ht);
+				}
+				catch(event:Error){
+					trace(event.errorID.toString() + " " + event.message.toString());
+				}
+				if(res == null){
+					this.lbResultado.text = "Código no encontrado";
+					/*sonido = new Sound();
+					sonido.load(new URLRequest("assets/sounds/error.mp3")); 	
+					canal = sonido.play();*/
+					//consola.text = consola.text + "\n no encontrado";
+				}
+				else{
+					var parsedResult:ParsedResult = ResultParser.parseResult(res);
+					this.lbResultado.text = parsedResult.getDisplayResult();
+					sonido = new Sound();
+					sonido.load(new URLRequest("assets/sounds/aceptado.mp3")); 	
+					canal = sonido.play();
+					//QRText_txt.text = parsedResult.getDisplayResult();
+					detectarCambio.stop();
+					if(lbResultado.text == this.documentoSeleccionado.folio){
+						this.documentoSeleccionado.verificado = true;
+						var evento:EventoMensajero = new EventoMensajero(EventoMensajero.REGRESAR_DOCUMENTO_VERIFICADO);
+						evento._documentoVerificado = this.documentoSeleccionado;
+						this.dispatchEvent(evento);
+						this.navigator.popView();
+					}
+					else{
+						this.lbResultado.text = "El producto no coincide con código";
+						detectarCambio.start();
+					}
+				}
+			}
+			
+			public function getAllHints128():HashTable{
+				var ht:HashTable = new HashTable();
+				ht.Add(DecodeHintType.POSSIBLE_FORMATS,BarcodeFormat.CODE_128);
+				return ht;
+			}
+			
+			
+			public function set recibirPendienteSeleccionado(_documento:Documento):void{
+				this.documentoSeleccionado = new Documento();
+				if(_documento.folio != null && _documento.folio != ""){
+					this.documentoSeleccionado = _documento;
+				}
+			}
+			
+			/*protected function hardcode(event:MouseEvent):void
+			{
+			this.documentoSeleccionado.verificado = true;
+			var evento:EventoMensajero = new EventoMensajero(EventoMensajero.REGRESAR_DOCUMENTO_VERIFICADO);
+			evento._documentoVerificado = this.documentoSeleccionado;
+			this.dispatchEvent(evento);
+			this.navigator.popView();
+			
+			}*/
+			
+			protected function introducirCodigoTeclado(event:MouseEvent):void
+			{
+				detectarCambio.stop();
+				this.contador.stop();
+				this.txtCodigo.includeInLayout = true;
+				this.txtCodigo.visible = true;
+				this.txtCodigo.setFocus();
+				
+			}
+			
+			protected function verificarCodigo(event:FlexEvent):void
+			{
+				stage.focus = null;
+				// TODO Auto-generated method stub
+				if(txtCodigo.text == this.documentoSeleccionado.folio){
+					this.documentoSeleccionado.verificado = true;
+					var evento:EventoMensajero = new EventoMensajero(EventoMensajero.REGRESAR_DOCUMENTO_VERIFICADO);
+					evento._documentoVerificado = this.documentoSeleccionado;
+					this.dispatchEvent(evento);
+					this.navigator.popView();
+				}
+				else{
+					this.lbResultado.text = "El producto no coincide con código";
+				}
+			}
+			
+			protected function salir(event:MouseEvent):void
+			{
+				videoDisplay = null;
+				camara=null;
+				this.navigator.popView();
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<s:GlowFilter id="glow" color="#00ff00"  blurX="7"/>
+		<s:SolidColor id="verdeFosoresente" color="#00FF00"/>
+		<s:SolidColor id="negro" color="#000000"/>
+	</fx:Declarations>
+	<!--<s:states>
+		<s:State name="landscape"/>
+	</s:states>-->
+	<mx:UIComponent id="uic" x="0" y="0" height="{this.height}" width="{this.width}" />
+	
+	<s:Rect x="0" y="0" left="0" right="0" height="170" alpha="0.4" fill="{negro}"/>
+	
+	<!--superior izquierda-->
+	<s:Rect y="170" width="200" left="0" height="2" filters="{glow}" fill="{verdeFosoresente}" />
+	<s:Rect y="170" width="2" left="0" height="50" filters="{glow}" fill="{verdeFosoresente}" />
+	
+	
+	<!--inferior izquierda-->
+	<s:Rect y="468" left="0" width="200" height="2" filters="{glow}" fill="{verdeFosoresente}" />
+	<s:Rect y="420" left="0" width="2" height="50" filters="{glow}" fill="{verdeFosoresente}" />
+	
+	<!--superior derecha-->
+	<s:Rect y="170" width="200" right="0" height="2" filters="{glow}" fill="{verdeFosoresente}" />
+	<s:Rect y="170" width="2" right="0" height="50" filters="{glow}" fill="{verdeFosoresente}" />
+	
+	<!--inferior derecha-->
+	<s:Rect y="468" width="200" right="0" height="2" filters="{glow}" fill="{verdeFosoresente}" />
+	<s:Rect y="420" width="2" right="0" height="50" filters="{glow}" fill="{verdeFosoresente}" />
+	
+	<s:Rect x="0" y="470" left="0" right="0" height="170" alpha="0.4" fill="{negro}"/>
+	
+	<s:Label id="lbResultado" y="550" text="Escaneando" horizontalCenter="0"/>
+	<s:Label id="lbTimer" y="65" text="30" fontSize="50" fontFamily="Digital" horizontalCenter="0"/>
+	
+	
+	<s:TextInput  autoCapitalize="all" top="50" left="140" right="140" visible="false" includeInLayout="false" id="txtCodigo" enter="verificarCodigo(event)"/>
+	<botonCerrar:btnCerrar left="20" y="55" label="X" click="salir(event)"/>
+	<!--<botonTeclado:btnTeclado  right="20" y="55" label="T" id="btnTeclado" click="introducirCodigoTeclado(event)"/>-->
+	<s:Button width="92" height="58" left="20" y="95" label="T" click="introducirCodigoTeclado(event)"/>
+	<!--<s:Label id="btnHard" y="65" text="hard" x="0" click="hardcode(event)"/>-->
+</s:View>

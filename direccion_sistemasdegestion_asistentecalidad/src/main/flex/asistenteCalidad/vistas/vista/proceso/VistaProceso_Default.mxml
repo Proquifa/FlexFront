@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:plantilla="asistenteCalidad.vistas.vista.plantilla.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%"
+		 creationComplete="init(event)"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.UsuarioPConnect;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.CompresorVentanas_asistente;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import asistenteCalidad.vistas.evento.EventoAsistenteCalidad;
+			import asistenteCalidad.vistas.vista.plantilla.alertas.popUp_AlertaEliminar;
+			import asistenteCalidad.vistas.vista.plantilla.alertas.popUp_ValidarNuevo;
+			import asistenteCalidad.vistas.vista.plantilla.alertas.popUp_ValidarVinculado;
+			
+			
+			public  var listaSolicitudes:VistaProceso_ListSolicitudes = new VistaProceso_ListSolicitudes();
+			public var listaClientes:VistaProceso_ListClientes = new VistaProceso_ListClientes();
+			private var listaContactos:VistaProceso_ListContactos = new VistaProceso_ListContactos();
+			public var info:VistaProceso_Info = new VistaProceso_Info();
+			private var compresor:CompresorVentanas_asistente = new CompresorVentanas_asistente();
+			private var $contactos:ArrayCollection;
+			private var vista:popUp_AlertaEliminar;
+			private var popUp_validaNuevo:popUp_ValidarNuevo;
+			private var popUp_validaVinculado:popUp_ValidarVinculado;
+			private var _sql:Query;
+			
+			[Bindable] private var _listaComponentes:ArrayCollection = new ArrayCollection();
+			
+			
+			
+			protected function vistaAtras(event:EventoAsistenteCalidad):void
+			{
+				dispatchEvent(new Event("cambiarVistaDefault",true));
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener("hacerConsultaContactos",hacerConsultaContactos,false,0,true);
+				addEventListener("validarSolicitud",mostrarPopUpValidar,false,0,true);
+				addEventListener("descartarSolicitudUsuario",verificarDescartar,false,0,true);	
+				
+				listaClientes.addEventListener(EventoAsistenteCalidad.CLIENTE_CON_CONTACTOS_SELECCIONADO,pasarContactosListaContactos,false,0,true);
+				var evt:EventoAsistenteCalidad = new EventoAsistenteCalidad( EventoAsistenteCalidad.CARGAR_LISTA_CONTACTOS_CLIENTE );
+				dispatchEvent( evt );	
+				
+				compresor.snColor = true;
+				compresor.divisionDegradado = true;
+				_listaComponentes.addItem(listaSolicitudes);
+				_listaComponentes.addItem(listaClientes);
+				_listaComponentes.addItem(listaContactos);
+				_listaComponentes.addItem(info);
+				
+				compresor.agregarComponentes(_listaComponentes);
+				
+				grpZonaTrabajo.addElement(compresor);
+				
+			}
+			
+			protected function verificarDescartar(evt:Event):void
+			{
+				if(!EventoAsistenteCalidad.vinculada)
+				{
+					if(vista == null)
+						vista = new popUp_AlertaEliminar(); 
+					
+					vista.addEventListener("cerrarPopUp",cerrarPopUp,false,0,true);	
+					vista.addEventListener("descartarSolicitud",descartarSolicitud,false,0,true);	
+					PopUpManager.addPopUp( vista, this, true );
+					PopUpManager.centerPopUp(vista);
+					vista.setRecibeContacto(listaSolicitudes.listaSolicitudes.selectedItem as UsuarioPConnect);
+				}
+			}
+			
+			protected function descartarSolicitud(ert:Event):void
+			{
+				var evt:EventoAsistenteCalidad = new EventoAsistenteCalidad(EventoAsistenteCalidad.DESCARTAR_SOLICITUD_USUARIO_PCONECT);
+				evt.solicitudUsuario = listaSolicitudes.listaSolicitudes.selectedItem as UsuarioPConnect;
+				dispatchEvent(evt);
+				PopUpManager.removePopUp(vista);
+				vista = null;
+			}
+			
+			private function cerrarPopUp(evt:Event):void
+			{
+				PopUpManager.removePopUp(vista);
+				vista = null;
+			}
+			
+			private function mostrarPopUpValidar(evt:Event):void
+			{
+				if(listaClientes.listaClientes.dataProvider.length > 0 && listaClientes.listaClientes.selectedItem)
+				{
+					if(EventoAsistenteCalidad.vinculada)
+					{
+						if(popUp_validaVinculado == null)
+							popUp_validaVinculado = new popUp_ValidarVinculado();
+						
+						popUp_validaVinculado.addEventListener("cerrarPopUpValidar",cerrarPopUpValidar,false,0,true);	
+						popUp_validaVinculado.addEventListener("validarSolicitud",validarSolicitud,false,0,true);	
+						PopUpManager.addPopUp( popUp_validaVinculado, this, true );
+						PopUpManager.centerPopUp(popUp_validaVinculado);
+						popUp_validaVinculado.setRecibeContacto(listaSolicitudes.listaSolicitudes.selectedItem as UsuarioPConnect);
+					}
+					else
+					{
+						if(popUp_validaNuevo == null)
+							popUp_validaNuevo = new popUp_ValidarNuevo();
+						
+						popUp_validaNuevo.addEventListener("cerrarPopUpValidar",cerrarPopUpValidar,false,0,true);	
+						popUp_validaNuevo.addEventListener("validarSolicitud",validarSolicitud,false,0,true);	
+						PopUpManager.addPopUp( popUp_validaNuevo, this, true );
+						PopUpManager.centerPopUp(popUp_validaNuevo);
+						popUp_validaNuevo.setRecibeContacto(listaSolicitudes.listaSolicitudes.selectedItem as UsuarioPConnect);
+					}
+				}
+			}
+			
+			private function cerrarPopUpValidar(evt:Event):void
+			{
+				closePopUp();
+			}
+			
+			private function closePopUp():void
+			{
+				if(popUp_validaVinculado)
+				{
+					PopUpManager.removePopUp(popUp_validaVinculado);
+					popUp_validaVinculado = null;
+				}
+				if(popUp_validaNuevo)
+				{
+					PopUpManager.removePopUp(popUp_validaNuevo);
+					popUp_validaNuevo = null;
+				}
+			}
+			
+			private function validarSolicitud(evt:Event):void
+			{
+				var validar:EventoAsistenteCalidad = new EventoAsistenteCalidad(EventoAsistenteCalidad.VALIDAR_USUARIO_PCONNECT);
+				if(EventoAsistenteCalidad.vinculada)
+				{
+					validar.solicitudUsuario = listaSolicitudes.listaSolicitudes.selectedItem as UsuarioPConnect;
+					validar.contactoSelect = listaContactos.listaContactos.selectedItem as Contacto;
+				}
+				else
+				{
+					validar.solicitudUsuario = listaSolicitudes.listaSolicitudes.selectedItem as UsuarioPConnect;
+					validar.contactoSelect = null;
+				}
+				
+				validar.idCliente = EventoAsistenteCalidad.idClienteStatic;
+				dispatchEvent(validar);
+				closePopUp();
+				
+				if(listaContactos.listaContactos.selectedItem)
+				{
+					(listaContactos.listaContactos.selectedItem as Contacto).vinculado = false;
+				}
+			}
+			
+			private function pasarContactosListaContactos(evt:EventoAsistenteCalidad):void
+			{
+				listaContactos.recibeContactos(StringFunciones.sortArreglo(evt.contactos,"nombre"));
+			}
+			
+			public function set recibeListaContactos($lista:ArrayCollection):void
+			{
+				if($lista == null)
+					return;
+				
+				listaContactos.cleanLista();
+				$contactos = new ArrayCollection();
+				$contactos = ObjectUtil.copy($lista) as ArrayCollection;
+				
+				_sql = new Query($lista,["empresa","nombre","EMail"],true);
+				listaClientes.recibeUniversoContactos($lista);
+			}
+			
+			
+			private function hacerConsultaContactos(evt:Event):void
+			{
+				info.recibeContactoSolictud(EventoAsistenteCalidad.solicitudSelect);
+				if (_sql && StringUtil.trim( EventoAsistenteCalidad.nombreContacto ).length > 0)
+				{
+					var busqueda:String = StringUtil.trim(EventoAsistenteCalidad.correoContacto);
+					var empresa:String = StringUtil.trim(EventoAsistenteCalidad.nombreEmpresa);
+					var nombreContacto:String = StringUtil.trim(EventoAsistenteCalidad.nombreContacto);
+					var punteroCliente:Array =  new Array();
+					var pru:Array = new Array();
+					var i:int;
+					
+					//  +++++++++++++++++++++++++++++++++++++++ BUSCA EN EMPRESA  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					pru = _sql.getCampoLikeLowerCase("empresa",busqueda);
+					pru.sort();
+					
+					if (pru.length > 0)
+					{
+						for ( i=0; i<pru.length; i++)
+						{
+							punteroCliente.push(_sql.getPunteros([pru[i],null,null]));
+						}
+					}
+					
+					//  ++++++++++++++++++++++++++++++++++++  BUSCA EN CONTACTO +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					pru = _sql.getCampoLikeLowerCase("nombre",busqueda);
+					pru.sort();
+					
+					if (pru.length > 0)
+					{
+						for ( i=0; i<pru.length; i++)
+						{
+							punteroCliente.push( _sql.getPunteros([null,pru[i],null]));
+						}
+					}
+					
+					//  +++++++++++++++++++++++++++++++++++++++  BUSCA EN EMAIL  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					var pru1:Array = _sql.getCampoLikeLowerCase("EMail",busqueda);
+					pru1.sort();
+					
+					if (pru1.length > 0)
+					{
+						for ( i=0; i<pru1.length; i++)
+						{
+							punteroCliente.push( _sql.getPunteros([null,null,pru1[i]]));
+						}
+					}
+					
+					
+					
+					//  +++++++++++++++++++++++++++++++++++++++ BUSCA EN EMPRESA  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					pru = _sql.getCampoLikeLowerCase("empresa",empresa);
+					pru.sort();
+					
+					if (pru.length > 0)
+					{
+						for ( i=0; i<pru.length; i++)
+						{
+							punteroCliente.push(_sql.getPunteros([pru[i],null,null]));
+						}
+					}
+					
+					//  ++++++++++++++++++++++++++++++++++++  BUSCA EN CONTACTO +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					pru = _sql.getCampoLikeLowerCase("nombre",empresa);
+					pru.sort();
+					
+					if (pru.length > 0)
+					{
+						for ( i=0; i<pru.length; i++)
+						{
+							punteroCliente.push( _sql.getPunteros([null,pru[i],null]));
+						}
+					}
+					
+					//  +++++++++++++++++++++++++++++++++++++++  BUSCA EN EMAIL  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					pru = new Array();
+					var pru12:Array = _sql.getCampoLikeLowerCase("EMail",empresa);
+					pru12.sort();
+					
+					if (pru12.length > 0)
+					{
+						for ( i=0; i<pru12.length; i++)
+						{
+							punteroCliente.push( _sql.getPunteros([null,null,pru12[i]]));
+						}
+					}
+					
+					//  +++++++++++++++++++++++++++++++++++++++  ORDENA Y ELIMINA REPETIDOS  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+					var arreTemp:Array = new Array()
+					for ( i=0;i<punteroCliente.length;i++)
+					{
+						if (punteroCliente[i].length > 1)
+						{
+							for(var j:int=0; j<punteroCliente[i].length; j++)
+							{
+								arreTemp.push(punteroCliente[i][j]);
+							}
+						}
+						else
+							arreTemp.push(punteroCliente[i][0]);
+					}
+					
+					var arregloTe:ArrayCollection = _sql.armarLista(removerDuplicados(arreTemp));
+					if(arregloTe.length > 0)
+						listaClientes.recibeContactos(arregloTe);
+					else
+						listaClientes.recibeContactos(new ArrayCollection());
+				}
+					
+				else
+				{
+					listaClientes.recibeContactos($contactos);
+					
+				}
+			}
+			
+			private function removerDuplicados($array:Array):Array
+			{
+				var i:int = 0;
+				$array.sort();
+				while(i < $array.length) 
+				{
+					while(i < $array.length+1 && $array[i] == $array[i+1]) 
+					{
+						$array.splice(i, 1);
+					}
+					i++;
+				}
+				return $array;
+			}
+			
+			
+			public function activarScroll():void
+			{
+				listaContactos.resetScroll();
+				EventoAsistenteCalidad.vinculada = false;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	
+	
+	<s:VGroup width="100%" height="100%" gap="0" >
+		<plantilla:Header_AsistenteCalidad id="cmpTitulo" width="100%" titulo="VALIDAR PERFIL"  vistaAnterior="vistaAtras(event)" isVisble="true"/>
+		
+		<s:HGroup id="grpZonaTrabajo" width="100%" height="100%" />
+	</s:VGroup>  
+	
+</s:Group>

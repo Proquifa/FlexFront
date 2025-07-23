@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:ordenDespachoMateriales="mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespachoMateriales.*" 
+		 xmlns:ordenDespacho="mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.*"
+		 xmlns:arribo="mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.*"
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*" 
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%" 
+		 creationComplete="init(event)" 
+		 resize="handlerResize(event)" 
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			
+			private var _sql:Query;
+			private var _proveedores:Array;
+			private var _arregloInfo:ArrayCollection;
+			private var _totales:Object;
+			private var FolioIdOD:String;
+			
+			[Bindable] public var sizeWidth:Number;
+			[Bindable] public var sizeHeight:Number;
+			[Bindable] public var sizeFontAgente:Number;
+			
+			
+			protected function vistaAnterior(event:EventoGestorCompras):void
+			{
+				plantilla.indice = 0;
+				vistaOperacion.selectedIndex = 0;
+				cmpTitulo.isVisble = false;
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				/*vistaOrdenesGuardadas.addEventListener("regresarVistaPrincipal",regresarPrincipal);
+				vistaGeneraDespacho.addEventListener("regresarVistaPrincipal",regresarPrincipal);*/
+				vistaGeneraDespacho.addEventListener("irTodasOrdenesGuardadas",regresarTodos);
+				vistaOrdenesGuardadas.addEventListener(EventoGestorCompras.NUEVA_ORDEN_DESPACHO, irGenerarDespachoNueva);
+				cmpGridProveedores.addEventListener("escucharClicGenerarOrdenDespacho",irOrdenesGuardadas);
+				vistaOrdenesGuardadas.lstOrdenesGuardadas.addEventListener(EventoGestorCompras.EDITAR_INFORMACION_ORDEN_DESPACHO, editarInformacion);
+				vistaGeneraDespacho.addEventListener("escucharClicGenerarOrdenDespacho",irOrdenesGuardadas);
+				cargarPlantilla();
+			}
+			
+			private var orden:OrdenDespacho = new OrdenDespacho;
+			public function editarInformacion(evt:EventoGestorCompras):void
+			{
+				orden = evt.ordenDespacho;
+				vistaGeneraDespacho.limpiarTodo(true);
+				vistaGeneraDespacho.recibeOrdenDespacho(orden);
+				vistaGeneraDespacho.renovado = false;
+				/*vistas.selectedIndex = 1;*/
+				plantilla.indice = 1;
+				vistaOperacion.selectedIndex = 0;
+				cmpTitulo.isVisble = true;
+			}
+			
+			public function set recibeOrdenDespacho($ordenes:ArrayCollection):void
+			{
+				if($ordenes == null || $ordenes.length == 0)
+					return;
+				
+				cmpGridProveedores.dataProvider = $ordenes;
+			}
+			
+			public function set recibeTotales($totales:Object):void
+			{
+				if($totales == null)
+					return;
+				
+				cmpGridProveedores.totales = $totales;
+				graficaBarras_Semaforo.recibeInfoGraficos = $totales;
+			}
+			
+			public function set recibeResumenPie($datos:ArrayCollection):void
+			{
+				if($datos == null)
+					return;
+				
+				graficaPie_Proveedor.obtenerResumenComprasPorPagar = $datos;
+			}
+			
+			protected function handlerResize(event:ResizeEvent):void
+			{
+				sizeWidth = (160/2005) * (unscaledWidth);
+				sizeHeight = (50/746) * (unscaledHeight);
+			}
+			
+			protected function irOrdenesGuardadas(err:Event):void
+			{
+				var evt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_ORDENES_DESPACHO_GUARDADAS);
+				evt.ordenDespacho = new OrdenDespacho;
+				evt.ordenDespacho.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+			/*	evt.ordenDespacho.tipoVista = "materiales";*/
+				dispatchEvent(evt);
+				/*vistas.selectedIndex = 2;*/
+				plantilla.indice = 1;
+				vistaOperacion.selectedIndex = 1;
+				cmpTitulo.isVisble = true;
+			}
+			
+			public function irGenerarDespachoNueva(evt:Event):void
+			{
+				vistaGeneraDespacho.limpiarTodo(false);
+				vistaGeneraDespacho.renovado = false;
+				/*vistas.selectedIndex = 1;*/
+				plantilla.indice = 1;
+				vistaOperacion.selectedIndex = 0;
+				cmpTitulo.isVisble = true;
+			}
+			
+			public function regresarPrincipal(evt:Event):void
+			{
+				/*vistas.selectedIndex = 0;*/
+				plantilla.indice = 0;
+				vistaOperacion.selectedIndex = 0;
+				cmpTitulo.isVisble = false;
+			}
+			
+			public function set recibeOrdenesEliminadas($eliminadas:Boolean):void
+			{
+				dispatchEvent( new Event("recargarPendientes",true));
+			
+                  if($eliminadas)
+				{
+					var event:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_ORDENES_DESPACHO_GUARDADAS);
+					event.ordenDespacho = new OrdenDespacho;
+					event.ordenDespacho.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+					event.ordenDespacho.tipoVista = "materiales";
+					dispatchEvent(event);
+					/*vistas.selectedIndex = 2;*/
+					plantilla.indice = 1;
+					vistaOperacion.selectedIndex = 1;
+					cmpTitulo.isVisble = true;
+				}
+			}
+			
+			
+			public function set recibeOrdenDespachoParcial($OParcial:String):void
+			{
+				if($OParcial != null)
+				{
+					FolioIdOD = "";
+					/*alertaSingleton.show("La Orden de Despacho Parcial fue generada con Exito.",catalogoAlertas.TIT_CONF_operacionExitosa);*/
+					/*vistas.selectedIndex = 0;*/
+					plantilla.indice = 0;
+					vistaOperacion.selectedIndex = 0;
+					cmpTitulo.isVisble = false;
+					
+					/*dispatchEvent(new EventoGestorCompras(EventoGestorCompras.VISTA_ANTERIOR));*/
+					vistaAnterior(new EventoGestorCompras(EventoGestorCompras.VISTA_ANTERIOR));
+					dispatchEvent( new Event("recargarPendientes",true));
+					FolioIdOD = $OParcial;
+					var arreglo:Array;
+					arreglo = ($OParcial as String).split('_');
+					descargarArchivo(arreglo[1]);
+				}
+			}
+			
+			private function descargarArchivo (idOrdenD:int):void
+			{
+				var event:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_PARTIDAS_ORDEN_DESPACHO);
+				event.idOrdenDespacho = idOrdenD;
+				dispatchEvent(event);
+			}
+			
+			
+			/*metodo para el archivo*/
+			public function set recibePartidasODAexportar($partidasOD:ArrayCollection):void
+			{
+				if(!$partidasOD)
+					return;
+				
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Catalogo");
+				fila[2] = hoja.addItem("Concepto");
+				fila[3] = hoja.addItem("Fabrica");
+				fila[4] = hoja.addItem("Pedido Interno");
+				fila[5] = hoja.addItem("Fecha Estimada de Entrega");
+				
+			
+			for(var i:int = 0; i < $partidasOD.length; i++)
+			{
+				var currentPartidaDes:PartidaCompra = $partidasOD[i] as PartidaCompra;
+				fila = new Array();
+				fila[0] = '"' + (i + 1) + '"';
+				fila[1] = '"' + currentPartidaDes.codigo + '"';
+				fila[2] = '"' + currentPartidaDes.concepto + '"';
+				fila[3] = '"' + currentPartidaDes.fabrica+ '"';
+				fila[4] = '"' + currentPartidaDes.cpedido+ '"';
+				fila[5] = '"' + currentPartidaDes.fechaString + '"';
+				
+				hoja.addItem('\r' + fila );
+			}
+			file.save(hoja,FolioIdOD +"-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date) + ".csv");
+		   }
+			
+			public function regresarTodos(vt:Event):void
+			{
+				plantilla.indice = 0;
+				vistaOperacion.selectedIndex = 0;
+				cmpTitulo.isVisble = false;
+			}
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				sizeFontAgente = (20 / 2005) * ($width);
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+			}
+			private function cargarPlantilla():void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpGridProveedores);
+				plantilla.cargarGraficas(gpGraficas);
+				plantilla.cargarOperacion(vistaOperacion);
+				plantilla.cargarLeyenda(footer);
+			}
+		
+				
+				
+			
+			
+			
+				
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" visible="false" includeInLayout="false">
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="PLANIFICAR DESPACHO" vistaAnterior="vistaAnterior(event)"/>
+		<ordenDespacho:GridOrdenDespacho id="cmpGridProveedores" width="100%" height="100%" />
+		<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" gap="0" id="gpGraficas">
+			<s:VGroup width="70%" height="90%" gap="0">
+				<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" text="PROVEEDORES" textAlign="center" fontSize="{sizeFontAgente}" />
+				<s:Spacer height="5%" />
+				<arribo:GraficaProveedoresArriboGestorCompra id="graficaPie_Proveedor" width="100%" height="100%" />
+				<s:Spacer height="18%" />
+				<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" text="SEMÁFORO DE  ENTREGA" textAlign="center" fontSize="{sizeFontAgente}" />
+				<s:Spacer height="5%" />
+				<arribo:GraficaBarrasArriboGestorCompras id="graficaBarras_Semaforo" width="100%" height="100%" />
+			</s:VGroup>
+		</s:VGroup>  
+		
+		<s:VGroup width="100%" height="100%" id="footer" paddingLeft="-22" paddingRight="-20" verticalAlign="middle" gap="0">
+			<otros:division height="1" width="100%"/>
+			<s:HGroup width="100%" height="100%" horizontalAlign="center" gap="30" verticalAlign="middle">
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#de0014"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="Fuera de Tiempo" fontSize="16"/>
+				</s:HGroup>  
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#f09500"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="Urgente" fontSize="16"/>
+				</s:HGroup>
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#4fa834"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="En Tiempo" fontSize="16"/>
+				</s:HGroup>
+			</s:HGroup>
+		</s:VGroup> 
+		
+		
+		<pq:MobViewStack width="100%" height="100%" id="vistaOperacion">
+			<ordenDespacho:VistaDefault_GenerarDespacho id="vistaGeneraDespacho" width="100%" height="100%" />
+			<ordenDespacho:OrdenesDespacho_Guardadas id="vistaOrdenesGuardadas" width="100%"  height="100%"/>
+		</pq:MobViewStack>
+	</s:VGroup>
+	<plantilla:Plantilla_VistaInicial id="plantilla" width="100%" height="100%" />
+</s:Group>

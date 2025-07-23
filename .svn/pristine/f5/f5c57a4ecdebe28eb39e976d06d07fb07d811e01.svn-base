@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:otros="skins.otros.*" xmlns:panelCtaLineaTiempo="skins.skin.comun.consultas.panelCtaLineaTiempo.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.compras.EventoConsultasCompraNuevo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+			import mx.utils.ObjectUtil;
+			private var _arregloExtra:ArrayCollection;
+			private var indiceAnterior:int = 0;
+			private var muestraImportacion:Boolean;
+			
+			public function set recibeDatosEtiqueta( $evt:EventoConsultasCompraNuevo ):void{
+				lblCantidad.NumPartida = $evt.partida;
+				lblCantidad.NumPiezas = $evt.cantidad;
+			}
+			public function set recibeHistorial( $lista:ArrayCollection ):void{
+				if( $lista == null ){return;}
+				var etapa:String = '';
+				this.lstHistorial.dataProvider = new ArrayCollection();
+				_arregloExtra = new ArrayCollection();
+				this._arregloExtra = ObjectUtil.copy( $lista ) as ArrayCollection; 
+				var totalTiempo:int = 0;
+				var $inserta:Boolean;
+				var _tiempoTotal:Boolean = true;
+				muestraImportacion = false;
+				for( var i:int; i < $lista.length; i++ ){
+					if( ($lista[i] as TiempoProceso).nivel == 1 ){ 
+						
+						if($lista[i].etapa == 'CONFIRMACIÓN'){
+							if($lista[i].fechaFin != null)
+								muestraImportacion = true;
+							
+						}
+						
+						 if($lista[i].etapa == 'IMPORTACIÓN'){
+							 if(muestraImportacion){
+								 if($lista[i].paisProveedor != "MEXICO" && $lista[i].tipo != "Fletes" && $lista[i].idCompra > 0 )
+								 {
+									 this.lstHistorial.dataProvider.addItem( $lista[i] );
+								 } 
+							 }
+							
+						}
+						else{
+							this.lstHistorial.dataProvider.addItem( $lista[i] );
+						}
+						
+						
+						
+						if(($lista[i] as TiempoProceso).etapa == 'RECIBIDO'){
+							totalTiempo = totalTiempo + ( $lista[i] as TiempoProceso ).totalProceso;
+							_tiempoTotal = false;
+						}
+					}
+					if(($lista[i] as TiempoProceso).etapa == 'TRÁNSITO PHS') etapa = 'phs';
+					if(($lista[i] as TiempoProceso).etapa == 'TRÁNSITO MATRIZ') etapa = 'matriz';
+					if(($lista[i] as TiempoProceso).etapa == 'RECIBIDO') 
+						($lista[i] as TiempoProceso).etiquetas = etapa;
+				}
+				if(_tiempoTotal == true){
+					var ultimaPartida:TiempoProceso = new TiempoProceso();
+					ultimaPartida.habilitaTotalTiempo = _tiempoTotal;
+					ultimaPartida.habilitaTiempoTotal = totalTiempo;
+					lstHistorial.dataProvider.addItem( ultimaPartida );
+				}
+				this.lstHistorial.selectedIndex = 0;
+				muestraGeneral();
+			}
+			private function muestraGeneral():void{
+				if((lstHistorial.selectedIndex != lstHistorial.dataProvider.length-1) || (lstHistorial.selectedItem.etapa == 'RECIBIDO')){
+					indiceAnterior = lstHistorial.selectedIndex;
+				} else if(lstHistorial.selectedIndex == lstHistorial.dataProvider.length-1){
+					lstHistorial.selectedIndex = indiceAnterior;
+					return;
+				}
+				var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.MUESTRA_EN_GENERALES);
+				evento.tiempoProceso = this.lstHistorial.selectedItem as TiempoProceso;
+				evento.arregloExtra = new ArrayCollection();
+				for(var i:int = 0; i < this._arregloExtra.length; i++){
+					if( (_arregloExtra[i] as TiempoProceso).nivel == 2 &&  (_arregloExtra[i] as TiempoProceso).padre == (this.lstHistorial.selectedItem as TiempoProceso).id ){
+						evento.arregloExtra.addItem( this._arregloExtra[i] );
+					}
+				}
+				dispatchEvent( evento );
+				indiceAnterior = lstHistorial.selectedIndex;
+			}
+		]]>
+	</fx:Script>
+	<s:Group width="100%" height="100%" >
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="#eaeaea"/>
+			</s:fill>
+		</s:Rect>
+		<s:VGroup width="100%" height="100%" gap="0" paddingRight="15" paddingLeft="15">
+			<panelCtaLineaTiempo:HeaderPartidasYPiezas id="lblCantidad"/>
+			<otros:division width="100%"/>
+			<s:List width="100%" height="100%" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.itemRenderer.IRConsultaCompraHistorial"
+					borderVisible="false" id="lstHistorial" mouseDown="muestraGeneral()" contentBackgroundColor="#eaeaea" horizontalScrollPolicy="off" contentBackgroundAlpha="0"/>
+		</s:VGroup>
+	</s:Group>  
+</s:VGroup>

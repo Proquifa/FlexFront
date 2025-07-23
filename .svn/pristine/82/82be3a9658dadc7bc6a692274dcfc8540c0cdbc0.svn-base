@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:ViewStack xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:DocumentosEntrante="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docRecibir.*"
+		 xmlns:comun="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docEnviar.*"
+		 xmlns:general="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.*"
+		 xmlns:menu="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.*"
+		 xmlns:mapas="mx.com.proquifa.proquifanet.admonComunicacion.vistas.mapas.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 initialize="init()" 
+		 creationPolicy="all"
+		 width="100%" height="100%"
+		 >
+	<fx:Declarations>
+		<mapas:MapaDocumentosPendientesPorEnviar/>
+		<mapas:MapaDocumentosAEnviarMail/>
+		<mapas:MapaDocumentosAEnviarFax/>
+		<mapas:MapaDocumen/>
+		<mapas:MapaLlama/>
+		<mapas:MapaAlertaPqNet/>
+		<mapas:MapaPopUpContacto />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoDocumentosPendientesAEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPopUpContactos;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.popUpContactos.AiescContactos;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.popUpAutorizacion;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docEnviar.DocumentosSalientesInspectorFax;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docEnviar.DocumentosSalientesInspectorMail;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docEnviar.EspacioPendientesTablasGraficas;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docEnviar.PlanificacionDocumentosSalientes;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.docRecibir.DocEntranTop;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			
+			/**
+			 * ***************************************** Instancias de los componentes ****************************************
+			 */ 
+			private var _contenedorEspaPenGra:EspacioPendientesTablasGraficas = null;
+			private var _contenedorPlanifica:PlanificacionDocumentosSalientes = null; 
+			private var _contenedorInspectorMail:DocumentosSalientesInspectorMail = null;
+			private var _contenedorInspectorFax:DocumentosSalientesInspectorFax = null;
+			private var _contenedorEntranNuevo:DocEntranTop = null;
+			private var _autorizattion:popUpAutorizacion = null;
+			[Bindable]
+			private var _contenedorMenu:NuevoMenu;
+			
+			/**
+			 * Funcion utiliza para que este componete (ViewStack) escuche a un hijo y utilice la funcion adecuada,
+			 *  segun la opcion seleccionada
+			 */ 
+			private var _popUpContacto:AiescContactos;
+			
+			private function init():void{
+				this.addEventListener( EventoPendientesPorEnviar.UTILIZA_OPCION_MENU, regresaAMenu );
+				this.addEventListener( EventoPendientesPorEnviar.SELECCIONA_OPCION, seleccionaHijo );
+				this.addEventListener( EventoPendientesPorEnviar.MUESTRA_AUTORIZACION, muestraAutoriza);
+				this.addEventListener( ResizeEvent.RESIZE, redimensiona );
+				this.addEventListener( EventoPopUpContactos.MUESTRA_POP_UP, muestraPopUp );
+				if( this._popUpContacto == null ){
+					_popUpContacto = AiescContactos( PopUpManager.createPopUp( this, AiescContactos, true ) );
+				}
+				PopUpManager.centerPopUp( _popUpContacto );
+				PopUpManager.removePopUp( _popUpContacto );
+			}
+			
+			private function muestraPopUp( $evt:EventoPopUpContactos ):void{
+				PopUpManager.addPopUp( _popUpContacto, this, true);
+				PopUpManager.centerPopUp( _popUpContacto );
+				_popUpContacto.validaProcedencia( $evt );
+			}
+			
+			private function redimensiona( $evt:Event ):void{
+				PopUpManager.centerPopUp( _popUpContacto );
+			}
+			
+			private function muestraAutoriza($event:EventoPendientesPorEnviar):void{
+				var eve:EventoDocumentosPendientesAEnviar = new EventoDocumentosPendientesAEnviar(EventoDocumentosPendientesAEnviar.OBTENER_CONTRASENAS_VALIDAS);
+				eve.tipoAutorizacion = "ModificarDoctoRercibido";
+				dispatchEvent( eve );
+				if(this._autorizattion == null){
+					this._autorizattion = new popUpAutorizacion();
+					this._autorizattion = PopUpManager.createPopUp(this,popUpAutorizacion,true) as popUpAutorizacion;
+				}else{
+					this._autorizattion.visible = true;
+				}
+				this._autorizattion._documentoModificar = $event.documentoRecibido;
+				PopUpManager.centerPopUp(this._autorizattion);
+			}
+			/**
+			 * funcion que es dispara por un evento en el componente NuevoMenu.mxml para cambiar al componente seleccionado
+			 */
+			private function regresaAMenu(datos:EventoPendientesPorEnviar):void{
+				switch( datos.idOpcionSeleccionada ){
+					case "DocAEnviar":
+						this.panelB.selectedIndex = 0;
+						this.EspacionPendientesYGrafGestorAIESC.tituloEstado = "DOCUMENTOS A ENVIAR";
+						this.EspacionPendientesYGrafGestorAIESC.iniciaEstadoPartidasAConfirmar();
+						break;	
+					case "DocEntran":
+						this.panelB.selectedIndex = 1;
+						this.EspacioEntrantes.tituloEstado = "DOCUMENTOS RECIBIDOS";
+						this.EspacioEntrantes.iniciaComponente();
+//						this.EspacionPendientesYGrafGestorAIESC.limpiaPies(true);
+						break;
+					case "LlamEntran":
+						this.panelB.selectedIndex = 2;
+						this.EspacioLlam.tituloEstado = "LLAMADAS RECIBIDAS";
+						this.EspacioLlam.inicia();
+//						this.EspacionPendientesYGrafGestorAIESC.limpiaPies(true);
+						break;
+				}
+			}
+			/**
+			 * funcion para seleccionar un hijo del Stack General.
+			 */ 
+			private function seleccionaHijo(  evento:EventoPendientesPorEnviar ):void{
+				switch ( evento.idOpcionSeleccionada ){
+					case"EspacionPendientesYGrafGestorAIESC":
+						this.selectedChild = contenedorMenu;
+						break;
+					case "espacioPlanificacion":
+						if( _contenedorPlanifica == null){
+							_contenedorPlanifica= new PlanificacionDocumentosSalientes();
+							vistaPlanificacion.addElement( _contenedorPlanifica );
+						}
+						this.selectedIndex = 1;
+						_contenedorPlanifica.inicia();
+						break;
+					case "espacioPlanificacionSinReiniciarComponente":
+						this.selectedIndex = 1;
+						if(evento.pendienteMensaje.numeroFolio != ""){
+							_contenedorPlanifica.borraDelArregloPendientes(evento.pendienteMensaje);
+						}
+						break;
+					case "VistaSalientesInspector":
+						vistaInspector.removeAllElements();
+						if(evento.medio == "Correo electrónico"){
+							_contenedorInspectorMail= new DocumentosSalientesInspectorMail();
+							vistaInspector.addElement( _contenedorInspectorMail );
+							_contenedorInspectorMail.iniciaCorreoInspector( evento.partidaSeleccionada );
+						}
+						if(evento.medio == "Fax"){
+							_contenedorInspectorFax
+							_contenedorInspectorFax= new DocumentosSalientesInspectorFax();
+							vistaInspector.addElement( _contenedorInspectorFax );
+							_contenedorInspectorFax.iniciaCorreoInspector( evento.partidaSeleccionada );
+						}
+						this.selectedIndex = 2;
+						break;
+					case "borraPendienteEnUsoDelArreglo":
+						if(evento.pendienteMensaje.numeroFolio != ""){
+							_contenedorPlanifica.borraDelArregloPendientes(evento.pendienteMensaje);
+						}
+						break;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:NavigatorContent width="100%" height="100%" id="contenedorMenu">
+		<s:layout >
+			<s:HorizontalLayout gap="0"/>
+		</s:layout>
+		<general:NuevoMenu width="320" id="MenuRoles" contentBackgroundColor="#eaeaea"/>
+		
+		<mx:ViewStack id="panelB" width="100%" height="100%" >
+			<s:NavigatorContent>
+				<comun:EspacioPendientesTablasGraficas id="EspacionPendientesYGrafGestorAIESC"/>
+			</s:NavigatorContent>
+			<s:NavigatorContent>
+					<DocumentosEntrante:DocEntranTop id="EspacioEntrantes"/>
+			</s:NavigatorContent>
+			<s:NavigatorContent>
+				<s:Scroller height="100%" width="100%">
+					<DocumentosEntrante:LlamTop id="EspacioLlam" />
+				</s:Scroller>
+			</s:NavigatorContent>
+		</mx:ViewStack>
+
+	</s:NavigatorContent>
+	<s:NavigatorContent width="100%" height="100%" id="vistaPlanificacion"/>
+	<s:NavigatorContent width="100%" height="100%" id="vistaInspector"/>
+</mx:ViewStack>

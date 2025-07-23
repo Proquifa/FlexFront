@@ -1,0 +1,580 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.comun
+{
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.comun.Cartera")]
+	[Bindable]
+	public class Cartera 
+	{
+		private var _nombre:String;
+		private var _nivel:String;
+		private var _publicada:Boolean;
+	
+		private var _industria:Number;
+		private var _esac:Number;
+		private var _ev:Number;
+		private var _cobrador:Number;
+		private var _usuario:Number;
+		private var _evt:Number;
+		
+		private var _idcartera:Number;
+		private var _facturacionAct:Number;
+		private var _facturacionAnt:Number;
+		private var _objetivoFundamental:Number;
+		private var _objetivoDeseado:Number;
+		private var _promedioFacturacion:Number;
+		private var _proyeccionVenta:Number;
+		private var _debemos:Number;
+		private var _deben:Number;
+		private var _fua:Date ; 
+		private var _clientes:ArrayCollection;
+		private var _cart_updatePublicada:Boolean;
+		private var _folio:String;
+		private var _cart_updateResponsables:Boolean;
+		private var _cart_updateESAC:Boolean;
+		private var _cart_updateEVT:Boolean;
+		
+		
+		private var _cart_updateEV:Boolean;
+		private var _cart_updateCOBRADOR:Boolean;
+		private var _areaActual:String;
+		private var _justificacion:String;
+		
+		//  VARIABLES VISTA
+		private var _facturacionAct_text:String;
+		private var _facturacionAnt_text:String;
+		private var _objetivoFundamental_text:String;
+		private var _objetivoDeseado_text:String;
+		private var _promedioFacturacion_text:String;
+		private var _proyeccionVenta_text:String;
+		private var _debemos_text:String;
+		private var _deben_text:String;
+		private var _vista_reverso:Boolean;
+		private var _cart_nombreElaboro:String;
+		
+		private var _totalClientes:Number;
+		private var _nombreEsac:String;
+		private var _nombreCobrador:String;
+		private var _nombreEV:String;
+		private var _nombreEVT:String;
+		
+		private var _cambioDeCartera:Boolean;
+		
+		
+		
+		private var _area:String;
+		private var _carteraDesistema:Boolean;
+		
+		public function Cartera()
+		{
+			_nombre ="";
+			_nivel ="";
+			_publicada = false;
+			_industria = 0;
+			_esac = 0;
+			_ev = 0;
+			_cobrador = 0;
+			_usuario = 0;
+			
+			_idcartera = 0;
+			_facturacionAct = 0;
+			_facturacionAnt = 0;
+			_objetivoFundamental = 0;
+			_objetivoDeseado = 0;
+			_promedioFacturacion = 0;
+			_proyeccionVenta = 0;
+			_debemos = 0;
+			_deben = 0;
+			
+			_facturacionAct_text = "$0.00";
+			_facturacionAnt_text = "$0.00";
+			_objetivoFundamental_text = "$0.00";
+			_objetivoDeseado_text = "$0.00";
+			_promedioFacturacion_text = "$0.00";
+			_proyeccionVenta_text = "$0.00";
+			_debemos_text = "$0.00";
+			_deben_text = "$0.00";
+		}
+
+		public function get nombreEVT():String
+		{
+			return _nombreEVT;
+		}
+
+		public function set nombreEVT(value:String):void
+		{
+			_nombreEVT = value;
+		}
+
+		public function get cart_updateEVT():Boolean
+		{
+			return _cart_updateEVT;
+		}
+
+		public function set cart_updateEVT(value:Boolean):void
+		{
+			_cart_updateEVT = value;
+		}
+
+		public function get evt():Number
+		{
+			return _evt;
+		}
+
+		public function set evt(value:Number):void
+		{
+			_evt = value;
+		}
+
+		public function get nombre():String
+		{
+			return _nombre;
+		}
+
+		public function set nombre(value:String):void
+		{
+			_nombre = value;
+		}
+
+		public function get nivel():String
+		{
+			return _nivel;
+		}
+
+		public function set nivel(value:String):void
+		{
+			_nivel = value;
+		}
+
+		public function get publicada():Boolean
+		{
+			return _publicada;
+		}
+
+		public function set publicada(value:Boolean):void
+		{
+			_publicada = value;
+		}
+
+		public function get industria():Number
+		{
+			return _industria;
+		}
+
+		public function set industria(value:Number):void
+		{
+			_industria = value;
+		}
+
+		public function get esac():Number
+		{
+			return _esac;
+		}
+
+		public function set esac(value:Number):void
+		{
+			_esac = value;
+		}
+
+		public function get ev():Number
+		{
+			return _ev;
+		}
+
+		public function set ev(value:Number):void
+		{
+			_ev = value;
+		}
+
+		public function get cobrador():Number
+		{
+			return _cobrador;
+		}
+
+		public function set cobrador(value:Number):void
+		{
+			_cobrador = value;
+		}
+
+		public function get usuario():Number
+		{
+			return _usuario;
+		}
+
+		public function set usuario(value:Number):void
+		{
+			_usuario = value;
+		}
+
+		public function get idcartera():Number
+		{
+			return _idcartera;
+		}
+
+		public function set idcartera(value:Number):void
+		{
+			_idcartera = value;
+		}
+
+		public function get facturacionAct():Number
+		{
+			return _facturacionAct;
+		}
+
+		public function set facturacionAct(value:Number):void
+		{
+			_facturacionAct = value;
+			_facturacionAct_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_facturacionAct);
+		}
+
+		public function get facturacionAnt():Number
+		{
+			return _facturacionAnt;
+		}
+
+		public function set facturacionAnt(value:Number):void
+		{
+			_facturacionAnt = value;
+			_facturacionAnt_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_facturacionAnt);
+		}
+
+		public function get objetivoFundamental():Number
+		{
+			return _objetivoFundamental;
+		}
+
+		public function set objetivoFundamental(value:Number):void
+		{
+			_objetivoFundamental = value;
+			_objetivoFundamental_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_objetivoFundamental);
+		}
+
+		public function get objetivoDeseado():Number
+		{
+			return _objetivoDeseado;
+		}
+
+		public function set objetivoDeseado(value:Number):void
+		{
+			_objetivoDeseado = value;
+			_objetivoDeseado_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_objetivoDeseado);
+		}
+
+		public function get promedioFacturacion():Number
+		{
+			return _promedioFacturacion;
+		}
+
+		public function set promedioFacturacion(value:Number):void
+		{
+			_promedioFacturacion = value;
+			_promedioFacturacion_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_promedioFacturacion);;
+		}
+
+		public function get proyeccionVenta():Number
+		{
+			return _proyeccionVenta;
+		}
+
+		public function set proyeccionVenta(value:Number):void
+		{
+			_proyeccionVenta = value;
+			_proyeccionVenta_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_proyeccionVenta);
+		}
+
+		public function get debemos():Number
+		{
+			return _debemos;
+		}
+
+		public function set debemos(value:Number):void
+		{
+			_debemos = value;
+			_debemos_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_debemos);
+		}
+
+		public function get deben():Number
+		{
+			return _deben;
+		}
+
+		public function set deben(value:Number):void
+		{
+			_deben = value;
+			_deben_text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(_deben);
+		}
+
+		public function get fua():Date
+		{
+			return _fua;
+		}
+
+		public function set fua(value:Date):void
+		{
+			_fua = value;
+		}
+
+		public function get clientes():ArrayCollection
+		{
+			return _clientes;
+		}
+
+		public function set clientes(value:ArrayCollection):void
+		{
+			_clientes = value;
+		}
+
+		public function get facturacionAct_text():String
+		{
+			return _facturacionAct_text;
+		}
+
+		public function set facturacionAct_text(value:String):void
+		{
+			_facturacionAct_text = value;
+		}
+
+		public function get facturacionAnt_text():String
+		{
+			return _facturacionAnt_text;
+		}
+
+		public function set facturacionAnt_text(value:String):void
+		{
+			_facturacionAnt_text = value;
+		}
+
+		public function get objetivoFundamental_text():String
+		{
+			return _objetivoFundamental_text;
+		}
+
+		public function set objetivoFundamental_text(value:String):void
+		{
+			_objetivoFundamental_text = value;
+		}
+
+		public function get objetivoDeseado_text():String
+		{
+			return _objetivoDeseado_text;
+		}
+
+		public function set objetivoDeseado_text(value:String):void
+		{
+			_objetivoDeseado_text = value;
+		}
+
+		public function get promedioFacturacion_text():String
+		{
+			return _promedioFacturacion_text;
+		}
+
+		public function set promedioFacturacion_text(value:String):void
+		{
+			_promedioFacturacion_text = value;
+		}
+
+		public function get proyeccionVenta_text():String
+		{
+			return _proyeccionVenta_text;
+		}
+
+		public function set proyeccionVenta_text(value:String):void
+		{
+			_proyeccionVenta_text = value;
+		}
+
+		public function get debemos_text():String
+		{
+			return _debemos_text;
+		}
+
+		public function set debemos_text(value:String):void
+		{
+			_debemos_text = value;
+		}
+
+		public function get deben_text():String
+		{
+			return _deben_text;
+		}
+
+		public function set deben_text(value:String):void
+		{
+			_deben_text = value;
+		}
+
+		public function get cart_updatePublicada():Boolean
+		{
+			return _cart_updatePublicada;
+		}
+
+		public function set cart_updatePublicada(value:Boolean):void
+		{
+			_cart_updatePublicada = value;
+		}
+
+		public function get folio():String
+		{
+			return _folio;
+		}
+
+		public function set folio(value:String):void
+		{
+			_folio = value;
+		}
+
+		public function get vista_reverso():Boolean
+		{
+			return _vista_reverso;
+		}
+
+		public function set vista_reverso(value:Boolean):void
+		{
+			_vista_reverso = value;
+		}
+
+		public function get cart_updateResponsables():Boolean
+		{
+			return _cart_updateResponsables;
+		}
+
+		public function set cart_updateResponsables(value:Boolean):void
+		{
+			_cart_updateResponsables = value;
+		}
+
+		public function get cart_updateESAC():Boolean
+		{
+			return _cart_updateESAC;
+		}
+
+		public function set cart_updateESAC(value:Boolean):void
+		{
+			_cart_updateESAC = value;
+		}
+
+		public function get area():String
+		{
+			return _area;
+		}
+
+		public function set area(value:String):void
+		{
+			_area = value;
+		}
+
+		public function get cart_updateEV():Boolean
+		{
+			return _cart_updateEV;
+		}
+
+		public function set cart_updateEV(value:Boolean):void
+		{
+			_cart_updateEV = value;
+		}
+
+		public function get cart_updateCOBRADOR():Boolean
+		{
+			return _cart_updateCOBRADOR;
+		}
+
+		public function set cart_updateCOBRADOR(value:Boolean):void
+		{
+			_cart_updateCOBRADOR = value;
+		}
+
+		public function get areaActual():String
+		{
+			return _areaActual;
+		}
+
+		public function set areaActual(value:String):void
+		{
+			_areaActual = value;
+		}
+
+		public function get cart_nombreElaboro():String
+		{
+			return _cart_nombreElaboro;
+		}
+
+		public function set cart_nombreElaboro(value:String):void
+		{
+			_cart_nombreElaboro = value;
+		}
+
+		public function get justificacion():String
+		{
+			return _justificacion;
+		}
+
+		public function set justificacion(value:String):void
+		{
+			_justificacion = value;
+		}
+
+		public function get carteraDesistema():Boolean
+		{
+			return _carteraDesistema;
+		}
+
+		public function set carteraDesistema(value:Boolean):void
+		{
+			_carteraDesistema = value;
+		}
+
+		public function get totalClientes():Number
+		{
+			return _totalClientes;
+		}
+
+		public function set totalClientes(value:Number):void
+		{
+			_totalClientes = value;
+		}
+
+		public function get nombreCobrador():String
+		{
+			return _nombreCobrador;
+		}
+
+		public function set nombreCobrador(value:String):void
+		{
+			_nombreCobrador = value;
+		}
+
+		public function get nombreEV():String
+		{
+			return _nombreEV;
+		}
+
+		public function set nombreEV(value:String):void
+		{
+			_nombreEV = value;
+		}
+
+		public function get nombreEsac():String
+		{
+			return _nombreEsac;
+		}
+
+		public function set nombreEsac(value:String):void
+		{
+			_nombreEsac = value;
+		}
+
+		public function get cambioDeCartera():Boolean
+		{
+			return _cambioDeCartera;
+		}
+
+		public function set cambioDeCartera(value:Boolean):void
+		{
+			_cambioDeCartera = value;
+		}
+
+
+	}
+}

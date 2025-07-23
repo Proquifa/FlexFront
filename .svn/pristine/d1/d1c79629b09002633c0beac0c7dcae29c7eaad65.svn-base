@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Scroller xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			xmlns:s="library://ns.adobe.com/flex/spark" width="100%" height="100%"
+			xmlns:mx="library://ns.adobe.com/flex/mx"  xmlns:otros="skins.otros.*" xmlns:label="skins.skin.label.*" 
+			xmlns:linkButton="skins.skin.linkButton.*" xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			
+			private var _cobrada:TiempoProceso;
+			
+			private function verFactura(tipo:String):void{
+				var _url:URLRequest = new URLRequest();
+				var path:Object;
+				if(tipo == 'factura'){
+					path = Util.rutaFecha(_cobrada.fechaInicio);
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + _cobrada.contacto + "/" + path.ruta + _cobrada.referencia + ".pdf";
+				}
+				if(tipo == 'comprobante'){
+					path = Util.rutaNueva(_cobrada.documento);
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.PAGOS_CLIENTE + path.ruta + _cobrada.documento + ".pdf";
+				}
+				navigateToURL(_url );	
+			}
+			
+			[Bindable]
+			public function get cobrada():TiempoProceso
+			{
+				return _cobrada;
+			}
+			
+			public function set cobrada(value:TiempoProceso):void
+			{
+				_cobrada = value;
+				if(_cobrada.monto == 0){
+					if(_cobrada.fechaFin == null)
+						lblMonto.text = "Pendiente";
+					else
+						lblMonto.text = "ND";
+				}else{
+					lblMonto.text = UtilsFormatosNumericos.precisionADosDecimalesConComas(cobrada.monto) +" "+_cobrada.lote;
+				}
+				if(cobrada.etapa=='COBRADA INTER'){
+					
+				}
+				
+				if(cobrada.folio != null && cobrada.folio != "")
+				{
+					lbl_ComplementoPago.visible = lbl_ComplementoPago.includeInLayout = true;
+					hg_ComplementoPago.visible = hg_ComplementoPago.includeInLayout = true;
+				}else{
+					lbl_ComplementoPago.visible = lbl_ComplementoPago.includeInLayout = false;
+					hg_ComplementoPago.visible = hg_ComplementoPago.includeInLayout = false;
+				}
+			}
+			
+			private var _factura:String="";
+			private var _fpor:String="";
+			public function set recibirFacturaFpor( $data:Object ):void
+			{
+				if( $data == null ) return;	
+				_factura = $data.factura;
+				_fpor = $data.fpor;
+				
+			}
+			
+			
+			private function visualizaPDF():void{
+				var path: Object;
+				var _url:URLRequest = new URLRequest();
+				path = Util.rutaFecha(cobrada.fechaCobro);
+				/// Nunca entra aquí por que no llega el folio
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.COMPLEMENTO_PAGO + _fpor + '/' + path + _cobrada.folio + ".pdf";
+				navigateToURL(_url);
+			}
+			
+			private	var file:File = new File();
+			private function descargaXML():void{
+				var request:URLRequest;
+				var variables:URLLoader = new URLLoader();
+				if(_cobrada.documento != ''){
+					variables.dataFormat = URLLoaderDataFormat.BINARY;
+					///PRODUCCION
+					var ruta:String = RutasPdF.GENERAL_RUTA + RutasPdF.COMPLEMENTO_PAGO + _fpor + '/' + _cobrada.folio + ".xml";
+					///LOCAL
+					request = new URLRequest(ruta);
+					variables.addEventListener(Event.COMPLETE, completeHandler);
+					variables.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+					try{
+						variables.load(request);
+					} 
+					catch (error:Error){
+						trace("Unable to load URL: " + error);
+					}	
+				}				
+			}
+			
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+					file.save( bytes, _cobrada.documento +'.xml' );	
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+			}
+			
+			private function errorHandler(event:Event):void{
+				alertaSingleton.show("No se encontro archivo");
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup height="100%" width="100%" >
+		<panelCtaDetalle:HeaderConBandera label="COBRADA" tipoDeBandera="meta"/>
+		<panelCtaDetalle:SubHeader1 label="GENERALES"/>
+		<s:VGroup width="100%" paddingLeft="15" paddingBottom="10">
+			<label:Titulo_w100  text="Fecha facturación:"/>
+			<label:FechaYHora fecha="{cobrada.fechaDispobible}"/>
+			<label:Titulo_w100  text="Condiciones de pago:"/>
+			<label:Texto_w100  text="{cobrada.tipo}"/>
+			<label:Titulo_w100  text="Fecha estimada de pago:"/>
+			<label:Fecha fecha="{cobrada.fechaProgramacion}" valorPorDefault="{cobrada.etapa=='COBRADA '?'N/A':'Pendiente'}"/>
+			<label:Titulo_w100  text="Fecha pago:"/>
+			<label:Fecha fecha="{cobrada.fechaCobro}"/>
+			<label:Titulo_w100  text="Fecha registro pago:"/>
+			<label:FechaYHora fecha="{cobrada.fechaFin}"/>
+			<label:Titulo_w100  text="Factura:"/>
+			<linkButton:LinkButtonPQNet2 id="lnkFactura" label="{cobrada.referencia}" click="verFactura('factura')"/>
+			<label:Titulo_w100  text="Monto:"/>
+			<label:Texto_w100 id="lblMonto"/>
+			<label:Titulo_w100  text="Comprobante de pago:"/>
+			<linkButton:LinkButtonPQNet2 id="lnkComprobante" label="{cobrada.documento}" click="verFactura('comprobante')" 
+										 visible="{cobrada.documento == null ? false: true}" includeInLayout="{cobrada.documento == null ? false : true}" />
+			
+			<label:Titulo_w100 id="lbl_ComplementoPago" text="Complemento de pago:" />
+			<s:HGroup id="hg_ComplementoPago" width="100%" >
+				<linkButton:LinkButtonPQNet2 id="lnkPDF" label="PDF" click="visualizaPDF()"   />
+				<s:Spacer width="15"/>
+				<linkButton:LinkButtonPQNet2 id="lnkXML" label="XML" click="descargaXML()" />
+			</s:HGroup> 
+			
+			<label:Texto_w100 text="Pendiente" visible="{cobrada.documento == null ? true: false }" includeInLayout="{cobrada.documento == null ? true: false }"/>
+			<label:Titulo_w100  text="Pago:"/>
+			<s:Label  fontSize="14" width="100%" text="{cobrada.comentarios}" styleName="{cobrada.comentarios == 'FT' ? 'cltas_texto_rojo_upperCase' : 'cltas_texto_verde_upperCase'}"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Scroller>

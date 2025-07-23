@@ -1,0 +1,582 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="0" height="0" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" skinClass="skins.titleWindow.skinTitleWindowBlanca"
+			   close="PopUpManager.removePopUp(this)" xmlns:amparar="skins.botones.colores.amparar.*" xmlns:ver="skins.botones.colores.ver.*" creationComplete="iniciaComponente()" xmlns:largo="skins.botones.largo.*" xmlns:pqNet="skins.botones.pqNet.*">
+	<!--width="1255" height="740"-->
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:StringValidator id="validanombre" source="{nombre}" property="text" minLength="2" requiredFieldError="{catalogoAlertas.REFERENCIA_ADV_nombrarArchivo}" />
+		<mx:StringValidator id="validajustificacion" source="{justificacion}" property="text" minLength="2" requiredFieldError="{catalogoAlertas.REFERENCIA_ADV_descripcionJustificacion}"/>
+		<s:Resize id="fxResize"  target="{this}" duration="500" effectEnd="{this.grpTodo.visible = true }"/>
+		<s:Resize id="fxCierraPop" target="{this}" widthTo="0" heightTo="0" duration="150" effectEnd="cerrarPopUp()"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			import flash.html.HTMLLoader;
+			import flash.html.HTMLPDFCapability;
+			import flash.net.navigateToURL;
+			
+			import flashx.textLayout.elements.BreakElement;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoReferencias;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoReformulaIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.ResizeEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.validators.Validator;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			private var keys:Object = {};
+			[Bindable]
+			private var referencia:Referencia = null;
+			[Bindable]
+			private var archivo:File = null;
+			[Bindable]
+			public var listaReferencias:ArrayCollection = new ArrayCollection();	
+			[Bindable]
+			public var listaFinalReferencias:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var _listaUbicacion:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var _referenciaReformulacion:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			public var validarArr:Array;
+			[Bindable]
+			private var _referenciaNum:int;
+			[Bindable]
+			private var _ruta:String;
+			[Bindable]
+			public var vieneD:String;
+			[Bindable]
+			private var _ubicacion:int;
+			[Bindable]
+			public var _idIncidente:int;
+			public var folioIncidente:String;	
+			private var eliminar:String = new String();
+			private var validar:Array;
+			
+			private function cerrarPopUp():void{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function centraEstePop(event:ResizeEvent):void{
+				PopUpManager.centerPopUp( this );
+			}
+			
+			private function ajustaCentraPop($:Event):void{
+				height = ($.currentTarget as Stage).stageHeight/1.5; //-
+				width = ($.currentTarget as Stage).stageWidth - ($.currentTarget as Stage).stageWidth/3.2; //+
+				this.addEventListener(ResizeEvent.RESIZE,centraEstePop);
+			}
+			
+			//función para traer referencias anteriormente cargadas por el usuario
+			public function inicia(arregloReferencias:ArrayCollection):void{
+				this.listaFinalReferencias = new ArrayCollection();
+				this.listaFinalReferencias = arregloReferencias;
+			}
+			
+			/**
+			 * En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			 * nativePath o ruta (donde se podra obtener el nombre del archivo)  y el ByteArray)
+			 */ 
+			private function buscarArchivo():void{
+				archivo = new File();
+				referencia = new Referencia();
+				archivo.addEventListener(Event.SELECT, selectHandler);
+				archivo.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				archivo.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				archivo.addEventListener(Event.COMPLETE,completeHandler);
+				var docFilter:FileFilter = new FileFilter("Documents", "*.pdf;*.jpg;*.jpeg;*.png;*.mov");
+				archivo.browse([docFilter]);
+			}
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				_ruta = archivo.nativePath;
+				creaReferencia();
+			}
+			
+			/**
+			 * Metodo para crear una referencia (un renglon)
+			 */ 
+			private function creaReferencia():void{
+				
+				if(this.listaReferencias == null ){
+					this.listaReferencias = new ArrayCollection();
+					this.listaFinalReferencias = new ArrayCollection();
+				}
+				
+				for(var i:int = 0; i < this.listaReferencias.source.length; i++ ){              		           		              		
+					if( this.archivo.name == (this.listaReferencias.getItemAt( i ) as Referencia).nomArchivoReal  ){
+						//Alert.show( "Este documento ya fue agregado" ,"¡Atención!" );
+						alertaSingleton.show(catalogoAlertas.REFERENCIA_ERR_documetoRepetido,catalogoAlertas.TIT_ADV_atencion,"","","","","");
+						return; //sale de la funcion
+					}
+				}
+				
+				this.referencia = new Referencia;
+				referencia.numFila = referencia.numFila;
+				referencia.bytes = this.archivo.data;
+				referencia.nomArchivoReal = this.archivo.name;
+				
+				if(vieneD == "Reformulación" ){
+					referencia.origen = "Reformulación";
+				}else if(vieneD == "Gestion" ){
+					referencia.origen = "Gestion";
+				}else if(vieneD == "Accion" ){
+					referencia.origen = "Acción";
+				}else if(vieneD == "Verificacion" ){
+					referencia.origen = "Verificación";
+				}else{
+					referencia.origen = "Registro";
+				}
+				
+				referencia.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado; /* 91; */    
+				referencia.nombreResponsable = DatosGlobales.getInstance()._usuario.usuario; //"OCardona";  
+				referencia.borrar = false;   	 	  
+				referencia.urlArchivo = archivo.nativePath;
+				referencia.extensionArchivo = archivo.extension;
+				
+				if( archivo.extension.toLowerCase() == "pdf" ){
+					referencia.tipo = "DOCUMENTO";
+				}else if ( archivo.extension.toLowerCase() == "jpg" || archivo.extension.toLowerCase() =="jpeg" || archivo.extension.toLowerCase() == "png" ){
+					referencia.tipo = "IMAGEN";
+				} else if( archivo.extension.toLowerCase() == "mov" ){
+					referencia.tipo = "VIDEO/AUDIO";
+				}
+				
+				this.archivo = null;
+			}
+			
+			public function set recibirIdIncidente(idIncidente:int):void{
+				this._idIncidente = idIncidente;
+			}
+			
+			private function cargaReferencia():void{
+				var _registro:Boolean = false;
+				var _reformula:Boolean = false;
+				var _gestiona:Boolean = false;
+				var _accion:Boolean = false;
+				var _verifica:Boolean = false;
+				if(referencia == null){
+					//Alert.show("Es necesario agregar un documento ","Atención...");
+					alertaSingleton.show(catalogoAlertas.REFERENCIA_ADV_agregarDocumento,catalogoAlertas.TIT_ADV_atencion,"","","","","");
+				}else{
+					if(referencia.bytes == null){
+						//Alert.show("Es necesario agregar un documento ","Atención...");
+						alertaSingleton.show(catalogoAlertas.REFERENCIA_ADV_agregarDocumento,catalogoAlertas.TIT_ADV_atencion,"","","","","");
+					}else{
+						listaReferencias = new ArrayCollection(); 
+						_listaUbicacion = new ArrayCollection();
+						referencia.justificacion = justificacion.text;
+						referencia.nombreReferencia = nombre.text;
+						referencia.idIncidente = _idIncidente;
+						
+						this.listaFinalReferencias.addItem(referencia);
+						//this.listaReferencias.addItem(referencia);		
+						
+						for(var m:int=0 ; m<listaReferencias.length ; m++){
+							if(listaReferencias[m].ultimo != ""){
+								this.listaReferencias.removeItemAt(m);
+								m = m - 1;
+							}
+						}
+						
+						for(var i:int=0; i<listaFinalReferencias.length ; i++){
+							if(listaFinalReferencias[i].ultimo != ""){
+								this.listaFinalReferencias.removeItemAt(i);
+								i = i - 1;		
+							}
+						}
+						//this._listaUbicacion = UtilsGrid.queryQuitarRepetidos(listaFinalReferencias, "nombreResponsable");	
+						for(var d:int=0; d<listaFinalReferencias.length ; d++){
+							if(listaFinalReferencias[d].origen == "Registro" && _registro == false && listaFinalReferencias[d].borrar != true){
+								_listaUbicacion.addItem(this.listaFinalReferencias[d]);
+								_registro = true;
+							}
+							if(listaFinalReferencias[d].origen == "Reformulación" && _reformula == false && listaFinalReferencias[d].borrar != true){
+								_listaUbicacion.addItem(this.listaFinalReferencias[d]);
+								_reformula = true;
+							}
+							if(listaFinalReferencias[d].origen == "Gestion" && _gestiona == false && listaFinalReferencias[d].borrar != true){
+								_listaUbicacion.addItem(this.listaFinalReferencias[d]);
+								_gestiona = true;
+							}
+							if(_referenciaReformulacion[d].origen == "Acción" &&  _accion == false && _referenciaReformulacion[d].borrar != true){
+								_listaUbicacion.addItem(_referenciaReformulacion[d]);
+								_accion = true;
+							}
+							if(_referenciaReformulacion[d].origen == "Verificación" && _verifica == false && _referenciaReformulacion[d].borrar != true){
+								_listaUbicacion.addItem(_referenciaReformulacion[d]);
+								_verifica = true;
+							}	
+							
+							if(listaFinalReferencias[d].ultimo == ""){
+								if(_referenciaReformulacion[d].origen == _referenciaReformulacion[0].origen && _referenciaReformulacion[d].borrar != true ){
+									listaReferencias.addItem(_referenciaReformulacion[d]);
+								}	
+							}
+						}
+						
+						var objeto:Referencia = new Referencia();
+						objeto.ultimo = listaReferencias.length.toString();
+						listaFinalReferencias.addItem(objeto);
+						listaReferencias.addItem(objeto);
+						
+						listaubicacion.selectedIndex = 0;
+						//		listaReferencias.length == 1 ? this.totalreferencia.text = String(listaReferencias.length) +" Referencia" : this.totalreferencia.text = String(listaReferencias.length) +" Referencias" ;
+						justificacion.text = "";
+						nombre.text = "";
+						tipo.text = "";
+						referencia = new Referencia();	
+					}	
+				}
+			}
+			
+			//funcion para vizualiar Documento local en Browser
+			private function verArchivo():void{
+				if(referencia == null){
+					return;
+				}
+				if(referencia.urlArchivo == null){
+					return;
+				}
+				var urlarchivo:URLRequest;					
+				/* _ruta = "file://" + referencia.urlArchivo.toString(); */
+				urlarchivo = new URLRequest ( _ruta.indexOf('http') == -1 ? "file://"+ encodeURI(_ruta) : encodeURI(_ruta) );	
+				navigateToURL(urlarchivo);	
+			}
+			
+			private function borrarElemento(evento:EventoReferencias):void{
+				this.eliminar = evento.fila;
+			}
+			
+			private function borrarReferencia(event:Event):void{
+				
+				if(event.currentTarget.selectedIndex == this.listaReferencias.length - 1 ){
+					return;
+				}
+				if(this.vieneD == "lineaDTiempo"){
+					event.currentTarget.selectedItem.borrar = false;
+					return;
+				}
+				
+				if(eliminar == "borrar"){
+					var _registro:Boolean = false;
+					var _reformula:Boolean = false;
+					var _analisis:Boolean = false;
+					var _accion:Boolean = false;
+					var _verifica:Boolean = false;
+					var _usuario:String = DatosGlobales.getInstance()._usuario.usuario;
+					
+					if( _usuario == event.currentTarget.selectedItem.nombreResponsable){
+						if(this.vieneD == event.currentTarget.selectedItem.origen){
+							
+							_listaUbicacion = new ArrayCollection();
+							this.listaReferencias = new ArrayCollection();
+							//this.listaReferencias.removeItemAt(event.currentTarget.selectedIndex);	
+							eliminar = new String();
+							
+							//listaReferencias.length == 1 ? this.totalreferencia.text = String(listaReferencias.length) +" Referencia" : this.totalreferencia.text = String(listaReferencias.length) +" Referencias" ;
+							
+							for(var m:int=0 ; m<listaReferencias.length ; m++){
+								if(listaReferencias[m].ultimo != ""){
+									this.listaReferencias.removeItemAt(m);
+									m = m - 1;
+								}
+							}
+							
+							for(var i:int=0; i<listaFinalReferencias.length ; i++){
+								if(listaFinalReferencias[i].ultimo != ""){
+									this.listaFinalReferencias.removeItemAt(i);
+									i = i - 1;		
+								}
+							}
+							
+							for(var d:int = 0; d<listaFinalReferencias.length ; d++){ 
+								
+								if(listaFinalReferencias[d].origen == "Registro" &&  listaFinalReferencias[d].borrar == false  && _registro == false ){
+									_listaUbicacion.addItem(this.listaFinalReferencias[d]);
+									_registro = true;
+								}
+								if(listaFinalReferencias[d].origen == "Gestion" &&  listaFinalReferencias[d].borrar == false  && _analisis == false ){
+									_listaUbicacion.addItem(this.listaFinalReferencias[d]);
+									_analisis = true;
+								}
+								if(listaFinalReferencias[d].origen == "Reformulación" &&  listaFinalReferencias[d].borrar == false  && _reformula == false ){
+									_listaUbicacion.addItem(this.listaFinalReferencias[d]);
+									_reformula = true;
+								}
+								if(_referenciaReformulacion[d].origen == "Acción" &&  _accion == false && _referenciaReformulacion[d].borrar != true){
+									_listaUbicacion.addItem(_referenciaReformulacion[d]);
+									_accion = true;
+								}
+								if(_referenciaReformulacion[d].origen == "Verificación" && _verifica == false && _referenciaReformulacion[d].borrar != true){
+									_listaUbicacion.addItem(_referenciaReformulacion[d]);
+									_verifica = true;
+								}	
+								
+								if(listaFinalReferencias[d].ultimo == ""){
+									if(_referenciaReformulacion[d].origen == _referenciaReformulacion[0].origen && _referenciaReformulacion[d].borrar != true ){
+										listaReferencias.addItem(_referenciaReformulacion[d]);
+									}	
+								}
+								
+								if(listaFinalReferencias[d].borrar == true && listaFinalReferencias[d].idReferencia == 0 ){
+									this.listaFinalReferencias.removeItemAt(d);
+									d = d - 1;
+								}
+							}
+							
+							var objeto:Referencia = new Referencia();
+							objeto.ultimo = listaReferencias.length.toString();
+							listaFinalReferencias.addItem(objeto);
+							listaReferencias.addItem(objeto);
+							
+							listaubicacion.selectedIndex = 0;
+						}else{
+							event.currentTarget.selectedItem.borrar = false;
+						}
+					}else{
+						event.currentTarget.selectedItem.borrar = false;
+					}
+				}
+			}
+			
+			private function iniciaComponente():void{
+				this.addEventListener(EventoReferencias.BORRAR_LISTA_REFERENCIA, borrarElemento); // elimina elementos de la lista de referencias 
+				
+				validarArr = new Array();
+				validarArr.push(validanombre);
+				validarArr.push(validajustificacion);
+				
+				//this.fxResize.heightTo = 740;
+				//this.fxResize.widthTo = 1255;
+				this.fxResize.heightTo = stage.height/1.5;
+				this.fxResize.widthTo = stage.width - stage.width/3.2;
+				this.fxResize.stop();
+				this.fxResize.play();
+				this.addEventListener(ResizeEvent.RESIZE,centraEstePop);
+				stage.addEventListener( ResizeEvent.RESIZE, ajustaCentraPop );
+				PopUpManager.centerPopUp( this );
+			}
+			
+			private function validarText(evt:MouseEvent):void{
+				validar = []; 
+				validar =  Validator.validateAll(validarArr) ;
+				var textCompleto:Boolean = validar.length == 0;
+				if(textCompleto){
+					var events:Event;
+					cargaReferencia();
+				}else{
+					var error:ValidationResultEvent
+					var mensajerror:ArrayCollection = new ArrayCollection();
+					
+					for(var n:int = 0 ; n<validar.length ; n++){
+						mensajerror.addItem(validar[n].message);	
+					}
+					
+					//Alert.show(mensajerror.join("\n\n"),"¡Importante ...!", Alert.OK);
+					alertaSingleton.show("",catalogoAlertas.TIT_ADV_atencion,"","","","","",mensajerror);
+				}
+			}
+			
+			public function registraReferencia():void{
+				//if(listaFinalReferencias.length > 1){
+				for(var i:int=0; i<listaFinalReferencias.length ; i++){
+					if(listaFinalReferencias[i].ultimo != ""){
+						this.listaFinalReferencias.removeItemAt(i);
+						i = i - 1;		
+					}
+				}
+				
+				var evt:EventoReferencias = new EventoReferencias(EventoReferencias.ENVIAR_REFERENCIAS);
+				evt.listaReferencia = ObjectUtil.copy( this.listaFinalReferencias) as ArrayCollection;
+				evt.vieneD = this.vieneD;
+				dispatchEvent(evt);
+				
+				this.listaReferencias = new ArrayCollection();
+				this._listaUbicacion = new ArrayCollection();
+				this.listaFinalReferencias = new ArrayCollection();
+				this.vieneD = new String();
+				PopUpManager.removePopUp(this);					
+				// }else{
+				//	Alert.show("Es necesario registrar al menos una referencia","Aviso!!!");
+				//} 
+			}
+			
+			public function set recibeReferenciasDReformulacion(referencias:Object):void{
+				_listaUbicacion = new ArrayCollection();
+				this.listaFinalReferencias = new ArrayCollection();
+				this.listaReferencias = new ArrayCollection();
+				this._referenciaReformulacion = referencias.referencia;
+				this.listaFinalReferencias = referencias.referencia;
+				vieneD = referencias.vieneD;
+				if(this.vieneD == "lineaDTiempo"){
+					this.registrar.enabled = false;
+					this.carga.enabled = false;
+				}
+				var _reformula:Boolean = false;
+				var _registro:Boolean = false;
+				var _gestion:Boolean = false;
+				var _accion:Boolean = false;
+				var _verifica:Boolean = false;
+				
+				for(var d:int = 0; d<referencias.referencia.length ; d++){
+					if(_referenciaReformulacion[d].origen == "Registro" && _registro == false && _referenciaReformulacion[d].borrar != true){
+						_listaUbicacion.addItem(_referenciaReformulacion[d]);
+						_registro = true;
+					}
+					if(_referenciaReformulacion[d].origen == "Reformulación" && _reformula == false && _referenciaReformulacion[d].borrar != true){
+						_listaUbicacion.addItem(_referenciaReformulacion[d]);
+						_reformula = true;
+					}
+					if(_referenciaReformulacion[d].origen == "Gestion" && _gestion == false && _referenciaReformulacion[d].borrar != true){
+						_listaUbicacion.addItem(_referenciaReformulacion[d]);
+						_gestion = true;
+					}
+					if(_referenciaReformulacion[d].origen == "Acción" &&  _accion == false && _referenciaReformulacion[d].borrar != true){
+						_listaUbicacion.addItem(_referenciaReformulacion[d]);
+						_accion = true;
+					}
+					if(_referenciaReformulacion[d].origen == "Verificación" && _verifica == false && _referenciaReformulacion[d].borrar != true){
+						_listaUbicacion.addItem(_referenciaReformulacion[d]);
+						_verifica = true;
+					}	
+					
+					if(referencias.referencia[d].ultimo == ""){
+						if(_referenciaReformulacion[d].origen == _referenciaReformulacion[0].origen && _referenciaReformulacion[d].borrar != true ){
+							listaReferencias.addItem(_referenciaReformulacion[d]);
+						}	
+					}
+					
+					/*if(_referenciaReformulacion[d].origen == "Registro" && _referenciaReformulacion[d].borrar != true ){
+					listaReferencias.addItem(_referenciaReformulacion[d]);
+					}else if(_referenciaReformulacion[d].origen == "Gestion" && _referenciaReformulacion[d].borrar != true){
+					listaReferencias.addItem(_referenciaReformulacion[d]);
+					}else if(_referenciaReformulacion[d].origen == "Reformulacion" && _referenciaReformulacion[d].borrar != true){
+					listaReferencias.addItem(_referenciaReformulacion[d]);
+					} */
+				}
+				
+				var objeto:Referencia = new Referencia();
+				objeto.ultimo = listaReferencias.length.toString();
+				listaReferencias.addItem(objeto);
+				
+				listaubicacion.selectedIndex = 0;
+				//		listaReferencias.addItem(_referenciaReformulacion[listaReferencias.length - 1]);
+				//		listaReferencias.length == 1 ? this.totalreferencia.text = String(listaReferencias.length) +" Referencia" : this.totalreferencia.text = String(listaReferencias.length) +" Referencias" ;
+			} 	
+			
+			//funcion para cargar las referencias existentes deacuerdo a su ubicación
+			private function clickUbicacion(event:Event):void{
+				listaReferencias = new ArrayCollection();
+				for(var d:int = 0; d<listaFinalReferencias.length ; d++){
+					if(event.currentTarget.selectedItem.origen == listaFinalReferencias[d].origen){
+						if(listaFinalReferencias[d].borrar != true){							
+							listaReferencias.addItem(listaFinalReferencias[d]);
+						}
+						
+					} 	
+					
+					if(listaFinalReferencias[d].ultimo != ""){
+						this.listaFinalReferencias.removeItemAt(d);
+						d = d - 1;
+					}
+					
+				}
+				
+				var objeto:Referencia = new Referencia();
+				objeto.ultimo = listaReferencias.length.toString();
+				listaReferencias.addItem(objeto);
+				//		listaReferencias.length == 1 ? this.totalreferencia.text = String(listaReferencias.length) +" Referencia" : this.totalreferencia.text = String(listaReferencias.length) +" Referencias" ;
+			}  
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" id="grpTodo" paddingLeft="20" paddingRight="20" paddingBottom="20" visible="false">
+		<label:labelTitulo_Otros text="Referencias" width="100%" color="#FF9900"/>
+		<s:Spacer width="100%" height="2%"/>
+		<otros:divisionGruesa width="100%" height="2%"/>
+		
+		<s:HGroup height="100%" width="100%">
+			
+			<!--<s:VGroup width="370" height="545" paddingRight="15">-->
+			<s:VGroup width="100%" height="100%" paddingRight="15">
+				
+				<s:HGroup width="100%">
+					<!--<amparar:botonAmparar id="amparar" width="288" click="buscarArchivo()"/>-->
+					<amparar:botonAmparar id="amparar" width="100%" click="buscarArchivo()"/>
+					<ver:botonVer id="visualizar" click="verArchivo()"/>
+				</s:HGroup>
+				<s:Spacer width="100%" height="2%"/>
+				<s:VGroup width="100%" height="100%">
+					<s:Label text="Nombre:" width="100%" fontFamily="Helvetica" fontWeight="bold"/>
+					<s:TextInput id="nombre" width="100%" maxChars="15"/>
+					<s:Spacer width="100%" height="2%"/>
+					<s:Label text="Justificación:" width="100%" fontFamily="Helvetica" fontWeight="bold"/>
+					<!--<s:TextArea id="justificacion" width="100%" height="260"/>-->
+					<s:TextArea id="justificacion" width="100%" height="100%"/>
+					<s:Spacer width="100%" height="2%"/>
+					<s:Label text="Tipo:" width="100%" fontFamily="Helvetica" fontWeight="bold"/>
+					<s:Label id="tipo" width="100%" text="{referencia.tipo}" />
+					<s:Spacer width="100%" height="2%"/>
+					<pqNet:botonPqNetLargo icono="cargar" label="CARGAR" id="carga" width="100%" click="validarText(event)"/>
+				</s:VGroup>
+			</s:VGroup>
+			
+			<otros:VDivisionClaro height="100%" />
+			
+			<!--<s:VGroup width="292" height="545">-->
+			<s:VGroup width="100%" height="100%">
+				<s:Label text="UBICACIÓN" width="100%" textAlign="center" fontFamily="Helvetica" fontWeight="bold" color="#999999" fontSize="20"/>
+				<otros:division width="100%" height="2%"/>
+				<s:List id="listaubicacion" borderVisible="false" width="100%" height="100%" dataProvider="{_listaUbicacion}" click="clickUbicacion(event)"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.vistaincidente.ListaUbicacion"/>
+			</s:VGroup>
+			
+			<otros:VDivisionClaro height="100%"/>
+			
+			<!--<s:VGroup width="495" height="545">-->
+			<s:VGroup width="100%" height="100%">
+				<s:List id="listareferencia" borderVisible="false" width="100%" height="100%" dataProvider="{listaReferencias}" click="borrarReferencia(event)"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.vistaincidente.ListaReferencia"/>
+				<!--<s:Label id="totalreferencia" text="0 Referencias" width="100%" fontSize="14" textAlign="center" color="#999999" fontFamily="Helvetica"/>
+				<s:Label text="TOTAL" color="#999999" fontSize="14" width="100%" textAlign="center"/>-->
+			</s:VGroup>
+		</s:HGroup>
+		
+		<otros:divisionGruesa width="100%" height="2%"/>
+		<s:HGroup width="100%" height="50">
+			<pqNet:botonPqNetLargo icono="iconosalir" label="Salir" id="salir" click="fxCierraPop.play();this.grpTodo.visible = false"/>
+			<s:Spacer width="100%"/>
+			<pqNet:botonPqNetLargo icono="registrarpeque" label="Registrar" id="registrar" click="registraReferencia()"/>
+		</s:HGroup>
+		
+	</s:VGroup>
+</s:TitleWindow>

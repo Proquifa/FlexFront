@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteAsociado;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteRechazado;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoReporteIncidentes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.seleccionador;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			private var _cmbSeleccionador:seleccionador = null;
+			[Bindable]
+			public var _incidente:Incidente; //esta variable publica se llena desde el componente Incidente_rechazado
+			[Bindable]
+			private var _gestion:Gestion;
+			private var _validaFinalizar:Boolean;
+			
+			private var productorAsociado:Producer = new Producer();
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet;
+			
+			private function init():void{
+				this.productorAsociado.destination = "actualizacionService";
+				this.productorAsociado.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAsociado = new ChannelSet();
+				this.canalesAsociado.addChannel(canalAsociado);
+				this.productorAsociado.channelSet = this.canalesAsociado;
+			}
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de registro de incidente asociado","Error");
+			}
+			/**
+			 * funcion publica que atualiza las referencias del combo cada que se consulta un Incidente Rechzado. Es usada desde el componente Incidente_rechazado.
+			 */
+			public function actualizaReferencias():void{
+				cargarComboNavegacion();
+				if(this._cmbSeleccionador != null ){
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._incidente.referencias ) as ArrayCollection;
+				}
+				cargaGestion();
+			}
+			/**
+			 * Funcion que manda a llamar al mapa 'MapaIncidenteRechazado' la Gestion se recibe en la funcion recibeGestion();
+			 */ 
+			private function cargaGestion():void{
+				var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado( EventoIncidenteRechazado.CONSULTA_GESTION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento ); 
+			}
+			/**
+			 * Funcion publica que recibe del mapa 'MapaIncidenteRechazado la gestion'
+			 */ 
+			public function set recibeGestion( datos:Gestion ):void{
+				if( datos == null){
+					return;
+				}
+				this._gestion = datos;
+				this._incidente.referencias = this._gestion.referencias;
+				this._cmbSeleccionador.listaReferencias = this._incidente.referencias;
+				/* if( this._gestion.acuerdo != null ){
+					if( this._gestion.acuerdo == "" ){
+						
+					}else{
+						
+					}
+				}else{
+					this.chkAcuerdo.selected = false;
+					this.chkDesAcuerdo.selected = false;
+				} */
+			}
+			/**
+			 * Funcion que nos permite habilitar o deshabilitar el check seleccionado 
+			 */ 
+			private function clickCheckAcuerdo():void{
+				if(this.chkDesAcuerdo.selected == true ){
+					this.chkDesAcuerdo.selected = false;
+				}
+			}
+			/**
+			 * Funcion que nos permite habilitar o deshabilitar el check seleccionado 
+			 */ 
+			private function clickCheckDesAcuerdo():void{
+				if( this.chkAcuerdo.selected == true ){
+					this.chkAcuerdo.selected = false;
+				}
+			}
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+					this.vbxComboSeleccionador.addChild( this._cmbSeleccionador );
+				}
+				if( this._incidente.referencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._incidente.referencias.source.length ; i++ ){
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).nombreArchivo = (  this._incidente.referencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy(  this._incidente.referencias ) as ArrayCollection;
+				}
+				this._cmbSeleccionador.fechaIncidnete = UtilsFecha.formatoFechaDDMMMYYYY( this._incidente.fecha );
+				this._cmbSeleccionador.empleadoLogueado = DatosGlobales.getInstance()._usuario;
+				this._cmbSeleccionador.idIncidente = this._incidente.idIncidente;
+				this._cmbSeleccionador.folioIncidente = this._incidente.folio;
+				this._cmbSeleccionador.vieneDe = "incidenteRechazado";
+				this.parent.stage.addEventListener(  EventoIncidenteRechazado.ACTUALIZA_REFERENCIAS , recibeListaDeReferencias );
+			}
+			/**
+			 * Metodo que recibe las Lsita de la Referencias del PopUp. 
+			 */
+			private function recibeListaDeReferencias(evento:EventoIncidenteRechazado):void{
+				this.parent.stage.removeEventListener( EventoIncidenteRechazado.ACTUALIZA_REFERENCIAS , recibeListaDeReferencias );
+				this._incidente.referencias = evento.listaReferencias;
+				if( this._incidente.referencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._incidente.referencias.source.length ; i++ ){
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._incidente.referencias.getItemAt( i ) as Referencia ).folio;
+						( this._incidente.referencias.getItemAt( i ) as Referencia ).idIncidente = this._incidente.idIncidente;
+					}
+					if(this._cmbSeleccionador != null ){
+						this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._incidente.referencias ) as ArrayCollection;
+					}
+				}	
+				this._gestion.referencias = this._incidente.referencias;
+			}
+			/**
+			 * Metodo que evalua si es aceptado o rechazado el incidente
+			 */ 
+			private function evaluaDecision():void{
+				if( this.chkAcuerdo.selected == true ){
+					advertenciaAcuerdo();
+				}else{
+					advertenciaDesAcuerdo();
+				}
+			}
+			/**
+			 * Warning que pregunta si deseas continuar cuando la decision fue de Acuerdo.
+			 */ 
+			private function advertenciaAcuerdo():void{
+				Alert.buttonWidth = 100;
+				Alert.yesLabel= "SI";
+				Alert.noLabel = "NO";
+				Alert.show("Ha establecido estar DE ACUERDO con el incidente rechazado y en lo futuro no podrá alterar su decisión, ¿Desea continuar?","¡Atención!",Alert.NO|Alert.YES,this,ejecutaAccionAcuerdo);
+			}
+			/**
+			 * Metodo que ejecuta la decision seleccionada en la advertenciaAcuerdo. e usara el mapaIncidenteRechazado y 
+			 * su notificacion regresara al mapa a la funcion notificacionPendienteCerrado();
+			 */   
+			public function ejecutaAccionAcuerdo(event:CloseEvent):void{
+				if(event.detail == Alert.YES){
+					//se esta en Acuerdo que el incidente se rechaza y se elimina el pendiente
+					var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado( EventoIncidenteRechazado.ACEPTA_RECHAZADO);
+					evento.folio = this._incidente.idPendiente; 
+					dispatchEvent( evento );
+				}else{
+					return;
+				}
+			}
+			
+			private function advertenciaDesAcuerdo():void{
+				Alert.buttonWidth = 100;
+				Alert.yesLabel= "SI";
+				Alert.noLabel = "NO";
+				Alert.show("Ha establecido estar en DESACUERDO con el incidente rechazado y en lo futuro no podrá alterar su decisión, ¿Desea continuar?","¡Atención!",Alert.NO|Alert.YES,
+					this,ejecutaAccionDesAcuerdo);
+			}
+			/**
+			 * Metodo que ejecuta la decision seleccionada en la advertenciaDesAcuerdo
+			 */   
+			private function ejecutaAccionDesAcuerdo(event:CloseEvent):void{
+				if(event.detail == Alert.YES){
+					//se levanta un nuevo Incidente
+					/* var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado( EventoIncidenteRechazado.SELECCIONA_REGISTRO_INCIDENTE );
+					evento.incidente = this._incidente;
+					evento.dirigidoA = "registroIncidente";
+					dispatchEvent( evento ); */
+					var evento:EventoIncidenteAsociado = new EventoIncidenteAsociado(EventoIncidenteAsociado.EVENTO_ASOCIADO_RECHAZADO);
+					evento._incidente = this._incidente;
+					dispatchEvent( evento );
+				}else{
+					return;
+				}
+			} 
+			/**
+			 * Funcion para guardar parcialmente. Se utiliza el MapaIncidenteRechazado se regresa el dato en la funcion notificacionGuardadoParcial();
+			 */ 
+			private function guardaParcialmente():void{
+				var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado(EventoIncidenteRechazado.GUARDA_PARCIALMENTE);
+				evento.nueva = this._gestion;
+				evento.nueva.referencias = this._incidente.referencias;
+				evento.nueva.idPendiente = this._incidente.idPendiente;
+				evento.nueva.aceptadoString = "falso";
+				evento.nueva.enviarCorreo = "";
+				/* falso
+					nulo */
+				if( this.chkAcuerdo.selected == true){
+					evento.nueva.acuerdo = "1";
+				}else if( this.chkDesAcuerdo.selected == true) {
+					evento.nueva.acuerdo = "0";
+				}
+				 for( var i:int = 0; i < evento.nueva.referencias.length ; i++ ){
+					(evento.nueva.referencias.getItemAt(i) as Referencia).idIncidente = this._incidente.idIncidente;
+					if( (evento.nueva.referencias.getItemAt( i ) as Referencia).origen == "Registro"  ){
+						evento.nueva.referencias.removeItemAt( i );
+					}
+				} 
+				dispatchEvent( evento );
+			}
+			/**
+			 * Funcion publica que recibe del MapaIncidenteRechazado la notificacion del Guardado Parcial.
+			 * Ademas se dispara otro evento para consultar la gestion y que este ya traiga las referencias con su nuevo id para evitar duplicidad.
+			 */ 
+			public function set notificacionGuardadoParcial( dato:Boolean ):void{
+				if( dato == false){
+					return;
+				}
+				cargaGestion();
+				Alert.show("Se guardó el incidente Rechazado", "Operación exitosa");
+				if( validaInfo() ){
+					this.btnFinalizar.enabled = true;
+				}else{
+					this.btnFinalizar.enabled = false;
+				}
+			}
+			/**
+			 * Metodo que valida si el IncidenteRechazado esta completo
+			 */ 
+			private function validaInfo():Boolean{
+				if( this.chkAcuerdo.selected == true || this.chkDesAcuerdo.selected == true ){
+					this._validaFinalizar = true
+				}
+				return this._validaFinalizar;
+			}
+			/**
+			 * Metodo public que recibe del MapaIncidenteRechazada la notificacion que el Incidente fue Aceptado como Rechazado 
+			 */ 
+			public function set notificacionPendienteCerrado(dato:Boolean):void{
+				if( dato == false || dato == 0 ){
+					return;
+				}
+				Alert.show("Su pendiente ha finalizado correctamente", "Operación exitosa");
+				regresarAListaIncidentesRechazados();
+			}
+			/**
+			 * Metodo para Regresar al grid de los Incidentes Rechazados
+			 */ 
+			private function regresarAListaIncidentesRechazados():void{
+				this.btnFinalizar.enabled = false;
+				this.chkAcuerdo.selected = false;
+				this.chkDesAcuerdo.selected = false;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorAsociado.send(mensaje);
+				var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado( EventoIncidenteRechazado.CAMBIA_HIJO );
+				evento.dirigidoA = "gridIncRechazado";	
+				dispatchEvent(evento);
+			}
+			public function set ejecutaRegresarAListado(dato:String):void{
+				if( dato == null){
+					return;
+				}
+				regresarAListaIncidentesRechazados();
+			}
+		]]>
+	</fx:Script>
+	<mx:HBox width="100%">
+		<!--<s:Label fontSize="40" fontWeight="bold" text="Rechazados"/>-->
+		<label:labelTitulo_Otros text="Rechazados"/>
+		<mx:Spacer width="100%"/>
+		<mx:VBox id="vbxComboSeleccionador" />
+	</mx:HBox>
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%" />-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<!--<s:Label text="Datos generales" fontSize="24" fontWeight="bold"/>-->
+	<label:labelSubtitulo text="Datos generales" />
+	<mx:Spacer height="3"/>
+	<s:Form width="100%">
+		<mx:FormItem width="100%" label="Fecha:"  fontWeight="bold">
+			<s:Label width="100%" text="{ UtilsFecha.formatoFechaDDMMMYYYY( new Date() ) }" fontWeight="normal"/>
+		</mx:FormItem>
+		<mx:FormItem width="100%" label="Gestión:"  fontWeight="bold">
+			<s:Label width="100%" text="{this._gestion.nombreEmpleado}" fontWeight="normal"/>
+		</mx:FormItem>
+	</s:Form>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<!--<s:Label text="Justificación" fontSize="24" fontWeight="bold"/>-->
+	<label:labelSubtitulo text="Justificación" />
+	<mx:Spacer height="3"/>
+	<s:TextArea width="100%" height="100%" borderVisible="true" editable="false"
+				text="{this._gestion.justificacion}"/>
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<!--<s:Label text="Sobre incidente rechazado" fontSize="24" fontWeight="bold"/>-->
+	<label:labelSubtitulo text="Sobre incidente rechazado"/>
+	<mx:Spacer height="3"/>
+	<s:RadioButton label=" DEACUERDO con el estatus de rechazo asignado por el gerente a este incidente" id="chkAcuerdo" click="clickCheckAcuerdo()"/>
+	<s:RadioButton label=" DESACUERDO con el estatus de rechazo asignado por el gerente a este incidente, por lo que generaré un nuevo folio de incidente asociado a éste " id="chkDesAcuerdo"
+				click="clickCheckDesAcuerdo()"/>
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<mx:HBox width="100%">
+		<s:Button styleName="botonNegroOld" label="SALIR" fontSize="12" fontWeight="normal" click="regresarAListaIncidentesRechazados()"/>
+		<mx:Spacer width="100%"/>
+		<s:Button styleName="botonNegroOld" label="Guardar" fontSize="12" fontWeight="normal" click="guardaParcialmente()"/>
+		<mx:Spacer width="100%"/>
+		<s:Button styleName="botonNegroOld" id="btnFinalizar" label="Finalizar" click="evaluaDecision()" enabled="false"
+				  fontSize="12" fontWeight="normal"/>
+	</mx:HBox>
+</mx:VBox>

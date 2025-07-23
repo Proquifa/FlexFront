@@ -1,0 +1,729 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  xmlns:combos="vista.componentes.comun.combos.*"
+		  width="100%" height="100%" gap="0" 
+		  creationComplete="completeHandler()" 
+		  >
+	
+	<fx:Declarations>
+		<s:Parallel id="fxFadeOut">
+			<s:Fade duration="200" alphaTo="0" />
+			<s:Resize duration="200" heightTo="0" />
+		</s:Parallel>
+		<s:Parallel id="fxFadeIn">
+			<s:Fade duration="200" alphaTo="1" />
+			<s:Resize duration="200" heightTo="{currentDPI == 160 ? 20:40}" />
+		</s:Parallel>
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.core.FlexGlobals;
+			import mx.core.IVisualElement;
+			import mx.events.PropertyChangeEvent;
+			import mx.utils.StringUtil;
+			
+			import spark.filters.DropShadowFilter;
+			import spark.utils.MultiDPIBitmapSource;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			
+			private var _listaPeriodo:ArrayCollection = new ArrayCollection([
+				"Anual","Semestral","Trimestral","Mensual"
+			]);
+			private var _listaSemestre:ArrayCollection = new ArrayCollection([
+				"Enero - Junio",
+				"Julio - Diciembre"
+			]);
+			private var _listaTrimestre:ArrayCollection = new ArrayCollection([
+				"Enero - Marzo","Abril - Junio","Julio - Septiembre","Octubre - Diciembre"
+			]);
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			
+			[Bindable]
+			private var currentDPI:int = FlexGlobals.topLevelApplication.applicationDPI;
+			
+			/* public var selectedItemCombo:*; */
+			public var selectedIndex:int = -1;
+			private var _choosingFilterBool:Boolean = false;
+			private var _rightParaLibrarLogo:Number;
+			
+			private var tipoFiltro:String;
+			
+			[Bindable]
+			private var ojoMordor:MultiDPIBitmapSource = new MultiDPIBitmapSource;
+			
+			
+			public function get choosingFilterBool():Boolean
+			{
+				return _choosingFilterBool;
+			}
+			
+			public function set choosingFilterBool(value:Boolean):void
+			{
+				_choosingFilterBool = value;
+				commitSelectedFilters();
+				dispatchEvent( new PropertyChangeEvent( PropertyChangeEvent.PROPERTY_CHANGE, true ) );
+			}
+			
+			private var _cadenaBusqueda:String = '';
+			
+			protected function completeHandler():void
+			{
+				ojoMordor.source160dpi = catalogoIconosBotones.getInstance().ojomordor;
+				ojoMordor.source240dpi = catalogoIconosBotones.getInstance().ojomordorDPI240;
+				
+				tipoFiltro = 'Global';
+				
+				/* imgTache.source = ojoMordor; */
+				
+				var fecha:Date = new Date();
+				var arrAnios:ArrayCollection = new ArrayCollection(); 
+				for(var n:int = 0; (fecha.getFullYear() - n) > 2008; n++ )
+				{
+					arrAnios.addItem( fecha.getFullYear() - n );
+				}
+				listAnios.dataProvider = arrAnios;
+				listPeriodo.dataProvider = _listaPeriodo;
+				listMeses.dataProvider = _listaMensual;
+				
+				listAnios.selectedIndex = 0;
+				listPeriodo.selectedIndex = 0;
+				listMeses_clickHandler();
+				
+				if( e.nivel == 1 // PLozada
+					|| e.nivel == 35 // Ing
+					|| e.esGerente == true )
+				{
+					_cadenaBusqueda = '';
+				}
+				else if( e.idFuncion == 5 )
+				{// ESAC
+					_cadenaBusqueda = e.usuario;
+				}
+				else if( e.idFuncion == 7 )
+				{// EV
+					_cadenaBusqueda = e.idEmpleado.toString();
+				}
+				else if( e.idFuncion == 37 )
+				{// Master ESAC 
+					_cadenaBusqueda = e.usuario;
+				}
+				else
+				{
+					_cadenaBusqueda = 'no encontrar';
+				}
+				///////////////////// evaluar director, gerente ev, gerente esac, y usuario normal para desaparecer boton colaborador
+				if( e.idFuncion == 1 || e.idFuncion == 2  || e.idFuncion == 35 || e.usuario == "ernestogl" )
+				{// Director general, Director de operaciones, director comercializacion, ernesto
+					
+				}
+				else if( e.idFuncion == 3 )
+				{// gerente de ventas
+					
+				}
+				else if( e.idFuncion == 4 )
+				{// gerente esac
+					
+				}
+				else if( e.idFuncion == 37 )
+				{// esac master
+					
+				}
+				else
+				{
+					grpTypeConsulta.removeElement( botonColaborador );
+				}
+				choosingFilterBool = false;
+				
+				cmbClientes.lista.addEventListener( MouseEvent.CLICK, cmbClientesClickHandler, false, 0, true );
+				cmbProveedor.lista.addEventListener( MouseEvent.CLICK, cmbClientesClickHandler, false, 0, true );
+			}
+			
+			protected function cmbClientesClickHandler( event:MouseEvent ):void
+			{
+				commitSelectedFilters();	
+			}
+			
+			protected function chooseTypeConsulta():void
+			{
+				cmbClientes.visible = true;
+				cmbProveedor.visible = false;
+				if( selectedIndex == 0 )
+				{
+					cmbClientes.visible = false;
+				}
+				else if( selectedIndex == 1 )
+				{
+					cmbClientes.cargaClientes( _cadenaBusqueda );
+				}
+				else if( selectedIndex == 2 )
+				{
+					if( e.idFuncion == 1 || e.idFuncion == 2 || e.idFuncion == 35 || e.usuario == "ernestogl" || e.idFuncion == 3   )
+					{// Director general, Director Operaciones, Director comercializacion, ernesto
+						// cmb carga lista EVs + ESACs
+						cmbClientes.cargarEmpleadosXTipoTablero( "esac-eve",'' );
+					}
+					else if( e.idFuncion == 4 )
+					{// gerente esac
+						// carga los ESACs
+						cmbClientes.cargarEmpleadosXTipoTablero( "esac",''  );
+					}
+					else if( e.idFuncion == 37)
+					{// gerente esac
+						// carga los ESACs
+						cmbClientes.cargarEmpleadosXTipoTablero( "esac_master", e.usuario );
+					}
+				}
+				else if( selectedIndex == 3 )
+				{
+					cmbProveedor.cargaProveedores( _cadenaBusqueda );
+					cmbProveedor.visible = true;
+					cmbClientes.visible = false;
+				}
+			}
+			
+			protected function cmbClientes_clickHandler(event:MouseEvent):void
+			{
+				cmbClientes.selectedItem = event.target.owner.data as CatalogoItem;
+				cmbClientes.validateNow();
+				commitSelectedFilters();
+			}
+			
+			private var _lastScrollPos:Number = 0;
+			
+			protected function listMeses_clickHandler( event:MouseEvent = null ):void
+			{
+				/* aplico las propiedades nuevas _proposedIndex >> selectedIndex */
+				listMeses.validateNow();
+				
+				var newIndex:int = listMeses.selectedIndex; // event == null ? 0 : event.currentTarget.selectedIndex;
+				
+				if( listPeriodo.selectedIndex == 0 )
+				{ // ANUAL
+					listMeses.selectedIndices = new <int>[0, 1, 2, 3, 4 ,5, 6, 7, 8, 9, 10, 11];
+				}
+				else if( listPeriodo.selectedIndex == 1 )
+				{ // SEMESTRE
+					if( newIndex < 6 )
+					{
+						listMeses.selectedIndices = new <int>[0, 1, 2, 3, 4 ,5];
+					}
+					else
+					{
+						listMeses.selectedIndices = new <int>[ 6, 7, 8, 9, 10, 11];
+					}
+				}
+				else if( listPeriodo.selectedIndex == 2 )
+				{ // TRIMESTRE
+					if( newIndex > 8 )
+					{
+						listMeses.selectedIndices = new <int>[ 9, 10, 11 ];
+					}
+					else if( newIndex > 5 )
+					{
+						listMeses.selectedIndices = new <int>[ 6, 7, 8 ];
+					}
+					else if( newIndex > 2 )
+					{
+						listMeses.selectedIndices = new <int>[ 3, 4, 5 ];
+					}
+					else if( newIndex > -1 )
+					{
+						listMeses.selectedIndices = new <int>[ 0, 1, 2 ];
+					}
+				}
+				else if( listPeriodo.selectedIndex == 3 )
+				{ // MENSUAL
+					listMeses.selectedIndices = new <int>[ newIndex ];
+				}
+				commitSelectedFilters();
+			}
+			
+			protected function tipoPeriodoHandler(event:MouseEvent):void
+			{
+				if( event.currentTarget.selectedIndex == 0 ){
+					listMeses.selectedIndices = new <int>[0, 1, 2, 3, 4 ,5, 6, 7, 8, 9, 10, 11];
+				}
+				else if( event.currentTarget.selectedIndex == 1 ){
+					listMeses.selectedIndices = new <int>[ 0, 1, 2, 3, 4, 5];
+				}
+				else if( event.currentTarget.selectedIndex == 2 ){
+					listMeses.selectedIndices = new <int>[ 0, 1, 2];
+				}
+				else if( event.currentTarget.selectedIndex == 3 ){
+					listMeses.selectedIndices = new <int>[ 0 ];
+				}
+				commitSelectedFilters();
+			}
+			
+			private var bFiltrosListos:Boolean = false;
+			
+			private function commitSelectedFilters():void
+			{
+				lblAnio.includeInLayout = lblAnio.visible = true;
+				lblAnio.text = StringUtil.trim(listAnios.selectedItem);
+				
+				lblCliente.text = StringUtil.trim(cmbClientes.selectedItem == null || selectedIndex == 0 || selectedIndex == 3 ? '' : cmbClientes.selectedItem.valor);
+				lblProveedor.text = StringUtil.trim(cmbProveedor.selectedItem == null || selectedIndex != 3 ? '' : cmbProveedor.selectedItem.valor);
+				
+				var mesesSelected:String = '';
+				if( listMeses.selectedIndices.length > 0 )
+				{
+					var vectorrs:Vector.<int> = listMeses.selectedIndices;
+					mesesSelected = _listaMensual[ vectorrs[0] ] + ' - ' + _listaMensual[ vectorrs[ vectorrs.length-1 ] ];
+					if( vectorrs.length == 1 )
+						mesesSelected = _listaMensual[ vectorrs[0] ];
+				}
+				lblMeses.text = StringUtil.trim(listPeriodo.selectedIndex ==  0 ? '': mesesSelected);
+				
+				if( listPeriodo.selectedIndex ==  0 )
+				{
+					lblMeses.includeInLayout = lblMeses.visible = false;
+				}
+				else
+				{
+					lblMeses.includeInLayout = lblMeses.visible = true;
+				} 
+				var filtrosComplete:Boolean = true;
+				if( cmbClientes.selectedItem == null && cmbProveedor.selectedItem == null && selectedIndex != 0 )
+					filtrosComplete = false;
+				if( listAnios.selectedItem == null )
+					filtrosComplete = false;
+				if( listPeriodo.selectedItem == null )
+					filtrosComplete = false;
+				if( listMeses.selectedIndex == -1 )
+					filtrosComplete = false;
+				
+				if( filtrosComplete )
+				{
+					var shadow:DropShadowFilter = new DropShadowFilter( 0, 0, 0x70a047, 1, 0, 0, 1, 1, false, false, true );
+					imgTache.source = ojoMordor;
+					bFiltrosListos = true;
+				}
+				else
+				{
+					bFiltrosListos = false;
+					const imagenClara:Class = catalogoIconosBotones.getInstance().ojoblanco;
+					imgTache.source = imagenClara;
+				}
+				
+				if( selectedIndex == 0 )
+					grpMundo.visible = true;
+				else
+					grpMundo.visible = false;
+				trace( ' s ' + selectedIndex.toString() );
+				
+				if( _choosingFilterBool )
+				{ // escogiendo filtros
+					grpMenu.visible = true;
+					
+					lblAnio.visible = false;
+					lblCliente.visible = lblCliente.includeInLayout = false;
+					lblProveedor.visible = lblProveedor.includeInLayout = false;
+					lblMeses.visible = lblMeses.includeInLayout = false;
+					
+					grpMenuuu.visible = grpMenuuu.includeInLayout = false;
+				}
+				else
+				{// seleccion completa proceder al servicio
+					grpMenuuu.visible = grpMenuuu.includeInLayout = true;
+					grpMenu.visible = false;
+					
+					/* lblAnio.visible = lblAnio.includeInLayout = true;
+					lblCliente.visible = lblCliente.includeInLayout = true;
+					lblMeses.visible = lblMeses.includeInLayout = true; */
+				}
+				
+			}
+			
+			/* override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+			super.updateDisplayList( unscaledWidth, unscaledHeight );
+			commitSelectedFilters();
+			} */
+			
+			private var e:Empleado = DatosGlobales.getInstance()._usuario;
+			protected function startConsulta():void
+			{
+				/* valido si falta alguna seleccion en las listas */
+				if( !bFiltrosListos )
+					return;
+				lnFiltro.width = (Math.max(btnFiltro.width,lblRangoDeFiltro.measuredWidth,10)) + (currentDPI == 160 ? 10:20);
+				setTimeout( lanzarConsulta, 600 );
+				dispatchEvent( new Event("iniciarLoaderBar", true ) );
+			}
+			
+			private function lanzarConsulta():void
+			{
+				var evtLineal:EventoTableroClientes = new EventoTableroClientes( "setearEventoFiltros" );
+				evtLineal.parametros.cliente = selectedIndex == 1 && cmbClientes.selectedItem is CatalogoItem ? (cmbClientes.selectedItem as CatalogoItem).llave: 0;
+				evtLineal.parametros.proveedor = selectedIndex == 3 && cmbProveedor.selectedItem is CatalogoItem ? (cmbProveedor.selectedItem as CatalogoItem).llave: 0;
+				evtLineal.parametros.anio = listAnios.selectedItem;
+				evtLineal.parametros.periodo = listPeriodo.selectedItem;
+				//evtLineal.tipoPeriodo = listPeriodo.selectedIndex == 3 || listPeriodo.selectedIndex == 0 ? 0 : listMeses.selectedIndex + 1;
+				
+				if( listPeriodo.selectedIndex == 3 || listPeriodo.selectedIndex == 0 )
+				{ // ANUAL O MENSUAL
+					evtLineal.parametros.tipoPeriodo = 0;
+				}
+				else
+				{
+					/*  cuando el periodo es trimestral el servicio recibe valores del 1 - 4 en tipoPeriodo correspondientes a los 4 trimestres del año,
+					evaluo en base al minimo index seleccionado que periodo corresponde */
+					var minIndexSelected:Number = returnMinValueInVector( listMeses.selectedIndices );
+					if( listPeriodo.selectedIndex == 2 )
+					{ // TRIMESTRAL
+						if(  minIndexSelected > 8 )
+							evtLineal.parametros.tipoPeriodo = 4;
+						else if( minIndexSelected > 5 )
+							evtLineal.parametros.tipoPeriodo = 3;
+						else if( minIndexSelected > 2 )
+							evtLineal.parametros.tipoPeriodo = 2;
+						else
+							evtLineal.parametros.tipoPeriodo = 1;
+					}
+					else // SEMESTRAL
+					{
+						if( minIndexSelected > 5 )
+							evtLineal.parametros.tipoPeriodo = 2;
+						else
+							evtLineal.parametros.tipoPeriodo = 1;
+					}
+				}
+				evtLineal.parametros.mes = listPeriodo.selectedIndex == 3 ? listMeses.selectedIndex + 1: 0;
+				if( e.idFuncion == 1 && selectedIndex == 2 || e.idFuncion == 2 && selectedIndex == 2 )
+					evtLineal.parametros.esac = cmbClientes.selectedItem.valor;
+				//				VALIDACION GERENTE VENTAS, ESACs
+				evtLineal.parametros.eventas = 0;
+				evtLineal.parametros.esac = "";
+				
+				if( selectedIndex == 2 )
+				{
+					if( (cmbClientes.selectedItem as CatalogoItem).tipoEmpleado == "ev" )
+					{
+						evtLineal.parametros.eventas = cmbClientes.selectedItem.llave;
+					}
+					else if( (cmbClientes.selectedItem as CatalogoItem).tipoEmpleado == "esac" )
+					{
+						evtLineal.parametros.esac = cmbClientes.selectedItem.valor;
+					}
+					else if( (cmbClientes.selectedItem as CatalogoItem).tipoEmpleado == "esac_master")
+					{
+						evtLineal.parametros.esac = cmbClientes.selectedItem.valor;
+					}
+				}
+				if( e.idFuncion == 5 || e.nivel == 8 || e.nivel == 32 )
+					evtLineal.parametros.esac = e.usuario; // ESAC
+				if( e.idFuncion == 7 )
+					evtLineal.parametros.eventas = e.idEmpleado; // EV
+				
+				
+				evtLineal.parametros.rangoMinMes = returnMinValueInVector( listMeses.selectedIndices ) + 1;
+				evtLineal.parametros.rangoMaxMes = returnMaxValueInVector( listMeses.selectedIndices ) + 1;
+				if( tipoFiltro == 'Global' ){
+					evtLineal.parametros.tipo = 'todos';
+				}else{
+					evtLineal.parametros.tipo = 'hab';
+				}
+				//evtLineal.mobTipoConsultaOrigen = _statusBusqueda;
+				dispatchEvent( evtLineal );
+			}
+			
+			private function returnMinValueInVector( vec:* ):Number
+			{
+				var returnVal:int =  vec[0];
+				for( var f:int = 0; f < vec.length; f++ )
+				{
+					if( vec[f] < returnVal )
+						returnVal = vec[f];
+				}
+				return returnVal;
+			}
+			
+			private function returnMaxValueInVector( vec:* ):Number
+			{
+				var returnVal:int =  vec[0];
+				for( var f:int = 0; f < vec.length; f++ )
+				{
+					if( vec[f] > returnVal )
+						returnVal = vec[f];
+				}
+				return returnVal;
+			}
+			
+			public var bOpenTypeConsulta:Boolean = true;
+			
+			public function typeConsultaSelector( $index:int ):void
+			{
+				selectedIndex = $index;
+				for( var m:int = 0; m < grpTypeConsulta.numElements; m++ )
+				{
+					var currentE:IVisualElement = grpTypeConsulta.getElementAt( m );
+					if( bOpenTypeConsulta || $index == -1 )
+					{
+						currentE.visible = true;
+					}
+					else
+					{
+						if( (currentE as Group).id.indexOf(tipoFiltro) != -1 )
+						{
+							currentE.visible = true;
+							chooseTypeConsulta();
+						}
+						else
+						{
+							currentE.visible = false;
+						}
+					}
+				}
+				bOpenTypeConsulta = !bOpenTypeConsulta;
+				commitSelectedFilters();
+				dispatchEvent( new PropertyChangeEvent( PropertyChangeEvent.PROPERTY_CHANGE, true ) );
+			}
+			
+			public function eventFilters( event:EventoTableroClientes ):void
+			{
+				if( event == null )
+					return;
+				cmbClientes.prevSelectedIndex 	= event.mobComboSelectedIndex;
+				cmbProveedor.prevSelectedIndex 	= event.mobComboProveedorSelectedIndex;
+				
+				selectedIndex 					= event.mobIndexOrigen;
+				listAnios.selectedItem = event.parametros.anio;
+				listPeriodo.selectedItem = event.parametros.periodo;
+				listPeriodo.validateNow();
+				if( listPeriodo.selectedIndex == 0 )
+				{ // ANUAL
+					listMeses.selectedIndices = new <int>[0, 1, 2, 3, 4 ,5, 6, 7, 8, 9, 10, 11];
+				}
+				else if( listPeriodo.selectedIndex == 1 )
+				{ // SEMESTRAL
+					if( event.parametros.tipoPeriodo == 1 )
+						listMeses.selectedIndices = new <int>[ 0, 1, 2, 3, 4, 5];
+					else
+						listMeses.selectedIndices = new <int>[ 6, 7, 8, 9, 10, 11];
+				}
+				else if( listPeriodo.selectedIndex == 2 )
+				{ // TRIMESTRAL
+					if( event.parametros.tipoPeriodo == 1 )
+						listMeses.selectedIndices = new <int>[ 0, 1, 2];
+					else if( event.parametros.tipoPeriodo == 2 )
+						listMeses.selectedIndices = new <int>[ 3, 4, 5];
+					else if( event.parametros.tipoPeriodo == 3 )
+						listMeses.selectedIndices = new <int>[ 6, 7, 8];
+					else if( event.parametros.tipoPeriodo == 4 )
+						listMeses.selectedIndices = new <int>[ 9, 10, 11];
+				}
+				else if( listPeriodo.selectedIndex == 3 )
+				{ // MENSUAL
+					listMeses.selectedIndices = new <int>[ event.parametros.mes-1 ];
+				}
+				choosingFilterBool = false;
+				
+				bOpenTypeConsulta = false;
+				filterTipoConsulta(selectedIndex);
+				typeConsultaSelector( selectedIndex );
+			}
+			
+			public function filterTipoConsulta(selected:int):void
+			{
+				switch(selected)
+				{
+					case 0:
+					{
+						tipoFiltro = "Global"
+						break;
+					}
+					case 1:
+					{
+						tipoFiltro = "Cliente"
+						break;
+					}
+					case 2:
+					{
+						tipoFiltro = "Colaborador"
+						break;
+					}
+					case 3:
+					{
+						tipoFiltro = "Proveedor"
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			[Bindable]
+			public function get rightParaLibrarLogo():Number
+			{
+				return _rightParaLibrarLogo;
+			}
+			
+			public function set rightParaLibrarLogo(value:Number):void
+			{
+				_rightParaLibrarLogo = value;
+			}
+		]]>
+	</fx:Script>
+	
+	<s:Group width="100%" height="100%" >
+		<s:HGroup id="grpMenu" width="100%" height="100%" gap="0" visible="true" >
+			<s:Group width="100%" height="100%" >
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="0x0e0e0e" alpha="1" />
+					</s:fill>
+				</s:Rect>
+				<s:Group id="grpMundo" width="{currentDPI == 160 ? 330:660}" height="100%" >
+					<s:BitmapImage source="{ catalogoIconosEtiquetas.getInstance().mobil_mundo_grande}" horizontalCenter="0" verticalCenter="0" />
+				</s:Group>
+				<s:HGroup width="100%" height="100%" gap="0" horizontalAlign="left" >
+					
+					<s:Group height="100%" >
+						<combos:MobilComboCatalogos id="cmbClientes" width="{currentDPI == 160 ? 290:580}" height="100%" />
+						<combos:MobilComboCatalogos id="cmbProveedor" width="{currentDPI == 160 ? 290:580}" height="100%" />
+					</s:Group>  
+					
+					<s:VGroup paddingTop="10" width="100%" height="100%" paddingLeft="{currentDPI == 160 ? 55:110}" paddingRight="{currentDPI == 160 ? 30:60}" gap="0" horizontalAlign="right" paddingBottom="{currentDPI == 160 ? 60:120}" >
+						<s:Group width="100%">
+							<pqNet:botonMobilUnderline label="Año" color="0xFFFFFF" enabled="false" right="0" line="false"/>
+							<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0">
+								<s:fill>
+									<s:SolidColor color="#FFFFFF"/>
+								</s:fill>
+							</s:Rect>	
+						</s:Group>  
+						
+						<s:ButtonBar id="listAnios" selectedIndex="0" width="100%" height="100%" click="commitSelectedFilters()">
+							<s:layout>
+								<s:VerticalLayout />
+							</s:layout>
+						</s:ButtonBar>
+						
+						<s:Group width="100%">
+							<pqNet:botonMobilUnderline label="Periodo" color="0xFFFFFF" enabled="false" right="0" line="false"/>
+							<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0">
+								<s:fill>
+									<s:SolidColor color="#FFFFFF"/>
+								</s:fill>
+							</s:Rect>	
+						</s:Group>  
+						
+						<s:ButtonBar id="listPeriodo" selectedIndex="0" width="100%" height="100%" click="tipoPeriodoHandler(event)">
+							<s:layout>
+								<s:VerticalLayout />
+							</s:layout>
+						</s:ButtonBar>
+					</s:VGroup>
+					
+					<s:VGroup width="100%" paddingTop="10" height="100%" paddingLeft="{currentDPI == 160 ? 65:130}" paddingRight="{currentDPI == 160 ? 40:80}" gap="0" horizontalAlign="right" paddingBottom="{currentDPI == 160 ? 75:112}">
+						<s:Group width="100%">
+							<pqNet:botonMobilUnderline label="Meses" color="0xFFFFFF" enabled="false" right="0" line="false"/>
+							<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0">
+								<s:fill>
+									<s:SolidColor color="#FFFFFF"/>
+								</s:fill>
+							</s:Rect>	
+						</s:Group>  
+						<s:List id="listMeses" width="100%" height="100%" selectedIndex="0" contentBackgroundAlpha="0" 
+								allowMultipleSelection="true" 
+								click="listMeses_clickHandler(event)"
+								itemRenderer="vista.componentes.comun.renderers.LabelItemRendererMobil"
+								/>
+					</s:VGroup>
+					
+				</s:HGroup>
+			</s:Group>
+			
+			<s:Group width="{currentDPI == 160 ? 310:620}" height="100%" click="{ choosingFilterBool = false; startConsulta() }">
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="0x0c0c0c" alpha="0.9" />
+					</s:fill>
+				</s:Rect>
+				<s:Image id="imgTache" source="{ojoMordor}" horizontalCenter="0" verticalCenter="0"  />
+			</s:Group>
+		</s:HGroup>
+		
+		
+		<s:Group width="100%" height="15%" bottom="{grpFiltro.height}">
+			
+			<s:Group id="grpMenuuu" left="{currentDPI == 160 ? 40:80}" height="30%" bottom="0">
+				<s:VGroup id="grpTypeConsulta" paddingBottom="{currentDPI == 160 ? 30:60}">
+					
+					<s:Group id="botonGlobal" hideEffect="{ fxFadeOut }" showEffect="{ fxFadeIn }" click="tipoFiltro = 'Global'; typeConsultaSelector( 0 )">
+						<pqNet:botonMobilUnderline label="Global" width="{currentDPI == 160 ? 120:240}" height="{currentDPI == 160 ? 20:40}"/>
+						<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0" left="-25" >
+							<s:fill>
+								<s:SolidColor color="#000000"/>
+							</s:fill>
+						</s:Rect>
+					</s:Group>
+					
+					<s:Group id="botonCliente" hideEffect="{ fxFadeOut }" showEffect="{ fxFadeIn }" click="tipoFiltro = 'Cliente'; typeConsultaSelector( 1 )">
+						<pqNet:botonMobilUnderline label="Cliente"  width="{currentDPI == 160 ? 120:240}" height="{currentDPI == 160 ? 20:40}" />
+						<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0" left="-25">
+							<s:fill>
+								<s:SolidColor color="#000000"/>
+							</s:fill>
+						</s:Rect>
+					</s:Group>
+					
+					<s:Group id="botonColaborador" hideEffect="{ fxFadeOut }" showEffect="{ fxFadeIn }" click="tipoFiltro = 'Colaborador'; typeConsultaSelector( 2 )">
+						<pqNet:botonMobilUnderline label="Colaborador" height="{currentDPI == 160 ? 20:40}"/>
+						<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0" left="-25">
+							<s:fill>
+								<s:SolidColor color="#000000"/>
+							</s:fill>
+						</s:Rect>
+					</s:Group>
+					
+					<s:Group id="botonProveedor" hideEffect="{ fxFadeOut }" showEffect="{ fxFadeIn }" click="tipoFiltro = 'Proveedor'; typeConsultaSelector( 3 )">
+						<pqNet:botonMobilUnderline label="Proveedor" width="{currentDPI == 160 ? 120:240}" height="{currentDPI == 160 ? 20:40}" />
+						<s:Rect width="100%" height="{currentDPI == 160 ? 1: 2}" bottom="0" left="-25">
+							<s:fill>
+								<s:SolidColor color="#000000"/>
+							</s:fill>
+						</s:Rect>
+					</s:Group>
+					
+				</s:VGroup>
+			</s:Group>
+		</s:Group>
+		
+		<s:VGroup id="grpFiltro" width="100%" height="10%" horizontalAlign="right" paddingRight="{rightParaLibrarLogo + (currentDPI == 160 ? 50:100)}" paddingTop="{currentDPI == 160 ? 10:20}" bottom="0" >
+			<pqNet:botonMobilUnderline id="btnFiltro" label="Filtro" color="0xFFFFFF" click="{ choosingFilterBool = !choosingFilterBool }" line="false"/>
+			<s:Rect id="lnFiltro" width="{btnFiltro.width+30}" height="{currentDPI == 160 ? 2: 4}" >
+				<s:fill>
+					<s:SolidColor color="#FFFFFF"/>
+				</s:fill>
+			</s:Rect>
+			<s:HGroup id="lblRangoDeFiltro" gap="0">
+				<s:Label id="lblCliente" styleName="titulo_Novecento_24" color="0x038d91" maxDisplayedLines="1" text="Cliente" includeInLayout="false" visible="false" paddingRight="15"/>
+				<s:Label id="lblProveedor" styleName="titulo_Novecento_24" color="0x038d91" maxDisplayedLines="1" text="Proveedor" includeInLayout="false" visible="false" paddingRight="15"/>
+				<s:Label id="lblAnio" styleName="titulo_Novecento_24" color="0x038d91" text="Año" includeInLayout="false" visible="false"/>
+				<s:Label id="lblMeses" styleName="titulo_Novecento_24" color="0x038d91" text="meses" includeInLayout="false" visible="false" paddingLeft="15"/>
+			</s:HGroup>
+		</s:VGroup>
+		
+	</s:Group>  
+	
+</s:VGroup>

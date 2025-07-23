@@ -1,0 +1,474 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"   
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:formato ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" 
+		  xmlns:label="skins.skin.label.*"  xmlns:otros="skins.otros.*" 
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		  xmlns:tabla="skins.botones.tabla.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:grafica="skins.botones.grafica.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  creationComplete="init()">
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.PedidosCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarGreenRenderer;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRedRenderer;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+			
+			private var cont:Number=0;
+			[Bindable]	private var _listadoPedidosCliente:ArrayCollection = new ArrayCollection();
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();
+			private var _keyAnterior:String = "";
+			private var _sql:Query;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			private function init():void
+			{
+				cont=0;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionaTabla():void
+			{
+				stackGeneral.selectedChild = vistaTabla;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+			}
+			
+			private function minimiza():void
+			{
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);
+			}
+			
+			public function set recibeListaPedidosCliente($lista:ArrayCollection):void
+			{
+				if($lista == null )
+					return;
+				_listadoPedidosCliente = $lista;
+				btnExportar.enabled =  _listadoPedidosCliente.length < 1 ? false : true;
+				setValoresFooter($lista);
+			}
+			
+			public function set recibeLinealPedidos( $lista:ArrayCollection ):void
+			{
+				if($lista == null ) 
+					return;
+				_linealArrGrafica = $lista;
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "PEDIDOS_0") );
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int;
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					objeto = new Object();
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.piezas = 0;
+					objeto.pzasCanceladas = 0;
+					objeto.montoCanceladoMensual = 0;
+					objeto.montoPedidoMensual = 0;
+					
+					for( m = 0; m < $lista.length;m++ )
+					{
+						resumen = $lista[m] as ResumenConsulta;
+						if( resumen.conceptoResultado == "Pedido")
+						{
+							objeto.piezas += resumen.piezasTotal;
+							objeto.montoPedidoMensual += resumen.total;
+						}
+						else if( resumen.conceptoResultado == "Cancelada" )
+						{
+							objeto.pzasCanceladas += resumen.piezasTotal;
+							objeto.montoCanceladoMensual += resumen.total;
+						}
+					}
+					objeto.montoCanceladoMensualLabel = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( Number( objeto.montoCanceladoMensual ) );
+					objeto.montoPedidoMensualLabel = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( Number( objeto.montoPedidoMensual ) );
+					arrReturn.addItem(objeto);
+				}
+				else
+				{
+					while( cuenta < 13)
+					{
+						if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+						{
+							objeto = new Object();
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.piezas = 0;
+							objeto.pzasCanceladas = 0;
+							objeto.montoCanceladoMensual = 0;
+							objeto.montoPedidoMensual = 0;
+							
+							for( m = 0; m < $lista.length;m++ )
+							{
+								resumen = $lista[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{
+									if( resumen.conceptoResultado == "Pedido")
+									{
+										objeto.piezas += resumen.piezasTotal;
+										objeto.montoPedidoMensual += resumen.total;
+									}
+									else if( resumen.conceptoResultado == "Cancelada" )
+									{
+										objeto.pzasCanceladas += resumen.piezasTotal;
+										objeto.montoCanceladoMensual += resumen.total;
+									}
+								}
+							}
+							objeto.montoCanceladoMensualLabel = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( Number( objeto.montoCanceladoMensual ) );
+							objeto.montoPedidoMensualLabel = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( Number( objeto.montoPedidoMensual ) );
+							arrReturn.addItem(objeto);
+						}
+						cuenta++;
+					}
+				}
+				return arrReturn;
+			}
+			
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				cont++;
+				
+				if (cont >1)
+				{
+					validarLlenarGrid();
+				}
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "PEDIDOS_0") );
+			}
+			
+			private function formateoEje($valor:Number, valorPrevio:Object, eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function gridItemClickEvent(evento:EventoDataGrid):void
+			{
+				var urlreq:URLRequest;
+				var ruta:String;
+				var click:ListEvent = evento.itemClick;
+				if (click.columnIndex == 1 )
+				{
+					var path:Object = Util.rutaNueva((click.currentTarget.selectedItem as PedidosCliente).cpedido);
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.PEDIDOS_RUTA + path.ruta + (click.currentTarget.selectedItem as PedidosCliente).cpedido + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}	 
+			}
+			
+			private function generaArchivo():void
+			{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("P.Interno");
+				fila1[2] = hoja.addItem("Referencia");
+				fila1[3] = hoja.addItem("Monto pedido USD");
+				fila1[4] = hoja.addItem("Monto cancelado USD");
+				fila1[5] = hoja.addItem("Cancelaciones");
+				
+				for(var i:int = 0 ; i<_listadoPedidosCliente.length ; i++ )
+				{
+					fila1 = new Array();	
+					fila1[0] = (_listadoPedidosCliente[i] as PedidosCliente).numFila;
+					fila1[1] = (_listadoPedidosCliente[i] as PedidosCliente).cpedido;
+					fila1[2] = (_listadoPedidosCliente[i] as PedidosCliente).referencia;
+					fila1[3] = aplicarFormato((_listadoPedidosCliente[i] as PedidosCliente).montoPedido);
+					fila1[4] = aplicarFormato((_listadoPedidosCliente[i] as PedidosCliente).montoCancelado );
+					fila1[5] = "("+(_listadoPedidosCliente[i] as PedidosCliente).partidasCanceladas+'/'+ (_listadoPedidosCliente[i] as PedidosCliente).partidas +")";
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Pedidos.csv");
+			}
+			
+			private function aplicarFormato($cantidad:Number):String
+			{
+				var _stringRegreso:String;
+				_stringRegreso = '$ ' +UtilsFormatosNumericos.precisionADosDecimalesConComas($cantidad);
+				_stringRegreso = _stringRegreso.split(',').join('\'');
+				return _stringRegreso.toString(); 
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			protected function validarLlenarGrid():void
+			{
+				grpCirculos.visible = grpCirculos.includeInLayout = false;
+				if( stackGeneral.selectedChild == vistaTabla )
+				{
+					if( _event != null)
+					{
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.idButtons = [];
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("CONSULTA_GRID_PEDIDOS");
+						dispatchEvent(eventEspera);
+						
+						var parametros:ParametrosBusquedaCliente = new ParametrosBusquedaCliente();
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_PEDIDOS );
+						evet.rangoMinMes = _event.parametros.rangoMinMes;
+						evet.rangoMaxMes = _event.parametros.rangoMaxMes;
+						evet.parametros = _event.parametros;
+						dispatchEvent( evet );
+						cont++;
+						_keyAnterior = _event.keyConsulta;
+					}
+				}
+				else
+				{
+					grpCirculos.visible = grpCirculos.includeInLayout = true;
+				}
+				
+			}
+			
+			private function compareFunction_MontoUSD(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoPedido,item2.montoPedido); 
+			}
+			
+			private function compareFunction_MontoCancelado(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoCancelado,item2.montoCancelado); 
+			}
+			
+			private function compareFunction_piezas(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.stringCompare(item1.partidasCanceladas+'/'+item1.partidas,item2.partidasCanceladas+'/'+item2.partidas); 
+			}
+			
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["cpedido","referencia","partidasCanceladas"]);
+				
+				var _noPedido:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("cpedido").length;
+				var _noReferencia:Number = _sql.getPunteros([null,"referencia"],"referencia").length;
+				var _montoPed:Number = _sql.getSumarCampo("montoPedido",[],"",true);
+				var _montoCanc:Number = _sql.getSumarCampo("montoCancelado",[],"",true);
+/*				var _noCancelaciones:Number = _sql.getPunteros([null,null,"partidasCanceladas"],"partidasCanceladas").length;*/
+				var _noCancelaciones:int = 0;
+				
+				for(var i:int = 0; i < $arreglo.length; i++){
+					_noCancelaciones += $arreglo.getItemAt(i).partidasCanceladas;
+				}
+				
+				
+				lbl1_nototal.text ="";
+				lbl2_noPedido.text= _noPedido == 1 ? "1 Pedido":_noPedido.toString()+" Pedidos";
+				lbl3_noReferencia.text = _noReferencia == 1 ? "1 Referencia":_noReferencia.toString()+" Referencias";
+				lbl4_montoPed.text = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPed);
+				lbl5_montoCanc.text= "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoCanc);
+				lbl6_noCancelaciones.text= _noCancelaciones == 1 ? "1 Cancelada":_noCancelaciones.toString()+" Canceladas";
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup>
+		<componentes:TituloChartMaxTablero width="100%" text="PEDIDOS" />
+		<s:HGroup id="grpCirculos" paddingLeft="5" visible="false" includeInLayout="false" >
+			<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+				<s:fill>
+					<s:SolidColor color="0x{catalogoColores.LABEL_VERDE}"/>
+				</s:fill>		
+			</s:Ellipse>
+			<componentes:TituloChartMaxTablero text="PEDIDO" />
+			<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+				<s:fill>
+					<s:SolidColor color="0x{catalogoColores.LABEL_ROJO}"/>
+				</s:fill>		
+			</s:Ellipse>
+			<componentes:TituloChartMaxTablero text="CANCELADO" />
+		</s:HGroup>
+	</s:HGroup>
+	<mx:ViewStack  id="stackGeneral" width="100%" height="100%">	
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%">
+				
+				<s:VGroup width="100%" height="100%" paddingBottom="0" >
+					<otros:divisionGruesa width="100%" />
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="tablaGrid" itemClickADG="gridItemClickEvent(event)" width="100%" height="100%" dataProvider="{this._listadoPedidosCliente}" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																 anchoColumnas="{['7%','19%','20%','18%','18%','=']}" mostrarFooter="false">
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"  />
+							<mx:AdvancedDataGridColumn headerText="P. Interno">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.PedidosCliente;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.PedidosCliente;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<mx:LinkButton label="{(data as PedidosCliente).cpedido}" color="0x257d92" toolTip="Ver Cotización" textDecoration.selected="underline"  horizontalCenter="0"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Referencia" dataField="referencia"/>
+							<mx:AdvancedDataGridColumn headerText="Monto pedido USD" dataField="montoPedidoString" sortCompareFunction="{compareFunction_MontoUSD}"/>
+							<mx:AdvancedDataGridColumn headerText="Monto cancelado USD" dataField="montoCanceladoString" sortCompareFunction="{compareFunction_MontoCancelado}"/>
+							<mx:AdvancedDataGridColumn headerText="Cancelaciones" dataField="piezasCotizadas" sortCompareFunction="{compareFunction_piezas}">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.PedidosCliente;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.PedidosCliente;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<label:Texto text="{(data as PedidosCliente).partidasCanceladas}/{(data as PedidosCliente).partidas}" width="100%" fontSize="12" />
+											<!--<s:Label text="{(data as PedidosCliente).partidasCanceladas}/{(data as PedidosCliente).partidas}" horizontalCenter="0" />-->
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				</s:VGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="7%" textAlign="center" />
+					<label:Titulo_12_VerdeAzul_pTop10 id="lbl2_noPedido" paddingTop="0" width="19%" fontSize="14" textAlign="center"/>
+					<label:Titulo id="lbl3_noReferencia" paddingTop="0" width="20%" textAlign="center" />
+					<label:Titulo id="lbl4_montoPed" paddingTop="0" width="18%" textAlign="center" />
+					<label:Titulo id="lbl5_montoCanc" paddingTop="0" width="18%" textAlign="center" />
+					<label:Titulo id="lbl6_noCancelaciones" paddingTop="0" width="18%" textAlign="center" />
+				</s:HGroup>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+			
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<mx:ColumnChart id="myChart" width="100%" height="100%"
+									dataTipRenderer="{PedidosToolTip}"
+									mouseSensitivity="5" 
+									showDataTips="true" 
+									showDataTipTargets="false" 
+									dataTipMode="single" 
+									paddingRight="40" paddingLeft="20" paddingTop="20"
+									paddingBottom="40"
+									type="stacked"
+									seriesFilters="[]"
+									>
+						<mx:series>
+							<mx:ColumnSeries id="colBarRed"
+											 yField="montoCanceladoMensual" 
+											 showDataEffect="{fxInterpolateIn}"
+											 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRedRenderer"
+											 />
+							<mx:ColumnSeries id="colBarVerde"
+											 yField="montoPedidoMensual" 
+											 showDataEffect="{fxInterpolateIn}"
+											 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarGreenRenderer"
+											 />
+						</mx:series>
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="piezas" categoryField="mes" />
+						</mx:horizontalAxis>
+						<mx:verticalAxis>
+							<mx:LinearAxis id="montos" title="Monto en DLS" baseAtZero="true" labelFunction="formateoEje" /> 
+						</mx:verticalAxis>
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{montos}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"/>
+						</mx:verticalAxisRenderers>
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{piezas}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}"
+											 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+						</mx:horizontalAxisRenderers>
+					</mx:ColumnChart>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="stackGeneral.selectedChild = vistaTabla" />
+						<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>	
+	</mx:ViewStack>
+</s:VGroup>

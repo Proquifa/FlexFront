@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%" 
+		 xmlns:ns="vista.ev_RealizarDailyScrum.*" 
+		 xmlns:ns1="vista.vistas.ev_AtenderPoolDeVisitas.*"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:vistas="vista.vistas.*" 
+		 xmlns:label="skins.skin.label.*"
+		 creationComplete="init(event)" 
+		 resize="calc(event)" xmlns:plantilla="vista.plantilla.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.DailyScrum;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import vista.ev_RealizarDailyScrum.Componentes.PopUpRegistrarAsistenciaDaily;
+			import vista.evento.EventoRealizarDailyScrum;
+			import vista.evento.EventoVentasGV;
+			
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFonTitulos:Number;
+			private var listaEV:ArrayCollection = new ArrayCollection;
+			private var listaEVAsistencia:ArrayCollection = new ArrayCollection;
+			private var universo:ArrayCollection = new ArrayCollection;
+			[Bindable] private var daily:DailyScrum = new DailyScrum;
+			
+			[Bindable] private var bloqueoDaily:Boolean;
+			
+			protected function vistaAnterior(event:EventoVentasGV):void
+			{
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				cmpTitulo.botonAcitvo = false;
+			}	
+			
+			protected function init(event:FlexEvent):void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpGrid);
+				plantilla.cargarGraficas(hgpGraficas);
+				plantilla.cargarOperacion(vistaOperacion);
+				plantilla.cargarLeyenda(footer);
+				addEventListener("abrirAsistencia",abrirAsistencia);
+				addEventListener("enviarServicioBloqueo",dispararInicioSprint);
+				
+				cmpGrid.setBloqueoDaily(false);
+			}
+			
+			public function set recibirVisitasParaDaily(data:ArrayCollection):void
+			{
+				universo = data;
+			}
+			public function set recibirVisitasAgrupadasEV(data:ArrayCollection):void
+			{
+				cmpGrid.data(data);
+				listaEV = ObjectUtil.copy(data) as ArrayCollection;
+			}
+			public function set recibirGraficaSprint(data:ArrayCollection):void
+			{
+				grafSprint.dataCreditoValores(data);
+			}
+			public function set recibirGraficaTipoVisita(data:ArrayCollection):void
+			{
+				grafTipo.dataVisitas(data);
+			}
+			
+			public function set recibirDailyActual(daily:DailyScrum):void
+			{
+				if(daily)
+					this.daily = daily;
+				else
+					this.daily = new DailyScrum;
+				
+				vistaOperacion.daily = daily;
+			}
+			
+			public function set recibirSiExisteDaily(data:int):void
+			{
+				if(data > 0){
+					cmpGrid.setBloqueoDaily(false);
+				}
+				else{
+					cmpGrid.setBloqueoDaily(true);
+				}
+			}
+			
+			public function set recibirCodigosAsistencia(data:ArrayCollection):void
+			{
+				/*listaEV = ObjectUtil.copy(data) as ArrayCollection*/
+				for each (var visita:VisitaCliente in listaEV) 
+				{
+					for each (var empleado:Empleado in data) 
+					{
+						if(visita.empleado.idEmpleado == empleado.idEmpleado){
+							visita.empleado.codigoAsistencia = empleado.codigoAsistencia;
+							break;
+						}
+					}
+				}
+				
+				iniciaEspera('terminaEspera');
+				if(data.length > 0){
+					dispatchEvent(new Event("abrirAsistencia"));
+				}
+			}
+			
+			public function set recibirRespuestaRegistrarDaily(data:Boolean):void
+			{
+				if(data){
+					alertaSingleton.show("Se registro el Daily Scrum");
+					////// VISTA ANTERIOR
+					plantilla.indice = 0;
+					cmpTitulo.isVisble = false;
+					cmpTitulo.botonAcitvo = false;
+					
+					cmpGrid.setBloqueoDaily(false);
+				}
+			}
+			
+			
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFont = (15 / 2005) * (unscaledWidth);
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 12 ? 12:sizeFont;
+				
+				sizeFonTitulos = (30 / 2005) * (unscaledWidth);
+				sizeFonTitulos = sizeFonTitulos > 20 ? 20:sizeFonTitulos;
+				sizeFonTitulos = sizeFonTitulos < 15 ? 15:sizeFonTitulos;
+			}
+			
+			private function cambiarVistaOperacion():void
+			{
+				plantilla.indice = 1;
+				cmpTitulo.isVisble = true;
+				cmpTitulo.subTitulo2 = "";
+				cmpTitulo.botonAcitvo = true;
+				
+				vistaOperacion.setUniverso(listaEVAsistencia,universo);
+			}
+			
+			private var popUpRegistrarAsistencia:PopUpRegistrarAsistenciaDaily;
+			
+			protected function abrirAsistencia(event:Event):void
+			{
+				iniciaEspera('terminaEspera');
+				if( popUpRegistrarAsistencia == null ){
+					popUpRegistrarAsistencia = PopUpRegistrarAsistenciaDaily(PopUpManager.createPopUp( this, PopUpRegistrarAsistenciaDaily, true ) );
+					PopUpManager.centerPopUp( popUpRegistrarAsistencia );
+					popUpRegistrarAsistencia.setListaEjecutivos(listaEV);
+					popUpRegistrarAsistencia.addEventListener("cancelar",cerrarPopUp);
+					popUpRegistrarAsistencia.addEventListener("aceptar",aceptarPopUp);
+				}else{
+					PopUpManager.addPopUp( popUpRegistrarAsistencia , this, true );
+				}
+				
+			}
+			
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpRegistrarAsistencia );
+				popUpRegistrarAsistencia = null;
+			}
+			
+			private function aceptarPopUp(event:Event):void
+			{
+				listaEVAsistencia = popUpRegistrarAsistencia.getListaAsistencia();
+				PopUpManager.removePopUp( popUpRegistrarAsistencia );
+				popUpRegistrarAsistencia = null;
+				//////////////REGISTRAR ASISTENCIA
+				
+				cambiarVistaOperacion();
+			}
+			
+			protected function finalizarDaily(event:EventoVentasGV):void
+			{
+				var evento:EventoRealizarDailyScrum = new EventoRealizarDailyScrum(EventoRealizarDailyScrum.REGISTRAR_DAILYSCRUM);
+				var objDaily:DailyScrum = daily;
+				
+				var arrayUniverso:ArrayCollection = vistaOperacion.listaAgrupada;
+				var arrayEmpleados:ArrayCollection = new ArrayCollection;
+				
+				objDaily.observacion = vistaOperacion.observaciones;
+				for each (var temp:VisitaCliente in arrayUniverso) 
+				{
+					arrayEmpleados.addItem(temp.empleado);	
+				}
+				
+				objDaily.empleados = arrayEmpleados;
+				evento.daily = objDaily;
+				dispatchEvent(evento);
+			}
+			protected function dispararInicioSprint(event:Event):void
+			{
+				iniciaEspera('iniciarEspera');
+				var evento:EventoRealizarDailyScrum = new EventoRealizarDailyScrum(EventoRealizarDailyScrum.INICIAR_SCRUM_Y_OBTENER_CODIGOS);
+				dispatchEvent(evento);
+			}
+			
+			
+			
+			private function iniciaEspera(mensaje:String):void
+			{
+				if(mensaje == "iniciarEspera")
+				{
+					
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+				}
+				else if (mensaje == "terminaEspera" )
+				{
+					alertaSingleton.remove(true);
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" gap="0" visible="false" includeInLayout="false">
+		
+		<plantilla:HeaderVentasGV id="cmpTitulo" width="100%" titulo="DAILY SCRUM / {daily.numeroDaily} DE {daily.totaDailys}" vistaAnterirorHeaderGV="vistaAnterior(event)" 
+							clicBotonHeader="finalizarDaily(event)"/>
+		<ns:VistaGridRealizarDailyScrum width="100%" height="100%" id="cmpGrid"/>
+		
+		<s:VGroup id="hgpGraficas" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" gap="15" paddingBottom="20" paddingTop="20" paddingLeft="20" paddingRight="20">
+			<label:Titulo_15_Helvetica fontWeight="bold" width="100%" text="SPRINT #{daily.sprint.numeroSprint}" textAlign="center" fontSize="{sizeFonTitulos}" color="#404040"/>
+			<ns:GraficasRealizarDailyScrum id="grafSprint" width="100%" height="100%" maxHeight="583" maxWidth="583"/>
+			<s:Spacer height="5%" />
+			<label:Titulo_15_Helvetica fontWeight="bold" width="100%" text="TIPO DE VISITAS" textAlign="center" fontSize="{sizeFonTitulos}" color="#404040"/>
+			<ns:GraficasRealizarDailyScrum id="grafTipo" width="100%" height="100%" maxHeight="583" maxWidth="583"/>
+		</s:VGroup>
+		
+		<s:VGroup width="100%" height="100%"  gap="0">
+			<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" id="footer">
+				<s:HGroup paddingLeft="-14" width="100%" >
+					<otros:division width="100%" grueso="1" color="#404040"/>
+				</s:HGroup>
+				<s:HGroup width="60%" height="100%" gap="25" verticalAlign="middle" horizontalAlign="center">
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="right">
+						<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().crm_icono}" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" text="CRM"/>
+					</s:HGroup>
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="left">
+						<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().soluciones_icono}" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" text="Solicitudes"/>
+					</s:HGroup>  
+				</s:HGroup>  
+				
+			</s:VGroup>  
+		</s:VGroup>
+		
+		<ns:VistaOperacionRealizarDailyScrum width="100%" height="100%" id="vistaOperacion" />
+	</s:VGroup>
+	
+	<plantilla:PlantillaGV_VistaInicial id="plantilla" width="100%" height="100%" />
+	
+</s:Group>
+

@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:formato ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 creationComplete="buscarListaIncidente();init()" xmlns:label="skins.skin.label.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:SolidColor id="sc1" color="0x32CD32"/>
+		<mx:SolidColor id="scPorCobrar" color="0xFF0000"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteRechazado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoColores;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.controls.Alert;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			[Bindable]
+			private var estadoTiempo:ArrayCollection;
+			private var totalPendientes:int = 0;
+			[Bndable]
+			private var _gestion:Gestion;
+			[Bindable]
+			private var _listaIncidentes:ArrayCollection = new ArrayCollection();
+			private var contadorGraficoEnTiempo:Number = 0;
+			private var contadorGraficoFueraTiempo:Number = 0;
+			
+			private var consumidorAcciones:Consumer = new Consumer();
+			private var canalAcciones:AMFChannel;
+			private var canalesAcciones:ChannelSet;
+			
+			private function init():void{
+				this.consumidorAcciones.destination = "actualizacionService";
+				this.consumidorAcciones.addEventListener("fault",falloconsumidor);
+				this.consumidorAcciones.addEventListener(MessageEvent.MESSAGE,actualizar);
+				this.canalAcciones = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAcciones = new ChannelSet();
+				this.canalesAcciones.addChannel(canalAcciones);
+				this.consumidorAcciones.channelSet = this.canalesAcciones;
+				this.consumidorAcciones.subscribe();
+				/* this.traeracciones(); */
+			}
+			private function falloconsumidor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Consumidor de acciones","Error");
+			}
+			
+			private function actualizar(mensaje:MessageEvent):void{
+				if(mensaje.message.headers["Destino"] == "gridRechazado" ){
+				/* 	this.traeracciones(); */
+					buscarListaIncidente();
+				}
+			}
+			/**
+			 * Metodo que invoca la lista de Incidentes por Gestionar en el mapa MapaIncidenteRechazado lo recibe la funcion recibirListaIncidentes();
+			 */ 
+			public function buscarListaIncidente():void{
+				this._gestion = new Gestion();
+				var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado( EventoIncidenteRechazado.CARGA_LISTA_DE_INCIDENTES );
+				evento.usuario = DatosGlobales.getInstance()._usuario.usuario;			
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo publico que recibe la inyeccion de los Pendientes por Gestionar 
+			 */ 
+			public function set recibirListaIncidentes(lista:ArrayCollection):void{
+				if( lista.source.length == 0 ){
+					this.grdIncidentesRechazados.dataProvider = lista;
+					this.grdIncidentesRechazados.percentHeight = 100;
+					this.spacerGridGraf.height = 0;
+					this.vbxGrafico.height = 0;
+					this.vbxGrafico.visible = false;
+					return;					
+				}else{				
+					this._listaIncidentes = lista;
+					totalPendientes = 0;
+					contadorGraficoEnTiempo = 0;
+					contadorGraficoFueraTiempo = 0;
+					for(var i:int = 0; i < this._listaIncidentes.source.length; i++){
+						//(this._listaIncidentes.getItemAt( i ) as Incidente).numFila = i + 1;	
+						if( (this._listaIncidentes.getItemAt( i ) as Incidente).diasAtraso > 0 ){
+							contadorGraficoFueraTiempo ++;
+						}else{
+							contadorGraficoEnTiempo ++;	
+						}	
+						(this._listaIncidentes.getItemAt( i ) as Incidente ).numFila = i + 1 ;
+					}
+					this.totalPendientes = contadorGraficoEnTiempo + contadorGraficoFueraTiempo;
+					this.estadoTiempo = new ArrayCollection([
+						{estado:"En Tiempo", Monto: contadorGraficoEnTiempo , EtiquetaMonto: "Total de Pendientes En Tiempo ( "+ contadorGraficoEnTiempo + " )"},
+						{estado:"Fuera de Tiempo", Monto: contadorGraficoFueraTiempo, EtiquetaMonto: "Total de Pendientes Fuera de Tiempo ( "+ contadorGraficoFueraTiempo + " )" }				        
+					]);										
+					this.grdIncidentesRechazados.percentHeight = 50;
+					this.vbxGrafico.percentHeight = 50;
+					this.vbxGrafico.visible = true;
+					this.spacerGridGraf.height = 15;
+					//this.grdIncidentesRechazados.dataProvider = this._listaIncidentes;
+				}
+			}
+			/**
+			 * Metodo usado para darle formato a los DATATIPS del la grafica del Pie (en tiempo y fuera de tiempo)
+			 */ 
+			public function dtFunc(hd:HitData):String {
+				var porcentaje:Number = new Number;
+				porcentaje = (hd.item.Monto * 100 ) /this.totalPendientes;
+				return 	"<B>" + hd.item.estado + ":</B> "+ UtilsFormatosNumericos.precisionADosDecimales( porcentaje ) + "<B>%</B>" + "<BR>" +
+					"<B>No. de pendientes:</B> "+ hd.item.Monto + "<BR>";
+			}
+		]]>
+	</fx:Script>
+	<mx:VBox verticalGap="0" width="100%" height="100%">
+		<mx:DataGrid width="100%" height="100%" textAlign="center" id="grdIncidentesRechazados" dataProvider="{this._listaIncidentes}" >
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" dataField="numFila" />
+				<mx:DataGridColumn headerText="INC" dataField="folio"/>
+				<mx:DataGridColumn headerText="Fecha" dataField="fechaFormato"/>
+				<mx:DataGridColumn headerText="Días de atraso" dataField="diasAtraso" />
+				<mx:DataGridColumn headerText=" "  dataField="idIncidente" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:LinkButton label="Cerrar rechazado" textDecoration="underline" color="#0C4AFC" click="ejecutar()" width="100%">
+								<fx:Script>
+									<![CDATA[
+										import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteRechazado;
+										import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+										private function ejecutar():void{
+											var evento:EventoIncidenteRechazado = new EventoIncidenteRechazado(EventoIncidenteRechazado.CAMBIA_HIJO );
+											evento.dirigidoA = "incRechazadoDetalle";												
+											evento.incidente = data as Incidente;
+											//evento._usuario = this["outerDocument"].usuario;
+											dispatchEvent(evento);
+										}
+									]]>
+								</fx:Script>
+							</mx:LinkButton>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:Spacer height="0" id="spacerGridGraf"/>
+		<mx:VBox width="100%" height="0" id="vbxGrafico" visible="false" borderStyle="solid">
+			<!--<mx:Label text="Tasa de espera" fontSize="24" fontWeight="bold" width="100%" paddingTop="10" paddingLeft="10"/>-->
+			<label:labelTitulo_Otros text="Tasa de espera" width="100%" paddingTop="10" paddingLeft="10"/>
+			<mx:PieChart id="pieGestion" height="100%" width="100%" dataProvider="{this.estadoTiempo}" showDataTips="true" dataTipFunction="dtFunc">
+				<mx:series>
+					<mx:PieSeries id="pieSeriesId" 
+								  field="Monto" 
+								  nameField="estado"
+								  labelField= "EtiquetaMonto"  
+								  explodeRadius=".1" 
+								  labelPosition="callout"
+								  fills="{[sc1, scPorCobrar]}"/>
+				</mx:series>		
+			</mx:PieChart>
+		</mx:VBox>
+	</mx:VBox>
+</mx:VBox>

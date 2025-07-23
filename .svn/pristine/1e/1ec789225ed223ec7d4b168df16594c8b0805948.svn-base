@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" gap="0"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:panelCtaLineaTiempo="skins.skin.comun.consultas.panelCtaLineaTiempo.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.consultaCotizaciones.EventoConsultaCotizaciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.itemRenderer.TiemposConsultaCotizacion;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var _listaTiemposCotizacion:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _listaBusquedaProducto:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _piezasPartidas:Object = new Object();
+			[Bindable] private var _totalProceso:int = new int();
+			[Bindable] private var _totalProcesoProducto:int = new int();
+			[Bindable] private var _varDia:String;
+			
+			public function set recibePiezasPartida(piezasPartida:Object):void{
+				this._piezasPartidas = piezasPartida;
+			}
+			
+			public function set recibirTiempoProceso($tProceso:ArrayCollection):void{
+				if($tProceso == null){
+					return ;
+				}
+				
+				_listaTiemposCotizacion = new ArrayCollection();
+				_listaBusquedaProducto = new ArrayCollection();
+				this._totalProceso = new int();
+				this._totalProcesoProducto = new int();
+				var objetoProducto:Object = new Object();
+				
+				
+				var _investiga:int = 0;
+				var _valida:int = 0;
+				var _responsable:int = 0;
+				var arrTemp:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($tProceso,"proceso");
+				
+				
+				for( var j:int = 0 ; j < arrTemp.length ; j++){
+					if(arrTemp[j].tipo == "Investigación"){
+						_investiga = arrTemp[j].total;
+						_responsable = 1;
+					}
+					if(arrTemp[j].tipo == "Validación pDp"){
+						_investiga = 0;
+						_valida = arrTemp[j].total;
+					}
+				}
+				
+				for(var i:int = 0 ; i<$tProceso.length ; i++){
+					if(this._piezasPartidas.situacion == "CERRADO" && i==($tProceso.length-2) && ($tProceso[i] as TiempoProceso).proceso!="CANCELADA"){
+						$tProceso[i].fechaAzul = true;
+					}
+					
+					if($tProceso[i].proceso == "Investigación" || $tProceso[i].proceso == "Confirmar Datos PHS" || $tProceso[i].proceso == "Evaluar respuesta" || 
+						$tProceso[i].proceso == "Ingresó en catálogo" || $tProceso[i].proceso == "Validación pDp"){
+						
+						if($tProceso[i].proceso == "Validación pDp" && _valida == 1){
+							objetoProducto.proceso = "Busqueda de producto";
+							if(_responsable == 0) objetoProducto.responsable = $tProceso[i].responsable;
+						}else if($tProceso[i].proceso == "Investigación" && _investiga == 1){
+							objetoProducto.proceso = "Busqueda de producto";
+							objetoProducto.responsable = $tProceso[i].responsable;
+						}
+						
+						if($tProceso[i].proceso == "Confirmar Datos PHS"){
+							objetoProducto.responsable = $tProceso[i].responsable;
+						}
+						
+						objetoProducto.fechaInicio = $tProceso[i].fechaInicio;
+						_totalProcesoProducto += $tProceso[i].totalProceso;
+						objetoProducto.totalProceso = _totalProcesoProducto ;
+						objetoProducto.fechaFin = $tProceso[i].fechaFin;
+						
+						_listaBusquedaProducto.addItem($tProceso[i]);
+					}	
+					if(i==0)
+						objetoProducto.clasificacionOrigen = $tProceso[i].pcotiza.clasifOrigen;
+				}
+				_listaBusquedaProducto.addItem(objetoProducto);
+				
+				
+				
+				for(var d:int = 0; d<$tProceso.length ; d++){
+					if($tProceso[d].proceso != "Investigación" && $tProceso[d].proceso != "Confirmar Datos PHS" && $tProceso[d].proceso != "Evaluar respuesta" 
+						&& $tProceso[d].proceso != "Ingresó en catálogo" && $tProceso[d].proceso != "Validación pDp"){
+						this._listaTiemposCotizacion.addItem($tProceso[d]);	
+					}
+					if($tProceso[d].proceso == "Validación pDp" && _valida == 1){
+						this._listaTiemposCotizacion.addItem(objetoProducto);
+					}else if($tProceso[d].proceso == "Investigación" && _investiga == 1){  
+						this._listaTiemposCotizacion.addItem(objetoProducto);
+					}
+					
+					this._totalProceso += $tProceso[d].totalProceso;
+					
+					if($tProceso[d].finLista == true){
+						var objetoFin:Object = new TiempoProceso();
+						if(this._piezasPartidas.situacion == "ABIERTO"){
+							objetoFin.tiempoTotal = "Pendiente";
+							objetoFin.fin = "Fin";
+							this._listaTiemposCotizacion.addItem(objetoFin);
+						}else{
+							objetoFin.proceso = ($tProceso[d] as TiempoProceso).proceso;
+							objetoFin.fechaFin = ($tProceso[d] as TiempoProceso).fechaFin;
+							objetoFin.responsable = ($tProceso[d] as TiempoProceso).responsable;
+							objetoFin.fechaInicio = ($tProceso[d] as TiempoProceso).fechaInicio;
+							objetoFin.totalProceso = ($tProceso[d] as TiempoProceso).totalProceso;
+							objetoFin.referencia = ($tProceso[d] as TiempoProceso).referencia;
+							objetoFin.pcotiza	= ($tProceso[d] as TiempoProceso).pcotiza;
+							objetoFin.situacion ="cerrado";
+							objetoFin.fechaAzulProceso = ($tProceso[d-1] as TiempoProceso).proceso;
+							objetoFin.fechaAzul = true;
+							this._listaTiemposCotizacion.removeItemAt(this._listaTiemposCotizacion.length -1);
+							this._listaTiemposCotizacion.addItem(objetoFin);
+						}
+					}
+					
+					if($tProceso[d].proceso == "Registro"){
+						var evento:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_FECHA_DE_REGISTRO);
+						evento.ffin = $tProceso[d].fechaFin;
+						dispatchEvent(evento);
+					}
+					if($tProceso[d].proceso == "Clasificación"){
+						var event:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_CLASIFICACION_ORIGEN);
+						event.clasificacion = $tProceso[d].pcotiza.clasifOrigen;
+						dispatchEvent(event);
+					}
+				}
+				
+				lblCantidad.NumPartida = this._piezasPartidas.fila;
+				lblCantidad.NumPiezas = this._piezasPartidas.pieza;
+				
+				this.lstTiemposCotizacion.selectedIndex = 0;
+				var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.INSPECTOR_COTIZACION_TIEMPO_PROCESO);
+				evt.tiempoProceso = $tProceso[0];
+				dispatchEvent(evt);	
+			}
+			
+			private function inspector(partidaCotizacion:IndexChangeEvent):void{
+				if( partidaCotizacion.currentTarget.selectedIndex == this._listaTiemposCotizacion.length - 1 &&
+					partidaCotizacion.currentTarget.selectedItem.proceso !="Envío" &&
+					partidaCotizacion.currentTarget.selectedItem.proceso !="CANCELADA" &&
+					partidaCotizacion.currentTarget.selectedItem.proceso !="PEDIDO" &&
+					partidaCotizacion.currentTarget.selectedItem.proceso !="RECOTIZADA")
+				{
+					return ;
+				}	
+				if(partidaCotizacion.currentTarget.selectedItem.proceso == "Busqueda de producto"){
+					var event:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.OBTENER_BUSQUEDA_PRODUCTO);
+					event.busquedaProducto = _listaBusquedaProducto;
+					dispatchEvent(event);
+				}else{
+					var evt:EventoConsultaCotizaciones = new EventoConsultaCotizaciones(EventoConsultaCotizaciones.INSPECTOR_COTIZACION_TIEMPO_PROCESO);
+					evt.tiempoProceso = partidaCotizacion.currentTarget.selectedItem;
+					dispatchEvent(evt);	
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:Group width="100%" height="100%" >
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="#eaeaea"/>
+			</s:fill>
+		</s:Rect>
+		<s:VGroup width="100%" height="100%"  gap="0" paddingRight="15" paddingLeft="15">
+			<panelCtaLineaTiempo:HeaderPartidasYPiezas id="lblCantidad"/>
+			<otros:division width="100%"/>
+			<s:List itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.Cotizaciones2012.itemRenderer.TiemposConsultaCotizacion" contentBackgroundAlpha="0"
+					id="lstTiemposCotizacion" height="100%" width="100%" borderVisible="false" change="inspector(event)"  dataProvider="{_listaTiemposCotizacion}"/>
+		</s:VGroup>
+	</s:Group>  
+</s:VGroup>

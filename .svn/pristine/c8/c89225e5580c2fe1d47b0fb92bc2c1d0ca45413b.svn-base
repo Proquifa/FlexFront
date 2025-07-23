@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoVs:ArrayCollection;
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoVs = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				var arrayTemp:Array = new Array();
+				arrayTemp = ObjectUtil.copy(($infoGrafica) as ArrayCollection).source;
+				
+				
+				/**
+				 * Se obtienen los cobros Cerrados, obteniendo del universo los cobros que se encuentren 
+				 * Cobrados, y Cancelados
+				 * */
+				var arrayCerrados:Array = new Array();
+				arrayCerrados = arrayTemp.filter(obtenerCerrados);
+				
+				/**
+				 * Se obtienen los cobros Abiertos, obteniendo del universo los cobros que se encuentren 
+				 * Abierto,Por cancelar y A refacturación
+				 * */
+				var arrayAbiertos:Array = new Array();
+				arrayAbiertos = arrayTemp.filter(obtenerAbiertos);
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				
+				var itemResumenConsulta:ResumenConsulta;
+				if (arrayCerrados.length == 0 && arrayAbiertos.length != 0){
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = "CERRADO";
+					itemResumenConsulta.etiqueta = "ESTADOS";
+					itemResumenConsulta.total = 0;
+					itemResumenConsulta.totalClientes = 0;
+					itemResumenConsulta.totalCobros = 0;
+					itemResumenConsulta.partidas = 0;
+					itemResumenConsulta.piezasTotal = 0;
+					
+					_infoVs.addItem(ObjectUtil.copy(itemResumenConsulta));
+					FormarLosEstados(arrayAbiertos,"ABIERTO",_infoVs,false);
+				}else if(arrayCerrados.length > 0 && arrayAbiertos.length > 0){
+					keys = new Object();
+					FormarLosEstados(arrayAbiertos,"ABIERTO",_infoVs,true);
+					FormarLosEstados(arrayCerrados,"CERRADO",_infoVs,true);
+					/**
+					 * Es necesario invertir el array para poner primero los que están en ET 
+					 * para que la gráfica asocie el color verde a ET y rojo a FT
+					 * */ 
+					_infoVs.addItemAt(ObjectUtil.copy(_infoVs[0]),2);
+					_infoVs.removeItemAt(0);
+				}else if(arrayCerrados.length>0){
+					FormarLosEstados(arrayCerrados,"CERRADO",_infoVs,false);
+				}
+				
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoVs,null,"totalCobros");
+				
+				//Liberar memoria
+				arrayAbiertos = new Array();
+				arrayCerrados = new Array();
+			}
+			
+			private function FormarLosEstados(estadosInfo:Array,etiqueta:String,infoEstados:ArrayCollection,ifDiscrimination:Boolean):void
+			{
+				var totalPartidas:int = 0;
+				var totalPiezas:int = 0;
+				var totalCobros:int = 0;
+				var totalMonto:Number = 0;
+				var totalClientes:int = 0;
+				var keysClientes:Object = new Object();;
+				
+				var currentPartidaCobros:Cobros; 
+				var itemResumenConsulta:ResumenConsulta;
+				
+				for(var i:int =0; i<estadosInfo.length; i++){
+					currentPartidaCobros = estadosInfo[i] as Cobros;
+					
+						totalPartidas += currentPartidaCobros.partidas;
+						totalPiezas += currentPartidaCobros.piezas;
+						totalMonto += currentPartidaCobros.montoDolares;
+						
+						totalCobros++;
+						/**
+						 * Para el conteo de clientes dando el peso a las clientes que están en estado ABIERTO
+						 * */
+						if(ifDiscrimination){
+							if( etiqueta == "ABIERTO"){
+								if(!keys.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+									keys[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+									totalClientes++;
+								}
+							}else{
+								if(!keys.hasOwnProperty(currentPartidaCobros.nombreCliente) && !keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+									keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+									totalClientes++;
+								}
+							}
+						}else{
+							if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+								keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+								totalClientes++;
+							} 
+						}
+				}
+				
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = etiqueta;
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalCobros = totalCobros;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoEstados.addItem(ObjectUtil.copy(itemResumenConsulta));
+			}
+			
+			private function obtenerAbiertos(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				if(item.estadoParaMostrar == 'Abierto'){//|| item.estado == 'Por Cancelar' || item.estado == 'A refacturación'
+					return true;
+				}else{
+					return false;
+				}
+			}
+			private function obtenerCerrados(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				if(item.estadoParaMostrar == 'Cerrado'){//|| item.estado == 'Cancelada'
+					return true;
+				}else{
+					return false;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="10%" verticalAlign="middle" horizontalAlign="center">
+		<s:Spacer width="100%" height="5%"/>
+		<componentes:tituloChartTablero width="100%" text="ABIERTO VS CERRADO" textAlign="center"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" horizontalCenter="0" verticalCenter="0" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesVS field="totalCobros"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="30%"/>
+	</s:VGroup>
+</s:Group>

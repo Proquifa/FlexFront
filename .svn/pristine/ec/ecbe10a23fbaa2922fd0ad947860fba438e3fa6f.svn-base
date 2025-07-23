@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			public var _currentType:String;
+			private var _infoCPagoXCobrarET:ArrayCollection;
+			private var _infoCPagoXCobrarFT:ArrayCollection;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET")
+						myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoCPagoXCobrarET,null,"totalCobros");
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoCPagoXCobrarFT,null,"totalCobros");
+				}
+			}
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				/**
+				 * Se realiza una copia de la info y se recibe en un Array simple, para poder aplicar funciones específicas de los mismos
+				 **/
+				var arrayTemp:Array = new Array();
+				_infoCPagoXCobrarET = new ArrayCollection();
+				_infoCPagoXCobrarFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				arrayTemp = (ObjectUtil.copy($infoGrafica)as ArrayCollection).source;
+				
+				/**
+				 * Eliminar los cobros en estado Cerrada y cancelada
+				 * */
+				keys = new Object();
+				var arraySinCerradayCancelada: Array = new Array();
+				arraySinCerradayCancelada = arrayTemp.filter(quitarCerradaYCancelada);
+				
+				//Liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * Se obtienen los Arreglos con los Cobros que están en ET y los FT deacuerdo a ciertos criterios que estan
+				 * definidos en las funciones obtenerCobrosET y obtenerCobrosFT referirse a ellas para más información
+				 * */
+				var arrayCobrosET:Array = new Array();
+				arrayCobrosET = arraySinCerradayCancelada.filter(obtenerCobrosET);
+				
+				var arrayCobrosFT:Array = new Array();
+				arrayCobrosFT = arraySinCerradayCancelada.filter(obtenerCobrosFT);
+				
+				arrayCobrosET.sortOn("cpago");
+				arrayCobrosFT.sortOn("cpago");
+				//Para limpiar memoria
+				arraySinCerradayCancelada = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Condición de Pago
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalCPagoPorCobrarET:Array = new Array();
+				arrayTotalCPagoPorCobrarET = arrayCobrosET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalCPagoPorCobrarFT:Array = new Array();
+				arrayTotalCPagoPorCobrarFT = arrayCobrosFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Nivel de Ingreso
+				 * */
+				
+				FormarLasConicionesDePago(arrayTotalCPagoPorCobrarET,arrayCobrosET,"CON_PAGO_ET",_infoCPagoXCobrarET);
+				FormarLasConicionesDePago(arrayTotalCPagoPorCobrarFT,arrayCobrosFT,"CON_PAGO_FT",_infoCPagoXCobrarFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoCPagoXCobrarET,null,"totalCobros");
+				else if(_currentType =="FT"){
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoCPagoXCobrarFT,null,"totalCobros");
+				}
+				
+				//Para liberar Memoria
+				arrayCobrosET = new Array();
+				arrayCobrosFT = new Array();
+				arrayTotalCPagoPorCobrarET = new Array();
+				arrayTotalCPagoPorCobrarFT = new Array();
+			}
+			
+			private function FormarLasConicionesDePago(TotalNIs:Array,NIsInfo:Array,etiqueta:String,infoNIs:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCobros:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientes:Object;
+				
+				var currentPartidaCobros:Cobros; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalNIs.length; i++){
+					j=0;
+					keysClientes = new Object();
+					totalCobros =0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCobros = NIsInfo[j] as Cobros;
+					while( (TotalNIs[i] as Cobros).cpago == currentPartidaCobros.cpago){
+						totalPartidas += currentPartidaCobros.partidas;
+						totalPiezas += currentPartidaCobros.piezas;
+						totalMonto += currentPartidaCobros.montoDolares;
+						
+						totalCobros++;
+						
+						if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+							keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+							totalClientes++;
+						}
+						
+						NIsInfo.shift();
+						if(NIsInfo.length >0)
+							currentPartidaCobros = NIsInfo[j] as Cobros;
+						else
+							currentPartidaCobros =new Cobros();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalNIs[i] as Cobros).cpago.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalCobros = totalCobros;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoNIs.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function quitarCerradaYCancelada(item:Cobros, id:uint, array:Array):Boolean
+			{
+				if(item.estado == "Cerrada" || item.estado == "Cancelada"  || item.estado == "Por Cancelar"){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+			public function quitaDuplicados(item:Cobros, id:uint, _array:Array):Boolean{
+				if (keys.hasOwnProperty(item.cpago)) {
+					return false;
+				} else {
+					keys[item.cpago] = item.cpago;
+					return true;
+				}
+			}
+			private function obtenerCobrosET(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				if(item.estadoParaMostrar == 'Abierto' ){
+					if(isNaN(Number(item.diasRestantesCobro))){
+						if(item.diasRestantesCobro == 'Pendiente'){
+							return true;
+						}else{
+							return false;
+						}
+					}else if(Number(item.diasRestantesCobro) >= 0){
+						return true;
+					}else{
+						return false;
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){
+					if(item.moroso == "NO"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			private function obtenerCobrosFT(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				
+				if(item.estadoParaMostrar == 'Abierto'){ 
+					if(!isNaN(Number(item.diasRestantesCobro)))
+					{
+						if(Number(item.diasRestantesCobro) < 0){
+							return true;
+						}else{
+							return false;
+						}
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){ 
+					if(item.moroso == "SI"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> <!--totalPartidas-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="C.PAGO POR COBRAR" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

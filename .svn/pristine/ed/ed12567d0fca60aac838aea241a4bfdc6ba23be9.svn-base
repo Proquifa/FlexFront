@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:textinput="skins.skin.textinput.*"
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  width="100%" maxHeight="484"
+		  creationComplete="inicio(event)" 
+		  xmlns:otros="skins.otros.*" 
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var _productosUniverso:ArrayCollection =  new ArrayCollection();
+			[Bindable]
+			private var _productos:ArrayCollection; 
+				
+			protected function inicio(event:FlexEvent):void
+			{
+				lstProductos.height = 0;
+				lstProductos.addEventListener(EventoTableroProductos.DESELECCIONA_RADIO_PRODUCTOS,escuchaItemRender,false,0,true);
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("");
+				eventEspera.tipoEventos.push("LLENAR_LISTA_PRODUCTOS");
+				dispatchEvent(eventEspera);
+				
+				var evt:EventoTableroProductos = new EventoTableroProductos( EventoTableroProductos.LLENAR_LISTA_PRODUCTOS );
+				dispatchEvent(evt);				
+			}
+			
+			private var _sql:Query;
+			public function set recibeProductos( $lista:ArrayCollection):void{
+				if ($lista == null )
+					return;
+				
+				_sql = new Query($lista,['codigo','descripcion'],true);
+			}
+			
+			protected function lstProductos_changingHandler(event:IndexChangeEvent):void
+			{
+				var evt:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.DESELECCIONA_RADIO_PRODUCTOS);
+				evt.idProducto = lstProductos.selectedItem.idProducto;
+				dispatchEvent(evt);
+			}
+			
+			public function escuchaItemRender(evt:EventoTableroProductos):void
+			{ //Se recorre todos los iTems de la lista para deseleccioar				
+				for (var i:int = 0; i < lstProductos.dataProvider.length; i++) 
+				{				
+					if( (lstProductos.dataProvider.getItemAt(i) as Producto).idProducto == evt.idProducto  ){
+						(lstProductos.dataProvider.getItemAt(i) as Producto).isCheck = true;
+					}
+					else{
+						(lstProductos.dataProvider.getItemAt(i) as Producto).isCheck = false;						
+					}
+				}				
+			}
+			
+			private	var temporizador:Timer;
+			protected function filtarPorTexto():void
+			{
+				var sTextoBuscar:String;
+				sTextoBuscar = StringUtil.trim(txtbusqueda.text);
+				if (sTextoBuscar.length > 0 )
+				{		
+					/*var arregloTe:ArrayCollection = new ArrayCollection();
+					var copiaUni:ArrayCollection = new ArrayCollection();
+					copiaUni = ObjectUtil.copy(_productosUniverso) as ArrayCollection;  
+					arregloTe = UtilsGrid.queryCampoXLikeDosCampos(copiaUni,"codigo", "descripcion", sTextoBuscar);
+					
+					_productos = ObjectUtil.copy(arregloTe) as ArrayCollection;*/
+					
+					if(temporizador == null)
+					{
+						temporizador = new Timer(300,0);
+						temporizador.addEventListener(TimerEvent.TIMER,filtrarTimer,false,0,true);
+					}
+					
+					if(temporizador)
+					{
+						if(temporizador.running)
+						{
+							temporizador.reset();
+							temporizador.reset();
+						}
+						else
+						{
+							temporizador.start();
+						}
+					}
+					
+				}
+				else{
+					_productos = ObjectUtil.copy(_productosUniverso) as ArrayCollection;
+					calcularAltoLstProd();
+				}			
+				EventoTableroProductos.indiceBusqueda = -1;
+			}
+			
+			public function filtrarTimer(event:TimerEvent):void
+			{
+				temporizador.stop();
+				
+				var sTextoBuscar:String;
+				var punteroTemp:Array = new Array();
+				var arreTemp:Array = new Array();
+				
+				sTextoBuscar = StringUtil.trim(txtbusqueda.text).toLowerCase();
+				var tmp1:Array = _sql.getCampoLikeLowerCase("codigo",sTextoBuscar);
+				var tmp2:Array = _sql.getCampoLikeLowerCase("descripcion",sTextoBuscar);
+				
+				if (tmp1.length > 0)
+				{division.visible = division.includeInLayout= false;
+					for ( var x:int = 0; x<tmp1.length; x++)
+					{
+						punteroTemp.push(_sql.getPunteros([tmp1[x],null]));
+					}
+				}
+				
+				if (tmp2.length > 0)
+				{
+					for ( var h:int = 0; h<tmp2.length; h++)
+					{
+						punteroTemp.push(_sql.getPunteros([null,tmp2[h]]));
+					}
+				}
+				arreTemp = UtilsGrid.generateArrayBiToArrayUni(punteroTemp);
+				_productos = _sql.armarLista(StringFunciones.removerDuplicados(arreTemp));
+				
+				if(_productos.length == 1)
+					(_productos[0] as Producto).unico = true;
+				
+				else 
+				division.visible = division.includeInLayout= true;
+				
+				{ 
+					for (var i:int = 0; i < _productos.length; i++) 
+					{
+						(_productos[i] as Producto).unico = false;
+					}
+					
+				}
+	
+				
+				calcularAltoLstProd();
+			}
+			
+			private function calcularAltoLstProd():void
+			{
+				if(lstProductos.dataProvider.length >= 5 )
+				{
+					lstProductos.height = 375;	
+				}else{
+					lstProductos.height = 76 * lstProductos.dataProvider.length;
+					
+				}
+				
+			}
+			
+			protected function cambioIndice(event:IndexChangeEvent):void
+			{
+				
+				EventoTableroProductos.indiceBusqueda = lstProductos.selectedIndex - 1;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<textinput:txtInputBlancoDefaultPQNet id="txtbusqueda"  skinClass="skins.textinput.busqueda.skinTextInputBusqueda" width="100%" prompt="Producto" fontStyle="normal" change="filtarPorTexto()" enter="filtarPorTexto()"/> 
+	<s:Spacer height="8" />
+	<otros:divisionHueca id="division" width="100%" visible="false" includeInLayout="false"/>
+	<s:Spacer height="5"/>
+	<s:VGroup id="grpRes" visible="{lstProductos.dataProvider.length == 0 ? true:false}" includeInLayout="{lstProductos.dataProvider.length == 0 ? true:false}" width="100%" paddingTop="0">			
+		<s:Label text="Sin Resultado" width="100%" textAlign="center" fontFamily="Helvetica" fontWeight="bold" fontStyle="normal" fontSize="10"/>
+	</s:VGroup>
+	<s:List id="lstProductos" borderVisible="false" horizontalScrollPolicy="off" width="100%" contentBackgroundAlpha="0"  changing="lstProductos_changingHandler(event)" dataProvider="{_productos}" 
+			itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.productos.itemRenderer.IRendererListaProductoTabProd" change="cambioIndice(event)" />	
+</s:VGroup>

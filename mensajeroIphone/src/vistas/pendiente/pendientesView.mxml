@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark"  
+		xmlns:botonAtras="skin.botonAtras.*"
+		xmlns:botonProquifa="skin.botonProquifa.*"
+		
+		backgroundColor="#252b2c"
+		title="PENDIENTES"
+		
+		>
+	
+	<fx:Script>
+		<![CDATA[
+			import eventos.EventoMensajero;
+			
+			import flash.sensors.Geolocation;
+			
+			import modelo.singletons.datosGlobales;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.ViewNavigatorEvent;
+			
+			import vistas.popup.popUpMobilPqNet;
+			
+			[Bindable]
+			public var pendientesMensajero:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			public var pendientesFiltrado:ArrayCollection = new ArrayCollection();
+			
+			public function set recibirPendientesAgrupados(pendientes:ArrayCollection):void
+			{
+				pendientesMensajero = new ArrayCollection();
+				pendientesFiltrado = new ArrayCollection();
+				if(pendientes.length > 0)
+				{
+					pendientesMensajero = pendientes;
+					pendientesFiltrado = pendientes;
+				}
+			}
+			
+			
+			protected function cambio(event:IndexChangeEvent):void
+			{
+				var evento:EventoMensajero = new EventoMensajero(EventoMensajero.IR_A_VISTA_PENDIENTES_RUTA);
+				evento._pendientesSeleccionados = pendientesMensajero[event.newIndex];
+				dispatchEvent(evento);
+				navigator.pushView(pendientesporRutaView);
+			}
+			
+			protected function vistaAnterior(event:MouseEvent):void
+			{
+				navigator.popView();
+			}
+			
+			private function filtrar(busqueda:String):void
+			{
+				if(busqueda != "")
+				{
+					var resultado:ArrayCollection = new ArrayCollection();
+					resultado = UtilsGrid.queryCampoXLike(pendientesMensajero,"empresa",busqueda);
+					pendientesFiltrado = resultado;
+				}
+				else
+				{
+					pendientesFiltrado = pendientesMensajero;
+				}
+			}
+			
+			///////////////////////////////////////////GPS///////////////////////////////////////////////
+			
+			protected var geo:Geolocation = new Geolocation();
+			
+			private var pqLatitud:Number = 19.285661;
+			private var pqLongitud:Number = -99.159588;
+			
+			protected function cerrarPendientesProquifa(event:MouseEvent):void
+			{
+				if(pendientesMensajero.length > 0){
+					if(Geolocation.isSupported){
+						geo.addEventListener(GeolocationEvent.UPDATE,comprobarDireccion);
+						addEventListener(ViewNavigatorEvent.REMOVING,eliminar)
+					}
+					else{
+						trace("gps no soportado");
+					}
+				}
+			}
+			
+			
+			
+			protected function comprobarDireccion(event:GeolocationEvent):void
+			{
+				geo.removeEventListener(GeolocationEvent.UPDATE,comprobarDireccion);
+				var latitud:Number = event.latitude;
+				var longitud:Number = event.longitude;
+				
+				var degtorad:Number = 0.01745329;
+				var dlong:Number = (-pqLongitud + longitud);
+				
+				var distancia:Number = 0;
+				
+				distancia = (Math.sin(pqLatitud * degtorad) * Math.sin(latitud*degtorad)) 
+					+ (Math.cos(pqLatitud * degtorad) * Math.cos(latitud * degtorad) * Math.cos(dlong*degtorad));
+				
+				distancia = Math.acos(distancia) * (6371000);
+				
+				if(distancia < 1000){
+					var q:popUpMobilPqNet = new popUpMobilPqNet();
+					q.mensaje = "¿Desea cerrar todos los pendientes?";
+					q.open(this,true);
+					q.btnSi.addEventListener(MouseEvent.CLICK,confirmarCerrarPendientes);
+					trace(distancia);
+				}
+				else{
+					var m:popUpMobilPqNet = new popUpMobilPqNet();
+					m.mensaje = "Usted se encuentra a " + distancia.toFixed(2) + "m de Proquifa, acerquese a menos de 1000m";
+					m.modoOk = true;
+					m.open(this,true);
+				}
+				
+			}
+			
+			protected function eliminar(event:ViewNavigatorEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+			}
+			
+			protected function confirmarCerrarPendientes(event:MouseEvent):void
+			{
+				var listaPendientesACierre:ArrayCollection = new ArrayCollection();
+				for(var m:int = 0; m<pendientesMensajero.length; m++){
+					listaPendientesACierre.source = listaPendientesACierre.source.concat(pendientesMensajero[m].pendientes.source);
+				}
+				for(var q:int = 0; q<listaPendientesACierre.length; q++){
+					listaPendientesACierre[q].tipoJustificacion = "Mensajero";
+					listaPendientesACierre[q].realizado = false;
+					listaPendientesACierre[q].justificacion = "";
+				}
+				var evento:EventoMensajero = new EventoMensajero(EventoMensajero.CERRAR_PENDIENTES_EN_PROQUIFA);
+				evento._pendientesACerrar = listaPendientesACierre;
+				evento._usuario = datosGlobales.getInstance().empleado_Login.usuario;
+				dispatchEvent(evento);
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:navigationContent>
+		<botonAtras:botonAtras click="vistaAnterior(event)"/>
+	</s:navigationContent>
+	<s:actionContent>
+		<botonProquifa:btnProquifa click="cerrarPendientesProquifa(event)"/>
+	</s:actionContent>
+	
+	<s:Scroller width="640" height="{this.height}">
+		<s:VGroup  gap="15" verticalCenter="0" horizontalCenter="0" horizontalAlign="center" height="100%" width="100%">
+			<s:TextInput width="100%" id="txtFiltro" enter="filtrar(this.txtFiltro.text)"/>
+			<s:List verticalScrollPolicy="off" contentBackgroundColor="#252b2c" itemRenderer="vistas.renders.renderPendientes.renderPendientes" 
+					dataProvider="{this.pendientesFiltrado}" change="cambio(event)" width="100%" height="{this.pendientesFiltrado.length * 191}" />
+			<s:Label  fontSize="22.64" color="#ffffff" textAlign="center"  text="{this.pendientesFiltrado.length +' Clientes'}"/>
+			<s:Label  fontSize="27.17" color="#ffffff" textAlign="center" text="TOTAL"/>
+		</s:VGroup>
+		
+	</s:Scroller>
+</s:View>

@@ -1,0 +1,181 @@
+package vista.modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.ResumenInspeccionProductos;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.utils.ObjectUtil;
+	
+	public class ModeloInspeccionarArribados extends EventDispatcher
+	{
+		public function ModeloInspeccionarArribados(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+		
+		private var lstArribados: ArrayCollection;
+		public function recibeArribados(result:ArrayCollection):void{
+			lstArribados=result;
+			dispatchEvent(new Event('enviarResultadoArribadosModeloInspeccionarArribados'))
+		}
+		
+		[Bindable (event="enviarResultadoArribadosModeloInspeccionarArribados")]
+		public function get enviarArribados():ArrayCollection{
+			return lstArribados;
+		}		
+		
+		private var numPzasArribadas:int;
+		public function recibeContadorArribados(result:int):void{
+			numPzasArribadas=result;
+			dispatchEvent(new Event('enviarContadorArribadosModeloInspeccionarArribados'))
+		}
+		
+		[Bindable (event="enviarContadorArribadosModeloInspeccionarArribados")]
+		public function get enviarContadorArribados():int{
+			return numPzasArribadas;
+		}
+
+		private var consecutivoDeLoteInspeccion:String;
+		public function recibeConsecutivoDeLoteInspeccion(result:String):void{
+			consecutivoDeLoteInspeccion=result;
+			dispatchEvent(new Event('enviarConsecutivoDeLoteInspeccion'))
+		}
+		
+		[Bindable (event="enviarConsecutivoDeLoteInspeccion")]
+		public function get enviarConsecutivoDeLoteInspeccion():String{
+			return consecutivoDeLoteInspeccion;
+		}
+
+			private var _sql:Query;
+	    private var _sqlP:Query;
+		private var listaClientes:ArrayCollection;
+		private var lstPartidas: ArrayCollection;
+		private var resumenTotal:ResumenInspeccionProductos;
+		private var dummy:PartidaInspeccion;
+		public function recibePartidasINSP(part:ArrayCollection):void{
+			
+			if(part == null)
+				lstPartidas = new ArrayCollection();
+			else{
+				listaClientes = new ArrayCollection;
+				lstPartidas = part;
+				var punterosCliente:Array;
+				var punterosPrioridad:Array;
+				var prioridadTem:Array;
+			
+				_sql = new Query(lstPartidas,["nombreCliente","prioridad"],true);
+				punterosCliente = _sql.getPunteros(["nombreCliente"],"nombreCliente");
+				resumenTotal = new ResumenInspeccionProductos;
+			
+				
+				for each (var clienteA:String in punterosCliente) 
+				{
+					var resumen:ResumenInspeccionProductos = new ResumenInspeccionProductos();
+					resumen.partidas = new ArrayCollection();
+					var punterosTemp:Array;
+					var contP1:Number = 0;
+					var contP2:Number = 0;
+					var contP3:Number = 0;
+					punterosTemp = _sql.getPunteros([clienteA]);
+					
+					for (var k:int = 0; k < punterosTemp.length; k++) 
+					{
+						var partTemp:PartidaInspeccion;
+						partTemp = ObjectUtil.copy(_sql.universo.getItemAt(punterosTemp[k])) as PartidaInspeccion;
+						
+						if(partTemp.prioridad == 'P1')
+							contP1 = contP1 + 1;
+						else if(partTemp.prioridad == 'P2')
+							contP2 = contP2 + 1;
+						else if(partTemp.prioridad == 'P3')
+							contP3 = contP3 + 1;
+						
+						if(k == punterosTemp.length - 1)
+						{
+							resumen.totalP1 = contP1;
+							resumen.totalP2 = contP2;
+							resumen.totalP3 = contP3;
+							
+							resumen.nombreCliente = clienteA.toUpperCase();
+							if(contP1 > 0)
+							{
+								resumen.prioridad = "P1";
+							}
+							else if(contP2 > 0)
+							{
+								resumen.prioridad = "P2";
+							}
+							else if(contP3 > 0)
+							{
+								resumen.prioridad = "P3";
+							}
+						}
+						
+						resumen.partidas.addItem(partTemp);
+					}
+					listaClientes.addItem(resumen);
+				}
+			}
+			/////////////////////////  TOTALES  /////////////////////////
+			_sqlP = new Query(lstPartidas,["nombreCliente","prioridad"],true);
+			punterosPrioridad = _sqlP.getPunteros([null,"prioridad"],"prioridad");
+			resumenTotal.numCliP1 = 0;
+			resumenTotal.numCliP2 = 0;
+			resumenTotal.numCliP3 = 0;
+			resumenTotal.numPiezasP1 = 0;
+			resumenTotal.numPiezasP2 = 0;
+			resumenTotal.numPiezasP3 = 0;
+			resumenTotal.numPartP1 = 0;
+			resumenTotal.numPartP2 = 0;
+			resumenTotal.numPartP3 = 0;
+			
+			for each (var prioridad:String in punterosPrioridad) 
+			{
+				punterosTemp = _sqlP.getPunteros([null,prioridad],"nombreCliente");
+				prioridadTem = _sqlP.getPunteros([null,prioridad]);
+				if(prioridad.toLowerCase() == 'p1')
+				{
+					resumenTotal.numPiezasP1 = _sqlP.getSumarCampo("cantidadCompra",prioridadTem);
+					resumenTotal.numCliP1 = punterosTemp.length;
+					resumenTotal.numPartP1 = prioridadTem.length;
+				}
+				else if(prioridad.toLowerCase() == 'p2')
+				{
+					resumenTotal.numPiezasP2 = _sqlP.getSumarCampo("cantidadCompra",prioridadTem);
+					resumenTotal.numCliP2 = punterosTemp.length;
+					resumenTotal.numPartP2 = prioridadTem.length;
+				}
+				else if(prioridad.toLowerCase() == 'p3')
+				{
+					resumenTotal.numPiezasP3 = _sqlP.getSumarCampo("cantidadCompra",prioridadTem);
+					resumenTotal.numCliP3 = punterosTemp.length;
+					resumenTotal.numPartP3 = prioridadTem.length;
+				}
+			}
+
+		
+			dispatchEvent(new Event('enviarPartidasInspeccion'))
+			dispatchEvent(new Event('mandaTotalesDeInspeccion'))
+			
+			
+		}
+		
+		[Bindable (event="enviarPartidasInspeccion")]
+		public function get enviarInformacion():ArrayCollection{
+			return listaClientes;
+		}
+		
+		[Bindable (event="mandaTotalesDeInspeccion")]
+		public function get enviarTotalesIP():ResumenInspeccionProductos{
+			return resumenTotal;
+		}
+		
+		public function error(mensaje:Object):void{
+			trace(mensaje.toString());
+		}
+	}
+}

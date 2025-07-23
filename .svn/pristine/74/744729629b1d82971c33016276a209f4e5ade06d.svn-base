@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+		 xmlns:comun="mapa.comun.*"
+		 width="100%" height="100%"
+		 >
+	<fx:Declarations>
+		<comun:MapaComboCatalogosMobil dispatcher="{this}" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComboCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.core.FlexGlobals;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			
+			private var _selectedIndex:int;
+			public var dataCaps:ArrayCollection;
+			public var dataMain:ArrayCollection;
+			
+			public var prevSelectedIndex:int = -1;
+			
+			[Bindable]
+			private var currentDPI:int = FlexGlobals.topLevelApplication.applicationDPI;
+			
+			public function get selectedIndex():int
+			{
+				return lista.selectedIndex;
+			}
+			
+			public function set selectedIndex(value:int):void
+			{
+				lista.selectedIndex = value;
+			}
+			
+			public function get dataProvider():ArrayCollection
+			{
+				return lista.dataProvider as ArrayCollection;
+			}
+			
+			public function set dataProvider( value:ArrayCollection ):void
+			{
+				selectedItem = null;
+				selectedIndex = -1;
+				
+				lista.dataProvider = value;
+				dataMain = value;
+				validateNow();
+				
+				/* valido si hay que seleccionar un item de la lista por consultas anteriores  */
+				if( prevSelectedIndex > -1 
+					&& lista.dataProvider != null
+					&& prevSelectedIndex <  lista.dataProvider.length )
+				{
+					selectedIndex = prevSelectedIndex;
+					prevSelectedIndex = -1;
+				}
+				
+				/*  valido si la lista necesita teclas de acceso directo */
+				if( value != null && value.length > 200 )
+					generarCaps();
+			}
+			
+			public function set asyncBarLoader( data:int ):void
+			{
+				/*  -1 */
+				
+				/* working */
+				if( data > -1 )
+				{
+					barLoader.percent = data;
+				}
+			}
+			
+			public function get selectedItem():CatalogoItem
+			{
+				if( !(lista.selectedItem is CatalogoItem) )
+					return null;
+				return lista.selectedItem;
+			}
+			
+			public function set selectedItem( value:CatalogoItem ):void
+			{
+				lista.selectedItem = value;
+			}
+			
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Clientes.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--".
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los clientes en la funcion recibirListaClientes();
+			 */ 
+			public function cargaClientes(valorAdicional:String):void
+			{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_CLIENTES);
+				evento.valorAdicional = valorAdicional;
+				dispatchEvent( evento );
+			}
+			
+			public function set recibirListaClientes( $datos:ArrayCollection):void
+			{
+				txtBusqueda.text = ''; 
+				dataProvider = $datos;
+			}
+
+			/**
+			 * Funcion publica que puede ser disparada desde cualquier componente que necesite el Combo de Proveedor.
+			 * El argumento que recibe puede ser un string tal como: "", "--NINGUNO--" o "--TODOS--".
+			 * Esta funcion manda a llamar el mapa MapaComboCatalogos y regresa la lista de los proveedores en la funcion recibirListaProveedores();
+			 */ 
+			public function cargaProveedores(valorAdicional:String):void
+			{
+				var eventoCli:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_PROVEEDORES);
+				eventoCli.valorAdicional = valorAdicional;
+				dispatchEvent( eventoCli );
+			}
+			
+			public function set recibirListaProveedores( $datos:ArrayCollection):void
+			{
+				txtBusqueda.text = ''; 
+				dataProvider = $datos;
+			}
+			
+			private var _primerItem:String;
+			
+			public function cargarEmpleadosXTipoTablero( $valorAdicional:String, $valor:String = "", $primerItem:String = "" ):void
+			{
+				var evento:EventoComboCatalogos = new EventoComboCatalogos( EventoComboCatalogos.BUSQUEDA_EMPLEADOS_POR_TIPO_TABLERO );
+				evento.valorAdicional = $valorAdicional;
+				evento.nombreEsacMaster = $valor;
+				dispatchEvent( evento );
+				_primerItem = $primerItem;
+			}
+			
+			public function set recibirEmpleadosPorTipo( $datos:ArrayCollection ):void
+			{
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "valor";
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				$datos.sort = numericDataSort;
+				$datos.refresh();
+				if( _primerItem != "" )
+				{
+					var firstItem:CatalogoItem = new CatalogoItem();
+					firstItem.valor = _primerItem;
+					$datos.addItemAt( firstItem, 0 );
+					_primerItem = "";
+				}
+				/* dataMain = $datos;
+				lista.dataProvider = $datos;
+				selectedIndex = 0; */
+				dataProvider = $datos;
+			}
+			
+			protected function searchInDataProvider():void
+			{
+				var stringToSearch:String = txtBusqueda.text;
+				if( stringToSearch.length < 3 )
+				{
+					lista.dataProvider = dataMain
+					return;
+				}
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				for( var h:int = 0; h < dataMain.length; h++ )
+				{
+					if( dataMain[h] is CatalogoItem )
+					{
+						var currentItem:CatalogoItem = dataMain[h] as CatalogoItem;
+						if( currentItem.valor.toUpperCase().indexOf( stringToSearch.toUpperCase() ) > -1 )
+							arrReturn.addItem( currentItem );
+					}
+				}
+				lista.dataProvider = arrReturn;
+			}
+			
+			protected function directAccesKey( $capital:String ):void
+			{
+				/* txtBusqueda.visible = false;
+				txtBusqueda.includeInLayout = false; */
+				lista.ensureIndexIsVisible( dataProvider.length-1 );
+				
+				if( $capital == "#" )
+				{
+					lista.layout.verticalScrollPosition = 0;
+					return;
+				}
+				for( var h:int = 0; h < dataProvider.length; h++ )
+				{
+					var cItem:* = dataProvider[h];
+					if( cItem.hasOwnProperty('capital') && cItem.capital == $capital )
+					{
+						lista.ensureIndexIsVisible( h );
+						return;
+					}
+				}
+			} 
+			
+			protected function generarCaps():void
+			{
+				if( lista.dataProvider == null )
+					return;
+				
+				dataCaps = new ArrayCollection();
+				for( var f:int = 0; f < lista.dataProvider.length; f++ )
+				{
+					var current:Object = lista.dataProvider[f];
+					if( current.hasOwnProperty('capital') )
+						dataCaps.addItem( current.capital );
+				}
+				listCaps.dataProvider = dataCaps;
+				listCaps.percentHeight = 100;
+			}
+			
+			protected function icoLens_clickHandler(event:MouseEvent):void
+			{
+				lista.layout.verticalScrollPosition = 0;
+				txtBusqueda.setFocus();
+			}
+			
+		]]>
+	</fx:Script>
+	<!-- BAR LOADER -->
+	<pq:LoaderBar id="barLoader" width="100%" height="{currentDPI == 160 ? 1:2}" top="0" />
+	
+	<!-- LISTA -->
+	<s:VGroup width="100%" height="100%" right="{currentDPI == 160 ? 30:60}" >
+		<s:TextInput id="txtBusqueda" prompt="BUSCAR" width="100%"  paddingLeft="{currentDPI == 160 ? 15:30}"  autoCorrect="false" change="searchInDataProvider()"/>
+		<s:List id="lista" width="100%" height="100%" contentBackgroundAlpha="0" itemRenderer="vista.componentes.comun.renderers.LabelItemRendererMobil" />
+	</s:VGroup>
+	
+	<!-- CAPS -->
+	<s:ButtonBar id="listCaps" width="{currentDPI == 160 ? 30:60}" height="100%" click="directAccesKey( listCaps.selectedItem )" right="0" top="{currentDPI == 160 ? 35:70}" >
+		<s:layout>
+			<s:VerticalLayout useVirtualLayout="false" />
+		</s:layout>
+	</s:ButtonBar>
+	<s:Group top="{currentDPI == 160 ? 12:24}" right="{currentDPI == 160 ? 7:14}" click="icoLens_clickHandler(event)">
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="red" alpha="0"/>
+			</s:fill>
+		</s:Rect>
+		<s:Image id="icoLens" source="{ catalogoIconosBotones.getInstance().mobil_milupita }"/>
+	</s:Group>  
+</s:Group>

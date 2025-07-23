@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:linkButton="skins.skin.linkButton.*"
+		  xmlns:label="skins.skin.label.*" 
+		  width="100%" 
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.utils.StringUtil;
+			
+			import spark.components.Label;
+			import spark.events.ElementExistenceEvent;
+			
+			[Bindable] public var _cobroMonitoreo:TiempoProceso;
+			[Bindable]  private var color:uint;
+			[Bindable]
+			private var mostrarNotasCredito:Boolean;
+			
+			private var _factura:String="";
+			private var _fpor:String="";
+			private var _nombreCliente:String="";
+			
+			public function set recibirFacturaFpor( $data:Object ):void
+			{
+				if( $data == null ) return;	
+				_factura = $data.factura;
+				_fpor = $data.fpor;
+				
+				if(_cobroMonitoreo.documento != undefined && _cobroMonitoreo.documento && _cobroMonitoreo.documento != ''){
+					lbl_ComplementoPago.visible = lbl_ComplementoPago.includeInLayout = true;
+					hg_ComplementoPago.visible = hg_ComplementoPago.includeInLayout = true;
+				}else{
+					lbl_ComplementoPago.visible = lbl_ComplementoPago.includeInLayout = false;
+					hg_ComplementoPago.visible = hg_ComplementoPago.includeInLayout = false;
+				}
+			}
+			
+			private function verComprobantePagos():void{
+				if(this.lnkCPagosMonitoreo.label != 'Pendiente'){
+					var _url:URLRequest = new URLRequest();
+					var path:Object = Util.rutaNueva(this.lnkCPagosMonitoreo.label);
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.PAGOS_CLIENTE + path.ruta + this.lnkCPagosMonitoreo.label + ".pdf";
+					navigateToURL(_url);	
+				}
+			}
+			
+			private function visualizaPDF():void{
+				if(_cobroMonitoreo.documento != ''){
+					var path:Object;
+					var _url:URLRequest = new URLRequest();
+					path = Util.rutaFecha(_cobroMonitoreo.fechaProgramacion); 
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.COMPLEMENTO_PAGO + _fpor + '/' +  path.ruta + _cobroMonitoreo.documento + ".pdf";
+					navigateToURL(_url);	
+				}
+			}
+			
+			private	var file:File = new File();
+			private function descargaXML():void{
+				var request:URLRequest;
+				var variables:URLLoader = new URLLoader();
+				var path:Object;
+				if(_cobroMonitoreo.documento != ''){
+					path = Util.rutaFecha(_cobroMonitoreo.fechaProgramacion);
+					variables.dataFormat = URLLoaderDataFormat.BINARY;
+					///PRODUCCION
+					var ruta:String = RutasPdF.GENERAL_RUTA + RutasPdF.COMPLEMENTO_PAGO + _fpor + '/'+ path.ruta + _cobroMonitoreo.documento + ".xml";
+					///LOCAL
+					request = new URLRequest(ruta);
+					variables.addEventListener(Event.COMPLETE, completeHandler);
+					variables.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+					try{
+						variables.load(request);
+					} 
+					catch (error:Error){
+						trace("Unable to load URL: " + error);
+					}	
+				}				
+			}
+			
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+					file.save( bytes, _cobroMonitoreo.documento +'.xml' );	
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+			}
+			
+			private function errorHandler(event:Event):void{
+				alertaSingleton.show("No se encontro archivo");
+			}
+			
+			public function valida( $dato:TiempoProceso ):void{
+				
+				if( $dato.cobro == null )
+				{
+					lblMoroso.text = 'Pendiente';
+					lblMoroso.styleName = "cltas_texto";
+				}
+				else if(  $dato.cobro == '1' )
+				{
+					lblMoroso.text = 'SI';
+					lblMoroso.styleName = "cltas_texto_rojo_upperCase";
+				}
+				else
+				{
+					lblMoroso.text = 'NO';
+					lblMoroso.styleName = "cltas_texto_verde_upperCase";
+				}
+				
+				
+				if($dato.folio && StringUtil.trim($dato.folio).length > 0)
+				{
+					var arrayNotasCredito:Array = $dato.folio.split(",");
+					var enlaceDocumento:LinkButtonPQNet2;
+					grplnkNotasCredito.removeAllElements();
+					
+					mostrarNotasCredito = true;
+					
+					var etiquetaTemp:String;
+					for(var i:int = 0; i< arrayNotasCredito.length ; i++)
+					{
+						etiquetaTemp = arrayNotasCredito[i] as String; 
+						if(etiquetaTemp!= null && StringUtil.trim(etiquetaTemp).length>0)
+						{
+							enlaceDocumento = new LinkButtonPQNet2;
+							enlaceDocumento.label = etiquetaTemp;
+							enlaceDocumento.toolTip = "Ver documento";
+							grplnkNotasCredito.addElement(enlaceDocumento);	
+						}
+					}
+				}
+				else
+				{
+					mostrarNotasCredito = false;
+				}
+			}
+			
+			private function verNotaCredito(event:Event):void
+			{
+				var _url:URLRequest = new URLRequest();
+				var path:Object;
+				path = Util.rutaFecha(_cobroMonitoreo.fechaRevision);
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.NOTA_CREDITO + this._fpor +"/"+ path.ruta + event.target.label +".pdf";
+				navigateToURL(_url);
+			}
+			
+			protected function grplnkNotasCredito_elementAddHandler(event:ElementExistenceEvent):void
+			{
+				if(!(event.element is Label))
+				{
+					event.element.addEventListener(MouseEvent.CLICK,verNotaCredito);
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<panelCtaDetalle:SubHeader2 label="MONITOREO" />
+	<s:VGroup width="100%" paddingLeft="15" paddingBottom="10">
+		<panelCtaDetalle:FechasInicioFinyTiempoTotal fechaInicio="{_cobroMonitoreo.fechaRevision}" fechaFin="{_cobroMonitoreo.fechaProgramacion}"/>
+		<label:Titulo_w100  text="Comprobante pago:"/>
+		<linkButton:LinkButtonPQNet2 id="lnkCPagosMonitoreo" label="{_cobroMonitoreo.doscResult1}" click="verComprobantePagos()" visible="false" includeInLayout="false"/>
+
+		<label:Titulo_w100 id="lbl_ComplementoPago" text="Complemento de pago:"/>
+		<s:HGroup id="hg_ComplementoPago" width="100%" >
+			<linkButton:LinkButtonPQNet2 id="lnkPDF" label="PDF" click="visualizaPDF()"/>
+			<s:Spacer width="15"/>
+			<linkButton:LinkButtonPQNet2 id="lnkXML" label="XML" click="descargaXML()"/>
+		</s:HGroup>  
+		
+		
+		<label:Titulo_w100  text="Notas de crédito aplicadas:" visible="{mostrarNotasCredito}" includeInLayout="{mostrarNotasCredito}"/>
+		<s:HGroup id="grplnkNotasCredito" elementAdd="grplnkNotasCredito_elementAddHandler(event)" width="100%" visible="{mostrarNotasCredito}" includeInLayout="{mostrarNotasCredito}"/>
+		
+		<label:Texto_w100 id="lbl_CPagosMonitoreo" text="{_cobroMonitoreo.doscResult1 == null ? 'Pendiente' : _cobroMonitoreo.doscResult1 }" visible="false" includeInLayout="false" />
+		<label:Titulo_w100 id="lbl_TitleMontoCobrado" text="Monto cobrado:"/>
+		<label:Texto_w100 id="lblMontoCobradoMon" />
+		<label:Titulo_w100  text="Fecha cobro:"/>
+		<label:Fecha fecha="{_cobroMonitoreo.fechaCobro}"/>
+		<label:Titulo_w100  text="Moroso:"/>
+		<label:Texto_w100 id="lblMoroso"/>
+	</s:VGroup>
+</s:VGroup>

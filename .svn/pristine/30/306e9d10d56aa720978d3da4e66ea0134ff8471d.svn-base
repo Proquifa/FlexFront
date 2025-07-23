@@ -1,0 +1,749 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.comun
+{
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.ventas.PartidaCotizacion")]
+	[Bindable]
+	public dynamic class PartidaCotizacion
+	{
+		public var propiedades:ArrayCollection = new ArrayCollection([
+			{propiedad:"precio",formato:"moneda",tipo:"Number",newpropiedad:"precioUnitario"},
+			{propiedad:"importe",formato:"moneda",tipo:"Number",newpropiedad:"importeCotizacion"},
+			{propiedad:"total",formato:"moneda",tipo:"Number",newpropiedad:"totalFormato"}]);
+		
+		private var _idProducto:Number;
+		private var _idPartidaCotizacion:Number;
+		private var _partida:Number;
+		private var _cantidad:Number;
+		private var _precio:Number;
+		private var _iva:Number;
+		private var _costo:Number;
+		private var _folio:Number;
+		private var _indicePrecio:Number;
+		private var _precioInvestigacion:Number;
+		private var _renglon:Number;
+		private var _total:Number;
+		private var _importe:Number;
+		private var _numFila:Number;
+		
+		private var _fechaGeneracion:Date;
+		private var _hCancelacion:Date;
+		
+		private var _fueraSistema:Boolean;
+		private var _variasMarcas:Boolean;
+		private var _inicioLista:Boolean;
+		private var _finLista:Boolean;
+		
+		private var _tiempoProceo:String;
+		private var _conforme:String;
+		private var _cotizacion:String;
+		private var _codigo:String;
+		private var _fabrica:String;
+		private var _producto:Producto;
+		private var _concepto:String;
+		private var _presentacion:String;
+		private var _unidades:String;
+		private var _tipo:String; 
+		private var _conceptoCompleto:String;
+		private var _estado:String;
+		private var _clasificacion:String;
+		private var _destino:String;
+		private var _horaEnvio:String
+		private var _medioEnvio:String;
+		private var _tiempoEntrega:String;
+		private var _notaCancelacion:String;
+		private var _clasifOrigen:String;
+		private var _clasifFinal:String;
+		private var _situacion:String;
+		private var _cargosEnviosAdicionales:String;
+		private var _hieloSeco:String;
+		private var _comentariosAdicionales:String;
+		private var _rechazoESAC:String;
+		private var _rechazoPharma:String;
+		private var _enSTOCK:String;
+		private var _ultimaEdicion:String;
+		private var _costosAdicionales:String;
+		private var _descripcion:String;
+		
+		private var _nota:String;
+		private var _observaE:String;
+		public var comentariosRequisicion:String;
+		private var _cliente:String;
+		private var _cotizo:String;
+		private var _estadoPedido:String;
+		private var _totalPartidas:Number;
+		private var _idPCotizaOrigen:Number;
+		private var _precioDolarProducto:Number;
+		private var _idAutorizacion:Number;
+		
+		
+		//Vista
+		private var _estadoSituacion:String;
+		private var _seleccionada:Boolean; 
+		private var _monedaAbreviatura:String;
+		private var _monedaSimbolo:String;
+		
+		
+		public function PartidaCotizacion()
+		{
+		}		
+
+		public function get idAutorizacion():Number
+		{
+			return _idAutorizacion;
+		}
+
+		public function set idAutorizacion(value:Number):void
+		{
+			_idAutorizacion = value;
+		}
+
+		public function get precioDolarProducto():Number
+		{
+			return _precioDolarProducto;
+		}
+
+		public function set precioDolarProducto(value:Number):void
+		{
+			_precioDolarProducto = value;
+		}
+
+		public function get monedaSimbolo():String
+		{
+			return _monedaSimbolo;
+		}
+
+		public function set monedaSimbolo(value:String):void
+		{
+			_monedaSimbolo = value;
+		}
+
+		public function get monedaAbreviatura():String
+		{
+			return _monedaAbreviatura;
+		}
+
+		public function set monedaAbreviatura(value:String):void
+		{
+			_monedaAbreviatura = value;
+		}
+
+		public function get idPCotizaOrigen():Number
+		{
+			return _idPCotizaOrigen;
+		}
+
+		public function set idPCotizaOrigen(value:Number):void
+		{
+			_idPCotizaOrigen = value;
+		}
+
+		public function get seleccionada():Boolean
+		{
+			return _seleccionada;
+		}
+
+		public function set seleccionada(value:Boolean):void
+		{
+			_seleccionada = value;
+		}
+
+		public function get numFila():Number
+		{
+			return _numFila;
+		}
+		
+		public function set numFila(value:Number):void
+		{
+			_numFila = value;
+		}
+		
+		public function get importe():Number
+		{
+			return _importe;
+		}
+		
+		public function set importe(value:Number):void
+		{
+			_importe = value;
+		}
+		
+		public function get hCancelacion():Date
+		{
+			return _hCancelacion;
+		}
+		
+		public function set hCancelacion(value:Date):void
+		{
+			_hCancelacion = value;
+		}
+		
+		public function get observaE():String
+		{
+			return _observaE;
+		}
+		
+		public function set observaE(value:String):void
+		{
+			_observaE = value;
+		}
+		
+		public function get nota():String
+		{
+			return _nota;
+		}
+		
+		public function set nota(value:String):void
+		{
+			_nota = value;
+		}
+		
+		public function get total():Number
+		{
+			return _total;
+		}
+		
+		public function set total(value:Number):void
+		{
+			_total = value;
+		}
+		
+		public function get conforme():String
+		{
+			if(_conforme == null) _conforme = "Pendiente";
+			return _conforme;
+		}
+		
+		public function set conforme(value:String):void
+		{
+			if(value == 'true'){
+				_conforme = "SC";
+			}else if(value == 'false'){
+				_conforme = "SNC";
+			}else{
+				_conforme = value;	
+			}
+		}
+		
+		public function get tiempoProceo():String
+		{
+			return _tiempoProceo;
+		}
+		
+		public function set tiempoProceo(value:String):void
+		{
+			if(value == null){
+				_tiempoProceo = "ND";
+			}else{
+				_tiempoProceo = value;	
+			}
+		}
+		
+		public function get clasifFinal():String
+		{
+			return _clasifFinal;
+		}
+		
+		public function set clasifFinal(value:String):void
+		{
+			_clasifFinal = value;
+		}
+		
+		public function get clasifOrigen():String
+		{
+			return _clasifOrigen;
+		}
+		
+		public function set clasifOrigen(value:String):void
+		{
+			_clasifOrigen = value;
+		}
+		
+		public function get renglon():Number
+		{
+			return _renglon;
+		}
+		
+		public function set renglon(value:Number):void
+		{
+			_renglon = value;
+		}
+		
+		public function get precioInvestigacion():Number
+		{
+			return _precioInvestigacion;
+		}
+		
+		public function set precioInvestigacion(value:Number):void
+		{
+			_precioInvestigacion = value;
+		}
+		
+		public function get notaCancelacion():String
+		{
+			return _notaCancelacion;
+		}
+		
+		public function set notaCancelacion(value:String):void
+		{
+			_notaCancelacion = value;
+		}
+		
+		public function get fueraSistema():Boolean
+		{
+			return _fueraSistema;
+		}
+		
+		public function set fueraSistema(value:Boolean):void
+		{
+			_fueraSistema = value;
+		}
+		
+		public function get tiempoEntrega():String
+		{
+			return _tiempoEntrega;
+		}
+		
+		public function set tiempoEntrega(value:String):void
+		{
+			_tiempoEntrega = value;
+		}
+		
+		public function get indicePrecio():Number
+		{
+			return _indicePrecio;
+		}
+		
+		public function set indicePrecio(value:Number):void
+		{
+			_indicePrecio = value;
+		}
+		
+		public function get fechaGeneracion():Date
+		{
+			return _fechaGeneracion;
+		}
+		
+		public function set fechaGeneracion(value:Date):void
+		{
+			_fechaGeneracion = value;
+		}
+		
+		public function get folio():Number
+		{
+			return _folio;
+		}
+		
+		public function set folio(value:Number):void
+		{
+			_folio = value;
+		}
+		
+		public function get medioEnvio():String
+		{
+			return _medioEnvio;
+		}
+		
+		public function set medioEnvio(value:String):void
+		{
+			_medioEnvio = value;
+		}
+		
+		public function get horaEnvio():String
+		{
+			return _horaEnvio;
+		}
+		
+		public function set horaEnvio(value:String):void
+		{
+			_horaEnvio = value;
+		}
+		
+		public function get destino():String
+		{
+			return _destino;
+		}
+		
+		public function set destino(value:String):void
+		{
+			_destino = value;
+		}
+		
+		public function get clasificacion():String
+		{
+			return _clasificacion;
+		}
+		
+		public function set clasificacion(value:String):void
+		{
+			_clasificacion = value;
+		}
+		
+		public function get costo():Number
+		{
+			return _costo;
+		}
+		
+		public function set costo(value:Number):void
+		{
+			_costo = value;
+		}
+		
+		public function get iva():Number
+		{
+			return _iva;
+		}
+		
+		public function set iva(value:Number):void
+		{
+			_iva = value;
+		}
+		
+		public function get estado():String
+		{
+			return _estado;
+		}
+		
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+		
+		public function get precio():Number
+		{
+			return _precio;
+		}
+		
+		public function set precio(value:Number):void
+		{
+			_precio = value;
+		}
+		
+		public function get variasMarcas():Boolean
+		{
+			return _variasMarcas;
+		}
+		
+		public function set variasMarcas(value:Boolean):void
+		{
+			_variasMarcas = value;
+		}
+		
+		public function get conceptoCompleto():String
+		{
+			return _conceptoCompleto;
+		}
+		
+		public function set conceptoCompleto(value:String):void
+		{
+			_conceptoCompleto = value;
+		}
+		
+		public function get tipo():String
+		{
+			return _tipo;
+		}
+		
+		public function set tipo(value:String):void
+		{
+			_tipo = value;
+		}
+		
+		public function get unidades():String
+		{
+			return _unidades;
+		}
+		
+		public function set unidades(value:String):void
+		{
+			_unidades = value;
+		}
+		
+		public function get presentacion():String
+		{
+			return _presentacion;
+		}
+		
+		public function set presentacion(value:String):void
+		{
+			_presentacion = value;
+		}
+		
+		public function get concepto():String
+		{
+			return _concepto;
+		}
+		
+		public function set concepto(value:String):void
+		{
+			_concepto = value;
+		}
+		
+		public function get producto():Producto
+		{
+			return _producto;
+		}
+		
+		public function set producto(value:Producto):void
+		{
+			_producto = value;
+		}
+		
+		public function get fabrica():String
+		{
+			return _fabrica;
+		}
+		
+		public function set fabrica(value:String):void
+		{
+			_fabrica = value;
+		}
+		
+		public function get codigo():String
+		{
+			return _codigo;
+		}
+		
+		public function set codigo(value:String):void
+		{
+			_codigo = value;
+		}
+		
+		public function get cantidad():Number
+		{
+			return _cantidad;
+		}
+		
+		public function set cantidad(value:Number):void
+		{
+			_cantidad = value;
+		}
+		
+		public function get cotizacion():String
+		{
+			return _cotizacion;
+		}
+		
+		public function set cotizacion(value:String):void
+		{
+			_cotizacion = value;
+		}
+		
+		public function get partida():Number
+		{
+			return _partida;
+		}
+		
+		public function set partida(value:Number):void
+		{
+			_partida = value;
+		}
+		
+		public function get idPartidaCotizacion():Number
+		{
+			return _idPartidaCotizacion;
+		}
+		
+		public function set idPartidaCotizacion(value:Number):void
+		{
+			_idPartidaCotizacion = value;
+		}
+		
+		public function get idProducto():Number
+		{
+			return _idProducto;
+		}
+		
+		public function set idProducto(value:Number):void
+		{
+			_idProducto = value;
+		}
+		
+		public function get situacion():String
+		{
+			return _situacion;
+		}
+		
+		public function set situacion(value:String):void
+		{
+			_situacion = value;
+		}
+		
+		public function get inicioLista():Boolean
+		{
+			return _inicioLista;
+		}
+		
+		public function set inicioLista(value:Boolean):void
+		{
+			_inicioLista = value;
+		}
+		
+		public function get finLista():Boolean
+		{
+			return _finLista;
+		}
+		
+		public function set finLista(value:Boolean):void
+		{
+			_finLista = value;
+		}
+		
+		public function get cargosEnviosAdicionales():String
+		{
+			if(_cargosEnviosAdicionales == null || _cargosEnviosAdicionales == "") _cargosEnviosAdicionales = "ND";
+			return _cargosEnviosAdicionales;
+		}
+		
+		public function set cargosEnviosAdicionales(value:String):void
+		{
+			_cargosEnviosAdicionales = value;
+		}
+		
+		public function get hieloSeco():String
+		{
+			if(_hieloSeco == null || _hieloSeco == ""){
+				_hieloSeco = "Pendiente";
+			}
+			return _hieloSeco;
+		}
+		
+		public function set hieloSeco(value:String):void
+		{
+			_hieloSeco = value;
+		}
+		
+		public function get comentariosAdicionales():String
+		{
+			if(_comentariosAdicionales == null || _comentariosAdicionales == "") _comentariosAdicionales = "ND";
+			return _comentariosAdicionales;
+		}
+		
+		public function set comentariosAdicionales(value:String):void
+		{
+			_comentariosAdicionales = value;
+		}
+		
+		public function get rechazoESAC():String
+		{
+			return _rechazoESAC;
+		}
+		
+		public function set rechazoESAC(value:String):void
+		{
+			_rechazoESAC = value;
+		}
+		
+		public function get rechazoPharma():String
+		{
+			//if(_rechazoPharma == null || _rechazoPharma == "") _rechazoPharma = "ND";
+			return _rechazoPharma;
+		}
+		
+		public function set rechazoPharma(value:String):void
+		{
+			_rechazoPharma = value;
+		}
+		
+		public function get enSTOCK():String
+		{
+			return _enSTOCK;
+		}
+		
+		public function set enSTOCK(value:String):void
+		{
+			_enSTOCK = value;
+		}
+		
+		public function get ultimaEdicion():String
+		{
+			return _ultimaEdicion;
+		}
+		
+		public function set ultimaEdicion(value:String):void
+		{
+			_ultimaEdicion = value;
+		}
+		
+		public function get costosAdicionales():String
+		{
+			return _costosAdicionales;
+		}
+		
+		public function set costosAdicionales(value:String):void
+		{
+			_costosAdicionales = value;
+		}
+		
+		public function get descripcion():String
+		{
+			return _descripcion;
+		}
+		
+		public function set descripcion(value:String):void
+		{
+			_descripcion = value;
+		}
+		
+		public function get cliente():String
+		{
+			return _cliente;
+		}
+		
+		public function set cliente(value:String):void
+		{
+			_cliente = value;
+		}
+		
+		public function get cotizo():String
+		{
+			return _cotizo;
+		}
+		
+		public function set cotizo(value:String):void
+		{
+			_cotizo = value;
+		}
+		
+		public function get estadoPedido():String
+		{
+			return _estadoPedido;
+		}
+		
+		public function set estadoPedido(value:String):void
+		{
+			_estadoPedido = value;
+		}
+		
+		public function get totalPartidas():Number
+		{
+			return _totalPartidas;
+		}
+		
+		public function set totalPartidas(value:Number):void
+		{
+			_totalPartidas = value;
+		}
+
+		public function get estadoSituacion():String
+		{
+			_estadoSituacion = situacion;
+			if (situacion == 'Gestionando' || situacion == 'Cancelable' ){
+				_estadoSituacion = "Cancelada";
+			}
+			else if(situacion == 'En Pharma' || situacion == 'Por Investigar' || situacion == 'En Catálogo' || situacion == 'Por Validar'
+				|| 	situacion == 'Por Gestionar' || situacion == 'Pedido cotizado'){
+				_estadoSituacion = 'Cotización';
+			}
+			return _estadoSituacion;
+		}
+
+		public function set estadoSituacion(value:String):void
+		{
+			_estadoSituacion = value;
+		}
+		
+		
+	}
+}

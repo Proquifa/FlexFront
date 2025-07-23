@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" width="800" creationComplete="init()" showCloseButton="true" 
+				close="cerrar()" x="350" y="150" height="498" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark">
+	<mx:states>
+		<mx:State name="Comentarios" id="estadoComentarios">
+			<mx:RemoveChild target="{panel1}"/>
+			<mx:RemoveChild target="{dtgDocumentos}"/>
+			<mx:RemoveChild target="{hbox1}"/>
+			<mx:RemoveChild target="{button1}"/>
+			<mx:AddChild relativeTo="{controlbar1}" position="lastChild">
+				<mx:Button label="ç" id="btnRegresar" click="this.currentState=''" width="80" fontFamily="Wingdings" fontSize="15" toolTip="Regresar"/>
+			</mx:AddChild>
+			<mx:RemoveChild target="{button2}"/>
+			<mx:RemoveChild target="{spacer1}"/>
+			<mx:RemoveChild target="{formitem4}"/>
+			<mx:RemoveChild target="{formitem5}"/>
+			<mx:RemoveChild target="{formitem1}"/>
+			<mx:RemoveChild target="{formitem2}"/>
+			<mx:RemoveChild target="{hbox2}"/>
+			<mx:AddChild relativeTo="{controlbar1}" position="before">
+				<mx:Panel width="95%" height="100%" layout="absolute" title="Comentarios para el envío" id="pnlAnimacionComentarios" backgroundColor="#FFFFFF">
+					<mx:TextArea width="100%" id="txtComentarios" height="100%" contentBackgroundColor="#FAFFC0" contentBackgroundAlpha="1.0" x="0" />
+				</mx:Panel>				
+			</mx:AddChild>
+			<mx:RemoveChild target="{panel2}"/>
+			<mx:AddChild relativeTo="{controlbar1}" position="before">
+				<mx:HRule width="95%" id="hrule2"/>
+			</mx:AddChild>
+			<mx:AddChild relativeTo="{hrule2}" position="before">
+				<mx:Spacer width="15"/>
+			</mx:AddChild>
+			<mx:AddChild relativeTo="{controlbar1}" position="before">
+				<mx:Spacer width="15"/>
+			</mx:AddChild>
+			<mx:RemoveChild target="{hrule3}"/>
+		</mx:State>
+	</mx:states>
+	<!--<mx:transitions>
+		<mx:Transition id="toAnyFromAny" fromState="*" toState="*">
+				 <mx:Sequence id="secuencia" target="{[pnlAnimacionComentarios,panel1]}">
+				 	<mx:Move duration="2000" />
+				 </mx:Sequence>
+		</mx:Transition>
+	</mx:transitions>-->
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.CotizacionPorEnviar.Cotizaciones;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.PedidosPorEnviar.PedidosEnviar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaContactoService;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.ValidadorDataGrid;
+			import mx.controls.Alert;
+			import mx.controls.CheckBox;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			public var folio:String;
+			[Bindable]
+			public var tipoDoc:String;
+			[Bindable]
+			private var _listaDocumentos:Array;			
+			[Bindable]
+			private var _dataDelGrid:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			public var doctoFolio:String; 
+			[Bindable]
+			public var folios:String;
+			
+			public var idCorreo:Number;
+			public var folioPendiente:Number;
+			public var idContacto:Number;
+			public var fPor:String;			
+			public var correoPara:String;
+			public var correoCuerpo:String;
+			public var medioEnvio:String;
+			public var origen:String;			
+			public var correoAsunto:String;
+			public var ComentariosEntrega:String;
+			public var nombreCliente:String;
+			
+			private var visor:VisorPDF = null;	
+			private var archivoPdF:File = new File();
+			private var observoComentarios:Boolean = new Boolean;
+			private var contValidaPdfVistos:Number = new Number;
+			
+			/**
+			 * Funcion para iniciar
+			 */
+			public function init():void{
+				var i:Number = new Number;
+				observoComentarios = false;
+				if( this.ComentariosEntrega != "" ){
+					this.verComentarios.enabled = true;
+				}
+				this.txtPara.text = this.nombreCliente;
+				this.txtAsunto.text = this.correoAsunto;		
+				this._listaDocumentos = new Array();	
+				if(folios != ""){
+					this._listaDocumentos = this.folios.split(",");
+					//se genera un dataProvider  para el Grid, se genera un ArrayCollection con Clases ValidarDataGrid para poder meter los validadores necesarios.
+					for( i=0; i<this._listaDocumentos.length; i++ ){
+						var generaValidador:ValidadorDataGrid = new ValidadorDataGrid();								
+						generaValidador.folio = this._listaDocumentos[i];
+						generaValidador.validaCheckButton = 0;
+						generaValidador.validaLinckButton = 0;
+						this._dataDelGrid.addItem( generaValidador );
+					}
+				}			
+				invocaContacto();	
+			}
+			
+			/**
+			 * Metodo que sirve para invocar al contacto por su Id en el Mapa
+			 */
+			private function invocaContacto():void{
+				var evento:EventoParaContactoService = new EventoParaContactoService ( EventoParaContactoService.OBTENER_CONTACTOS_IDCONTACTO);
+				evento.idContacto = this.idContacto;
+				dispatchEvent( evento );				
+			} 
+			 
+			/**
+			 * Funcion que recibe del Mapa un Contacto
+			 */
+			public function set recibeContacto(datos:Contacto):void{
+				if(datos == null ){
+					return;
+				}				
+				if (datos.telefonoN != "" ){
+					this.txtCCopia.text = datos.telefono + "   " + datos.telefonoN;
+				} else{
+					this.txtCCopia.text = datos.telefono 
+				}
+				this.txtContacto.text = datos.nombre;
+				if( datos.fax == "" ) {
+					this.txtAsunto.text = "N/D";
+				}else{
+					this.txtAsunto.text = datos.fax;
+				}
+			}
+			
+			/**
+			 * Funcion que sera usada para validar que los comentarios sean leidos
+			 */
+			private function mostrarComentarios():void{
+				observoComentarios = true;
+				this.currentState='Comentarios';	
+				this.txtComentarios.text = this.ComentariosEntrega;
+			}
+			
+			/**
+			 * Funcion que determina la ruta del pdf 
+			 */
+			private function obtenRutaPdF(event:ListEvent):void{
+				if(event.columnIndex == 0){						
+					var ruta:String = new String;
+					//Aqui se modifica el data provider para dar por echo que se vio el documento
+					this.dtgDocumentos.selectedItem.validaLinckButton = 1;				
+					this.folio = this.dtgDocumentos.selectedItem.folio;
+					ruta = obtenCarpeta(this.folio);
+					if(folio == "Carta fin de año Proquifa"){
+		        		folio = "Carta fin de anio Proquifa";
+		        	}
+					ruta = ruta + this.folio + ".pdf";
+					abrirPDF( ruta );
+				}else if( event.columnIndex == 1){
+					//se modifica el dataProvider para indicar que el checkBox fue seleccionado o deseleccionado
+					 if( (event.itemRenderer as CheckBox).selected == true ) {
+						this.dtgDocumentos.selectedItem.validaCheckButton = 1;	
+					} else if ((event.itemRenderer as CheckBox).selected == false ){
+						this.dtgDocumentos.selectedItem.validaCheckButton = 0;	
+					}                	
+				}
+			} 
+			
+			/**
+			 * Funcion que determina la Carpeta del Documeno PDF
+			 */
+			private function obtenCarpeta(folioDoc:String):String{
+				
+				var ruta:String= new String;
+				var ubicacion:String;
+								
+		        if (folioDoc.substring(0,5) == "Carta" || folioDoc.substring(0,5) == "Aviso" ){		        	
+		        	ubicacion = RutasPdF.CARTAS_RUTA;
+		        }else if(tipoDoc == "Notificaciones"){
+	 		   		if(folioDoc.substring(0,2) == "NT"){
+			   			ubicacion = RutasPdF.NOTIFICACIONES_RUTA;
+			   		}else if (folioDoc.indexOf("-", 0) != -1 && folioDoc.length >= 11){
+		   				ubicacion = RutasPdF.PEDIDOS_RUTA;
+		   			} else{
+		   				ubicacion = RutasPdF.DOCTOSR_RUTA;
+		   			} 
+			   	}else if(this.tipoDoc == "Pedidos"){
+			   		ubicacion = RutasPdF.PEDIDOS_RUTA;	   		
+			   	}else if(this.tipoDoc == "Cotizaciones"){
+			   		ubicacion = RutasPdF.COTIZACIONES_RUTA;
+			   	}else if(this.tipoDoc == "Facturas"){
+			   		ubicacion = RutasPdF.FACTURAS_RUTA + this.fPor+"/";			
+			   	}    	
+			   	ruta = RutasPdF.GENERAL_RUTA + ubicacion;				    
+			    return ruta;	
+			} 
+			
+			/**
+			 * Funcion para abrir visualizar El PDF 
+			 */
+			private function abrirPDF(ruta:String):void{
+	           /* if(visor == null){
+		        	visor = VisorPDF(PopUpManager.createPopUp( this, VisorPDF , true));
+		            visor.ruta = ruta;
+		            visor.vieneDe = "Fax";
+		            visor.addEventListener( EventoGenerico.CERRAR_PDF, cerrarVisor);
+			   		PopUpManager.centerPopUp( visor );
+	        	}else{
+		        	visor.ruta = ruta;
+		            visor.vieneDe = "Fax";
+		            visor.addEventListener( EventoGenerico.CERRAR_PDF, cerrarVisor);
+			   		PopUpManager.centerPopUp( visor );			   	
+				   	PopUpManager.addPopUp(visor,this,false);
+				   	visor.init();
+	        	} */
+	        	var request:URLRequest = new URLRequest(ruta);
+	        	navigateToURL(request);
+			}
+			
+			private function cerrarVisor(evento:EventoGenerico):void{
+				visor.removeEventListener( EventoGenerico.CERRAR_PDF, cerrarVisor );
+				PopUpManager.removePopUp( visor );	
+				flash.system.System.gc();
+			}
+			
+			/**
+			 * Funcion para abrir visualizar El PDF 
+			 */
+			private function validacionPdFsVistos():void{
+				var i:Number = new Number;
+				var contadorValidador:Number = new Number;
+				if ( folios != "" ){
+					this._dataDelGrid = this.dtgDocumentos.dataProvider as ArrayCollection;
+					for( i = 0; i < this._dataDelGrid.length; i++ ){
+						if( (this._dataDelGrid.getItemAt( i ) as ValidadorDataGrid ).validaLinckButton == 1 && (this._dataDelGrid.getItemAt( i ) as ValidadorDataGrid ).validaCheckButton == 1){
+							contadorValidador++;
+						}
+					}
+					if( contadorValidador == this._dataDelGrid.length){
+						this.sendMail();
+					}else{
+						Alert.show("Debe consultar todos los documentos", "Operación imposible");
+					}
+				}else{ // no contiene folios de docuemntos por lo tanto no valida.
+					this.sendMail();
+				}
+			}
+			
+			/**
+			 * Metodo para evualar antes del envio 
+			 */
+			private function sendMail():void{
+				if(ComentariosEntrega == ""){
+					this.enviarFAX();
+					this.folioPendiente = 0
+					cerrar();
+				}else{
+					if(observoComentarios){		  	 	
+				  	 	this.enviarFAX();		  	 	
+				  	 	this.folioPendiente = 0
+				  	 	cerrar();
+				  	 }else{
+				  	 	Alert.show("Debe consultar los comentarios","¡Atención!",Alert.OK,this,null);
+				  	 }
+				}
+			}
+			
+			/**
+			 * Metodo para enviar el objeto correo al Mapa
+			 */
+			private function enviarFAX():void{	
+				var evento:EventoPendientesPorEnviar = null;
+				if( this.tipoDoc ==  "Cotizaciones" ){
+					evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.FAX_POR_ENVIAR_COTIZACIONES );
+				}else if( this.tipoDoc == "Pedidos" ){
+					evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.FAX_POR_ENVIAR_PEDIDOS );
+				}else if( this.tipoDoc == "Notificaciones" ){
+					evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.FAX_POR_ENVIAR_NOTIFICACIONES );
+				}else if( this.tipoDoc == "Facturas" ){
+					evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.FAX_POR_ENVIAR_FACTURAS );
+				}
+				var correoPorEnviar:Correo = new Correo();
+				    correoPorEnviar.origen = this.origen;
+				    correoPorEnviar.cuerpoCorreo = "";
+				    correoPorEnviar.tipo = this.tipoDoc;
+				    correoPorEnviar.archivoAdjunto = folios;    
+				    correoPorEnviar.FolioDocumento = folios;
+				    correoPorEnviar.asunto = this.txtAsunto.text;
+				    //como se necesitan  direcciones para el tipo de servicio pero no se envia ningun correo solo se le ponen datos ficticios
+				    correoPorEnviar.correo = "datosFicticios@proquifa.com.mx"; //this.txtPara.text;  
+				    correoPorEnviar.ccorreo = "datosFicticios@proquifa.com.mx";//this.txtCCopia.text;
+				    correoPorEnviar.idCorreo = this.idCorreo;
+				    correoPorEnviar.medio = this.medioEnvio;
+				    correoPorEnviar.idPendiente = this.folioPendiente;
+					correoPorEnviar.idEmpleado = parentApplication.datosUsuarioLogueado.idEmpleado;
+			    evento.correo = correoPorEnviar;
+			    dispatchEvent( evento );
+			} 
+			
+			/**
+			 * Funcion para cerrar el PopUp
+			 */
+			private function cerrar():void{
+				this.txtPara.text = "";	  //nombre contacto	
+				this.txtContacto.text = "";//contacto
+				this.txtCCopia.text = ""; //telefonos
+				this.txtAsunto.text = ""; //fax
+				this._listaDocumentos = null;
+				this.folios = "";
+				this._dataDelGrid.removeAll();	
+				this.observoComentarios = false;	
+				this.verComentarios.enabled = false;
+				//PopUpManager.removePopUp(this);	 
+				if(tipoDoc == "Cotizaciones"){				
+					var cotizas:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+					cotizas.folioPendiente = folioPendiente;
+					cotizas.origen = "fax";
+					dispatchEvent( cotizas ); 				
+				}else if(tipoDoc == "Pedidos") {
+					var pedidos:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+					pedidos.folioPendiente = folioPendiente;
+					pedidos.origen = "fax;"
+					dispatchEvent( pedidos ); 		
+				}else if(tipoDoc == "Notificaciones") {
+					var notificaciones:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+					notificaciones.folioPendiente = folioPendiente;
+					notificaciones.origen = "fax";
+					dispatchEvent( notificaciones ); 		
+				}else if(tipoDoc == "Facturas") {
+					var compra:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+					compra.folioPendiente = folioPendiente;
+					compra.origen = "fax";
+					dispatchEvent( compra ); 		
+				}
+			}
+			  
+		]]>
+	</mx:Script>
+	
+	<mx:VBox width="100%" height="100%" horizontalAlign="center" paddingTop="30">		
+		<!--<mx:Label text="FAX" fontSize="30" width="95%" height="10%"/>-->
+		<label:labelSubtitulo text="FAX" width="95%" height="10%"/>
+	    <mx:Spacer width="15"/>	
+		<!--<mx:HRule width="95%" id="hrule3"/>-->
+		<otros:division width="95%" id="hrule3"/>
+		<mx:Spacer width="15"/>	
+		<mx:Panel width="95%" height="40%" layout="vertical"  id="panel2" title="DATOS" backgroundAlpha="1.0" borderColor="#E2E2E2" backgroundColor="#FFFFFF"  alpha="1.0" >
+				<mx:ControlBar width="100%">
+					<mx:VBox width="100%">						
+						<mx:VBox width="100%">
+							<!--title="DATOS"  layout="vertical"-->
+							<mx:FormItem label="Cliente:" width="100%" fontWeight="bold" id="formitem4" paddingLeft="30" paddingTop="5" >
+								<mx:TextInput width="100%" id="txtPara"  editable="false"  />
+							</mx:FormItem>
+							<mx:FormItem label="Contacto:" width="100%" fontWeight="bold" id="formitem5" paddingLeft="18" >
+								<mx:TextInput width="100%" id="txtContacto"  editable="false"  />
+							</mx:FormItem>
+							<mx:FormItem label="Telefono(s):" width="100%" fontWeight="bold" id="formitem1"  paddingLeft="5">
+								<mx:Label width="100%" id="txtCCopia" />
+							</mx:FormItem>
+							<mx:FormItem label="Fax:" width="100%" fontWeight="bold" id="formitem2" paddingLeft="40">
+								<mx:Label width="100%" id="txtAsunto"/>
+							</mx:FormItem>
+						</mx:VBox>
+						<mx:HBox width="100%" id="hbox2">
+							<mx:Spacer width="100%"/>					
+							<mx:Button paddingRight="5" label="^" fontSize="10" fontFamily="Webdings" enabled="false" id="verComentarios" click="mostrarComentarios()" width="100" toolTip="Ver comenatrios"/>
+						</mx:HBox>
+					</mx:VBox>
+				</mx:ControlBar>
+		</mx:Panel>
+		<mx:Spacer height="10"/>
+		<mx:Panel width="95%" height="50%" title="CUERPO" id="panel1" alpha="1.0" backgroundColor="#FFFFFF">		
+			<!--backgroundColor="#D2D2D2"-->
+			<mx:HBox width="100%" height="100%" id="hbox1">
+				<mx:DataGrid id="dtgDocumentos" width="100%" height="100%" dataProvider="{this._dataDelGrid}"  itemClick="obtenRutaPdF( event )" >
+					<mx:columns>					
+						<mx:DataGridColumn headerText="Documentos" dataField="folio" width=".80" >
+							<mx:itemRenderer>
+								<mx:Component>
+									<mx:LinkButton textDecoration="underline" color="#0C4AFC" label="{data.folio}"  />
+								</mx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<!--<mx:DataGridColumn  headerText="Enviado" width=".22" textAlign="center" id="chkBox" itemRenderer="mx.controls.CheckBox"  
+	            							rendererIsEditor="true" editorDataField="selected" paddingLeft="25" headerStyleName="centered"/>	-->
+						<mx:DataGridColumn headerText="Enviado" width=".22" textAlign="center">
+							<mx:itemRenderer>
+								<mx:Component>
+									<mx:CheckBox width="100%" textAlign="center" horizontalCenter="0" paddingLeft="20"/>
+								</mx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</mx:columns>
+				</mx:DataGrid>
+			</mx:HBox>					
+		</mx:Panel>
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="95%" id="hrule1"/>-->
+		<otros:division width="95%" id="hrule1"/>
+		<mx:Spacer width="15"/>	
+		<mx:HBox  width="95%" id="controlbar1" paddingBottom="10">
+			<s:Button label="Cancelar" click="cerrar()" id="button2"/>
+			<mx:Spacer width="100%" id="spacer1"/>
+			<s:Button label="Guardar" click="validacionPdFsVistos()" id="button1"/>
+		</mx:HBox>
+	</mx:VBox>	
+</mx:TitleWindow>

@@ -1,0 +1,1469 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:chekbox="skins.skin.chekbox.*" 
+		 xmlns:input="skins.skin.textinput.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*"
+		 xmlns:textarea="skins.skin.textarea.*" 
+		 xmlns:shaders="skins.skin.shaders.*" 
+		 xmlns:numericStepper="skins.skin.numericStepper.*" 
+		 creationComplete="group1_creationCompleteHandler(event)"
+		 width="100%" height="100%" xmlns:evento="skins.botones.evento.*" 
+		 >
+	
+	<fx:Declarations>
+		
+		<s:NumberValidator id="validatorPorcentajePositivo"
+						   allowNegative="false" 
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+		
+		<s:NumberValidator id="validatorPorcentajePositivoMayorACero"
+						   allowNegative="false" 
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   minValue="1" required="true"
+						   lessThanMinError="El numero debe ser mayor a cero"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Comentario;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Direccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.ObjetivoCrecimiento;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.VistaTodosLosClientes;
+			import mx.core.IVisualElement;
+			import mx.events.EffectEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			private var activaCambios:Boolean;
+			private var seEstaEditando:Boolean = false;
+			private var master:Boolean = false;
+			private var senior:Boolean = false;
+			private var junior:Boolean = false;	
+			private var cobradorMaster:Boolean = false;	
+			private var _user:Empleado = DatosGlobales.getInstance()._usuario;
+			private var _comentarios:ArrayCollection;
+			private var _comentariosVisibles:ArrayCollection;
+			private var editando:Boolean = false;
+			
+			[Bindable]
+			private var mostrarTxtObjetivoCrecimiento:Boolean = true;
+			
+			[Bindable]
+			private var _cliente:Cliente;
+			[Bindable] private var _clienteRespaldo:Cliente;
+			[Bindable] private var _seGuardaImagen:Boolean;
+			[Bindable] private var clickEnHabilitado:Boolean;
+			[Bindable] private var clickEnS_Comercial:Boolean;
+			[Bindable] private var _ocultarMostrarMenuBool:Boolean = true;
+			
+			private var productorActualiza:Producer = new Producer();
+			private var productorBloquea:Producer = new Producer();
+			private var productorActualizaFacturacion:Producer = new Producer(); //Responsable Cobros y Pagos 
+			
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet;
+			
+			private var vieneDe:String = "inicializar";
+			
+			[Bindable] public static var clienteClose:Cliente;
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				dispatchEvent(new EventoCatClientes_General(EventoCatClientes_General.OBTENER_OBJETIVOS_DE_CRECIMIENTO_PARA_VISTA_EMPRESA)); 
+				
+				listComentarios.addEventListener("clicImagenEliminarComentario",eliminarComentario,false,0,true);
+				producerInit();
+			}
+			
+			protected function producerInit():void
+			{
+				productorActualiza.destination = "catalogoClienteActualizaSecciones";
+				productorBloquea.destination = "catalogoClienteBloqueaSecciones";
+				productorActualizaFacturacion.destination = "actualizarFacturacion";
+				
+				canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				canalesAsociado = new ChannelSet();
+				canalesAsociado.addChannel(canalAsociado);
+				productorActualiza.channelSet = canalesAsociado;
+				productorBloquea.channelSet = canalesAsociado;
+				productorActualizaFacturacion.channelSet = this.canalesAsociado;
+				
+			}
+			
+			protected function verificaValidacion():void
+			{
+				var roles:ArrayCollection = _user.roles; 
+				if (roles.length > 0)
+				{
+					for (var j:Number=0; j<roles.length; j++)
+					{
+						if (roles[j]=="CatCliente_Master" )
+						{
+							master = true;
+							break;
+						}
+						if (roles[j]=="CatCliente_Senior" )
+						{
+							senior = true;
+							break;
+						}
+						if (roles[j]=="CatCliente_Junior" )
+						{
+							junior = true;
+							break;
+						}
+						if (roles[j]=="Cobrador_Master" )
+						{
+							cobradorMaster = true;
+							break;
+						}
+					}
+				}				
+				if (!master && !senior && !junior && !cobradorMaster )
+					lnkEditar.enabled = false;
+			}
+			
+			public function ocultaGrupoImagen():void
+			{
+				if( _cliente != null )
+				{
+					if( isNaN( _cliente.idCliente) )
+					{
+						//YA NOS E HACE NADA
+					}
+					else
+					{
+						_ocultarMostrarMenuBool = true;
+						_seGuardaImagen=false; 
+						grpInfo.percentHeight = 100;
+						grpInfo.percentWidth = 100;
+						if( lnkCancelar.visible )
+						{
+							grpGuardarCancelar.visible = false;
+							lnkEditar.visible = true;
+						}
+					}
+				}
+			}
+			
+			public function set recibeClienteSeleccionado($cliente:Cliente):void
+			{
+				if ($cliente == null) return;
+				cmbColonia.textInput.text = "";
+				seEstaEditando=true;
+				acomodaTiempo();
+				vieneDe = "inicializar";
+				recibeClienteFlujo( $cliente );
+				
+			}
+			
+			public function recibeClienteFlujo($cli:Cliente):void
+			{
+				if ($cli == null ) return;
+				
+				habilitaTextos(false);
+				cliente = ObjectUtil.copy( $cli ) as Cliente;
+				clienteClose = ObjectUtil.copy( $cli ) as Cliente;
+				_clienteRespaldo = ObjectUtil.copy( $cli ) as Cliente;
+				
+				
+				
+				_seGuardaImagen = false;
+				activaCambios = false;
+				grpBotonEditar.visible = true;
+				cargaEV();
+				cargaESAC();
+				cargaSector();
+				cargaIndustria();
+				cargarImportancia();
+				cargaRol();
+				cargaComprador();
+				verificaValidacion();
+				cargaPais();
+				//cargaColonia();
+				if(cliente.direccion != null){
+					obtenerComboDireccion(cliente.direccion.codigoPostal,cliente.direccion.pais);
+				}
+				grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = false;
+				grpBotones.visible = grpBotones.includeInLayout = false;
+				//grpImagen.visible = false;
+				
+				clickEnHabilitado = false;
+				clickEnS_Comercial = false;
+				
+				chkHabilitado.selected = _cliente.habilitado;
+				
+				if( isNaN( _cliente.idCliente ) )
+				{ //es nuevo proveedor por agregar
+					grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = true;
+					cmbEsac.selectedIndex = 0;
+					_ocultarMostrarMenuBool = true;
+					seEstaEditando=false;
+					editarInfo();
+					chkHabilitado.selected = true;
+					txtNivelIngreso.visible = false;
+					lblNivelIngreso.visible = false;
+					grpTxtComentarios.visible = grpTxtComentarios.includeInLayout = true;
+					grplstComentarios.visible = grplstComentarios.includeInLayout = true;
+					grpTxtComentarios.percentWidth = 100;
+					grplstComentarios.percentWidth = 100;
+					grpImagen.visible = true;
+					grpInfo.percentWidth = 70;
+					grpImagen.percentWidth = 30;
+					listComentarios.dataProvider = new ArrayCollection();
+				}
+				else
+				{
+					grpImagen.visible = false;
+					grpTxtComentarios.visible = grpTxtComentarios.includeInLayout = false;
+					divDireccion.visible = divDireccion.includeInLayout = false;
+					grplstComentarios.visible = grplstComentarios.includeInLayout = true;
+					grpTxtComentarios.width = 0;
+					grplstComentarios.paddingLeft = 0;
+					grplstComentarios.percentWidth = 100;
+					txtNivelIngreso.visible = true;
+					lblNivelIngreso.visible = true;
+					
+					if(_cliente.nivelIngreso == "AAplus")
+						txtNivelIngreso.text = "AA+";
+					else
+						txtNivelIngreso.text = _cliente.nivelIngreso;
+					
+					grpBotones.visible = grpBotones.includeInLayout = true;
+					if( _cliente.habilitado )
+					{
+						clickEnHabilitado = true;
+					}
+					if (_cliente.listaComentarios)
+					{
+						var curr:Comentario = new Comentario();
+						_comentarios = new ArrayCollection();
+						var n:int=0;
+						for (var i:int=0; i< _cliente.listaComentarios.length; i++)
+						{
+							curr = _cliente.listaComentarios[i] as Comentario;
+							if (curr.seccion == "General")
+							{
+								curr.numero = n;
+								_comentarios.addItem(curr);
+								n++;
+							}
+						}
+						mostrarComentariosActivos();
+					}
+				} 
+			}
+			
+			
+			private function validar():Boolean
+			{
+				var industria:String = cmbIndustria.selectedItem.valor;
+				
+				if( txtAlias.text == "" && txtAlias.editable == true){
+					alertaSingleton.show("Es necesario indicar el nombre.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				if( txtRazonSocial.text == "" && txtRazonSocial.editable == true){
+					alertaSingleton.show("Es necesario indicar la razón social.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				if( cmbIndustria.selectedIndex == 0  && cmbIndustria.openButton.enabled == true){
+					alertaSingleton.show("Es necesario indicar la industria.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				
+				
+				if (industria != "OTRA"  )
+				{
+					if( cmbEsac.selectedIndex == 0 && cmbEsac.openButton.enabled == true){
+						alertaSingleton.show("Es necesario indicar el ESAC.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return false;
+					}
+					if( cmbSector.selectedIndex == 0 && cmbSector.openButton.enabled == true){
+						alertaSingleton.show("Es necesario indicar el sector.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return false;
+					}
+					if( cmbRol.selectedIndex == 0 && cmbRol.openButton.enabled == true){
+						alertaSingleton.show("Es necesario indicar el rol.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return false;
+					}
+					
+					if(StringUtil.trim(txtObjetivoCrecimiento.text).length == 0 && txtObjetivoCrecimiento.editable == true)
+					{
+						alertaSingleton.show("Es necesario indicar el objetivo de crecimiento.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return false;
+					}
+					
+					if(StringUtil.trim(txtObjetivoCrecimientoFundamental.text).length == 0 || StringUtil.trim(txtObjetivoCrecimientoFundamental.text)== "0.0" && txtObjetivoCrecimientoFundamental.editable == true)
+					{
+						alertaSingleton.show("Es necesario indicar el objetivo de crecimiento fundamental.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return false;
+					}
+				}
+				
+				
+				return true;
+			}
+			
+			
+			private function guardaCambios( vieneDe:String = '' ):void
+			{
+				//se dispara el evento que regresa el proveedor al componente CatProMenu.mxml para guardar
+				activaCambios = false;
+				var seGuarda:Boolean = false;
+				var evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.ACTUALIZAR_CLIENTES );
+				
+				if( isNaN( _cliente.idCliente ) ){
+					seGuarda = false;
+					
+					evt = new EventoCatClientes_General( EventoCatClientes_General.CREA_NUEVO_CLIENTE );
+				}
+				
+				if(validar())
+				{
+					seGuarda = true;
+				} 
+				else
+				{
+					return;
+				}
+				
+				if( seGuarda )
+				{
+					if( _seGuardaImagen)
+					{
+						_cliente.bytes = referencia.bytes;
+						_cliente.imagen = referencia.extensionArchivo;
+					}
+					else
+					{
+						_cliente.bytes = _cliente.bytes == null ? null:_cliente.bytes;
+						_cliente.imagen = _cliente.imagen == null ? null:_cliente.imagen;
+					}
+					
+					_cliente.nombre = txtAlias.text;
+					_cliente.razonSocial = txtRazonSocial.text;
+					_cliente.vendedor = cmbEsac.selectedItem.valor;
+					_cliente.idEjecutivoVenta = cmbEv.selectedItem.llave;
+					_cliente.sector = cmbSector.selectedItem.valor;
+					_cliente.industria = cmbIndustria.selectedItem.valor;
+					_cliente.rol = cmbRol.selectedItem.valor;
+					//_cliente.nivelPrecio = cmbNp.selectedItem.valor;
+					_cliente.importancia = cmbImportancia.selectedItem.llave;
+					_cliente.habilitado = chkHabilitado.selected;
+					_cliente.idCobrador = cmbComprador.selectedItem.llave;
+					
+					_cliente.objectivoCrecimiento = txtObjetivoCrecimiento.text;
+					_cliente.objetivoCrecimientoFundamental = txtObjetivoCrecimientoFundamental.text;
+					
+					_cliente.direccion.pais = cmbPais.selectedItem.valor;
+					_cliente.direccion.estado = txtEstado.text;
+					_cliente.direccion.ciudad = txtCiudad.text;
+					_cliente.direccion.municipio = txtDelegacion.text;
+					_cliente.direccion.colonia = cmbColonia.selectedItem.valor;
+					_cliente.direccion.calle = txtCalle.text;
+					_cliente.direccion.codigoPostal = txtCP.text;
+					
+					var lista:ArrayCollection = new ArrayCollection();
+					if (_comentarios)
+					{
+						for(var n:int=0; n < _comentarios.length; n++)
+						{
+							var curr:Comentario = _comentarios[n] as Comentario;
+							if (curr.idComentario > 0)
+							{
+								lista.addItem(curr);
+							}
+							else if (curr.eliminar == false)
+							{
+								lista.addItem(curr);
+							}
+						}
+						_cliente.listaComentarios = lista;
+					}
+					
+					evt.clienteSeleccionado = _cliente;
+					evt.ventana = "CatClientes_Empresa ( idCliente:"+_cliente.idCliente+" )";
+					dispatchEvent( evt );
+					
+					producerMessage();
+					producerMessageFacturacion();
+				}
+			}
+			
+			protected function producerMessage():void
+			{
+				var object:Object = new Object();
+				object.body = 'actualizaSecciones';
+				object.cliente = _cliente.idCliente;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorActualiza.send(mensaje);
+			}
+			
+			protected function producerMessageFacturacion():void{
+				var object:Object = new Object();
+				object.body = 'actualizaFacturacion';
+				object.cliente = _cliente.idCliente;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorActualizaFacturacion.send(mensaje);
+			}
+			
+			protected function validarPorcetajePositivoNoVacioMayorACero($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if(cmbIndustria.selectedIndex > 0 && cmbIndustria.selectedItem !="OTRA")
+				{
+					if($txtInput != null )
+					{
+						var currentTxtInput:txtInputBlancoDefaultPQNet = $txtInput as txtInputBlancoDefaultPQNet;
+						validatorPorcentajePositivoMayorACero.listener = currentTxtInput;
+						error = validatorPorcentajePositivoMayorACero.validate(currentTxtInput.text);
+					}
+					
+					if(error == null || error.results == null)
+						return true;
+					else
+						return false;
+				}
+				return true;
+			}
+			
+			
+			public function set confirmaGuardado(confirmaGuardado:Boolean):void
+			{
+				if( confirmaGuardado == true)
+				{
+					seEstaEditando=true;
+					editarInfo('guardar');
+					hideComentarios.play();
+					var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.REFRESCAR_CLIENTES);
+					evt.clienteSeleccionado = _cliente;
+					dispatchEvent( evt );
+					_clienteRespaldo = ObjectUtil.copy( _cliente ) as Cliente;
+				}
+			}
+			
+			public function set confirmaInsertar( $dato:Number ):void
+			{
+				if( isNaN( $dato ) )
+					return;
+				
+				var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.REFRESCAR_CLIENTES);
+				evt.clienteSeleccionado = _cliente;
+				evt.clienteSeleccionado.idCliente = $dato;
+				evt.habilitado = 1;
+				dispatchEvent( evt );
+				grpBotonesAgrgar.visible = false;
+				
+				seEstaEditando=true;editarInfo('cancelar');
+				hideComentarios.play();
+			}
+			
+			
+			public function imagenMuestraOculta():void
+			{
+				if( _ocultarMostrarMenuBool)
+				{
+					_ocultarMostrarMenuBool = false;
+					grpImagen.visible = true;
+				}
+				else
+				{
+					grpInfo.percentWidth = 100;
+					grpImagen.visible = false;
+					_ocultarMostrarMenuBool = true;
+				} 
+				ocultar();
+			}
+			
+			
+			protected function editarInfo($vieneDe:String = ''):void 
+			{
+				if( seEstaEditando )
+				{
+					if( $vieneDe == 'cancelar' && !_ocultarMostrarMenuBool )
+					{
+						imagenMuestraOculta();
+						acomodaTiempo();
+						hideComentarios.play();
+					}
+					else
+					{
+						grpGuardarCancelar.visible = false; 
+						lnkEditar.visible = true;
+						habilitaTextos(false);
+						_ocultarMostrarMenuBool = false;
+						imagenMuestraOculta();
+					}
+				}
+				else
+				{
+					setTimeout( muestraLinkCancelar, 250 );
+				} 
+			}
+			
+			private function muestraLinkCancelar():void
+			{
+				grpGuardarCancelar.visible = true; 
+				lnkEditar.visible = false;
+				habilitaTextos(true);
+				mostrarComentarios();
+				_ocultarMostrarMenuBool = true;
+				imagenMuestraOculta();
+				if(editando)
+				{
+					if(String(cmbRol.selectedItem.valor).toLowerCase() == "otro" || String(cmbRol.selectedItem.valor).toLowerCase() == "distribuidor"){
+						cmbIndustria.selectedIndex = cmbIndustria.seleccionarValor("OTRA","valor");
+						cmbIndustria.openButton.enabled = false;
+						cmbIndustria.textInput.enabled = false;
+					}
+					else{
+						cmbIndustria.openButton.enabled = true;
+						cmbIndustria.textInput.enabled = true;
+					}
+				}
+			} 
+			
+			private function acomodaTiempo():void
+			{
+				grpGuardarCancelar.visible = false; 
+				lnkEditar.visible = true;
+				habilitaTextos(false);
+			}
+			
+			private function setImagenComentarios($valor:Boolean):void
+			{
+				if(listComentarios.dataProvider)
+				{
+					var nuevo:ArrayCollection = new ArrayCollection();
+					var arra:ArrayCollection = new ArrayCollection();
+					arra = listComentarios.dataProvider as ArrayCollection;
+					for (var i:int=0; i< arra.length; i++)
+					{
+						var coment:Comentario = arra[i] as Comentario;
+						coment.enEdicion = $valor;
+						nuevo.addItem(coment);
+					}
+					listComentarios.dataProvider = new ArrayCollection();
+					listComentarios.dataProvider = nuevo;
+				}
+			}
+			
+			private function habilitaTextos( $seHabilita:Boolean):void
+			{
+				if (!junior && !cobradorMaster)
+				{
+					txtAlias.editable = $seHabilita;
+					txtRazonSocial.editable = $seHabilita;
+					txtObjetivoCrecimiento.editable = $seHabilita;
+					txtObjetivoCrecimientoFundamental.editable = $seHabilita;
+					cmbEv.openButton.enabled= $seHabilita;
+					cmbEv.textInput.enabled = $seHabilita;
+					cmbIndustria.openButton.enabled= $seHabilita;
+					cmbIndustria.textInput.enabled = $seHabilita;
+					cmbImportancia.openButton.enabled= $seHabilita;
+					cmbImportancia.textInput.enabled = $seHabilita;
+					cmbRol.openButton.enabled= $seHabilita;
+					cmbRol.textInput.enabled = $seHabilita;
+					cmbSector.openButton.enabled= $seHabilita;
+					cmbSector.textInput.enabled = $seHabilita;
+					setImagenComentarios($seHabilita);
+					divDireccion.visible = $seHabilita;
+					divDireccion.includeInLayout = $seHabilita;
+					txtTema.editable = $seHabilita;
+					txtComentario.editable = $seHabilita;
+					btnAgregaComentario.enabled = $seHabilita;
+					
+					cmbPais.enabled = $seHabilita;
+					txtEstado.editable = $seHabilita;
+					txtCiudad.editable = $seHabilita;
+					txtDelegacion.editable = $seHabilita;
+					txtColonia.editable = $seHabilita;
+					txtCalle.editable = $seHabilita;
+					txtCP.editable = $seHabilita;
+					cmbColonia.enabled = $seHabilita;
+					
+					btnDireccion.visible = $seHabilita;
+					
+					if (master)
+					{
+						cmbComprador.openButton.enabled= $seHabilita;
+						cmbComprador.textInput.enabled = $seHabilita;
+						cmbComprador.focusEnabled = $seHabilita;
+					}
+					else
+					{
+						cmbComprador.openButton.enabled= false;
+						cmbComprador.textInput.enabled = false;
+						cmbComprador.focusEnabled = false;
+					}
+					
+					cmbEsac.openButton.enabled= false;   //$seHabilita;   ESTO ES TEPORAL
+					cmbEsac.textInput.enabled = false;   //$seHabilita;   ESTO ES TEPORAL
+					cmbEsac.focusEnabled = false;   //$seHabilita;   ESTO ES TEPORAL
+					
+					cmbEv.focusEnabled = $seHabilita;
+					cmbIndustria.focusEnabled = $seHabilita;
+					cmbImportancia.focusEnabled= $seHabilita;
+					cmbRol.focusEnabled = $seHabilita;
+					cmbSector.focusEnabled = $seHabilita;
+				}
+				else if (cobradorMaster)
+				{
+					cmbComprador.openButton.enabled= $seHabilita;
+					cmbComprador.textInput.enabled = $seHabilita;
+					cmbComprador.focusEnabled = $seHabilita;
+				}
+				else 
+				{
+					cmbEsac.openButton.enabled= false;   //$seHabilita;   ESTO ES TEPORAL
+					cmbEsac.textInput.enabled = false;   //$seHabilita;   ESTO ES TEPORAL
+					cmbEsac.focusEnabled = false;   //$seHabilita;   ESTO ES TEPORAL
+				}
+				
+				if( _cliente == null || isNaN( _cliente.idCliente ) )
+				{
+					chkHabilitado.enabled = chkHabilitado.selected = false;
+				}
+				else
+				{
+					chkHabilitado.enabled = $seHabilita;
+				}
+			}
+			
+			
+			public function cancelaGuardado():void{
+				grpTxtComentarios.width = 0;
+				grpTxtComentarios.includeInLayout = false;
+				cmbColonia.selectedIndex = -1;
+				vieneDe = "inicializar";
+				recibeClienteFlujo( _clienteRespaldo );
+			}
+			
+			
+			private function cargaEV():void{
+				if( cmbEv.dataProvider != null && cmbEv.dataProvider.length > 0 ){
+					cmbEv.selectedIndex = cmbEv.seleccionarValor(_cliente.ejecutivoVenta);
+				}else{
+					setTimeout( cargaEV, 250 );
+				}
+			}
+			private function cargaESAC():void{
+				if( cmbEsac.dataProvider != null && cmbEsac.dataProvider.length > 0 ){
+					cmbEsac.selectedIndex = cmbEsac.seleccionarValor(_cliente.vendedor);
+				}else{
+					setTimeout( cargaESAC, 250 );
+				}
+			}
+			private function cargaSector():void{
+				if( cmbSector.dataProvider != null && cmbSector.dataProvider.length > 0 ){
+					cmbSector.selectedIndex = cmbSector.seleccionarValor(_cliente.sector);
+				}else{
+					setTimeout( cargaSector, 250 );
+				}
+			}
+			private function cargaIndustria():void{
+				if( cmbIndustria.dataProvider != null && cmbIndustria.dataProvider.length > 0 ){
+					cmbIndustria.selectedIndex = cmbIndustria.seleccionarValor(_cliente.industria);
+				}else{
+					setTimeout( cargaIndustria, 250 );
+				}
+			}
+			private function cargaRol():void{
+				if( cmbRol.dataProvider != null && cmbRol.dataProvider.length > 0 ){
+					cmbRol.selectedIndex = cmbRol.seleccionarValor(_cliente.rol);
+				}else{
+					setTimeout( cargaRol, 250 );
+				}
+			}
+			private function cargarImportancia():void{
+				if( cmbImportancia.dataProvider != null && cmbImportancia.dataProvider.length > 0 ){
+					cmbImportancia.selectedIndex = cmbImportancia.seleccionarValor( _cliente.importancia.toString(),'llave');
+					
+				}else{
+					setTimeout( cargarImportancia, 250 );
+				}
+			}
+			private function cargaComprador():void{
+				if( cmbComprador.dataProvider != null && cmbComprador.dataProvider.length > 0 ){
+					cmbComprador.selectedIndex = cmbComprador.seleccionarValor(_cliente.idCobrador.toString(),'llave');
+				}else{
+					setTimeout( cargaComprador, 250 );
+				}
+			}
+			
+			private function cargaPais():void{
+				if (cmbPais.dataProvider != null && cmbPais.dataProvider.length > 0 )
+				{
+					if (_cliente.direccion != null)
+						this.cmbPais.selectedIndex = cmbPais.seleccionarValor(_cliente.direccion.pais);
+				}else
+				{
+					setTimeout(cargaPais,250);
+				}
+			}
+
+			protected function grpImagenShow_effectEndHandler(event:EffectEvent):void
+			{
+				grpInfo.percentWidth = 70;
+				grpImagen.percentWidth = 30;
+			}
+			
+			protected function grpImagenHide_effectEndHandler(event:EffectEvent):void
+			{
+				grpInfo.percentWidth = 100;
+				grpImagen.width = 0;
+			}
+			
+			/* En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			nativePath o ruta (donde se podra obtener el nombre del archivo)  y el ByteArray) */
+			private var file:File;
+			private var referencia:Referencia;
+			private function buscarArchivo():void
+			{
+				file = new File();
+				referencia = new Referencia();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				file.browse();
+			}
+			
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				trace("completeHandler: " + event);
+				creaReferencia();
+				btnRestablecer.includeInLayout = btnRestablecer.visible = true;
+			}
+			
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 * Metodo para crear una referencia (un renglon)
+			 */ 
+			private function creaReferencia():void
+			{
+				if( file.extension.toLocaleLowerCase() == 'jpeg' || file.extension.toLocaleLowerCase() == 'jpg' || 
+					file.extension.toLocaleLowerCase() == 'png' || file.extension.toLocaleLowerCase() == 'gif' )
+				{
+					referencia.bytes = file.data;
+					referencia.extensionArchivo = file.extension;
+					referencia.nombre = _cliente.idCliente.toString();
+					imgTemporal.source =  referencia.bytes;
+					_seGuardaImagen = true;
+				}
+				else
+				{
+					alertaSingleton.show( 'Formato de archivo no permitido', catalogoAlertas.TIT_ADV_operacionImposible );
+				}
+			}
+			
+			private function ocultar():void
+			{
+				btnRestablecer.includeInLayout = btnRestablecer.visible = false;
+			}
+			
+			public function set confirmaModificacion(confirmaGuardado:Boolean):void
+			{
+				if( confirmaGuardado == true)
+					trace("Se registro la modificacion");
+			}
+			
+			protected function agregarComentarios(event:MouseEvent):void
+			{
+				if(txtTema.text != null && txtTema.text != ""  && txtComentario.text != null && txtComentario.text != "" )
+				{
+					var come:Comentario = new Comentario();
+					come.tema = txtTema.text;
+					come.contenido = txtComentario.text;
+					come.seccion = "General";
+					come.idCliente = _cliente.idCliente;
+					come.enEdicion = true;
+					come.numero = _comentarios.length;
+					_comentarios.addItem(come);
+					mostrarComentariosActivos();
+					
+					txtTema.text="";
+					txtComentario.text="";
+				}
+			}
+			
+			private function mostrarComentarios():void
+			{
+				showCometarios.play();
+			}
+			
+			protected function showCometarios_effectEndHandler(event:EffectEvent):void
+			{
+				grpTxtComentarios.percentWidth = 100;
+				grplstComentarios.paddingLeft = 20;
+				
+			}
+			
+			protected function hideComentarios_effectEndHandler(event:EffectEvent):void
+			{
+				grplstComentarios.paddingLeft = 0;
+				grpTxtComentarios.width = 0;
+				grpTxtComentarios.includeInLayout = false;
+			}
+			
+			private function eliminarComentario($eve:Event):void
+			{
+				var tmp:Comentario = listComentarios.selectedItem as Comentario;
+				(_comentarios[tmp.numero] as Comentario).eliminar = true;
+				_comentarios.refresh();
+				mostrarComentariosActivos();
+			}
+			
+			private function mostrarComentariosActivos():void
+			{
+				var arreglo:ArrayCollection = new ArrayCollection();
+				for( var y:int=0; y<_comentarios.length; y++)
+				{
+					var come:Comentario = _comentarios[y] as Comentario;
+					if (!come.eliminar)
+						arreglo.addItem(come);
+				}
+				listComentarios.dataProvider = arreglo;
+			}
+			
+			protected function editar(event:MouseEvent):void
+			{
+				if(producerBlock())
+				{
+					alertaSingleton.show("Esta sección se encuentra en modificación por otro usuario",catalogoAlertas.TIT_ADV_atencion);
+				}
+				else
+				{ 
+					editando = true;
+					seEstaEditando=false;
+					editarInfo();
+					VistaTodosLosClientes.bloqueo = true;
+					grpTxtComentarios.includeInLayout = true;
+				} 
+			}
+			
+			protected function producerBlock():Boolean
+			{
+				var object:Object = new Object();
+				object.body = 'bloqueaSecciones';
+				object.nuevo = false;
+				object.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				
+				var block:Object = new Object();
+				block.cliente = _cliente.idCliente;
+				
+				if (VistaTodosLosClientes.arrayEditables != null && VistaTodosLosClientes.arrayEditables.length > 0 )
+				{
+					var index:int = Util.searchInArrayCollection(VistaTodosLosClientes.arrayEditables,_cliente.idCliente,"cliente");
+					if (index >= 0)
+					{
+						return true;
+					}
+					else
+					{
+						VistaTodosLosClientes.arrayEditables.addItem(block);
+						object.block = VistaTodosLosClientes.arrayEditables;
+					}
+				}
+				else
+				{
+					VistaTodosLosClientes.arrayEditables = new ArrayCollection();
+					VistaTodosLosClientes.arrayEditables.addItem(block);
+					object.block = VistaTodosLosClientes.arrayEditables;
+				}
+				
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorBloquea.send(mensaje);
+				
+				return false;
+			}
+			
+			protected function cancelar(event:MouseEvent):void
+			{
+				cancelarBlock();
+				inicia();
+				
+			}
+			
+			public function inicia():void
+			{
+				seEstaEditando=true;
+				editarInfo('cancelar');
+				cancelaGuardado(); 
+			}
+			
+			protected function cancelarBlock():void
+			{
+				VistaTodosLosClientes.bloqueo = false;
+				var object:Object = new Object();
+				object.body = 'bloqueaSecciones';
+				object.nuevo = false;
+				object.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				
+				var index:int = Util.searchInArrayCollection(VistaTodosLosClientes.arrayEditables,_cliente.idCliente,"cliente");
+				if (index >= 0 )
+				{
+					VistaTodosLosClientes.arrayEditables.removeItemAt(index);
+					object.block = VistaTodosLosClientes.arrayEditables;
+					
+					var mensaje:AsyncMessage = new AsyncMessage();
+					mensaje.body = object;
+					productorBloquea.send(mensaje);
+				}
+				
+			}
+			
+			protected function btnGuardar_clickHandler(event:MouseEvent):void
+			{
+				cancelarBlock();
+				guardaCambios();
+			}
+			
+			[Bindable]
+			public function get cliente():Cliente
+			{
+				return _cliente;
+			}
+			
+			public function set cliente(value:Cliente):void
+			{
+				_cliente = value;
+				
+				mostrarTxtObjetivoCrecimiento = true;
+				
+				if(esClienteNuevo(_cliente))
+				{
+					txtObjetivoCrecimiento.text = "0";
+				}
+				else
+				{
+					saberObjetivoCrecimientoPorNIngresoCliente();
+					if(_cliente.objectivoCrecimiento)
+						txtObjetivoCrecimiento.text = _cliente.objectivoCrecimiento;
+					else
+						txtObjetivoCrecimiento.text = '0';
+				}
+				
+				
+				
+			}
+			
+			private function saberObjetivoCrecimientoPorNIngresoCliente():void
+			{
+				if(objetivosCre && objetivosCre.length > 0)
+				{
+					for (var i:int = 0; i < objetivosCre.length; i++) 
+					{
+						var item:ObjetivoCrecimiento = ObjetivoCrecimiento(objetivosCre[i]);
+						if(cliente.nivelIngreso != null){
+							if(item.nivelIngreso.toLowerCase() == cliente.nivelIngreso.toLowerCase())
+								objCrecimientoCliente =item.porcentajeAnual;
+						}
+					}
+				}
+				else
+				{
+					setTimeout(saberObjetivoCrecimientoPorNIngresoCliente,250);
+				}
+			}
+			
+			private function esClienteNuevo($cliente:Cliente):Boolean
+			{
+				if(isNaN($cliente.idCliente))
+					return true;
+				else
+					return false;
+			}
+			
+			
+			private var objetivosCre:ArrayCollection;
+			private var objCrecimientoBajo:Number;
+			private var objCrecimientoBajoFundamental:Number;
+			private var objCrecimientoDist:Number;
+			private var objCrecimientoDistFundamental:Number;
+			private var objCrecimientoCliente:Number;
+			public function set recibeListaObjetivosDeCremiento($objetivos:ArrayCollection):void
+			{
+				if(!$objetivos)
+					return;
+				
+				objetivosCre = $objetivos;
+				
+				for (var i:int = 0; i < $objetivos.length; i++) 
+				{
+					var item:ObjetivoCrecimiento = ObjetivoCrecimiento($objetivos[i]);
+					if(item.nivelIngreso.toLowerCase() == "bajo")
+					{
+						objCrecimientoBajo =item.porcentajeAnual;
+						objCrecimientoBajoFundamental = item.porcentajeAnualFundamental;						
+					}
+					else if(item.nivelIngreso.toLowerCase() == "distribuidor")
+					{
+						objCrecimientoDist =item.porcentajeAnual;
+						objCrecimientoDistFundamental = item.porcentajeAnualFundamental;						
+					}
+				}
+				
+			}
+			
+			
+			protected function cmbIndustria_changeHandler(event:IndexChangeEvent):void
+			{
+				activaCambios = true;
+			}
+			
+			protected function cmbRol_changeHandler(event:IndexChangeEvent):void
+			{
+				activaCambios = true;
+				
+				if(event.newIndex != -1)
+				{
+					if(event.newIndex == 0 )
+					{
+						txtObjetivoCrecimiento.text = "0"; 
+						txtObjetivoCrecimientoFundamental.text = "0"; 
+					}
+					else
+					{
+						if(String(cmbRol.selectedItem.valor).toLowerCase() == "distribuidor")
+						{
+							txtObjetivoCrecimiento.text = objCrecimientoDist.toString(); 
+							txtObjetivoCrecimientoFundamental.text = objCrecimientoDistFundamental.toString(); 
+
+						}
+						else if(String(cmbRol.selectedItem.valor).toLowerCase() == "laboratorio" || String(cmbRol.selectedItem.valor).toLowerCase() == "otro")
+						{
+							txtObjetivoCrecimiento.text = objCrecimientoBajo.toString(); 
+							txtObjetivoCrecimientoFundamental.text = objCrecimientoBajoFundamental.toString(); 
+							
+						}
+						else
+						{
+							
+							if(esClienteNuevo(_cliente))
+							{
+								txtObjetivoCrecimiento.text = objCrecimientoBajo.toString();
+								txtObjetivoCrecimientoFundamental.text = objCrecimientoBajoFundamental.toString();
+							}
+							else
+							{
+								txtObjetivoCrecimiento.text = objCrecimientoCliente.toString() == "NaN" ? "0" : objCrecimientoCliente.toString();
+								txtObjetivoCrecimientoFundamental.text = objCrecimientoCliente.toString() == "NaN" ? "0" : objCrecimientoCliente.toString();
+							}
+						}
+						if(String(cmbRol.selectedItem.valor).toLowerCase() == "otro" || String(cmbRol.selectedItem.valor).toLowerCase() == "distribuidor"){
+							cmbIndustria.selectedIndex = cmbIndustria.seleccionarValor("OTRA","valor");
+							cmbIndustria.openButton.enabled = false;
+							cmbIndustria.textInput.enabled = false;
+						}
+						else{
+							cmbIndustria.openButton.enabled = true;
+							cmbIndustria.textInput.enabled = true;
+						}
+					}
+				}
+				
+			}
+			
+			protected function obtenerDireccion(event:MouseEvent):void
+			{
+				vieneDe = "buscar";
+				if (validarDireccion()){
+					obtenerComboDireccion(txtCP.text,cmbPais.selectedItem.valor);
+				}
+			}
+			
+			private function validarDireccion():Boolean{
+				if (StringUtil.trim(txtCP.text) == "" ){
+					alertaSingleton.show("Es necesario indicar el codigo postal.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				if (cmbPais.selectedItem == undefined || cmbPais.selectedItem.llave == 0){
+					alertaSingleton.show("Es necesario indicar el país",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				return true;
+			}
+			
+			public function set recibeDireccionxPais($direccion:Direccion):void{
+				if ($direccion == null) 
+					return;
+				
+				cmbColonia.dataProvider = $direccion.lstColonias;
+				if(vieneDe == "buscar" ){
+					txtEstado.text = $direccion.estado;
+					txtDelegacion.text = $direccion.municipio;
+					cmbColonia.selectedIndex = 0;
+				}
+				else{
+					setTimeout(cargaColonias,600);
+				}
+			}
+			
+			private function cargaColonias():void{
+				if( cmbColonia.dataProvider != null && cmbColonia.dataProvider.length > 0 ){
+					//cmbColonia.selectedIndex = cmbColonia.dataProvider.getItemIndex(_cliente.direccion.colonia);
+					cmbColonia.selectedIndex =cmbColonia.seleccionarValor(_cliente.direccion.colonia);
+				}else{
+					setTimeout( cargaColonias, 250 );
+				}
+			}
+			
+			private function obtenerComboDireccion($cp:String, $pais:String):void{
+				var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_DIRECCION_X_PAIS);
+				evt.direccion = new Direccion();
+				evt.direccion.codigoPostal = $cp;
+				evt.direccion.pais = $pais;
+				dispatchEvent(evt);
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		
+		<s:Parallel id="showCometarios" effectEnd="showCometarios_effectEndHandler(event)" target="{grpTxtComentarios}" duration="130"> 
+			<s:Fade alphaFrom="0" alphaTo="1" startDelay="100"/>
+			<s:Resize widthFrom="0" widthTo="300"/>
+		</s:Parallel>
+		
+		<s:Parallel id="hideComentarios" effectEnd="hideComentarios_effectEndHandler(event)" target="{grpTxtComentarios}" >
+			<s:Fade alphaFrom="1" alphaTo="0" duration="50"/>
+			<s:Resize widthFrom="300" widthTo="0" duration="300"/>
+		</s:Parallel>
+		
+		
+		<s:Parallel id="grpImagenShow" effectEnd="grpImagenShow_effectEndHandler(event)">
+			<s:Fade duration="100" alphaFrom="0" alphaTo="1" startDelay="200"/>
+			<mx:Resize duration="300" widthFrom="0" widthTo="{(grpContenedorPrincipal.width / 3)-60}"/>
+		</s:Parallel>
+		
+		<s:Parallel id="grpImagenHide" effectEnd="grpImagenHide_effectEndHandler(event)">
+			<s:Fade duration="50" alphaFrom="1" alphaTo="0"/>
+			<mx:Resize duration="300" widthFrom="{grpImagen.width}" widthTo="0"/>
+		</s:Parallel>
+		
+	</fx:Declarations>
+	
+	
+	<s:HGroup width="100%" height="100%" gap="0" id="grpContenedorPrincipal">
+		<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpInfo">
+			<s:BorderContainer borderVisible="false" width="100%" height="100%" backgroundColor="white" backgroundAlpha="0">
+				<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+					
+					<s:HGroup width="100%" verticalAlign="bottom" >
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_empresaGris }"/>
+						<label:TituloBankGothic_30 text="EMPRESA"/>
+						<s:Spacer width="100%"/>
+						<s:HGroup visible="{ ( isNaN(_cliente.idCliente) ? false : true )}" >
+							<label:Texto_13_VerdeAzul text="Última actualización: "/>
+							<label:Fecha_13_VerdeAzul  fecha="{_cliente.fechaActualizacion}"/>
+						</s:HGroup>
+					</s:HGroup>
+					
+					<otros:divisionGruesa width="100%"/>
+					<s:Scroller id="sclGeneral" maxWidth="1050" width="100%" height="100%" minWidth="340">
+						
+						<s:VGroup width="100%"  horizontalCenter="0" id="grpGeneral" paddingLeft="3" paddingRight="3" verticalAlign="middle" verticalCenter="0">
+							<!--<s:Spacer height="20" />-->
+							<label:Titulo_16_pTop10 width="100%" text="GENERALES" textAlign="right"/>
+							<otros:division width="100%" />
+							
+							<s:HGroup width="100%" verticalAlign="middle" paddingTop="10">
+								<label:Titulo_22_pTop10 text="ID: " paddingTop="0"/>
+								<label:Titulo_22_RojoClaro_pTop10 text="{ isNaN(_cliente.idCliente) ? 'Nuevo' : _cliente.idCliente.toString() }" paddingTop="0" width="100%"/>
+								<s:VGroup horizontalAlign="right" gap="10">
+									<chekbox:CheckRadioDefaultPQNet id="chkHabilitado" label="Habilitado" tipoCheck="cuadrado" nombreStiloFuente="default22" />
+								</s:VGroup>
+							</s:HGroup>
+							<s:HGroup width="100%" horizontalAlign="right">
+								<s:Image id="imgTemporalChica" source="{ ( _cliente.bytes != null ? _cliente.bytes : catalogoIconosBotones.getInstance().proveedoresDefault	) }" width="96" height="110" />
+							</s:HGroup>
+							<s:VGroup width="100%" gap="10">
+								<s:Spacer width="10"/>
+								<label:Titulo text="Alias:" paddingTop="0"/>
+								<input:txtInputBlancoDefaultPQNet  width="100%" text="{ _cliente.nombre}" change="activaCambios = true" id="txtAlias" />
+								<label:Titulo text="Nombre institucional:" paddingTop="0"/>
+								<input:txtInputBlancoDefaultPQNet  width="100%" text="{ _cliente.razonSocial }" change="activaCambios = true" id="txtRazonSocial" />
+							</s:VGroup>
+							<s:Spacer height="20" />
+							<s:VGroup width="100%" gap="10">
+								<s:Spacer width="10"/>
+								<label:Titulo_16_pTop10 width="100%" text="COMERCIALES" textAlign="right"/>
+								<otros:division width="100%"/>
+							</s:VGroup>	
+							<s:VGroup width="100%" >
+								<s:HGroup height="100%" width="100%">
+									<s:VGroup height="100%"  width="20%" gap="10"> 
+										<label:Titulo text="ESAC:" />			 						
+										<cmbCat:ComboCatalogos change="activaCambios = true;"  fontSize="14" width="150" height="28" id="cmbEsac" creationComplete="{ cmbEsac.cargaEmpleadosPorFunciones([5,37],'--NINGUNO--') }"/>
+										<label:Titulo text="Sector:" paddingTop="10"/>
+										<cmbCat:ComboCatalogos change="activaCambios = true;"  fontSize="14" width="150" height="28" id="cmbSector" creationComplete="{ cmbSector.cargaSector('--NINGUNO--') }"/>
+										<label:Titulo id="lblNivelIngreso" text="NI:" paddingTop="10"/>
+										<s:Group width="100%" height="28" >
+											<label:Texto id="txtNivelIngreso" verticalCenter="0"/>
+										</s:Group>  
+									</s:VGroup>
+									<s:Spacer width="100%" />
+									<s:VGroup height="100%"  width="50%" gap="10">
+										<label:Titulo text="Vendedor:" />
+										<cmbCat:ComboCatalogos change="activaCambios = true;"  fontSize="14" width="100%" height="28" id="cmbEv" creationComplete="{ cmbEv.cargarEmpleadosXTipoTablero( 'ev','--NINGUNO--' ) } "/>
+										<label:Titulo text="Industria:" paddingTop="10" />
+										<cmbCat:ComboCatalogos change="cmbIndustria_changeHandler(event)"  fontSize="14" width="200" height="28" id="cmbIndustria" creationComplete="{ cmbIndustria.cargaIndustria('--NINGUNO--') }"/>
+										<label:Titulo text="Objetivo   fundamental:" paddingTop="10" visible="{mostrarTxtObjetivoCrecimiento}" includeInLayout="{mostrarTxtObjetivoCrecimiento}"/>
+										<s:HGroup id="grpObjetivoCrecimientoFundamental" width="100%" height="28" verticalAlign="middle" visible="{mostrarTxtObjetivoCrecimiento}" includeInLayout="{mostrarTxtObjetivoCrecimiento}">
+											<input:txtInputBlancoDefaultPQNet id="txtObjetivoCrecimientoFundamental" text="{_cliente.objetivoCrecimientoFundamental}" width="100%" restrict="0-9." focusOut="validarPorcetajePositivoNoVacioMayorACero(txtObjetivoCrecimientoFundamental)"/>
+											<label:Titulo text="%" paddingTop="0"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%" />
+									<s:VGroup height="100%"  width="20%" gap="10">
+										<label:Titulo text="Cobrador:" />
+										<cmbCat:ComboCatalogos change="activaCambios = true;"  fontSize="14" width="100%" height="28" id="cmbComprador" creationComplete="{ cmbComprador.cargarEmpleadosPorSoloPorTipo('Contabilidad','--NINGUNO--') }"/>
+										<label:Titulo text="Rol:" paddingTop="10"/>
+										<cmbCat:ComboCatalogos change="cmbRol_changeHandler(event)"  fontSize="14" width="150" height="28" id="cmbRol" creationComplete="{ cmbRol.cargaRol('--NINGUNO--') }"/>
+										
+										<label:Titulo text="Objetivo deseado:" paddingTop="10" visible="{mostrarTxtObjetivoCrecimiento}" includeInLayout="{mostrarTxtObjetivoCrecimiento}"/>
+										<s:HGroup id="grpObjetivoCrecimiento" width="100%" height="28" verticalAlign="middle" visible="{mostrarTxtObjetivoCrecimiento}" includeInLayout="{mostrarTxtObjetivoCrecimiento}">
+											<input:txtInputBlancoDefaultPQNet id="txtObjetivoCrecimiento" width="100%" restrict="0-9." focusOut="validarPorcetajePositivoNoVacioMayorACero(txtObjetivoCrecimiento)"/>
+											<label:Titulo text="%" paddingTop="0"/>
+										</s:HGroup>
+										
+										<!--<label:Texto text="{_cliente.objectivoCrecimiento} %" visible="{ isNaN(_cliente.idCliente) ? false:true}" />-->
+										
+										
+									</s:VGroup>
+									<s:Spacer width="100%" />
+									<s:VGroup height="100%"  width="100%" gap="10" >
+										<label:Titulo text="Importancia:" />
+										<cmbCat:ComboCatalogos change="activaCambios = true;"  fontSize="14" width="150" height="28" id="cmbImportancia" creationComplete="{ cmbImportancia.cargarImportancia('--NINGUNO--') }"/>
+										<label:Titulo text="Condiciones de cobro:" paddingTop="10" visible="{ isNaN(_cliente.idCliente) ? false:true}"/>
+										<label:Texto text="{_cliente.condicionesPago}" visible="{ isNaN(_cliente.idCliente) ? false:true}"/>
+									</s:VGroup>
+								</s:HGroup>
+							</s:VGroup>
+							
+							<s:Spacer height="20" />
+							
+							<label:Titulo_16_pTop10 width="100%" text="DIRECCIÓN PRINCIPAL" textAlign="right" />
+							<otros:division width="100%"/>
+							
+							<s:HGroup width="100%" gap="20">
+								
+								<s:VGroup width="35%" gap="5">
+									<s:VGroup gap="5" width="100%">
+										<label:Titulo text="País: " />
+										<cmbCat:ComboCatalogos change="activaCambios = true;" fontSize="14" width="100%" height="28" id="cmbPais" creationComplete="{cmbPais.cargaPaises('--NINGUNO--')}" />
+									</s:VGroup>
+									<s:VGroup gap="5" width="100%" >
+										<label:Titulo text="Codigo postal: " />
+										<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.direccion.codigoPostal}" id="txtCP" change="activaCambios = true" />
+									</s:VGroup>
+									<s:VGroup gap="5" width="100%" horizontalAlign="right" >
+										<label:Titulo text=" " visible="false" />
+										<!--<pqNet:botonPqNetLargo label="Obtener dirección" id="btnDireccion" />-->
+										<evento:botonColoresConImagenEventoDefault id="btnDireccion" color="#000000" conTexto="true" label="Obtener dirección" icono="direccion" height="28" horizontal="left" width="145" click="obtenerDireccion(event)" />
+										
+									</s:VGroup>
+								</s:VGroup>
+								
+								<otros:VDivisionSuperDelgada height="100%" />
+								
+								<s:VGroup width="65%" gap="5">
+									<s:HGroup width="100%" gap="20">
+										<s:VGroup gap="5" width="60%">
+											<label:Titulo text="Estado: " />
+											<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.direccion.estado}" id="txtEstado" change="activaCambios = true" />
+										</s:VGroup>
+										<s:VGroup gap="5" width="40%">
+											<label:Titulo text="Delegación o municipio: " />
+											<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.direccion.municipio}" id="txtDelegacion" change="activaCambios = true" />
+										</s:VGroup>
+									</s:HGroup>
+									
+									<s:HGroup width="100%" gap="20">
+										<s:VGroup gap="5" width="35%">
+											<label:Titulo text="Ciudad: " />
+											<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.direccion.ciudad}" id="txtCiudad" change="activaCambios = true" />
+										</s:VGroup>
+										<s:VGroup gap="5" width="65%">
+											<label:Titulo text="Colonia: " />
+											<input:txtInputBlancoDefaultPQNet width="100%" text="{_cliente.direccion.colonia}" id="txtColonia" change="activaCambios = true" visible="false" includeInLayout="false" />
+											<cmbCat:ComboCatalogos change="activaCambios = true;" fontSize="14" width="100%" height="28" id="cmbColonia" />
+										</s:VGroup>
+									</s:HGroup>
+									
+									<s:HGroup width="100%" gap="20">
+										<s:VGroup gap="5" width="100%">
+											<label:Titulo text="Calle y número: " />
+											<input:txtInputBlancoDefaultPQNet width="100%" height="100%" text="{_cliente.direccion.calle}" change="activaCambios = true" id="txtCalle" />
+										</s:VGroup>
+									</s:HGroup>
+									
+									
+								</s:VGroup>
+							</s:HGroup>
+							
+							<s:Spacer height="20" />
+							<s:VGroup width="100%" gap="10">
+								<label:Titulo_16_pTop10 width="100%" text="COMENTARIOS ADICIONALES" textAlign="right"/>
+								<otros:division width="100%"/>
+								
+								<s:HGroup width="100%" >
+									<s:Group width="0" height="100%" id="grpTxtComentarios" visible="false" includeInLayout="false">
+										<s:VGroup height="100%" width="100%" paddingRight="20">
+											<label:Titulo text="Tema:" />
+											<input:txtInputBlancoDefaultPQNet id="txtTema" width="100%" />
+											<label:Titulo text="Comentario:" paddingTop="0" />
+											<input:txtInputBlancoDefaultPQNet id="txtComentario" width="100%" />
+											<pqNet:botonPqNetLargo width="100%" icono="agregar" id="btnAgregaComentario" click="agregarComentarios(event)" 
+																   colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+										</s:VGroup>
+									</s:Group>  
+									<otros:vDivisionGruesa  id="divDireccion" height="100%" />
+									<s:VGroup width="100%" id="grplstComentarios" >
+										<s:List width="100%" height="150" id="listComentarios" borderVisible="false" horizontalScrollPolicy="off"
+												itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.IRCatClientesGeneral_Comentarios"/>
+									</s:VGroup>
+								</s:HGroup>
+								
+								<!--<textarea:txtAreaBlancoDefaultPQNet width="100%" height="100%" minHeight="70" text="{ _cliente.comentarios }" change="activaCambios = true" id="txtDescripcionAmpliada"/>-->
+							</s:VGroup>	
+						</s:VGroup>
+					</s:Scroller>
+					<s:VGroup width="100%" gap="10">
+						<otros:divisionGruesa width="100%"/>
+						<s:Group width="100%" id="grpBotones">
+							<s:HGroup width="100%" horizontalAlign="right" verticalAlign="middle" id="grpBotonEditar"  >
+								<pqNet:botonPqNetLargo label="Editar" id="lnkEditar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="editar(event)"/>
+							</s:HGroup>
+							<s:HGroup width="100%" id="grpGuardarCancelar" visible="false">
+								<pqNet:botonPqNetLargo label="Guardar" id="lnkGuardar" 
+													   click="btnGuardar_clickHandler(event)" 
+													   />
+								<s:Spacer width="100%"/>
+								<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" 
+													   click="cancelar(event)"
+													   id="lnkCancelar" />
+							</s:HGroup>
+						</s:Group>
+						<s:HGroup id="grpBotonesAgrgar" width="100%" paddingTop="8">
+							<s:Spacer width="100%"/>
+							<pqNet:botonPqNetLargo icono="guardar"  click="guardaCambios()" label="AGREGAR"/>
+						</s:HGroup>
+					</s:VGroup>  
+				</s:VGroup>
+			</s:BorderContainer>
+		</contenedores:VGroupConPaddingStandardPqNet>
+		
+		<s:Group width="0" height="100%" id="grpImagen" visible="false" showEffect="{grpImagenShow}" hideEffect="{grpImagenHide}">
+			<s:Rect width="100%" height="100%" >
+				<s:filters>
+					<shaders:sombraBevelFilter direccion="left"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="#eaeaea" />
+				</s:fill>
+			</s:Rect>
+			<contenedores:VGroupConPaddingStandardPqNet>
+				<s:HGroup width="100%" verticalAlign="bottom" >
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_imagenGris }" />
+					<label:labelSubtitulo  text="LOGO"/>
+					<s:Spacer width="100%"/>
+				</s:HGroup>
+				<s:VGroup width="100%" gap="10" >
+					<otros:divisionHueca width="100%"/>
+					<s:VGroup width="100%" gap="10" verticalAlign="middle" horizontalAlign="center">
+						<s:Group width="137" height="137" toolTip="{'Formatos permitidos: JPEG, JPG, PNG, GIF'}" mouseOver="grpEtiquetaEditar.visible = true">
+							<s:Image id="imgTemporal" source="{ ( _cliente.bytes != null ? _cliente.bytes : catalogoIconosBotones.getInstance().proveedoresDefaultMax ) }" width="137" height="137" />
+							<s:Group width="{imgTemporal.width}" height="137" id="grpEtiquetaEditar" visible="false" click="buscarArchivo(); grpEtiquetaEditar.visible = false" mouseOut="grpEtiquetaEditar.visible = false" >
+								<s:Rect width="{imgTemporal.width}" height="30" verticalCenter="52" horizontalCenter="0" id="fondoAzulImagen" >
+									<s:fill>
+										<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+									</s:fill>
+								</s:Rect>
+								<s:Label color="white" id="lblEditarImagen" text="Editar" horizontalCenter="0" verticalCenter="52" />
+							</s:Group>
+						</s:Group>
+					</s:VGroup>
+					<s:HGroup width="100%"  horizontalAlign="center" id="btnRestablecer" visible="false" includeInLayout="false">
+						<pqNet:botonPqNetLargo label="Restablecer"  
+											   click="_cliente.imagen != null  ? imgTemporal.source = _cliente.bytes : imgTemporal.source = catalogoIconosBotones.getInstance().proveedoresDefaultMax;_seGuardaImagen=false; ocultar()" />
+					</s:HGroup>
+					<otros:division width="100%"/>
+				</s:VGroup>
+			</contenedores:VGroupConPaddingStandardPqNet>
+		</s:Group>
+		
+		
+	</s:HGroup>
+</s:Group>

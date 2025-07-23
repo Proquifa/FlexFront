@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"  
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			public var _currentType:String;
+			private var _infoClientesET:ArrayCollection = new ArrayCollection();
+			private var _infoClientesFT:ArrayCollection = new ArrayCollection();
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET")
+						myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClientesET,null,"totalCobros");
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClientesFT,null,"totalCobros");
+				}
+			}
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				/**
+				 * Se realiza una copia de la info y se recibe en un Array simple, para poder aplicar funciones específicas de los mismos
+				 **/
+				var arrayTemp:Array = new Array();
+				_infoClientesET = new ArrayCollection();
+				_infoClientesFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				arrayTemp = (ObjectUtil.copy($infoGrafica)as ArrayCollection).source;
+				
+				/**
+				 * Se obtienen los Arreglos con los Cobros que están en ET y los FT deacuerdo a ciertos criterios que estan
+				 * definidos en las funciones obtenerCobrosET y obtenerCobrosFT referirse a ellas para más información
+				 * */
+				var arrayCobrosET:Array = new Array();
+				var arrayCobrosFT:Array = new Array();
+				
+				arrayCobrosET = arrayTemp.filter(obtenerCobrosET);
+				arrayCobrosFT = arrayTemp.filter(obtenerCobrosFT);
+				arrayCobrosET.sortOn("nombreCliente");
+				arrayCobrosFT.sortOn("nombreCliente");
+				
+				//Liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Cliente
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotaClientesET:Array = new Array();
+				arrayTotaClientesET = arrayCobrosET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotaClientesFT:Array = new Array();
+				arrayTotaClientesFT = arrayCobrosFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Cliente
+				 * */
+				
+				FormarLosClientes(arrayTotaClientesET,arrayCobrosET,"CLIENTES_ET",_infoClientesET);
+				FormarLosClientes(arrayTotaClientesFT,arrayCobrosFT,"CLIENTES_FT",_infoClientesFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClientesET,null,"totalCobros");
+				else if(_currentType =="FT")
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClientesFT,null,"totalCobros");
+				
+				//Para liberar Memoria
+				arrayTotaClientesET = new Array();
+				arrayCobrosET = new Array();
+				arrayTotaClientesFT = new Array();
+				arrayCobrosFT = new Array();
+				
+			}
+			
+			private function FormarLosClientes(TotalClientes:Array,ClientesInfo:Array,etiqueta:String,infoClientes:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCobros:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysCobros:Object;
+				var stringTemp:String;
+				
+				var currentPartidaCobros:Cobros; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalClientes.length; i++){
+					j=0;
+					keysCobros = new Object();
+					totalCobros =0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCobros = ClientesInfo[j] as Cobros;
+					while( (TotalClientes[i] as Cobros).nombreCliente == currentPartidaCobros.nombreCliente){
+						totalPartidas += currentPartidaCobros.partidas;
+						totalPiezas += currentPartidaCobros.piezas;
+						totalMonto += currentPartidaCobros.montoDolares;
+						
+						stringTemp = String(currentPartidaCobros.factura+'_'+currentPartidaCobros.fpor);
+						
+						if(!keysCobros.hasOwnProperty(stringTemp)){
+							keysCobros[stringTemp] = stringTemp;
+							totalCobros++;
+						}
+						
+						ClientesInfo.shift();
+						if(ClientesInfo.length >0)
+							currentPartidaCobros = ClientesInfo[j] as Cobros;
+						else
+							currentPartidaCobros =new Cobros();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalClientes[i] as Cobros).nombreCliente.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = 1;
+					itemResumenConsulta.totalCobros = totalCobros;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoClientes.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function quitarPorCobrarCancelarRefacturacion(item:Cobros, id:uint, array:Array):Boolean
+			{
+				if(item.estado =='Abierto' || item.estado == 'Por Cancelar' || item.estado == 'A refacturación'){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			public function quitaDuplicados(item:Cobros, id:uint, _array:Array):Boolean{
+				if (keys.hasOwnProperty(item.nombreCliente)) {
+					return false;
+				} else {
+					keys[item.nombreCliente] = item.nombreCliente;
+					return true;
+				}
+			}
+			private function obtenerCobrosET(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				if(item.estadoParaMostrar == 'Abierto' ){
+					if(isNaN(Number(item.diasRestantesCobro))){
+						if(item.diasRestantesCobro == 'Pendiente'){
+							return true;
+						}else{
+							return false;
+						}
+					}else if(Number(item.diasRestantesCobro) >= 0){
+						return true;
+					}else{
+						return false;
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){
+					if(item.moroso == "NO"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+			
+			private function obtenerCobrosFT(item:Cobros, id:uint, _array:Array):Boolean
+			{
+				
+				if(item.estadoParaMostrar == 'Abierto'){ 
+					if(!isNaN(Number(item.diasRestantesCobro)))
+					{
+						if(Number(item.diasRestantesCobro) < 0){
+							return true;
+						}else{
+							return false;
+						}
+					}
+				}else if(item.estadoParaMostrar == 'Cerrado'){ 
+					if(item.moroso == "SI"){
+						return true;
+					}else{
+						return false;
+					}
+				}
+				return false;
+			}
+ 		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="CLIENTES" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>

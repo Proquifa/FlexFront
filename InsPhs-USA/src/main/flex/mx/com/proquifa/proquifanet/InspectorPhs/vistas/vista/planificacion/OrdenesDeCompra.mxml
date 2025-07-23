@@ -1,0 +1,661 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		 xmlns:largo="skins.botones.largo.*"
+		 xmlns:pqNet1="skins.botones.pqNet.*"
+		 width="100%" height="100%"
+		 paddingBottom="10" paddingLeft="10" paddingRight="10"
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.eventos.EventoInspectorPhs;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.modelo.datosDisplayInsPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.BodyMensajes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.ListEvent;
+			import mx.events.ResizeEvent;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			import spark.events.ListEvent;
+			[Bindable]	private var _display:datosDisplayInsPhs = new datosDisplayInsPhs();
+			[Bindable]	public var _datosBarraBoton:ArrayCollection = new ArrayCollection([
+				{label:"INS"},
+				{label:"DOC"},
+				{label:"AMBOS"}
+			]);
+			[Bindable]	public var _estadoVista:String;
+			[Bindable]	public var _filtroRechazo:String="";
+			[Bindable]	private var _opcionSeleccionada:PartidaInspeccion;
+			[Bindable]	public var _listaPartidaInspeccionUniverso:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listaPartidaInspeccionTrabajo:ArrayCollection;
+			[Bindable]	private var _listaOrdenesCompra:ArrayCollection = new ArrayCollection(); 
+			[Bindable]	private var _nombreProveedor:String;
+			[Bindable]	private var _numParti:int;
+			[Bindable]	private var _numET:int;
+			[Bindable]	private var _numUR:int;
+			[Bindable]	private var _numFT:int;
+			[Bindable]	private var _numST:int;
+			[Bindable]	private var _numCG:int;
+			[Bindable]	private var _numRG:int;
+			[Bindable]	private var _numAB:int;
+			[Bindable]	private var _numNA:int;
+			[Bindable]	private var _numFR:int;
+			[Bindable]	private var _numFE:int;
+			[Bindable]	private var _numFP:int;
+			[Bindable]	private var _numAbiertas:int;
+			[Bindable]	private var _numBloqueadas:int;
+			[Bindable]	public var _OC:String="";
+			[Bindable]	private var _ET:String;
+			
+			public function iniciarOrdenesCompra($proveedorrr:String):void{
+				_seleccionaAnteriorBool = true;
+				 limpiaDatosTitulo();
+				_nombreProveedor = $proveedorrr;
+				_display.nombreProveedor = $proveedorrr;
+				_listaOrdenesCompra = new ArrayCollection();
+				var arrTodoProveedor:ArrayCollection = new ArrayCollection();
+				arrTodoProveedor = UtilsGrid.queryCampoX(_listaPartidaInspeccionUniverso, "nombreProveedor", $proveedorrr);
+				var renderRechazoString:String = "";
+				if(_filtroRechazo == "INS"){
+					_listaOrdenesCompra = UtilsGrid.queryADosCampos( arrTodoProveedor, "rechazoXDoc", "false", "rechazoXInsp" , "true" );
+					renderRechazoString = "inspección";
+				}
+				if(_filtroRechazo == "DOC"){
+					_listaOrdenesCompra = UtilsGrid.queryADosCampos( arrTodoProveedor, "rechazoXDoc", "true", "rechazoXInsp" , "false" );
+					renderRechazoString = "documentación";
+				}
+				if(_filtroRechazo == "AMB"){
+					_listaOrdenesCompra = UtilsGrid.queryADosCampos( arrTodoProveedor, "rechazoXDoc", "true", "rechazoXInsp" , "true" );
+					renderRechazoString = "inspección y documentación";
+				}
+				if(_filtroRechazo == ""){
+					_listaOrdenesCompra = UtilsGrid.queryADosCampos(arrTodoProveedor, "rechazoXDoc","false", "rechazoXInsp", "false");
+				}
+				_listaOrdenesCompra = UtilsGrid.queryQuitarRepetidos(_listaOrdenesCompra, "compra");
+				if(_listaOrdenesCompra.length > 0 ){
+						for(var f:int=0; f<_listaOrdenesCompra.length; f++){
+							var arrTempo:ArrayCollection = UtilsGrid.queryADosCampos(_listaPartidaInspeccionUniverso,
+								"nombreProveedor", _listaOrdenesCompra[f].nombreProveedor,
+								"compra", _listaOrdenesCompra[f].compra
+							);
+							(_listaOrdenesCompra[f] as PartidaInspeccion).numPartidas = arrTempo.length;
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).ET = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numFechaInicioInspeccionDias", 0 ) >  0 ? "FT" : "ET" ;
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numET = UtilsGrid.conteoCampoX(arrTempo, "enTiempo","En tiempo");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numUR = UtilsGrid.conteoCampoX(arrTempo, "enTiempo","Urgente");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numFT = UtilsGrid.conteoCampoX(arrTempo, "enTiempo","Fuera de tiempo");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numCG = UtilsGrid.conteoCampoX(arrTempo, "manejo","Congelación");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numRG = UtilsGrid.conteoCampoX(arrTempo, "manejo","Refrigeración");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numAB = UtilsGrid.conteoCampoX(arrTempo, "manejo","Ambiente");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numNA = UtilsGrid.conteoCampoX(arrTempo, "manejo","NA");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numFR = UtilsGrid.conteoCampoX(arrTempo, "tipoFlete", "Regular");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numFE = UtilsGrid.conteoCampoX(arrTempo, "tipoFlete", "Flete Express");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numFP = UtilsGrid.conteoCampoX(arrTempo, "tipoFlete", "Programado");
+							 (_listaOrdenesCompra[f] as PartidaInspeccion).numST = UtilsGrid.conteoCampoX(arrTempo, "nombreCliente","STOCK");
+							 if(_filtroRechazo == ""){
+								 (_listaOrdenesCompra[f] as PartidaInspeccion).numAbierto = -2;
+								 (_listaOrdenesCompra[f] as PartidaInspeccion).numCerrado = -2;
+							 }else{
+								 (_listaOrdenesCompra[f] as PartidaInspeccion).numAbierto = UtilsGrid.conteoCampoX(arrTempo, "estadoRechazo", "Cerrado");
+								 (_listaOrdenesCompra[f] as PartidaInspeccion).numCerrado = UtilsGrid.conteoCampoX(arrTempo, "estadoRechazo", "Abierto");
+							 }
+						}
+				}
+				 if( _listaOrdenesCompra.length > 0){
+					 listOC.selectedIndex = 0;
+				 }else{
+					 _listaPartidaInspeccionTrabajo = new ArrayCollection();
+				 }
+				var finalLista:PartidaInspeccion = new PartidaInspeccion();
+				finalLista.ultimo = _listaOrdenesCompra.length.toString();
+				finalLista.rechaString = renderRechazoString;
+				_listaOrdenesCompra.addItem(finalLista);
+				 if(_estadoVista == "comprasArribadas"){
+					 grpArribadas.percentWidth = 100;
+					 grpArribadas.visible = true;
+					 grpRechazo.width = 0;
+					 grpRechazo.visible = false;
+					 lbltituloRechazado.visible = false;
+					 btnInspector.visible = true;
+					 tablaGrid.porcentajesColumnasPq = [2,0,4,4,13,13,10,10,14,14,10];
+				 }else if(_estadoVista == "comprasRechazo"){
+					 grpArribadas.width = 0;
+					 grpArribadas.visible = false;
+					 grpRechazo.percentWidth = 100;
+					 grpRechazo.visible = true;
+					 lbltituloRechazado.visible = true;
+					 btnInspector.visible = false;
+					 tablaGrid.porcentajesColumnasPq = [2,5,4,4,13,13,10,10,14,14,10];
+				 }
+				 listOC_clickHandler();
+				 btnInspector.enabled = _listaPartidaInspeccionTrabajo.length > 0 ? true: false; 
+			}
+			private function limpiaDatosTitulo():void{
+				_listaPartidaInspeccionTrabajo = new ArrayCollection();
+				_OC = '';
+				lblET.visible = false;
+				_numAbiertas = 0;
+				_numBloqueadas = 0;
+				_numAB = 0;
+				_numCG = 0;
+				_numET = 0;
+				_numFE = 0;
+				_numFP = 0;
+				_numFR = 0;
+				_numFT = 0;
+				_numNA = 0;
+				_numParti = 0;
+				_numRG = 0;
+				_numST = 0;
+				_numUR = 0;
+			}
+			/**
+			 * Funcion para pasar Al inspector
+			 */ 
+			private function avanzaInspector():void{
+				var evento:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.SELECCIONA_OPCION );
+				evento.idOpcionSeleccionada = "seleccionaInspector";
+				dispatchEvent( evento );
+			}
+			/**
+			 * recibo la lista del mapa MapaInspectorPhs
+			 */
+			public function set recibeListaPartidaCompra($lista:ArrayCollection):void{
+				if($lista == null ) return;
+				_listaPartidaInspeccionUniverso = $lista;
+				_seleccionaAnteriorBool = true;
+			}
+			private var _ultimaOCTrabajada:String="algo";
+			private var _seleccionaAnteriorBool:Boolean=false;
+			
+			[Bindable]	private var _indiceAnteriorListOC:int = 0;
+			protected function listOC_clickHandler():void
+			{
+				/// FIXME
+					var theSelectedIndex:int=0;
+					if( listOC.selectedItem != null ){
+									if( _ultimaOCTrabajada != null
+										&& ( listOC.selectedItem as PartidaInspeccion).compra != _ultimaOCTrabajada
+										&& _seleccionaAnteriorBool
+									){ /* ya se trabajo una OC  */
+												_seleccionaAnteriorBool = false;
+												var tempOC:String = _ultimaOCTrabajada;
+												_ultimaOCTrabajada = null;
+												for( var g:int=0; g< _listaOrdenesCompra.length; g++){
+													if( (_listaOrdenesCompra[g] as PartidaInspeccion).compra == tempOC ){
+															theSelectedIndex = (_listaOrdenesCompra[g] as PartidaInspeccion).numFila - 1;
+															_ultimaOCTrabajada = ObjectUtil.copy( (_listaOrdenesCompra[g] as PartidaInspeccion).compra ) as String;
+													}
+												}
+												listOC.selectedIndex = theSelectedIndex;
+									}
+					}
+					// 				VALIDAR SELECCION EN LA LISTA
+					if(listOC.selectedIndex == _listaOrdenesCompra.length-1){
+						listOC.selectedIndex  = _indiceAnteriorListOC;
+						return;
+					}
+					if(listOC.selectedIndex == -1) return;
+					// 				/VALIDAR SELECCION EN LA LISTA
+					_indiceAnteriorListOC = listOC.selectedIndex;
+					var compraOc:String = (_listaOrdenesCompra[listOC.selectedIndex] as PartidaInspeccion).compra;
+					_OC = 'OC-'+compraOc;
+					_display.OCString = 'OC-'+compraOc;
+					_ultimaOCTrabajada = compraOc;
+					lblET.visible = true;
+					_ET = (_listaOrdenesCompra[listOC.selectedIndex] as PartidaInspeccion).ET;
+					var colorRojoTextoGrid:uint = 0xd10c0c; // Red
+					var colorVerdeTextoGrid:uint = 0x70a047; // Verde
+					lblET.setStyle("color", (_ET == "ET" ? colorVerdeTextoGrid: colorRojoTextoGrid) );
+					_listaPartidaInspeccionTrabajo = UtilsGrid.queryCampoX(_listaPartidaInspeccionUniverso, "compra", compraOc);
+					if(_filtroRechazo == "DOC") _listaPartidaInspeccionTrabajo = UtilsGrid.queryADosCampos( _listaPartidaInspeccionTrabajo, "rechazoXDoc", "true", "rechazoXInsp" , "false" );
+					if(_filtroRechazo == "INS") _listaPartidaInspeccionTrabajo = UtilsGrid.queryADosCampos( _listaPartidaInspeccionTrabajo, "rechazoXDoc", "false", "rechazoXInsp" , "true" );
+					if(_filtroRechazo == "AMB") _listaPartidaInspeccionTrabajo = UtilsGrid.queryADosCampos(_listaPartidaInspeccionTrabajo, "rechazoXDoc", "true", "rechazoXInsp" , "true" );
+					if(_filtroRechazo == "") _listaPartidaInspeccionTrabajo = UtilsGrid.queryADosCampos(_listaPartidaInspeccionTrabajo, "rechazoXDoc", "false", "rechazoXInsp" , "false" );
+					
+					_numParti = _listaPartidaInspeccionTrabajo.length;
+					_numET = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"enTiempo","En tiempo");
+					//_display.OC_ET_INT = _numET;
+					_numUR = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"enTiempo","Urgente");
+					_numFT = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"enTiempo","Fuera de tiempo");
+					_numST = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"nombreCliente","STOCK");
+					_numCG = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"manejo","Congelamiento");
+					_numRG = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"manejo","Refrigeración");
+					_numAB = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"manejo","Ambiente");
+					_numNA = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"manejo","NA");
+					_numFR = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"tipoFlete","Regular");
+					_numFE = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"tipoFlete","Flete Express");
+					_numFP = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"tipoFlete","Programado");
+					_numAbiertas = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"estadoRechazo","Cerrado");
+					_numBloqueadas = UtilsGrid.conteoCampoX(_listaPartidaInspeccionTrabajo,"estadoRechazo","Abierto");
+					if(_listaPartidaInspeccionTrabajo.length > 0) tablaGrid.selectedIndex = 0;
+					_ultimoIndiceTablaGrid=0;
+					tablaGrid_itemClickHandler();
+			}
+			
+			public function btnBarra_clickHandler():void
+			{
+				if(btnBarra.selectedIndex == 0){
+					_filtroRechazo = "INS";
+					iniciarOrdenesCompra(_nombreProveedor);
+					lbltituloRechazado.text = "RECHAZADO POR INSPECCIÓN" 
+				}else if(btnBarra.selectedIndex == 1){
+					_filtroRechazo = "DOC";
+					iniciarOrdenesCompra(_nombreProveedor);
+					lbltituloRechazado.text = "RECHAZADO POR DOCUMENTACIÓN" 
+				}else if(btnBarra.selectedIndex == 2){
+					_filtroRechazo = "AMB";
+					iniciarOrdenesCompra(_nombreProveedor);
+					lbltituloRechazado.text = "RECHAZADO POR INSPECCIÓN Y DOCUMENTACIÓN" 
+				}
+			}
+			private var _ultimoIndiceTablaGrid:int=0;
+			protected function tablaGrid_itemClickHandler():void
+			{
+				if( (_listaPartidaInspeccionTrabajo[tablaGrid.selectedIndex ] as PartidaInspeccion).numFila > 0){
+					(_listaPartidaInspeccionTrabajo[tablaGrid.selectedIndex ] as PartidaInspeccion).numFila = (tablaGrid.selectedIndex +1 )* -1;
+				}
+				if(_ultimoIndiceTablaGrid != tablaGrid.selectedIndex ){
+					(_listaPartidaInspeccionTrabajo[_ultimoIndiceTablaGrid] as PartidaInspeccion).numFila = (_ultimoIndiceTablaGrid +1 );
+					_ultimoIndiceTablaGrid = tablaGrid.selectedIndex;
+				}
+			}
+			private function gotoInspeccion():void{
+				var ettv:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.SELECCIONA_OPCION);
+				ettv.idOpcionSeleccionada = "seleccionaInspector";
+				ettv.listaPartidas = _listaPartidaInspeccionTrabajo;
+				ettv.datosDisplay = _display;
+				dispatchEvent( ettv );
+				var e:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.OC_STRING_EN_INSPECCION );
+				if( listOC.selectedItem != null) e.ordenCompra = (listOC.selectedItem as PartidaInspeccion).compra; //_display.OCString.substr(3, 11);
+				dispatchEvent( e );
+			}
+		]]>
+	</fx:Script>
+		<s:VGroup width="30%" height="100%" gap="0">
+			<s:ButtonBar id="btnBarra" width="100%" click="btnBarra_clickHandler()"
+						 dataProvider="{_datosBarraBoton}" selectedIndex="0"/>
+			<s:List id="listOC" width="100%" height="100%" borderVisible="false"
+					mouseDown="listOC_clickHandler()" dataProvider="{_listaOrdenesCompra}"
+					itemRenderer="mx.com.proquifa.proquifanet.InspectorPhs.vistas.vista.itemRenderers.OrdenCompraRenderer"
+					selectedIndex="0" 
+					 
+					/><!--selectionColor="0x{catalogoColores.LIST_SELECTED}" rollOverColor="0x{catalogoColores.LIST_HOVERED}"-->
+		</s:VGroup>
+		<otros:VDivisionHueca height="100%"/>
+		<s:VGroup width="100%" height="100%" paddingLeft="15" gap="0">
+			
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:VGroup id="grpArribadas" width="0" >
+					<s:Label text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numET} ET · {_numUR} UR · {_numFT} FT · {_numST} ST"
+										  paddingBottom="5" color="#773F8C" fontSize="14" fontWeight="bold" />
+					<s:Label color="#336699" fontSize="13" text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numCG} CG · {_numRG} RG · {_numAB} AB · {_numNA} NA "/>
+					<s:Label color="#999999" fontSize="13" text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numFR} FR · {_numFE} FE · {_numFP} FP · {_numST} ST"/>
+				</s:VGroup>
+				<s:VGroup id="grpRechazo" width="0">
+					<s:Label text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numAbiertas} Abierta{(_numAbiertas == 1 ? '':'s')} · {_numBloqueadas} Bloqueada{(_numBloqueadas == 1 ? '':'s')}" 
+										paddingBottom="5" color="#dd9c21" fontSize="14" fontWeight="bold"/>
+					<s:Label color="#336699" fontSize="13" text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numCG} CG · {_numRG} RG · {_numAB} AB · {_numNA} NA "/>
+					<s:Label color="#666666" fontSize="13" text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numET} ET · {_numUR} UR · {_numFT} FT · {_numST} ST"/>
+					<s:Label color="#999999" fontSize="13" text="{_numParti} partida{(_numParti == 1 ? '':'s')} : {_numFR} FR · {_numFE} FE · {_numFP} FP · {_numST} ST"/>
+				</s:VGroup>
+				<s:VGroup horizontalAlign="right" verticalAlign="middle">
+					<label:labelSubtitulo fontSize="14" fontWeight="bold" text="{_OC}"/>
+					<label:labelSubtitulo id="lblET" fontSize="14" fontWeight="bold"
+										  text="{_ET}"/>
+					<label:labelSubtitulo id="lbltituloRechazado" color="#999999" fontSize="14"
+										  fontWeight="bold" text="RECHAZADA POR ######"/>
+				</s:VGroup>
+			</s:HGroup>
+			<otros:divisionGruesa width="100%"/>
+			<pqNet:dataGridPqNet id="tablaGrid" width="100%" height="100%" dataProvider="{_listaPartidaInspeccionTrabajo}"
+								  itemClick="tablaGrid_itemClickHandler()"
+								 variableRowHeight="true" rowHeight="66"
+								 >
+				<pqNet:columns>
+					<mx:DataGridColumn />
+					<mx:DataGridColumn >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoIconosGrid;
+											[Bindable]	private var normalIcon:Class;
+											//[Bindable]	private var hoveredIcon:Class;
+											
+											override public function set data(value:Object):void{
+												super.data= value;
+												if(data.estadoRechazo == "Abierto"){
+													normalIcon = catalogoIconosGrid.getInstance().render_candadonegrocerrado;
+													//hoveredIcon = catalogoIconosGrid.getInstance().render_botedebasurablanco;
+												}else if(data.estadoRechazo == "Cerrado"){
+													normalIcon = catalogoIconosGrid.getInstance().render_candadonegroabierto;
+													//hoveredIcon = catalogoIconosGrid.getInstance().render_botedebasurablanco;
+												}
+											}
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:Image source="{normalIcon}" horizontalCenter="0" />
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<!--<mx:DataGridColumn dataField="estadoRechazo" headerText="estadoRechazo"/>
+					<mx:DataGridColumn dataField="idPartidaCompra" headerText="_idPartidaCompra"/>-->
+					<mx:DataGridColumn dataField="partida" headerText="#">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:Label text="{(data.numFila > 0 ? data.numFila: data.numFila * -1)}" horizontalCenter="0"
+											 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"  />
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="C" dataField="cantidadCompra"/>
+					<mx:DataGridColumn headerText="Concepto" dataField="descripcionProducto" itemRenderer="skins.skin.datagrid.pqNet.componentes.VerMasRenderer"/>
+					<mx:DataGridColumn headerText="Tipo">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup width="100%">
+										<s:Label width="100%" fontSize="12" fontWeight="normal" textAlign="center"
+												 text="{data.tipo}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+										<s:Label width="100%" textAlign="center"
+												 color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"
+												 text="{(data.manejo == 'NA' ? 'No aplica': data.manejo)}" fontSize="10" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Peticiones especiales" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+											
+											import skins.catalogos.catalogoColores;
+											
+											import spark.components.Label;
+											override public function set data(value:Object):void{
+												super.data= value;
+												iniciarr();
+											}
+											private function iniciarr():void{
+												grpPublicacion.height = 0;
+												grpPublicacion.visible = false;
+												grpSinEspecificar.height = 0;
+												grpSinEspecificar.visible = false;
+												grpTodo.percentHeight = 100;
+												grpTodo.visible = true;
+												
+												grpLote.percentHeight = 100;
+												grpLote.visible = true;
+												grpCaducidad.percentHeight = 100;
+												grpCaducidad.visible = true;
+												if(data.tipo == "Publicaciones" ){
+													grpTodo.height = 0;
+													grpTodo.visible = false;
+													if( (data as PartidaInspeccion).edicion == "ND" || data.edicion == "No especificado" || data.edicion == "NA" ){
+														grpSinEspecificar.percentHeight = 100;
+														grpSinEspecificar.visible = true;
+													}else{
+														grpPublicacion.percentHeight = 100;
+														grpPublicacion.visible = true;
+													}
+												}else{
+													var caducidadBool:Boolean= false;
+													var loteBool:Boolean= false;
+													if(data.caducidad =="No especificado" || data.caducidad =="ND" || data.caducidad =="NA") caducidadBool = true;
+													if(data.lote =="No especificado" || data.lote =="ND" || data.lote =="NA") loteBool = true;
+													if( caducidadBool == true && loteBool == true){
+														grpSinEspecificar.percentHeight = 100;
+														grpSinEspecificar.visible = true;
+														grpTodo.height = 0;
+														grpTodo.visible = false;
+													}else if( loteBool == true ){
+														grpLote.height = 0;
+														grpLote.visible = false;
+													}else if(caducidadBool == true ){
+														grpCaducidad.height = 0;
+														grpCaducidad.visible = false;
+													}
+												}
+											}
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup id="grpSinEspecificar" width="100%" horizontalAlign="center">
+										<s:Label color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="Sin especificar" />
+									</s:VGroup>
+									<s:VGroup id="grpPublicacion" width="100%" horizontalAlign="center">
+										<s:Label fontSize="10" color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="Edición" />
+										<s:Label fontSize="10" text="{data.edicion}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+									</s:VGroup>
+									<s:VGroup id="grpTodo" width="100%" height="100%" horizontalAlign="center">
+										<s:VGroup id="grpCaducidad" width="100%" height="100%" horizontalAlign="center">
+											<s:Label fontSize="10" color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="Caducidad" />
+											<s:Label fontSize="10" text="{data.caducidad}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+										</s:VGroup>
+										<s:VGroup id="grpLote" width="100%" height="100%" horizontalAlign="center">
+											<s:Label fontSize="10" color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="Lote" />
+											<s:Label fontSize="10" text="{data.lote}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+										</s:VGroup>
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>		
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="FEE">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+											import skins.catalogos.catalogoIconosGrid;
+											
+											import spark.components.Label;
+											[Bindable]	private var colorX:uint = 0x002200;
+											[Bindable]	private var normalIco:Class;
+											override public function set data(value:Object):void{
+												super.data= value;
+												if(data.enTiempo == "Fuera de tiempo"){
+													colorX = uint('0x'+catalogoColores.LABEL_MORADO);// 0x773F8C;// morado
+													normalIco = catalogoIconosGrid.getInstance().render_banderamorada;
+												}
+												if(data.enTiempo == "Urgente"){
+													colorX = uint('0x'+catalogoColores.LABEL_ROJO); //0xC1251D;// rojo
+													normalIco = catalogoIconosGrid.getInstance().render_banderaroja;
+												}
+												if(data.enTiempo == "En tiempo"){
+													colorX = uint('0x'+catalogoColores.LABEL_VERDE ); //0x6BA143;// verde
+													normalIco = catalogoIconosGrid.getInstance().render_banderaverde;
+												}
+												if(data.tipoFlete == "Regular"){
+													lblFlete.text = "FR";
+												}else if(data.tipoFlete == "Programado"){
+													lblFlete.text = "FP";
+												}else if(data.tipoFlete == "Flete Express"){
+													lblFlete.text = "FE";
+												}
+												iniciarr();
+											}
+											private function iniciarr():void{
+												if(data.nombreCliente == "STOCK"){
+													grpFecha.height = 0;
+													grpFecha.visible = false;
+													grpNA.percentHeight = 100;
+													grpNA.visible = true;
+												}else{
+													grpFecha.percentHeight = 100;
+													grpFecha.visible = true;
+													grpNA.height = 0;
+													grpNA.visible = false;
+												}
+											}
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup id="grpFecha" width="100%" horizontalAlign="center">
+										<s:Label id="lblFEE" text="{data.fechaEstimadaEntregaString}"  fontWeight="bold"
+												 color="{colorX}"/>
+										<s:Label id="lblFlete" text="-" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" />
+										<s:Image source="{normalIco}" horizontalCenter="0"/>
+									</s:VGroup>
+									<s:VGroup id="grpNA" width="100%" horizontalAlign="center">
+										<s:Label color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="NA" />
+										<s:Label color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="NA" />
+										<s:Label color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="NA" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="PI">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+											override public function set data(value:Object):void{
+												super.data= value;
+												lblFletes.visible = true;
+												lblFletes.height = 14;
+												lblParciales.visible = true;
+												lblParciales.height = 14;
+												if(data.tipo == "Publicaciones"){
+													lblFletes.visible = false;
+													lblFletes.height = 0;
+													lblParciales.visible = false;
+													lblParciales.height = 0;
+												}
+											}
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup id="grpNA" width="100%" horizontalAlign="center">
+										<s:Label text="PI-{data.pedido}" fontSize="12"
+												color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" />
+										<s:Label id="lblFletes" text="{data.numPartidasRegulares} FR  :  {data.numPartidasFEx} FE :  {data.numPartidasProgramadas} FP"
+												 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+										<s:Label id="lblParciales" text="{(data.parciales == '1' ? 'PARCIALES':'NO PARCIALES')}"
+												 color="0x{catalogoColores.LABEL_AZUL_TENUE}"/>
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn dataField="nombreCliente" headerText="Destino">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+										]]>
+									</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:VGroup id="grpNA" width="100%" horizontalAlign="center">
+											<s:Label color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="{(data.nombreCliente == 'STOCK' ? 'Matriz': data.nombreCliente)}" fontSize="10"/>
+											<s:Label color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}" text="{(data.nombreCliente == 'STOCK' ? 'Stock': 'Cliente')}" fontSize="10"/>
+										</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="En espera desde">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup id="grpNA" width="100%" horizontalAlign="center">
+										<s:Label text="{data.fechaInicioInspeccionString}" fontSize="12"/>
+										<s:Label text="{data.numFechaInicioInspeccionDias} dia{(data.numFechaInicioInspeccionDias == 1 ? '':'s' )} de recibido" fontSize="10"/><!--color="#666666" color.selected="#FFFFFF"-->
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<!--<mx:DataGridColumn headerText="doc" dataField="rechazoXDoc"/>
+					<mx:DataGridColumn headerText="ins" dataField="rechazoXInsp"/>-->
+				</pqNet:columns>
+			</pqNet:dataGridPqNet>
+			<otros:divisionGruesa width="100%"/>
+			<s:HGroup width="100%" height="25" verticalAlign="middle" horizontalAlign="right" paddingTop="13">
+				<pqNet1:botonPqNetLargo id="btnInspector" label="Inspector" icono="inspector" click="gotoInspeccion()"/>
+			</s:HGroup>
+		</s:VGroup>
+</s:HGroup>

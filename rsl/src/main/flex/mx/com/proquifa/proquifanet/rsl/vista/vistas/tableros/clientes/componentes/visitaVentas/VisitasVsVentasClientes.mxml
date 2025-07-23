@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorTableroMiniChart xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								  xmlns:s="library://ns.adobe.com/flex/spark" 
+								  xmlns:mx="library://ns.adobe.com/flex/mx" 
+								  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*" xmlns:graficas="skins.skin.graficas.*"
+								  width="100%" height="100%" 
+								  informacion="{catalogoInfoGraficas.TABLERO_CLIENTES_VISITAS_VS_VENTAS}" 
+								  titulo="VISITAS VS VENTAS" 
+								  vistaTablaGrafica="{ new VisitasVsVentasClientesMax() }"
+								  xmlns:label="skins.skin.label.*" >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+			
+			
+			private var yallegaronLasVentas:Boolean = false;
+			private var yallegaronLasVisitas:Boolean = false;
+			private var montoVentas:ArrayCollection;
+			private var visitas:ArrayCollection;
+			[Bindable] private var _event:EventoTableroClientes;
+			private var totalLegend:Number = 0;
+			private const _tamanioMinimo:int = 170;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			public function set recibeLinealVentasPeriodo( $lista:ArrayCollection ):void{
+				if($lista == null || $lista.length == 0)
+					$lista = new ArrayCollection;
+				
+				montoVentas = ObjectUtil.copy($lista) as ArrayCollection;
+				
+				yallegaronLasVentas = true;
+			}
+			
+			public function set recibeVisitas($lista:ArrayCollection):void {
+				if($lista == null || $lista.length == 0)
+					$lista = new ArrayCollection;
+				
+				visitas = ObjectUtil.copy($lista) as ArrayCollection;
+				yallegaronLasVisitas = true;
+			}
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				
+				visitas = new ArrayCollection;
+				montoVentas = new ArrayCollection;
+				_event = $event;
+				yallegaronLasVentas = false;
+				yallegaronLasVisitas = false;
+				
+				iniciarGrafica();
+			}
+			
+			private function iniciarGrafica():void {
+				if (yallegaronLasVentas && yallegaronLasVisitas ) {
+					yallegaronLasVentas = false;
+					yallegaronLasVisitas = false;
+					myChart.dataProvider = new ArrayCollection();
+					myChart.dataProvider = llenaGrafica();
+					myChart.invalidateProperties();
+				} else
+					setTimeout(iniciarGrafica, 300);
+			}
+			
+			private function llenaGrafica():ArrayCollection {
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int = 0;
+				totalLegend = 0;
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.montoUSD_0 = 0;
+					objeto.montoUSD_1 = 0;
+					objeto.montoUSD_2 = 0;
+					objeto.montoObjetivo = 0;
+					objeto.montoFundamental = 0;
+					
+					for( m = 0; m < montoVentas.length;m++ )
+					{
+						resumen = montoVentas[m] as ResumenConsulta;
+						if( resumen.etiqueta == "VENTAS_0" || resumen.etiqueta == "NOTA_0" ){
+							objeto.montoUSD_0 += resumen.total;
+							totalLegend += resumen.total;	
+						}
+						else if( resumen.etiqueta == "VENTAS_1" || resumen.etiqueta == "NOTA_1" ){
+							objeto.montoUSD_1 += resumen.total;									
+						}
+					}
+					
+					arrReturn.addItem( objeto );
+				}
+				else
+				{
+
+					while( cuenta < 13)
+					{
+						if(cuenta >= _event.parametros.rangoMinMes && cuenta <= _event.parametros.rangoMaxMes)
+						{
+							objeto = new Object();
+							objeto.numeroMes = cuenta;
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.montoUSD_0 = 0;
+							objeto.montoUSD_1 = 0;
+							objeto.montoUSD_2 = 0;
+							objeto.montoObjetivo = 0;
+							objeto.totalPeriodo = 0;
+							
+							for( m = 0; m < montoVentas.length;m++ )
+							{
+								resumen = montoVentas[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{
+									if( resumen.etiqueta == "VENTAS_0" || resumen.etiqueta == "NOTA_0" )
+									{
+										objeto.montoUSD_0 += resumen.total;
+										totalLegend += resumen.total;
+									} 
+								}
+							}
+							
+							arrReturn.addItem(objeto);
+						}
+						cuenta++;
+					}
+				}
+				
+				
+				for (var i:int = 0; i < arrReturn.length; i++) 
+				{
+					var monto:Object = arrReturn[i];
+					monto.visitas = 0;
+					for (var j:int = 0; j < visitas.length; j++) 
+					{
+						var resumen1:ResumenConsulta = visitas[j];
+						if (resumen1.mes == monto.numeroMes) {
+							monto.visitas = resumen1.totalVisitas;
+							visitas.removeItemAt(j);
+							break;
+						}else if (_event.parametros.periodo.toLowerCase() == "quincenal") {
+							monto.visitas = resumen1.totalVisitas;
+							monto.numeroMes = resumen1.mes;
+							visitas.removeItemAt(j);
+							break;
+						}
+					}
+					
+					if (monto.visitas == 0 ) {
+						monto.montoUSD_0 = -1;
+					}
+					
+				}
+				
+				return arrReturn;
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+		<mx:SolidColorStroke id="sA" color="0x3b98af" weight="6"/>
+		<s:SolidColorStroke id="s1" color="0x000000" weight="1"/>
+	</fx:Declarations>
+	
+	<comun:contenido >
+		<s:VGroup width="100%" height="100%" horizontalAlign="right" paddingTop="50" paddingBottom="10" >
+			<mx:BubbleChart width="100%" height="100%" id="myChart" 
+				showDataTips="true" maxRadius="20" minRadius="1"
+				dataTipRenderer="{VisitasVsVentasToolTip}"
+				dataTipMode="single"
+				showDataTipTargets="false"
+				paddingRight="{ width > _tamanioMinimo ? 30 : 5}"
+				paddingLeft="{ width > _tamanioMinimo ? 20 : 5}"
+				>
+				<mx:series>
+					<mx:BubbleSeries id="seriaVenta" 
+					 xField="numeroMes" yField="montoUSD_0" radiusField="visitas">
+						
+					</mx:BubbleSeries>
+					<mx:BubbleSeries id="seriaVisita"
+					xField="numeroMes" yField="montoUSD_0" radiusField="visitas">
+						
+					</mx:BubbleSeries>
+				</mx:series>
+				
+				<mx:horizontalAxis>
+					<mx:LinearAxis id="nombre" minimum="{_event.parametros.rangoMinMes}" maximum="{_event.parametros.rangoMaxMes}" interval="1" /> <!--FUNCIONA BIEN PERO CORTA A LA MITAD LA PRIMERA COLUMNA (ACTUAL)-->
+					<!--<mx:LinearAxis id="nombre" minimum="{_event.parametros.rangoMinMes-1}" interval="1" />-->   <!--FUNCIONA BIEN PERO SE AGREGA UN NÚMERO ANTERIOR AL MES INICIAL DEL PERIODO-->
+				</mx:horizontalAxis>
+				
+				<mx:horizontalAxisRenderers>
+					<mx:AxisRenderer axis="{nombre}" axisStroke="{trazoGruezo}"
+									 tickPlacement="none" tickLength="0"
+									 fontFamily="Helvetica" fontSize="11" fontStyle="normal"
+									 fontWeight="bold" labelFunction="lblFunction"
+									 >
+						<mx:tickStroke>
+							<mx:SolidColorStroke color="#000000" weight="1"/>
+						</mx:tickStroke>
+						<mx:minorTickStroke>
+							<mx:SolidColorStroke color="#000000" weight="1"/>
+						</mx:minorTickStroke>
+					</mx:AxisRenderer>
+				</mx:horizontalAxisRenderers>				
+				
+				
+				<mx:verticalAxis>
+					<mx:LinearAxis id="ventasDLS"  labelFunction="formateoEje" minimum="0" /> 
+				</mx:verticalAxis>
+				<mx:verticalAxisRenderers>
+					<mx:AxisRenderer axis="{ventasDLS}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"
+									 showLabels="{ width > _tamanioMinimo ? true : false}" >
+					</mx:AxisRenderer>
+				</mx:verticalAxisRenderers>
+				
+				
+			</mx:BubbleChart>
+			<s:Label width="100%" paddingBottom="10" paddingLeft="15" styleName="axisVerticalLabels">
+				<s:text>Los montos se refieren a precio de Venta</s:text>
+			</s:Label>
+		</s:VGroup>
+	</comun:contenido>
+	
+</comun:ContenedorTableroMiniChart>

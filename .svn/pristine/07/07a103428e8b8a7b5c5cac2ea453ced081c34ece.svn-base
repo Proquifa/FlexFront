@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:documentacion="mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.documentacion.*"
+		  xmlns:busqueda="mx.com.proquifa.vista.vistas.skin.busqueda.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  paddingTop="20" gap="20" 
+		  verticalAlign="middle" 
+		  width="100%" height="100%"
+		  creationComplete="init(event)" 
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			private var _sql:Query;
+			private var setDocEdita:Boolean = false;
+			private var respaldoDocumentos:ArrayCollection;
+			
+			public function resetAll():void
+			{
+				_sql = null;
+				recibeDocumentos( new ArrayCollection());
+				grpVista.dataProvider = new ArrayCollection();
+				respaldoDocumentos = new ArrayCollection();
+				lstDocumentos.resetAll();
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener(EventoGestorCompras.ENVIAR_ARCHIVO_ADICIONAL,recibeAdicional,false,0,true);
+				addEventListener(EventoGestorCompras.ENVIO_DOCUMENTO_SELECT_PIE,cambioSeleccion,false,0,true);
+				addEventListener("borrarItemAdicional",borrarItem,false,0,true);
+				addEventListener("resetFiltrosPieGestor",resetFiltros,false,0,true);
+			}
+			
+			private function recibeAdicional(evt:EventoGestorCompras):void
+			{
+				respaldoDocumentos.addItem(evt.documentoDespacho);
+				lstDocumentos.seleccionaAdicional = true;
+				recibeDocumentos( respaldoDocumentos );
+			}
+			
+			private function cambioSeleccion(event:EventoGestorCompras):void
+			{
+				var tipo:String = event.seleccionado;
+				
+				if(event.seleccionado == "carta de uso")
+					tipo = "cartauso";
+				
+				if(event.seleccionado == "packing list")
+					tipo = "pakinglist";
+				
+				lstDocumentos.dataProvider = _sql.armarLista(_sql.getPunteros([null,null,null,null,tipo]));
+				lstDocumentos.cargados = _sql.armarLista(_sql.getPunteros([false,null,null,null,tipo]));
+				lstDocumentos.faltantes = _sql.armarLista(_sql.getPunteros([true,null,null,null,tipo]));
+			}
+			
+			private function resetFiltros(evet:Event):void
+			{
+				setRespaldoDatos();
+			}
+			
+			private function setRespaldoDatos():void
+			{
+				grpVista.dataProvider = new ArrayCollection();
+				lstDocumentos.dataProvider = respaldoDocumentos;
+				lstDocumentos.cargados = _sql.armarLista(_sql.getPunteros([false]));
+				lstDocumentos.faltantes = _sql.armarLista(_sql.getPunteros([true]));
+				grpVista.dataProvider = respaldoDocumentos;
+			}
+			
+			public function recibeDocumentos($documentos:ArrayCollection):void
+			{
+				respaldoDocumentos = new ArrayCollection();
+				respaldoDocumentos = ObjectUtil.copy($documentos) as ArrayCollection;
+				
+				_sql = new Query($documentos,["faltante","folio","codigoLA","nombreProducto","tipo","recargado"],true);
+				lstDocumentos.dataProvider = $documentos;
+				lstDocumentos.cargados = _sql.armarLista(_sql.getPunteros([false]));
+				lstDocumentos.faltantes = _sql.armarLista(_sql.getPunteros([true,null,null,null,null,false]));
+				grpVista.dataProvider = $documentos;
+				
+				var otros:ArrayCollection = _sql.armarLista(_sql.getPunteros([null,null,null,null,null,true]));
+				if (otros.length > 0)
+				{
+					for (var r:int = 0; r < otros.length; r++) 
+					{
+						lstDocumentos.cargados.addItem(otros[r]);
+					}
+				}
+				
+			}
+			
+			
+			private function borrarItem(evt:Event):void
+			{
+				var tmpAdicional:DocumentoOrdenDespacho = lstDocumentos.getDocumentSelect();
+				for (var i:int = 0; i < respaldoDocumentos.length; i++) 
+				{
+					var curr:DocumentoOrdenDespacho = respaldoDocumentos[i] as DocumentoOrdenDespacho;
+					if(curr.tipo == tmpAdicional.tipo && curr.nombreDocumento == tmpAdicional.nombreDocumento)
+					{
+						respaldoDocumentos.removeItemAt(i);
+						setRespaldoDatos();
+						break;
+					}
+				}
+				
+				dispatchEvent(new Event("EnviarDocumentosConArchivosCargados",true));
+			}
+			
+			
+			public function get documentos():ArrayCollection
+			{
+				return lstDocumentos.docs;
+			}
+			
+			public function get documentosResumen():ArrayCollection
+			{
+				return respaldoDocumentos;
+			}
+			
+			
+			public function setOrdenDespacho($orden:OrdenDespacho):void
+			{
+				if($orden.documentos && $orden.documentos.length > 0)
+				{
+					recibeDocumentos( $orden.documentos );
+					grpVista.dataProvider = $orden.documentos;
+				}
+				else
+				{
+					recibeDocumentos( new ArrayCollection() );
+					grpVista.dataProvider = new ArrayCollection();
+				}
+			}
+			
+			
+		]]>	
+	</fx:Script>
+	
+	
+	
+	<!--	ESTA ES LA GRAFICA	  -->
+	<s:VGroup width="35%" height="100%" >
+		<documentacion:DocumentacionOrdenDespacho_Grafica id="grpVista" width="100%" height="100%" />
+	</s:VGroup>  
+	
+	
+	<!-- 	ESTA ES LA PARTE DE LA LISTA Y VISUALIZADOR -->
+	<s:VGroup width="65%" height="100%" horizontalAlign="center" paddingTop="20" paddingBottom="10">
+		<documentacion:DocumentacionOrdenDespacho_ListaDocumentos id="lstDocumentos" width="100%" height="100%" /> 
+	</s:VGroup>  
+	
+	
+	
+	
+	
+</s:HGroup>

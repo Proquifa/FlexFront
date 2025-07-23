@@ -1,0 +1,677 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"		   
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+		  xmlns:otros="skins.otros.*" xmlns:grafica="skins.botones.grafica.*" xmlns:pqNet="skins.botones.pqNet.*" 
+		  xmlns:chekbox="skins.skin.chekbox.*"
+		  xmlns:cotPed="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.productos.componentes.cotPed.*"
+		  xmlns:componentes="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  width="100%" height="100%" 
+		  creationComplete="init(event)" xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" xmlns:label="skins.skin.label.*" 
+		  >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+		<mx:SolidColorStroke id = "sA" color="0x3b98af" weight="6"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			private var cont:Number=0;
+			private var totalLegend:Number = 0;
+			private var mesesActivos:Number = 0;
+			private var mesesCotizados:Number = 0;			
+			public static var chkAux:CheckBoxPq = new CheckBoxPq;	
+			private var _sql:Query;
+			
+			[Bindable] private var _listadoProductosCliente:ArrayCollection = new ArrayCollection(); // Es para el GRID
+			[Bindable] private var _pedidosTabla:ArrayCollection;
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();		
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			[Bindable] private var _anioMultiple:Boolean = false;
+			private var _anioInicio:int = 0;
+			private var _anioFin:int = 0;
+			
+			protected function init(event:FlexEvent):void
+			{
+				cont=0;
+				validarLlenarGrid();
+				chkAux.selected = checkCotizado.selected;
+				
+				chkAux.addEventListener(Event.CHANGE,seleccionarChkCotizado,false,0,true);
+			}
+			
+			public function set recibeCotPedido( $lista:ArrayCollection ):void
+			{
+				if( $lista == null ) return;
+				
+				_linealArrGrafica = $lista;
+				var listTemp:ArrayCollection = UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COT=PED_0");
+				if(_anioMultiple){
+					totalCotizado.myChart.dataProvider = iniciarGraficaAnioMultiple( listTemp, "barras" );				
+					totalCotizado.myChart1.dataProvider = iniciarGraficaAnioMultiple(listTemp, "puntos" );
+				}else{
+					totalCotizado.myChart.dataProvider = iniciarGrafica( listTemp, "barras" );				
+					totalCotizado.myChart1.dataProvider = iniciarGrafica(listTemp, "puntos" );
+				}
+			}
+			
+			public function set recibeListaCotizaPedidoCliente($lista:ArrayCollection):void
+			{
+				if($lista == null ) return;
+				_listadoProductosCliente = $lista;
+				for(var d:int = 0; d< _listadoProductosCliente.length ; d++)
+				{
+					if(_listadoProductosCliente[d].folioCotizacion == cotizacionTemp )
+					{
+						_listadoProductosCliente[d].repetido = true;
+					}
+					var cotizacionTemp:String = _listadoProductosCliente[d].folioCotizacion;
+				}
+				btnExportar.enabled =  _listadoProductosCliente.length < 1 ? false : true;
+				setValoresFooter($lista);
+			}
+			
+			private function minimiza():void{	
+				var evt:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.VOLVER_A_TABLERO_PRODUCTOS);
+				dispatchEvent(evt);			
+			}
+			
+			public function seleccionaTabla():void
+			{			
+				stackGeneral.selectedChild = vistaTabla;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+			}		
+			
+			private function iniciarGrafica( $lista:ArrayCollection, $vieneD:String):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int;
+				var totalCotizado:Number=0;
+				var totalPedido:Number=0;
+				var mT:int;
+				var cuentaT:int = 1;
+				totalLegend = 0;
+				
+				if ($vieneD == "puntos")
+					arrReturn.addItem(new Object());				
+				
+				mesesActivos = 0;
+				mesesCotizados = 0;
+				var sumaPorcentajes:Number = 0; 
+				while( cuenta < 13)
+				{
+					if(cuenta >= this._minimoMeses && cuenta <= this._maximoMeses)
+					{
+						objeto = new Object();
+						objeto.numeroMes = cuenta;
+						objeto.mes = _listaMensual[cuenta -1];
+						objeto.cotizado = 0;
+						objeto.pedido = 0;
+						objeto.totalCotizado = 0;
+						objeto.totalPedido = 0;
+						objeto.percentPedido = 0;
+						objeto.diferencia = 0;
+						objeto.promedioMeses = 0;
+						
+						for( m = 0; m < $lista.length;m++ )
+						{
+							resumen = $lista[m] as ResumenConsulta;
+							if(cuenta == resumen.mes)
+							{ 
+								if( resumen.conceptoResultado == "PEDIDA" )
+								{
+									objeto.pedido += resumen.total;
+									totalLegend += resumen.total;
+									mesesActivos++;
+								}
+								else if( resumen.conceptoResultado == "COTIZADA" )
+								{
+									objeto.cotizado += resumen.total;
+									mesesCotizados++;
+								}
+								
+								if (objeto.pedido > 0 && objeto.cotizado > 0){
+									objeto.percentPedido=((objeto.pedido as Number)*100)/(objeto.cotizado as Number);
+									sumaPorcentajes += ObjectUtil.copy(objeto.percentPedido) as Number;
+									objeto.diferencia = objeto.pedido - objeto.cotizado;
+								}
+							}
+						}
+						arrReturn.addItem(objeto);
+					}
+					cuenta++;
+				}
+				
+				if (mesesActivos > 0)
+				{
+					var prom:Number = sumaPorcentajes / mesesActivos;
+					for(var w:int=0; w < arrReturn.length; w++)
+					{
+						arrReturn[w].promedioMeses = prom;
+					}
+				}				
+				
+				if ($vieneD == "puntos")
+					arrReturn.addItem(new Object());
+				
+				for( var g:int = 0; g < arrReturn.length; g++ )
+				{
+					arrReturn[g].totalPeriodo = totalLegend;
+				}
+				
+				return arrReturn;
+			}
+			
+			private function iniciarGraficaAnioMultiple( $lista:ArrayCollection, $vieneD:String):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;				
+				var resumen:ResumenConsulta;
+				var m:int;
+				var totalCotizado:Number=0;
+				var totalPedido:Number=0;
+				var mT:int;				
+				var pintarAnio:int = _anioInicio;
+				var copiaUniverso:ArrayCollection = ObjectUtil.copy($lista) as ArrayCollection;
+				totalLegend = 0;
+				
+				if ($vieneD == "puntos")
+					arrReturn.addItem(new Object());
+				
+				mesesActivos = 0;
+				mesesCotizados = 0;
+				var sumaPorcentajes:Number = 0; 
+				while( pintarAnio <= _anioFin)
+				{					
+					objeto = new Object();
+					objeto.numeroMes = pintarAnio;
+					objeto.mes = pintarAnio;
+					objeto.cotizado = 0;
+					objeto.pedido = 0;
+					objeto.totalCotizado = 0;
+					objeto.totalPedido = 0;
+					objeto.percentPedido = 0;
+					objeto.diferencia = 0;
+					objeto.promedioMeses = 0;
+					
+					var arrCopia:ArrayCollection = UtilsGrid.queryCampoX( copiaUniverso, "mes",pintarAnio.toString() );
+					
+					for( m = 0; m < arrCopia.length;m++ )
+					{
+						resumen = arrCopia[m] as ResumenConsulta;
+						
+						if( resumen.conceptoResultado == "PEDIDA" )
+						{
+							objeto.pedido += resumen.total;
+							totalLegend += resumen.total;
+							mesesActivos++;
+						}
+						else if( resumen.conceptoResultado == "COTIZADA" )
+						{
+							objeto.cotizado += resumen.total;
+							mesesCotizados++;
+						}
+						
+						if (objeto.pedido > 0 && objeto.cotizado > 0){
+							objeto.percentPedido=((objeto.pedido as Number)*100)/(objeto.cotizado as Number);
+							sumaPorcentajes += ObjectUtil.copy(objeto.percentPedido) as Number;
+							objeto.diferencia = objeto.pedido - objeto.cotizado;
+						}
+						
+					}
+					arrReturn.addItem(objeto);
+					
+					pintarAnio++;					
+				}
+				
+				if (mesesActivos > 0)
+				{
+					var prom:Number = sumaPorcentajes / mesesActivos;
+					for(var w:int=0; w < arrReturn.length; w++)
+					{
+						arrReturn[w].promedioMeses = prom;
+					}
+				}				
+				
+				if ($vieneD == "puntos")
+					arrReturn.addItem(new Object());
+				
+				for( var g:int = 0; g < arrReturn.length; g++ )
+				{
+					arrReturn[g].totalPeriodo = totalLegend;
+				}
+				
+				return arrReturn;
+			}
+			
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			
+			[Bindable]
+			private var _event:EventoTableroProductos;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			public function set recibeFiltros( $event:EventoTableroProductos ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				_anioMultiple = _event.parametros.aniosMultiple;
+				
+				if(_anioMultiple){
+					_anioInicio = _event.parametros.anioInicio;
+					_anioFin = _event.parametros.anioFin;
+				}
+				cont++;
+				
+				if (cont >1)
+				{
+					validarLlenarGrid();
+				}
+				checkCotizado.selected = false;
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function gridItemClickEvent(event:EventoDataGrid):void
+			{
+				var urlreq:URLRequest;
+				var ruta:String;
+				var click:ListEvent = event.itemClick;
+				if (click.columnIndex == 1 )
+				{
+				if(click.itemRenderer.data.repetido != true)
+				{
+				ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.COTIZACIONES_RUTA + (click.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion + ".pdf";
+				urlreq = new URLRequest ( ruta );
+				navigateToURL( urlreq );
+				}
+				}	 
+				/*if (event.columnIndex == 4 )
+				{
+				if(event.itemRenderer.data.pedido != "NA")
+				{
+				ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.PEDIDOS_RUTA + (event.currentTarget.selectedItem as CotizaPedidoCliente).pedido + ".pdf";
+				urlreq = new URLRequest ( ruta );	
+				navigateToURL( urlreq );	
+				}
+				}*/
+			}
+			
+			private function generaArchivo():void
+			{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Cotización");
+				fila1[2] = hoja.addItem("Monto cotizado");
+				fila1[3] = hoja.addItem("Piezas cotizadas");
+				fila1[4] = hoja.addItem("Producto");
+				fila1[5] = hoja.addItem("Cliente");
+				
+				for(var i:int = 0 ; i<_listadoProductosCliente.length ; i++ )
+				{
+				fila1 = new Array();	
+				fila1[0] =  (_listadoProductosCliente[i] as SeguimientoCotizacion ).numFila;
+				fila1[1] = '"'+(_listadoProductosCliente[i] as SeguimientoCotizacion).folioCotizacion+'"';
+				fila1[2] = '"'+(_listadoProductosCliente[i] as SeguimientoCotizacion).montoPartidaString+'"';
+				fila1[3] = '"'+(_listadoProductosCliente[i] as SeguimientoCotizacion).piezas+'"';
+				fila1[4] = '"'+(_listadoProductosCliente[i] as SeguimientoCotizacion).nombreProducto+'"';
+				fila1[5] = '"'+(_listadoProductosCliente[i] as SeguimientoCotizacion).nombreCliente+'"';
+				hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Cotiza_A_Pedido.csv");
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			protected function validarLlenarGrid():void
+			{
+				/*if( _event != null )
+				{
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.tipoEventos.push("CONSULTA_GRID_COT_PED");
+				dispatchEvent(eventEspera); 
+				
+				var parametros:ParametrosBusquedaCliente = new ParametrosBusquedaCliente();
+				var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_COT_PED );
+				evet.rangoMinMes = _event.parametros.rangoMinMes;
+				evet.rangoMaxMes = _event.parametros.rangoMaxMes;
+				evet.parametros = _event.parametros;
+				dispatchEvent( evet );
+				cont++;
+				}*/
+				lblTitulo.text = 'COTIZACIÓN = PEDIDO';
+				if( stackGeneral.selectedChild == vistaGrafico )
+					lblTitulo.text += ' · MONTO COTIZADO / MONTO PEDIDO'; 
+			}
+			
+			/*private function compareFunction_montoPedido(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoPedido,item2.montoPedido); 
+			}*/
+			
+			private function compareFunction_montoCotizado(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoPartida,item2.montoPartida); 
+			}
+			
+			
+			private function formateoEje2($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '% ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				
+				if($valor==100){
+					
+				}else{
+				}
+				
+				return strRegreso;
+			}
+			
+			private function lblFunction2( $value:Object, $etiqueta:Object ):String
+			{			
+				return _listaMensual[ int($etiqueta) -1 ].toUpperCase();
+			}					
+			
+			protected function cambiarswitch(event:MouseEvent):void
+			{
+				var evet:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.TOTAL_COTIZACION_PEDIDO_TABPROD);
+				_event.parametros.todoCotizado = !checkCotizado.selected;
+				evet.parametros = _event.parametros;				
+				dispatchEvent(evet);				
+				ProductoCotPetComparacion.chkAux.selected = checkCotizado.selected;
+				ProductoCotPetComparacion.chkAux.dispatchEvent(new Event(Event.CHANGE));
+			}
+			
+			protected function seleccionarChkCotizado(event:Event):void{
+				checkCotizado.selected = chkAux.selected;
+			}
+			
+			public function set obtenerCotPed(pedidos:ArrayCollection):void{
+				if(pedidos == null){
+					return;
+				}
+				this._pedidosTabla = pedidos;
+				setValoresFooter(pedidos);
+			}
+			
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["cotizacion","nombreCliente"]);
+				
+				var _noCotizacion:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("folioCotizacion").length;
+				var _monto :Number = _sql.getSumarCampo("montoPartida",[],"",true);
+				var _totalPiezasCot:Number = _sql.getSumarCampo("piezas",[],"",true);
+				var _noClientes:Number = _sql.getPunteros([null,"nombreCliente"],"nombreCliente").length;
+
+				
+				lbl1_nototal.text ="";
+				lbl2_noCotizacion.text=_noCotizacion == 1 ? "1 Cotización":_noCotizacion.toString()+" Cotizaciones";
+				lbl3_montoCot.text = "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(_monto);
+				lbl4_totalPiezasCot.text= _totalPiezasCot == 1 ? "1 Pieza":_totalPiezasCot.toString()+" Piezas";
+				lbl5_totalClientes.text = _noClientes == 1 ? "1 Cliente":_noClientes.toString()+" Clientes";
+			
+			
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<componentes:TituloChartMaxTablero id="lblTitulo" width="100%" />
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" change="validarLlenarGrid()">
+		
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="0" gap="0">
+				<s:VGroup width="100%" height="100%" paddingBottom="0" >
+					<otros:divisionGruesa width="100%" />
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter itemClickADG="gridItemClickEvent(event)" id="gridCompras" width="100%" rowHeight="40" height="100%" dataProvider="{this._listadoProductosCliente}" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																 anchoColumnas="{['10%','=','=','=','=']}" tipoDeConsulta="vacio">
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"  />
+							<mx:AdvancedDataGridColumn headerText="Cotización" dataField="folioCotizacion">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+													
+													import skins.catalogos.catalogoColores;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<mx:LinkButton label="{(data as SeguimientoCotizacion).folioCotizacion}" color="0x257d92" toolTip="Ver Cotización" textDecoration.selected="underline"  horizontalCenter="0"
+														   includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? false:true}"
+														   visible="{(data as SeguimientoCotizacion).repetido == true ? false:true}"/>
+											
+											<s:Label  horizontalCenter="0" text="{(data as SeguimientoCotizacion).folioCotizacion}" 
+													  includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? true:false}" 
+													  visible="{(data as SeguimientoCotizacion).repetido == true ? true:false}" fontSize="12" />
+											
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							
+							<mx:AdvancedDataGridColumn headerText="Monto cotizado" dataField="montoPartidaString"  />
+							<mx:AdvancedDataGridColumn headerText="Piezas cotizadas" dataField="piezas"  />
+							<mx:AdvancedDataGridColumn headerText="Cliente" dataField="nombreCliente"  />
+							<!--<mx:AdvancedDataGridColumn headerText="Monto cotizado" dataField="montoPartidaString"  sortCompareFunction="{compareFunction_montoCotizado}" >
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<s:Label width="50%" text="{(data as SeguimientoCotizacion).montoPartidaString}" horizontalCenter="0"
+													 includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? false:true}"
+													 visible="{(data as SeguimientoCotizacion).repetido == true ? false:true}"/>
+											
+											<s:Label text="$0.00" horizontalCenter="0" 
+													 includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? true:false}" 
+													 visible="{(data as SeguimientoCotizacion).repetido == true ? true:false}"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>-->
+							
+							<!--<mx:AdvancedDataGridColumn headerText="Piezas cotizadas" dataField="piezas">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<s:Label text="{(data as SeguimientoCotizacion).piezas}"  horizontalCenter="0"
+													 includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? false:true}"
+													 visible="{(data as SeguimientoCotizacion).repetido == true ? false:true}"/>
+											
+											<s:Label horizontalCenter="0" text="0" 
+													 includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? true:false}" 
+													 visible="{(data as SeguimientoCotizacion).repetido == true ? true:false}"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Cliente" dataField="nombreCliente">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<s:Label text="{(data as SeguimientoCotizacion).nombreCliente}"  horizontalCenter="0"
+													 includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? false:true}"
+													 visible="{(data as SeguimientoCotizacion).repetido == true ? false:true}"/>
+											
+											<s:Label horizontalCenter="0" text="0" 
+													 includeInLayout="{(data as SeguimientoCotizacion).repetido == true ? true:false}" 
+													 visible="{(data as SeguimientoCotizacion).repetido == true ? true:false}"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>-->
+							
+						<!--	<mx:AdvancedDataGridColumn headerText="Monto pedido" dataField="montoPedidoString" sortCompareFunction="{compareFunction_montoPedido}" >
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<s:Label text="{(data as CotizaPedidoCliente).montoPedidoString}" textAlign="center"  horizontalCenter="0"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Piezas Pedidas" dataField="piezasPedidas">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<s:HGroup width="100%" paddingRight="20" horizontalAlign="center">
+												<s:Label text="{(data as CotizaPedidoCliente).piezasPedidas}"  horizontalCenter="0" />
+											</s:HGroup>	
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>-->
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				</s:VGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl2_noCotizacion" paddingTop="0" width="22%" textAlign="center"/>
+					<label:Titulo id="lbl3_montoCot" paddingTop="0" width="22%" textAlign="center" />
+					<label:Titulo id="lbl4_totalPiezasCot" paddingTop="0" width="22%" textAlign="center" />
+					<label:Titulo id="lbl5_totalClientes" paddingTop="0" width="24%" textAlign="center" />
+				</s:HGroup>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico" />
+					<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+		
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<s:VGroup width="100%" horizontalAlign="center" verticalAlign="middle" paddingTop="15" paddingBottom="15">
+						<chekbox:CheckBoxPq id="checkCotizado" labelLeft="Total cotizado" click="cambiarswitch(event)" selected="false"  labelRight="Cotizado convertido a pedido"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%">
+						<cotPed:PanelGraficaCotPedMax_Productos id="totalCotizado" anioMultiple="{_anioMultiple}" />
+					</s:VGroup>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="stackGeneral.selectedChild = vistaTabla"/>
+						<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>
+	</pq:MobViewStack>	
+</s:VGroup>

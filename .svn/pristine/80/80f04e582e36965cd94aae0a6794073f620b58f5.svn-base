@@ -1,0 +1,364 @@
+package skins.catalogos
+{
+	public class catalogoInfoGraficas
+	{
+		public static const JOBS:String = "Steven Paul Jobs (San Francisco, California, 24 de febrero de 1955 – Palo Alto, California, 5 de octubre de 2011), " +
+				"más conocido como Steve Jobs, fue un empresario y magnate de los negocios del sector informático y de la industria del entretenimiento estadounidense. " +
+				"Fue cofundador y presidente ejecutivo de Apple Inc.12 y máximo accionista individual de The Walt Disney Company. Fundó Apple en 1976 junto " +
+				"con un amigo de la adolescencia, Steve Wozniak, en el garaje de su casa. Aupado por el éxito de su Apple II Jobs obtuvo una gran relevancia pública, " +
+				"siendo portada de Time en 1982. Contaba con 26 años y ya era millonario gracias a la exitosa salida a bolsa de la compañía a finales del año anterior. " +
+				"\n\nLa década de los 80 supuso la entrada de potentes competidores en el mercado de los ordenadores personales, lo que originó las primeras dificultades " +
+				"empresariales. Su reacción fue innovar, o mejor dicho, implementar: a principios de 1984 su compañía lanzaba el Macintosh 128K, que fue el primer " +
+				"ordenador personal que se comercializó exitosamente que usaba una interfaz gráfica de usuario (GUI) y un ratón en vez de la línea de comandos. " +
+				"\n\nDespués de tener problemas con la cúpula directiva de la empresa que él mismo fundó, fue despedido de Apple Computer en 1985. Jobs vendió " +
+				"entonces todas sus acciones, salvo una. Ese mismo año recibía la Medalla Nacional de Tecnología del presidente Ronald Reagan, cerrando con este " +
+				"reconocimiento esta primera etapa como emprendedor. Regresó en 1997 a la compañía, que se encontraba en graves dificultades financieras, y fue " +
+				"su director ejecutivo hasta el 24 de agosto de 2011. En ese verano Apple sobrepasó a Exxon como la empresa con mayor capitalización del mundo.";
+		public static const RECHAZOS:String = "información grafica rechazos";
+		public static const ET_VS_FT:String = "info grafica ETvsFT";
+		public static const ET_VS_UR_VS_FT:String = "info grafica ETvsURvsFT";
+		public static const SITUACION_PARTIDAS:String = "info situación partidas";
+		public static const MANEJO_PARTIDAS:String = "info manejo partidas";
+		public static const TIPOS_PARTIDAS:String = "info tipos partidas";
+		public static const PROVEEDORES:String = "info proveedores";
+		public static const ORIGEN:String = "info origen";
+		public static const FLETE_PARTIDAS:String = "info flete ";
+		public static const UBICACION_PARTIDAS:String = "info ubicación";
+		public static const CLIENTES:String = "info clientes";
+		public static const REDACTO:String = "info de redacto";
+		
+		////////////////////////////////////////////////////// TABLERO CLIENTES //////////////////////////////////////////////////////
+		public static const TABLERO_CLIENTES_MIXPRODUCTOS:String = "<B>· MIX PRODUCTOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar la distribución de lo comprado por el cliente en cuanto a linea de productos se refiere, estándares, biológicos, reactivos, publicaciones y " +
+			"labware en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los productos derivados de los pedidos tramitados diferentes de los pedidos tramitados pero cancelados. Pedidos abiertos o cerrados.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_CLIENTES_MIXMARCAS:String = "<B>· MIX MARCAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar la distribución de lo comprado por el cliente en cuanto a marcas en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos las marcas derivadas de los pedidos tramitados diferentes de los pedidos tramitados pero cancelados. Pedidos abiertos o cerrados.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_CLIENTES_LINEAPRODUCTO:String = "<B>· LINEA DE PRODUCTOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar la distribución de las compras realizadas por línea de productos.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las líneas de productos derivadas de las compras realizadas en el periodo consultado.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_CLIENTES_COTIZADO_PEDIDO:String = "<B>· COT & PED ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el monto total pedido relacionado al monto total cotizado en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas cotizadas en el periodo seleccionado que eventualmente fueron relacionadas a un pedido tramitado. Cotizaciones abiertas o cerradas.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan el periodo seleccionado<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_CLIENTES_PEDIDOS:String = "<B>· PEDIDOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el monto total de los pedidos tramitados contra el monto total de los pedidos tramitados pero cancelados en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas derivadas de los pedidos tramitados en el periodo seleccionado incluyendo las canceladas. Pedidos abiertos o cerrados.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan mensualmente los datos solicitados.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_CLIENTES_VENTAS_PERIODO:String = "<B>· VENTAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el monto total mensual facturado de acuerdo al periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas facturadas discriminando las canceladas, las tramitadas en una nota de crédito y las tramitadas en una remisión.<br /><br />" +
+			"<B>Gráfico:</B><br />Puntos de unión que muestran en histograma los picos mensuales facturados.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_CLIENTES_COTIZADO_NO_PEDIDO:String = "<B>· COT &lt;&gt; PED ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las piezas cotizadas por marca que no han sido tramitadas en un pedido en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas cotizadas en el periodo seleccionado que se encuentran en estado abiertas o canceladas discriminando a las que fueron canceladas por recotización. Cotizaciones abiertas o cerradas.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie<br /><br />" +
+			"<B>Moneda:</B><br />Dólares<br /><br />" +
+			"<B>NOTAS:</B><br /><br />" +
+			"El gráfico ya se encuentra libre del efecto <i>‘Inflación de datos’</i> provocado por la refacturación de partidas a partir de la gestión de una venta o la tramitación de un pedido.<br /><br />" +
+			"<B>Definiciones:</B><br /><br />" +
+			"<i><B>Inflación de datos</B><br />" +
+			"Es cuando un gráfico muestra más datos de los que debe mostrar, provocando que los datos sean sobreestimados.</i><br /><br /><br />";
+		public static const TABLERO_CLIENTES_ENTREGAS:String = "<B>· ENTREGAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las partidas por entregar (xE) en tiempo (ET) y fuera de tiempo (FT) contra las partidas entregadas (E) en tiempo (ET) y fuera de tiempo (FT).<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas entregadas y por entregar en el periodo de tiempo seleccionado y considerando la evaluación de tiempos de cada una de ellas para determinar si están en tiempo o fuera de tiempo. Pedidos abiertos o cerrados.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan mensualmente los datos solicitados.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares<br /><br />" +
+			"<B>Nomenclatura:</B><br /><br />E (entregada)<br />xE (por entregar)<br />ET (en tiempo)<br />FT (fuera de tiempo)";
+		public static const TABLERO_CLIENTES_VISITAS_TIPO:String = "<B>· VISITAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar la distribución del tipo de visitas generadas en el periodo consultado así como la relación entre las visitas Realizadas y No realizadas.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Mostrar todas las visitas por tipo, generadas en un periodo de tiempo determinado y su estatus de realización.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan por tipo de visita el total de visitas realizadas y no realizadas en un periodo de tiempo.<br /><br />" +
+			"<B>Nomenclatura:</B><br /><br />NP: No programadas<br />";
+		public static const TABLERO_CLIENTES_VISITAS_VS_VENTAS:String = "<B>· VISITAS VS VENTAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el monto total mensual facturado vs el número de visitas realizadas en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas facturadas discriminando las canceladas, las que se encuentran en una nota de crédito y las tramitadas en una remisión así como el número de visitas generadas en el periodo consultado.<br /><br />" +
+			"<B>Gráfico:</B><br />Puntos de unión que muestra en histograma los picos mensuales facturados, y el diámetro del punto indica el volumen de visitas en ese periodo.<br /><br />";
+		public static const TABLERO_CLIENTES_COMPORTAMIENTO_PAGOS:String = "<B>· COMPORTAMIENTO PAGOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar los montos totales mensuales por cobrar y cobrados del periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas facturadas no cobradas contra todas las partidas facturadas y cobradas en el periodo seleccionado. Facturas abiertas y cerradas.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que muestran los montos facturados por cobrar y cobrados de manera mensual.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares<br /><br />" +
+			"<B>Nomenclatura:</B><br /><br />C (cobrada)<br />xC (por cobrar)";
+		public static const TABLERO_CLIENTES_SEGUIMIENTOS:String = "<B>· SEGUIMIENTOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar los seguimientos cerrados y abiertos de un periodo determinado, mostrando los que se encuentran en tiempo y fuera de tiempo.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las piezas de cotización que tuvieron y tienen un pendiente de seguimiento durante la gestión de venta en un periodo determinado y considerando la evaluación de tiempos de cada una de ellas para determinar si están en tiempo o fuera de tiempo.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan mensualmente los datos solicitados.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares<br /><br />" + 
+			"<B>Nomenclatura:</B><br /><br />S (seguimiento)<br />C (cerrado)<br />ET (en tiempo)<br />FT (fuera de tiempo)";
+		public static const TABLERO_CLIENTES_CANCELACION_COTIZACION:String = "<B>· CANCELACIÓN EN COTIZACIÓN ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las razones de cancelación de las piezas de cotización en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las piezas de cotización que fueron canceladas durante la gestión de venta en el periodo seleccionado.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares<br /><br />" ;//"info cancelaciones";
+		////////////////////////////////////////////////////// TABLERO PROVEEDORES //////////////////////////////////////////////////////
+		
+		public static const TABLERO_PROVEEDORES_TOP10_PRODUCTOS:String = "<B>· TOP 10 PRODUCTOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las compras realizadas al proveedor en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los productos derivados de las compras confirmadas excluyendo aquellas canceladas.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_TOP10_CLIENTES:String = "<B>· TOP 10 CLIENTES ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar la distribución de los clientes que adquirieron productos del proveedor seleccionado en el periodo solicitado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los clientes, total de piezas y el monto de su compra en el periodo.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_OC_TRANSITO:String = "<B>· OC EN TRÁNSITO ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar la distribución mensual de las piezas por orden de compra en el periodo solicitado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Únicamente las OC en tránsito, su estado En tiempo y Fuera de tiempo se asigna mediante su fecha esperada de arribo al primer almacén.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que muestran el total de piezas en tránsito tanto En tiempo como Fuera de tiempo por mes en el periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_OC_RECIBIDA:String = "<B>· OC RECIBIDA ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las piezas recibidas del proveedor En tiempo y Fuera de tiempo en el periodo.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las piezas recibidas por cada OC y el monto que representa.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan el monto y cantidad de piezas recibidas En tiempo y Fuera de tiempo, totalizadas por mes en el periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_RECHAZOS:String = "<B>· RECHAZOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar los productos rechazados por orden de compra y la distribución de lo tipos de rechazo en el periodo.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los productos rechazados, la cantidad y el monto que representa el rechazo.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_AVISO_DE_CAMBIOS:String = "<B>· AVISO DE CAMBIOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar los cambios que el proveedor realiza en la fecha de entrega de los productos solicitados en el periodo.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los productos con un aviso de cambios, la razón, el total de piezas, la decisión del cliente que los solicita y el monto que representa.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_COMPRAS:String = "<B>· COMPRAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las compras realizadas al proveedor establecido en el tiempo requerido.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las piezas cuya compra fue confirmada y nunca cancelada, y el monto que representa.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan las piezas confirmadas y canceladas por mes del periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_PAGOS:String = "<B>· PAGOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el comportamiento de los pagos por factura al proveedor por mes en el periodo solicitado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las OC, el monto de la misma, su estado de pago y el monto real de la factura.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras totalizando las facturas por mes en el periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_LINEA_DE_CREDITO:String = "<B>· PAGOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el comportamiento de los pagos por factura al proveedor por mes en el periodo solicitado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las OC, el monto de la misma, su estado de pago y el monto real de la factura.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras totalizando las facturas por mes en el periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PROVEEDORES_CONDICIONES_DE_PAGO:String = "<B>· PAGOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el comportamiento de los pagos por factura al proveedor por mes en el periodo solicitado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las OC, el monto de la misma, su estado de pago y el monto real de la factura.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras totalizando las facturas por mes en el periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		
+		
+		/** 
+		 * TABLERO OPERATIVOS
+		 * */
+		public static const TABLERO_OPERATIVOS_REQ_COT:String = "<P ALIGN='center'><FONT SIZE='+5'><B> · REQUISICIÓN A COTIZAR ·</B></FONT></P><br /><br/>" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir al menos en un 85% la entrega de cotizaciones solicitadas por nuestros clientes en un máximo de 3 horas para partidas existentes en nuestro catálogo.<br/>" +
+			"<br />Cumplir al menos en un 85% la entrega de cotizaciones solicitadas por nuestros clientes en un máximo de 72 horas para partidas investigadas." +
+			"<br/><br/><br/><FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>" +
+			"<B>Requisiciones a cotizar =</B><br/>Todas las requisiciones recibidas - Requisiciones Duplicadas - Requisiciones No cotizables <br/><br/>" + 
+			"<B>Requisiciones cotizadas =</B><br/>Requisición que se ha convertido en cotización generada. <br/><br/>" +
+			"<B>Requisición cotizada En Tiempo con partidas en sistema:</B><br/>Es una requisición que se convirtió en cotización en un tiempo máximo de 3hrs laborables.<br/><br/>" +
+			"<B>Requisición cotizada En Tiempo con partidas fuera de sistema:</B><br/>Se refiere a una requisición con partidas fuera de catálogo que se convirtió en cotización en un tiempo menor o igual a 72 hrs.";
+		public static const TABLERO_OPERATIVOS_CONFIRMACIONES:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· CONFIRMACIONES ·</B></FONT></P><br/><br/>"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Realizar un mínimo de 85% de confirmaciones de recepción de cotización en 24 horas."+
+			"<br/><br/><br/><FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>"+
+			"<B>Por realizar =</B><br/>Pendientes de Confirmación de recepción de cotización.<br/><br/>"+
+			"<B>Realizadas =</B><br/>Confirmaciones marcadas como realizadas. <br/><br/>"+
+			"<B>Confirmaciones En Tiempo:</B><br/>Aquellas realizadas en menos de 24 hrs.";
+		public static const TABLERO_OPERATIVOS_PEDIDOS:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· PEDIDOS A TRAMITAR ·</B></FONT></P><br/><br/>"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Cumplir con un mínimo de 85% de cotizaciones convertidas en pedidos en un máximo de 30 días."+
+			"<br /><br />Procesar y confirmar el 85% de las órdenes de compra del cliente en no más de 72 horas."+
+			"<br/><br/><br/><FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>"+
+			"<B>Pedidos por realizar =</B><br/>Pedidos por tramitar - pedidos duplicados - pedidos detenidos.<br/><br/>"+
+			"<B>Pedidos realizados =</B><br/>Número de pedidos que ha concluido el flujo de tramitación.<br/><br/>"+
+			"<B>Pedidos realizados En Tiempo:</B><br/>Pedidos cuyo flujo de tramitación se realizó en un lapso no mayor a 48 hrs.";
+	
+		public static const TABLERO_OPERATIVOS_SEGUIMIENTO:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· SEGUIMIENTOS ·</B></FONT></P><br /><br />"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Realizar un 85% de seguimientos para gestión de venta en máximo 24 horas a partir de la recepción de cotización."+
+			"<br /><br />Gestionar la venta del 85% de las cotizaciones en máximo un mes.";
+		/*"<br /><br /><B>Fórmula:</B><br />"+
+			"Por Realizar: son las partidas de cotización a las que se levanto un pendiente para seguimiento. <br/>" + 
+			"Realizadas: son las partidas de cotización a las que se le dio seguimiento.<br/><br/>"+
+			"Grafica de dona:<br/>En tiempo  es cuando las partidas de cotización la fecha del ultimo seguimiento es menor o igual a la fecha en que se levanto el seguimiento. <br/>" +
+			"Fuera de Tiempo es cuando las partidas de cotización la fecha del ultimo seguimiento es mayor a la fecha en que se levanto el seguimiento.";*/
+		
+		
+		public static const TABLERO_OPERATIVOS_PEDIDOS_COMPRA:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· PEDIDOS POR COLOCAR ·</B></FONT></P><br /><br />"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Cumplir al menos en un 85% la colocación de pedidos con el proveedor."+
+			"<br/><br/><br/><FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>"+
+			"<B>Por Realizar =</B><br/>Número de partidas de pedido tramitadas en un lapso de tiempo determinado y que deben ser colocadas en una orden de compra.<br/><br/>"+
+			"<B>Realizadas =</B><br/>Partidas de pedido tramitadas y que se encuentran colocadas en una orden de compra.<br/><br/>"+
+			"<B>Colocadas En Tiempo:</B><br/>Partidas de pedido que se colocaron en una compra en un lapso no mayor a 72 hrs después de la tramitación del pedido.";
+		public static const TABLERO_OPERATIVOS_CONFIRMACIONES_COMPRA:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· CONFIRMACIONES OC ·</B></FONT></P><br /><br />"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Realizar la confirmación de OC colocada con el proveedor en no más de 48 hrs."+
+			"<br/><br/><br/><FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>"+
+			"<B>Por Realizar = </B><br/>Total de pendiente de confirmación de OC en el periodo consultado. <br/><br/>"+
+			"<B>Realizadas = </B><br/>Total de pendientes de confirmación de OC realizados en un periodo determinado.<br/><br/>"+
+			"<B>Confirmación de OC En Tiempo:</B><br/>Confirmaciones realizadas en un máximo de 48 hrs después de la creación del pendiente.";
+		public static const TABLERO_OPERATIVOS_INSPECCIONES:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· INSPECCIONES ·</B></FONT></P><br /><br />"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Cumplir con el 85% de órdenes de compra a inspeccionar diariamente.<br /><br /><br />"+
+			"<FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>"+
+			"<B>Por Realizar =</B><br/>Número de partidas enviadas a inspeccionarse en un periodo determinado.<br/><br/>"+
+			"<B>Realizadas =</B><br/>Partidas inspeccionadas en el periodo consultado.<br/><br/>"+
+			"<B>Inspecciones En  Tiempo:</B><br/>Partidas inspeccionadas en el mismo día en que se les dio entrada al material por el gestor de compras.";
+		
+		
+		public static const TABLERO_OPERATIVOS_AVISO_CAMBIOS:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· AVISO DE CAMBIOS ·</B></FONT></P><br /><br />"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Realizar por lo menos un 85% de AC antes de que se cumpla la FEE.";
+		/*"<br /><br /><B>Fórmula:</B><br />" + 
+			"Por Realizar: son todas las partidas de compra que no se entregaron a tiempo y la fecha de inspección es mayor o igual a la fecha estimada de entrega del cliente. <br/>" + 
+			"Realizadas: que tenga un pendiente de tipo aviso de cambios . <br/><br/>"+
+			"Grafica de dona:<br/>En tiempo son aquellas que la fecha en que se realizo el aviso de cambio esta en los dos días anteriores a la fecha estimada de llegada (proquifa) y que fue entregada a tiempo. <br/>" +
+			"Fuera de Tiempo son aquellas que no se realizo el aviso de cambios o que se entrego el producto después de la fecha estimada de entrega.";*/
+		public static const TABLERO_OPERATIVOS_MONITOREOS:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· MONITOREOS OC ·</B></FONT></P><br /><br />"+
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>"+
+			"Cumplir en un 85% el monitoreo de OC antes de que se cumpla la FEE.";
+		/*"<br /><br /><B>Fórmula:</B><br />" +
+			"Por Realizar: la fecha actual debe ser mayor a la fecha de recibo y no debe haber sido inspeccionada <br/>" + 
+			"Realizadas: se considera realizada cuando  existe un registro de partida en el historial de la compra y fecha de inspección es mayor o igual a la fecha de recepción de proquifa. <br/><br/>"+
+			"Grafica de dona:<br/>En tiempo cuando el tiempo entre el inicio y el fin del pendiente Monitorear OC  es menor a 48 horas sin contar los fines de semana <br/>" +
+			"Fuera de Tiempo cuando el tiempo entre  la fecha inicio y fin del pendiente es mayor a las 48 horas.";*/
+		public static const TABLERO_OPERATIVOS_FACTURACIONES:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· FACTURACIONES ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Realizar por lo menos el 85% de las facturas solicitadas para la entrega del producto en tiempo.";
+			/*"<br /><br /><B>Fórmula:</B><br />" +
+			"Por Realizar: son las peticiones a factura. <br/>" + 
+			"Realizadas: son las peticiones a facturar de las cuales si se hizo la factura.<br/><br/>"+
+			"Grafica de dona:<br/>En tiempo son las facturas que se realizaron en un lapso de 1 día desde que se hizo la petición de facturar.<br/>" +
+			"Fuera de Tiempo son las facturas que se realizaron en un lapso de mayor a un día desde que se hizo la petición de facturar.";*/
+		public static const TABLERO_OPERATIVOS_ENTREGAS:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· ENTREGAS ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir con un mínimo de 85% de entregas al cliente en tiempo." +
+			"<br /><br />Cumplir con un mínimo de 85% de conformidad en las entregas de productos al cliente.";
+			/*"<br /><br /><B>Fórmula:</B><br />" +
+			"Por Realizar: son el numero de eventos que se levantaron. <br/>" + 
+			"Realizadas: son el numero de eventos de los cuales se hizo la entrega.<br/><br/>"+
+			"Grafica de dona:<br/>En tiempo son las entregas que se realizaron en un lapso de 1 día.<br/>" +
+			"Fuera de Tiempo son las entregas que se realizaron en un lapso mayor a un día.";*/
+		
+		
+		public static const TABLERO_OPERATIVOS_COBROS:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· COBROS ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir con al menos el 85% de cobros programados.";
+			/*"<br /><br /><B>Fórmula:</B><br />" +
+			"Por Realizar: son el numero de los pagos pendientes. <br/>" + 
+			"Realizadas: son el numero de pagos pendientes que si se realizaron.<br/><br/>"+
+			"Grafica de dona:<br/>En tiempo son los cobros que se realizaron dentro de la fecha estimada de pago.<br/>" +
+			"Fuera de Tiempo son los cobros que se realizaron posterior a la fecha estimada de pago.";*/
+		public static const TABLERO_OPERATIVOS_PAGOS:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· PAGOS ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir con un mínimo de 85% de pagos realizados en tiempo.";
+			/*"<br /><br /><B>Fórmula:</B><br />" +
+			"Por Realizar: son el numero de las facturas por pagar. <br/>" + 
+			"Realizadas: son el numero de facturas por pagar que si se hicieron.<br/><br/>"+
+			"Grafica de dona:<br/>En tiempo son los cobros que se realizaron dentro de la fecha estimada.<br/>" +
+			"Fuera de Tiempo son los cobros que se realizaron posterior a la fecha estimada.";*/
+		
+		public static const TABLERO_OPERATIVOS_REVISION:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· REVISIONES ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir con un mínimo de 85% de revisones realizados en tiempo.";
+		
+		public static const TABLERO_OPERATIVOS_CARGARFACTURA:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· ASOCIACIONES DE DOCUMENTO DE PAGO ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir con un mínimo de 85% de cargas de facturas realizados en tiempo." +
+			"<br/><br/><br/><FONT SIZE='+2'><B>FÓRMULA:</B></FONT><br/><br/>" +
+			"<B>Por Realizar =</B><br/>Número de partidas de compra confirmadas en un periodo de tiempo determinado.<br/><br/>" +
+			"<B>Realizadas =</B><br/>Partidas de compra confirmadas y asociadas a una factura por pagar.<br/><br/>" +
+			"<B>Asociaciones En  Tiempo:</B><br/>Partidas de compra asociadas a una factura por pagar dentro de los 15 primeros días después de la confirmación de la OC.";
+		
+		public static const TABLERO_OPERATIVOS_CIERRERUTA:String = "<P ALIGN='center'><FONT SIZE='+5'><B>· CIERRE DE RUTAS ·</B></FONT></P><br /><br />" +
+			"<FONT SIZE='+2'><B>OBJETIVO:</B></FONT><br/><br/>" +
+			"Cumplir con un mínimo de 85% de cierres realizados en tiempo.";
+		
+		/** 
+		 * TABLERO PRODUCTOS
+		 * */
+		public static const TABLERO_PRODUCTOS_COMPRAS_REALIZADAS:String = "<B>· COMPRAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las compras realizadas al proveedor establecido en el tiempo requerido.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las piezas cuya compra fue confirmada y nunca cancelada, y el monto que representa.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan las piezas confirmadas y canceladas por mes del periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PRODUCTOS_AVISO_DE_CAMBIOS:String = "<B>· AVISO DE CAMBIOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar los cambios que el proveedor realiza en la fecha de entrega de los productos solicitados en el periodo.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los productos con un aviso de cambios, la razón, el total de piezas, la decisión del cliente que los solicita y el monto que representa.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PRODUCTOS_RECHAZOS:String = "<B>· RECHAZOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar los productos rechazados por orden de compra y la distribución de lo tipos de rechazo en el periodo.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todos los productos rechazados, la cantidad y el monto que representa el rechazo.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PRODUCTOS_PAGOS:String = "<B>· PAGOS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el comportamiento de los pagos por factura al proveedor por mes en el periodo solicitado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las OC, el monto de la misma, su estado de pago y el monto real de la factura.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras totalizando las facturas por mes en el periodo.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares.";
+		public static const TABLERO_PRODUCTOS_CANCELACION_COTIZACION:String = "<B>· CANCELACIÓN EN COTIZACIÓN ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar las razones de cancelación de las piezas de cotización en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las piezas de cotización que fueron canceladas durante la gestión de venta en el periodo seleccionado.<br /><br />" +
+			"<B>Gráfico:</B><br />Pie.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares<br /><br />" ;
+		public static const TABLERO_PRODUCTOS_VENTAS_PERIODO:String = "<B>· VENTAS ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el monto total mensual facturado de acuerdo al periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas facturadas discriminando las canceladas, las tramitadas en una nota de crédito y las tramitadas en una remisión.<br /><br />" +
+			"<B>Gráfico:</B><br />Puntos de unión que muestran en histograma los picos mensuales facturados.<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		public static const TABLERO_PRODUCTOS_COTIZADO_PEDIDO:String = "<B>· COT & PED ·</B><br /><br /><B>Objetivo:</B><br />" +
+			"Mostrar el monto total pedido relacionado al monto total cotizado en el periodo seleccionado.<br /><br />" +
+			"<B>Alcance:</B><br />" +
+			"Todas las partidas cotizadas en el periodo seleccionado que eventualmente fueron relacionadas a un pedido tramitado. Cotizaciones abiertas o cerradas.<br /><br />" +
+			"<B>Gráfico:</B><br />Barras que totalizan el periodo seleccionado<br /><br />" +
+			"<B>Moneda:</B><br />Dólares";
+		/*agregar para informacion de la grafica*/
+		
+		public static const SIN_INFORMACION:String = "";
+		
+		public function catalogoInfoGraficas()
+		{
+		}
+	}
+}

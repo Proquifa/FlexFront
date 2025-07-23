@@ -1,0 +1,486 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:tabla="skins.botones.tabla.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+		  xmlns:otros="skins.otros.*"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:grafica="skins.botones.grafica.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:graf ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotNoPed.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  xmlns:pq = "mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  creationComplete="validarLlenarGrid()"
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaNoPedidoCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.EffectEvent;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import flashx.textLayout.formats.WhiteSpaceCollapse;
+			private var cont:Number=0;
+			private var _arregloGrafica:ArrayCollection;
+			private var _sql:Query;
+			private var _showGrafica:Boolean = false;
+			
+			
+			private function init():void{
+				cont=0;
+				validarLlenarGrid();
+				
+			}
+			
+			public function seleccionaTabla():void{			
+				stackGeneral.selectedChild = vistaTabla;
+				validarLlenarGrid();
+			}
+			public function seleccionarGrafica():void{
+				stackGeneral.selectedChild = vistaGrafico;
+			}
+			private function minimiza():void{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			[Bindable]	private var _listaCotizaNoPedidoCliente:ArrayCollection = new ArrayCollection();
+			
+			public function set recibeCotizaNoPedidoCliente( $lista:ArrayCollection ):void{
+				if($lista == null ) return;
+				_listaCotizaNoPedidoCliente = $lista;
+				btnExportar.enabled =  _listaCotizaNoPedidoCliente.length < 1 ? false : true;
+				setValoresFooter($lista);
+			}
+			
+			public function set recibeLinealCotDifPed( $lista:ArrayCollection ):void{
+				if( $lista == null )
+					return;
+				_arregloGrafica = new ArrayCollection();
+				_arregloGrafica = myChart.aplicarFormatoTableroClientesMarcas( UtilsGrid.queryCampoX( $lista, "etiqueta", "COTNOPED_0" ) );
+				myChart.useCursorHand = true;
+				myChart.dataProvider = _arregloGrafica;
+				_sql = new Query(_arregloGrafica,["etiqueta"],true);
+				
+			}
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void{
+				if( $event == null )
+					return;
+				//if( _keyAnterior != $event.keyConsulta )
+				{
+					_event = $event;
+					_minimoMeses = _event.parametros.rangoMinMes;
+					_maximoMeses = _event.parametros.rangoMaxMes;
+					cont++;
+				}
+				if (cont >1){
+					validarLlenarGrid();
+				}
+				if (_showGrafica)
+				{
+					btnCloseGraf.visible=false;
+					hideGrafica.play();
+				}
+			}
+			
+			private function generaArchivo():void{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Cotización");
+				fila1[2] = hoja.addItem("Marca");
+				fila1[3] = hoja.addItem("Concepto");
+				fila1[4] = hoja.addItem("Cantidad");
+				fila1[5] = hoja.addItem("Monto");
+				for(var i:int = 0 ; i< _listaCotizaNoPedidoCliente.length ; i++ ){
+					fila1 = new Array();	
+					fila1[0] = (_listaCotizaNoPedidoCliente[i] as CotizaNoPedidoCliente).numFila;
+					fila1[1] = (_listaCotizaNoPedidoCliente[i] as CotizaNoPedidoCliente).cotizacion;
+					fila1[2] = '"'+(_listaCotizaNoPedidoCliente[i] as CotizaNoPedidoCliente).marca+'"';
+					fila1[3] = '"'+(_listaCotizaNoPedidoCliente[i] as CotizaNoPedidoCliente).concepto+'"';
+					fila1[4] = (_listaCotizaNoPedidoCliente[i] as CotizaNoPedidoCliente).cantidad;
+					fila1[5] = '"'+(_listaCotizaNoPedidoCliente[i] as CotizaNoPedidoCliente).montoString+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Cotiza_Dif_Pedido.csv");
+			}
+			
+			protected function myChart_itemRollOverHandler(event:ChartItemEvent):void
+			{
+				var sItem:PieSeriesItem = event.hitData.chartItem as PieSeriesItem;
+				var resumen:ResumenConsulta = sItem.item as ResumenConsulta;
+				if( resumen == null )
+					return;
+				myChart.lblDataTipBold.text = resumen.conceptoResultado.toUpperCase();
+				myChart.lblDataTip.text = sItem.percentValue.toFixed(2) + " %" 
+					+ '\n' + resumen.piezasTotal + " Pieza" + (resumen.piezasTotal == 1 ? '' : 's')
+					+ '\n' + '$' + UtilsFormatosNumericos.precisionADosDecimalesConComas( resumen.total );
+			}
+			
+			private function gridItemClickEvent(evento:EventoDataGrid):void{
+				var urlreq:URLRequest;
+				var ruta:String;
+				var click:ListEvent = evento.itemClick;
+				
+				if (click.columnIndex == 1 ){
+					if(click.itemRenderer.data.repetido != true){
+						ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.COTIZACIONES_RUTA + (click.currentTarget.selectedItem as CotizaNoPedidoCliente).cotizacion + ".pdf";
+						urlreq = new URLRequest ( ruta );
+						navigateToURL( urlreq );
+					}
+				}	 
+			}
+			
+			private var _keyAnterior:String = "";
+			
+			protected function validarLlenarGrid():void
+			{
+				if( stackGeneral.selectedChild == vistaTabla ){
+					if( _event != null )//&& _event.keyConsulta != _keyAnterior ){
+					{
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.idButtons = [];
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("CONSULTA_GRID_COT_NO_PED");
+						dispatchEvent(eventEspera);
+						
+						var parametros:ParametrosBusquedaCliente = new ParametrosBusquedaCliente();
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_COT_NO_PED );
+						evet.rangoMinMes = _event.parametros.rangoMinMes;
+						evet.rangoMaxMes = _event.parametros.rangoMaxMes;
+						evet.parametros = _event.parametros;
+						dispatchEvent( evet );
+						cont++;
+						_keyAnterior = _event.keyConsulta;
+						
+					}
+				}
+			}
+			
+			private function compareFunction_Monto(item1:Object, item2:Object):int{
+				return ObjectUtil.numericCompare(item1.monto, item2.monto);
+			}
+			
+			protected function myChart_itemClickHandler(event:ChartItemEvent):void
+			{
+				
+				var parametros:ParametrosBusquedaCliente = new ParametrosBusquedaCliente();
+				var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_COT_NO_PED_PORCIENTO );
+				evet.rangoMinMes = _event.parametros.rangoMinMes;
+				evet.rangoMaxMes = _event.parametros.rangoMaxMes;
+				evet.parametros = _event.parametros;
+				evet.parametros.fabrica = event.hitData.item.etiqueta;
+				dispatchEvent( evet );
+				
+				grafPorciento.titulo.text = event.hitData.item.etiqueta;
+				
+			}
+			
+			protected function showGrafica_effectEndHandler(event:EffectEvent):void
+			{
+				divisionGrafica.visible = divisionGrafica.includeInLayout = true;
+				grafPorciento.percentWidth = 100;
+				grafPorciento.percentHeight = 100;
+				_showGrafica = true;
+				btnCloseGraf.visible = true;
+			}
+			
+			protected function hideGrafica_effectEndHandler(event:EffectEvent):void
+			{
+				btnCloseGraf.visible = false;
+				divisionGrafica.visible = divisionGrafica.includeInLayout = false;
+				_showGrafica = false;
+				grafPorciento.width = 0;
+				grafPorciento.visible = false;
+				grafPorciento.includeInLayout = false;
+				myChart.percentWidth = 100;
+			}
+			
+			protected function btnCloseGraf_clickHandler(event:MouseEvent):void
+			{
+				grafPorciento.invalidateDisplayList();
+				btnCloseGraf.visible=false;
+				hideGrafica.play();
+			}
+			
+			public function set recibePorciento($arreglo:ArrayCollection):void
+			{
+				if( $arreglo == null )
+					return;
+				
+				grafPorciento.getArreglo($arreglo );
+				
+				if (!_showGrafica)
+				{
+					grafPorciento.invalidateDisplayList();
+					grafPorciento.visible = grafPorciento.includeInLayout = true;
+					showGrafica.play();
+					
+				}	
+			}
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["cotizacion","concepto","marca"]);
+				
+				var _noCotizacion:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("cotizacion").length;
+				var _noMarcas:Number = _sql.getPunteros([null,null,"marca"],"marca").length;
+				var _noConceptos:Number = _sql.getPunteros([null,"concepto"],"concepto").length;
+				var _piezas:Number = _sql.getSumarCampo("cantidad",[],"",true);
+				var _monto:Number = _sql.getSumarCampo("monto",[],"",true);
+				
+				lbl1_nototal.text ="";
+				lbl2_noCotizacion.text= _noCotizacion == 1 ? "1 Cotización":_noCotizacion.toString()+" Cotizaciones";
+				lbl3_noMarcas.text = _noMarcas == 1 ? "1 Marca":_noMarcas.toString()+" Marcas";
+				lbl4_noConceptos.text = _noConceptos == 1 ? "1 Concepto":_noConceptos.toString()+" Conceptos";
+				lbl5_piezas.text = _piezas == 1 ? "1 Pieza":_piezas.toString()+" Piezas";
+				lbl6_monto.text= "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_monto);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:Parallel id="showGrafica" effectEnd="showGrafica_effectEndHandler(event)" target="{grafPorciento}" > 
+			<s:Fade alphaFrom="0" alphaTo="1" duration="100" startDelay="200"/>
+			<s:Resize widthFrom="0" widthTo="300" duration="130"/>
+		</s:Parallel>
+		
+		<s:Parallel id="hideGrafica" effectEnd="hideGrafica_effectEndHandler(event)" target="{grafPorciento}" >
+			<s:Fade alphaFrom="1" alphaTo="0" duration="50"/>
+			<s:Resize widthFrom="300" widthTo="0" duration="300"/>
+		</s:Parallel>	
+	</fx:Declarations>
+	
+	<componentes:TituloChartMaxTablero width="100%" text="COTIZACIÓN ‡ PEDIDO"	/>
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" change="validarLlenarGrid()">
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="0" gap="0">
+				<s:VGroup width="100%" height="100%" paddingBottom="0" >
+					<otros:divisionGruesa width="100%" />
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridCompras" width="100%" height="100%" dataProvider="{this._listaCotizaNoPedidoCliente}" 
+																 disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																 anchoColumnas="{['8%','11%','24%','30%','12%','=']}" itemClickADG="gridItemClickEvent(event)" mostrarFooter="false">
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"  />
+							<mx:AdvancedDataGridColumn headerText="Cotización" dataField="cotizacion">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaNoPedidoCliente;
+													
+													import skins.catalogos.catalogoColores;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<mx:LinkButton label="{(data as CotizaNoPedidoCliente).cotizacion}" color="0x257d92" toolTip="Ver Cotización" textDecoration.selected="underline"  horizontalCenter="0"
+														   includeInLayout="{(data as CotizaNoPedidoCliente).repetido == true ? false:true}"
+														   visible="{(data as CotizaNoPedidoCliente).repetido == true ? false:true}"/>
+											
+											<s:Label horizontalCenter="0" text="{(data as CotizaNoPedidoCliente).cotizacion}" 
+													 includeInLayout="{(data as CotizaNoPedidoCliente).repetido == true ? true:false}" 
+													 visible="{(data as CotizaNoPedidoCliente).repetido == true ? true:false}"/>
+											
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Marca" dataField="marca">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<label:Texto text="{data.marca}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Concepto" dataField="concepto">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<label:Texto text="{data.concepto}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Cantidad" dataField="cantidad"/>
+							<mx:AdvancedDataGridColumn headerText="Monto" dataField="montoString" sortCompareFunction="compareFunction_Monto"/>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				</s:VGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="8%" textAlign="center" />
+					<label:Titulo_12_VerdeAzul_pTop10 id="lbl2_noCotizacion" paddingTop="0" width="11%" fontSize="14" textAlign="center"/>
+					<label:Titulo id="lbl3_noMarcas" paddingTop="0" width="24%" textAlign="center" />
+					<label:Titulo id="lbl4_noConceptos" paddingTop="0" width="30%" textAlign="center" />
+					<label:Titulo id="lbl5_piezas" paddingTop="0" width="12%" textAlign="center" />
+					<label:Titulo id="lbl6_monto" paddingTop="0" width="15%" textAlign="center" />
+				</s:HGroup>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet1:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+			
+			
+			<!--<s:VGroup width="100%" height="100%" gap="0">
+				<otros:divisionGruesa width="100%" />
+				<pqNet:dataGridPqNet id="tablaGrid" width="100%" height="100%" 
+									 dataProvider="{_listaCotizaNoPedidoCliente}" horizontalScrollPolicy="auto"
+									 porcentajesColumnasPq="[8,13,25,25,12,15]" itemClick="gridItemClickEvent(event)">
+					<pqNet:columns>
+						<mx:DataGridColumn headerText="#" dataField="numFila"/>
+						<mx:DataGridColumn headerText="Cotización" dataField="cotizacion">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaNoPedidoCliente;
+												
+												import skins.catalogos.catalogoColores;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<mx:LinkButton label="{(data as CotizaNoPedidoCliente).cotizacion}" color="0x257d92" toolTip="Ver Cotización" textDecoration.selected="underline"  horizontalCenter="0"
+													   includeInLayout="{(data as CotizaNoPedidoCliente).repetido == true ? false:true}"
+													   visible="{(data as CotizaNoPedidoCliente).repetido == true ? false:true}"/>
+										
+										<s:Label horizontalCenter="0" text="{(data as CotizaNoPedidoCliente).cotizacion}" 
+												 includeInLayout="{(data as CotizaNoPedidoCliente).repetido == true ? true:false}" 
+												 visible="{(data as CotizaNoPedidoCliente).repetido == true ? true:false}"/>
+										
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="Marca" dataField="marca"/>
+						<mx:DataGridColumn headerText="Concepto" dataField="concepto"/>
+						<mx:DataGridColumn headerText="Cantidad" dataField="cantidad"/>
+						<mx:DataGridColumn headerText="Monto" dataField="montoString" sortCompareFunction="compareFunction_Monto">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaNoPedidoCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:Label text="{ (data as CotizaNoPedidoCliente).montoString}"  horizontalCenter="0"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</pqNet:columns>
+				</pqNet:dataGridPqNet>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet1:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>-->
+		</s:NavigatorContent>
+		
+		
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" gap="0"  >	
+				<otros:divisionGruesa width="100%" />
+				
+				<s:HGroup id="grpPrincipal" width="100%" height="100%" gap="0"  >
+					<s:Group width="100%" height="100%" >
+						<s:HGroup width="100%" horizontalAlign="right" paddingTop="20">
+							<grafica:botonPopUp id="btnCloseGraf" icono="tache" click="btnCloseGraf_clickHandler(event)" visible="false" />
+						</s:HGroup>
+						<s:HGroup width="100%" height="100%" paddingTop="20" paddingBottom="20">
+							<graficas:PieChartPqGris id="myChart" width="100%" height="100%" paddingTop="20" paddingBottom="0" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+													 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" itemClick="myChart_itemClickHandler(event)">
+								<graficas:series>
+									<graficas:pieSeriesPqNet field="total"/>
+								</graficas:series>
+							</graficas:PieChartPqGris>
+							
+							<otros:VDivisionDelgada id="divisionGrafica" height="100%"  visible="false" includeInLayout="false"/>
+							<graf:CotNoPed_porcierto id="grafPorciento" width="0" height="100%" visible="false"/>
+						</s:HGroup>
+					</s:Group>
+				</s:HGroup>
+				<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+					<s:text>Los montos se refieren a precio de Venta</s:text>
+				</s:Label>
+				
+				<otros:divisionHueca width="100%" />
+				
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="tabla" click="seleccionaTabla()" />
+					<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+				</s:HGroup>
+				
+			</s:VGroup>
+			
+		</s:NavigatorContent>
+		
+	</pq:MobViewStack>
+</s:VGroup>

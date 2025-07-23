@@ -1,0 +1,158 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita
+{
+	import mx.collections.ArrayCollection;
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.ventas.visitas.VisitaProquifa")]
+	[Bindable]
+	public class VisitaProquifa
+	{
+		private var _idVisitaProquifa:int;
+		private var _idContacto:int;
+		private var _idEmpleado:int;
+		private var _vehiculo:Boolean;
+		private var _vehiculoTipo:String;
+		private var _vehiculoMarca:String;
+		private var _vehiculoColor:String;
+		private var _vehiculoPlacas:String;
+		private var _observaciones:String;
+		private var _fecha:Date;
+		private var _lordenesDespacho:ArrayCollection; 
+		private var _ordenesDespacho:ArrayCollection; //Se envian los id de las ordenes de despacho
+		private var _arregloImagenes:ArrayCollection;
+		
+		public function VisitaProquifa()
+		{
+		}
+
+
+		public function get arregloImagenes():ArrayCollection
+		{
+			return _arregloImagenes;
+		}
+
+		public function set arregloImagenes(value:ArrayCollection):void
+		{
+			_arregloImagenes = value;
+		}
+
+		public function get ordenesDespacho():ArrayCollection
+		{
+			return _ordenesDespacho;
+		}
+
+		public function set ordenesDespacho(value:ArrayCollection):void
+		{
+			_ordenesDespacho = value;
+		}
+
+		public function get lordenesDespacho():ArrayCollection
+		{
+			return _lordenesDespacho;
+		}
+
+		public function set lordenesDespacho(value:ArrayCollection):void
+		{
+			_lordenesDespacho = value;
+		}
+
+		public function get fecha():Date
+		{
+			return _fecha;
+		}
+
+		public function set fecha(value:Date):void
+		{
+			_fecha = value;
+		}
+
+		public function get observaciones():String
+		{
+			return _observaciones;
+		}
+
+		public function set observaciones(value:String):void
+		{
+			_observaciones = value;
+		}
+
+		public function get vehiculoPlacas():String
+		{
+			return _vehiculoPlacas;
+		}
+
+		public function set vehiculoPlacas(value:String):void
+		{
+			_vehiculoPlacas = value;
+		}
+
+		public function get vehiculoColor():String
+		{
+			return _vehiculoColor;
+		}
+
+		public function set vehiculoColor(value:String):void
+		{
+			_vehiculoColor = value;
+		}
+
+		public function get vehiculoMarca():String
+		{
+			return _vehiculoMarca;
+		}
+
+		public function set vehiculoMarca(value:String):void
+		{
+			_vehiculoMarca = value;
+		}
+
+		public function get vehiculoTipo():String
+		{
+			return _vehiculoTipo;
+		}
+
+		public function set vehiculoTipo(value:String):void
+		{
+			_vehiculoTipo = value;
+		}
+
+		public function get vehiculo():Boolean
+		{
+			return _vehiculo;
+		}
+
+		public function set vehiculo(value:Boolean):void
+		{
+			_vehiculo = value;
+		}
+
+		public function get idEmpleado():int
+		{
+			return _idEmpleado;
+		}
+
+		public function set idEmpleado(value:int):void
+		{
+			_idEmpleado = value;
+		}
+
+		public function get idContacto():int
+		{
+			return _idContacto;
+		}
+
+		public function set idContacto(value:int):void
+		{
+			_idContacto = value;
+		}
+
+		public function get idVisitaProquifa():int
+		{
+			return _idVisitaProquifa;
+		}
+
+		public function set idVisitaProquifa(value:int):void
+		{
+			_idVisitaProquifa = value;
+		}
+
+	}
+}

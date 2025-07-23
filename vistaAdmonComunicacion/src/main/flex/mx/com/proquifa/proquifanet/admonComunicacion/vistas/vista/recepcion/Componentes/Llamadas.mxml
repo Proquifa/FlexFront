@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		   xmlns:maps="mx.com.proquifa.proquifanet.admonComunicacion.vistas.mapas.*"
+		   creationComplete="init()" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark">
+<mx:Script>
+	<![CDATA[
+		import mx.collections.ArrayCollection;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+		import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+		import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaCatalogoService;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+		import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.contacto.BusquedaContactos;
+		import mx.controls.Alert;
+		import mx.events.ValidationResultEvent;
+		import mx.formatters.Formatter;
+		import mx.managers.PopUpManager;
+		import mx.messaging.ChannelSet;
+		import mx.messaging.Producer;
+		import mx.messaging.channels.AMFChannel;
+		import mx.messaging.events.MessageFaultEvent;
+		import mx.messaging.messages.AsyncMessage;
+		import mx.rpc.events.ResultEvent;
+		import mx.validators.NumberValidator;
+		import mx.validators.StringValidator;
+		
+		 private var comboMinutos:Array = new Array();
+		 private var date:Date = new Date();					     
+		 private var comboHora:Array = new Array();
+		 private var contacto:BusquedaContactos= null;
+		 [Bindable]
+		 public var Usuario:String = new String;
+		 [Bindable]
+		 public var _usuarios:ArrayCollection = new ArrayCollection();
+		 [Bindable]		 
+		 public var _empleados:ArrayCollection = new ArrayCollection();
+		 private var usuarioAtendioParaMensaje:String;
+		 private var validarContacto:StringValidator;
+		 private var validarAtendio:NumberValidator;
+		 private var ValidarDestino:NumberValidator;
+		 private var validarAsunto:StringValidator;	 
+		 private var ValidarFecha:StringValidator;
+		 /* [Bindable]
+ 		 [Embed(source="iconos/error.png")]
+		 private var noAcceso:Class;  */
+		 
+		 /* [Bindable]
+		 [Embed(source="iconos/error2.png")]
+		 private var iconDenegado:Class; */
+		 
+		private var productorAsociado:Producer = new Producer();
+		private var canalAsociado:AMFChannel;
+		private var canalesAsociado:ChannelSet; 
+		
+		private function falloproductor(event:MessageFaultEvent):void{
+			Alert.show("Se ha producido un error en el Productor de registro de incidente asociado","Error");
+		}
+		
+		 public function init():void{    
+			//inicia canal y productor
+			this.productorAsociado.destination = "actualizacionService";
+			this.productorAsociado.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+			this.canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+			this.canalesAsociado = new ChannelSet();
+			this.canalesAsociado.addChannel(canalAsociado);
+			this.productorAsociado.channelSet = this.canalesAsociado;
+			//inicializando		
+			validarContacto = new StringValidator();
+			validarContacto.source = this.lblContactoLlamada;
+			validarContacto.property = "text";
+			validarContacto.requiredFieldError = "Debe seleccionar un contacto";
+			//validar destino
+			ValidarDestino = new NumberValidator();
+			ValidarDestino.source = this.cmbDestino;
+			ValidarDestino.property = "selectedIndex";
+			ValidarDestino.minValue = 1;
+			ValidarDestino.lowerThanMinError = "Debe seleccionar un destino";
+			//validar quien atenio
+			validarAtendio = new NumberValidator();
+			validarAtendio.source = this.cmbAtendio;
+			validarAtendio.property = "selectedIndex";
+			validarAtendio.minValue = 1;
+			validarAtendio.lowerThanMinError = "Debe indicar quién atendió";
+			//validar respuesta
+			validarAsunto = new StringValidator();
+			validarAsunto.source = this.txtRespuesta;
+			validarAsunto.property = "text";
+			validarAsunto.requiredFieldError = "Especificar el asunto";
+			//validar fecha
+			ValidarFecha = new StringValidator;
+			ValidarFecha.source = this.dtfFechaOrigen;
+			ValidarFecha.property = "text";
+			ValidarFecha.requiredFieldError = "Debe seleccionar una fecha";  
+			
+			var evento:EventoPendientesPorEnviar = null;			
+		    evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.OBTNER_USUARIOS );
+		    evento.tipo = "esac";
+		    evento.valorAdicional = "--NINGUNO--";			
+		    dispatchEvent( evento );
+		    var evento2:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.OBTENER_EMPLEADOS_DESTINOS_LLAMADAS );
+		    evento2.valorAdicional = "--NINGUNO--";
+		    dispatchEvent( evento2 );
+		    obtenerFechas();
+		}
+			
+		public function validarIfo():Boolean {
+			var contacto_validado:ValidationResultEvent = this.validarContacto.validate();
+			var destino_validado:ValidationResultEvent = this.ValidarDestino.validate();
+			var atendio_validado:ValidationResultEvent = this.validarAtendio.validate();
+			var asunto_validado:ValidationResultEvent = this.validarAsunto.validate();
+			var validacionCompleta:Boolean = new Boolean();
+			var fecha_validado:ValidationResultEvent = this.ValidarFecha.validate();
+			if (contacto_validado.type == ValidationResultEvent.VALID && destino_validado.type == ValidationResultEvent.VALID && atendio_validado.type == ValidationResultEvent.VALID && 
+			     asunto_validado.type == ValidationResultEvent.VALID  && fecha_validado.type == ValidationResultEvent.VALID) {
+					 return validacionCompleta = true;
+				}else{
+					 return validacionCompleta = false;
+				}
+        }
+			
+		private function guardarContacto(event:Event):void{
+			this.lblEmpresaLlamada.text = contacto.empresaSelect;
+			this.lblOrigenLlamada.text = contacto.origenSelect;
+			this.lblContactoLlamada.text = contacto.contactoSelect;	
+			/* PopUpManager.removePopUp(contacto); */
+			var eventoC:EventoParaCatalogoService = null;
+			eventoC = new EventoParaCatalogoService( EventoParaCatalogoService.OBTENER_EMPLEADOS_POR_EMPRESA_EN_LLAMADA );		   
+		   	eventoC.nombreEmpresa = this.lblEmpresaLlamada.text;
+		   	dispatchEvent( eventoC );
+		}
+		private function agregarContacto(event:Event):void{
+			this.lblEmpresaLlamada.text = contacto.empresaSelect;
+			this.lblOrigenLlamada.text = contacto.origenSelect;
+			this.lblContactoLlamada.text = contacto.contactoSelect;		
+			this.cmbDestino.selectedIndex = 0;		
+			/* PopUpManager.removePopUp(contacto); */
+		}
+		
+		private function consultaContactos():void{ 
+			if( contacto == null ){
+			  	 contacto = BusquedaContactos(PopUpManager.createPopUp( this, BusquedaContactos, true ));	
+			  	 contacto.addEventListener("guardarContacto",guardarContacto);
+			  	 contacto.addEventListener("agregaDatos", agregarContacto);
+			  	 contacto.addEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS,  cierraContactos );
+			  	 contacto.contactoNuevoVisible();
+			  	 PopUpManager.centerPopUp(contacto);	
+			}else{
+			  	contacto.addEventListener("guardarContacto",guardarContacto);
+			  	contacto.addEventListener("agregaDatos", agregarContacto);
+			  	PopUpManager.addPopUp(contacto,this,true);
+			  	contacto.addEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS,  cierraContactos );
+			  	contacto.contactoNuevoVisible();
+			  	PopUpManager.centerPopUp(contacto);				
+			}
+	    }
+		
+	    public function cierraContactos(event:Event):void{
+	  		contacto.removeEventListener( "guardarContacto", guardarContacto);
+	  		contacto.removeEventListener( "agregaDatos", agregarContacto);
+	  		contacto.removeEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS, cierraContactos );
+	  		PopUpManager.removePopUp( contacto ); 
+	  		flash.system.System.gc();
+	    }  
+	     
+	   private function LimpiarCampos():void{
+	   	   this.lblContactoLlamada.text="";
+	   	   this.lblEmpresaLlamada.text="";
+	   	   this.lblOrigenLlamada.text="";
+	   	   this.cmbAtendio.selectedIndex = 0;
+	   	   this.cmbDestino.selectedIndex = 0;
+	   	   this.txtRespuesta.text="";
+	   }
+		   
+	   private function guardarDatos():void{
+	   	  if(validarIfo()){
+	   	  	var fechaDTP:Date = dtfFechaOrigen.selectedDate ; 
+	   	  	var fechaTotal:String = new String;
+	   	  	var textoHorasMinutos:String = new String;
+	   	  	
+	   	  	if(horaSelect.value < 10 ){
+  	  	  		textoHorasMinutos = "0" + horaSelect.value
+  	  	  	}else{
+  	  	  		textoHorasMinutos = horaSelect.value.toString();
+  	  	  	}
+  	  	  	if(minuteSelect.value < 10 ){
+  	  	  		textoHorasMinutos = textoHorasMinutos + ":0" + minuteSelect.value
+  	  	  	}else{
+  	  	  		textoHorasMinutos = textoHorasMinutos + ":" + minuteSelect.value.toString();
+  	  	  	}	  
+  	  	  	
+  	  	  	fechaTotal = formatoFechaUniversal.format( fechaDTP ) + " " + textoHorasMinutos
+  	  	  	 	  	
+	   	  	/* fechaDTP.hours = parseInt( textoHoras );
+	    	fechaDTP.minutes = parseInt( minutosTexto ); */
+	   	  	
+            var evento:EventoPendientesPorEnviar = null;			
+		    evento = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.GUARDAR_LLAMDAS);
+			var llamadaEnvio:Llamada = new Llamada();
+					/* fechaDTP = this.dtfFechaOrigen (date.fullYear,date.month, date.date);	 */
+					llamadaEnvio.fecha = fechaDTP;	
+					llamadaEnvio.fechaHora = fechaTotal;		
+				  	llamadaEnvio.origen = this.lblOrigenLlamada.text;					  	
+				  	llamadaEnvio.contacto = this.lblContactoLlamada.text;
+				  	llamadaEnvio.empresa = this.lblEmpresaLlamada.text;	  
+				  	llamadaEnvio.destino = this.cmbDestino.text;
+				  	llamadaEnvio.atendio = this.cmbAtendio.text; 	
+					this.usuarioAtendioParaMensaje = this.cmbAtendio.text;
+				  	llamadaEnvio.respuesta = "";  
+				  	llamadaEnvio.asunto = this.txtRespuesta.text;
+				  	llamadaEnvio.mensaje = false;	
+				  	llamadaEnvio.estado = "EN ESPERA";
+				  	llamadaEnvio.recibio = "Recepción";
+		    evento.llamada = llamadaEnvio;
+		    dispatchEvent( evento );
+			  LimpiarCampos();
+		    }else{
+		      Alert.show("Información incompleta","Información incompleta",Alert.OK,this,null); 	
+		    }
+	   }
+	   
+	   private function httperror():void{
+			Alert.show("Error en el servlet","Error",Alert.OK,this,null);
+			/* ,noAcceso  */
+		}
+	
+	   /**
+	   	*Metodo que recibe a los usarios del mapa
+	   	*/
+	   public function set usuariosParaCombo(datos:ArrayCollection):void{
+		if(datos == null){
+				return;
+			}
+			this._usuarios = datos; 
+		}
+		 /**
+	   	  *Metodo que recibe a los Empleados del mapa
+	   	  */
+		public function set empleadosParaCombo(datos:ArrayCollection):void{
+			if(datos == null){
+				return;
+			}
+			this._empleados = datos;
+		}
+		/**
+		 * Recibe la inyeccion q trae todos los datos de la llamada GUARDADA
+		 */
+		public function set recibeLlamadasGuardadas ( datos:Boolean ):void{
+			if(datos == false){
+				return;
+			}
+			if(datos == true){
+				Alert.show("Se registró la llamada correctamente", "Operación exitosa");
+				this.dtfFechaOrigen.text = "";
+				obtenerFechas();
+				// se envia el mensaje al reporte de llmadas
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "reporteLlamada";
+				mensaje.headers["Usuario"] = this.usuarioAtendioParaMensaje;
+				mensaje.body = "Mensaje";
+				this.productorAsociado.send(mensaje);
+				this.usuarioAtendioParaMensaje = "";
+			}
+		}
+		
+	   /**
+	    * Recibe la inyeccion q trae al Vendedor buscado por la empresa
+	    */
+	   public function set recibeVendedorDeLaEmpresa( datos:CatalogoItem ):void{
+			 if(datos == false){
+			 	 return;
+			 }
+			 this.cmbDestino.text= datos.valor;
+			 this.cmbDestino.selectedIndex = 1;
+	   }	
+	   public function obtenerFechas():void{
+			  this.horaSelect.value = date.getHours();
+			  this.minuteSelect.value = date.getMinutes(); 
+		   }
+	]]>
+</mx:Script>
+
+	<mx:DateFormatter formatString="YYYYMMDD" id="formatoFechaUniversal"/>
+	
+	<maps:MapaLlamadas/> 
+	
+	<mx:VBox width="100%" height="100%" paddingLeft="10" paddingRight="10" paddingBottom="10">
+		<!--<mx:Label text="Registro de Llamadas" fontSize="30" width="100%" fontWeight="bold"/>-->
+		<label:labelSubtitulo text="Registro de Llamadas" width="100%" />
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer width="15"/>	
+		<mx:FormItem label="Fecha Origen: *">
+			<mx:DateField id="dtfFechaOrigen" width="150"/>
+		</mx:FormItem>
+		<mx:HBox>			
+			<mx:FormItem label="Hora origen: *" paddingLeft="8">
+				<mx:NumericStepper id="horaSelect" minimum="0" maximum="24" stepSize="1"/>
+			</mx:FormItem>
+			<mx:FormItem label=":">
+				<mx:NumericStepper id="minuteSelect" minimum="0" maximum="60" stepSize="1"/>
+			</mx:FormItem>
+		</mx:HBox>
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer width="15"/>	
+		<mx:HBox width="100%" verticalAlign="middle" paddingLeft="5">
+			<mx:Form width="100%">
+				<mx:FormItem label="Origen: *" width="100%">
+					<mx:Label width="100%" id="lblOrigenLlamada" />
+				</mx:FormItem>
+				<mx:FormItem label="Empresa: *" width="100%">
+					<mx:Label width="100%" id="lblEmpresaLlamada"/>
+				</mx:FormItem>
+				<mx:FormItem label="Contacto: *" width="100%">
+					<mx:Label width="100%" id="lblContactoLlamada"/>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:Spacer width="100%"/>
+			<mx:Button  fontFamily="Webdings" fontSize="60" click="consultaContactos()"  id="btnContacto" width="80" height="95" icon="@Embed('assets/IcoUsuario.png')"/>
+		</mx:HBox>
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer width="15"/>	
+		<mx:Form width="100%" paddingLeft="27">
+			<mx:FormItem label="Destino: *" paddingLeft="2">
+				<mx:ComboBox dataProvider="{this._usuarios}" labelField="valor" data="llave" textAlign="left" id="cmbDestino" width="150"/>
+			</mx:FormItem>
+			<mx:FormItem label="Atendió: *" paddingLeft="2">
+				<mx:ComboBox dataProvider="{this._empleados}"  labelField="valor" data="llave"  textAlign="left" id="cmbAtendio" width="150"/>
+			</mx:FormItem>
+		</mx:Form>
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer width="15"/>	
+		<mx:FormItem label="Asunto: *" paddingLeft="2"/>			
+		<s:TextArea width="100%" height="100%" id="txtRespuesta" contentBackgroundColor="#FAFFC0" contentBackgroundAlpha="1.0"/>
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer width="15"/>	
+		<mx:HBox width="100%" horizontalAlign="right">
+		 	<s:Button id="guardarLlamada" label="Guardar" click="guardarDatos()" width="80"/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:Canvas>

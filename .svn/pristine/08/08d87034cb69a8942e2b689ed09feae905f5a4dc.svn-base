@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		 xmlns:operacion="mx.com.proquifa.vista.vistas.registrarArribo.operacion.*"
+		 xmlns:registrarArribo="mx.com.proquifa.vista.vistas.registrarArribo.*" 
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 width="100%" height="100%"
+		 creationComplete="init(event)" xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*" 
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Services;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.RegistarArribo.EventoRegistrarArribo;
+			import mx.com.proquifa.vista.vistas.registrarArribo.progreso.RegistrarArribo_VistaProgreso;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable] public var sizeFonTitulos:Number;
+			[Bindable] public var flete:String;
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener(EventoRegistrarArribo.CLIC_FLETERA_SELECCIONADA,cambiarVista,false,0,true);
+				addEventListener("cambiarPrincipal",cambiarVistaPrincipal,false,0,true);
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpListaFletera);
+				plantilla.cargarGraficas(hgpGraficas);
+				plantilla.sinLeyenda();
+				plantilla.cargarOperacion(vistaOperacion);
+				
+				sizeFonTitulos = (30 / 2005) * (unscaledWidth);
+				sizeFonTitulos = sizeFonTitulos > 20 ? 20:sizeFonTitulos;
+				sizeFonTitulos = sizeFonTitulos < 15 ? 15:sizeFonTitulos;
+			}
+			
+			
+			
+			private var $sql:Query;
+			public function set recibeListasArribo($data:ArrayCollection):void
+			{
+				if(!$data)
+					return;
+				
+				/*if(updateListas)
+				stackRegistrar.selectedIndex = 1;
+				else
+				stackRegistrar.selectedIndex = 0;*/
+				
+				$sql = new Query($data,['fletera','FEAString','arribado']);
+				grafGuias.dataProvider = grafAA.dataProvider = cmpListaFletera.dataProvider = armarInfo();
+				
+				if($data)
+				{
+					cmpListaFletera.lblTotalPedimentos.text = $data.length.toString() + " Pedimentos";
+					cmpListaFletera.lblTotalBultos.text = $sql.getSumarCampo("noBultos",new Array,"",true).toString() + " Bultos";
+					cmpListaFletera.lblTotalMontos.text = "Monto Total: $ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas($sql.getSumarCampo("totalMonto",new Array,"",true));
+				}
+				
+				if(updateListas)
+				{
+					if(fleteras.length > 0)
+					{
+						for (var i:int = 0; i < fleteras.length; i++) 
+						{
+							if(fleteraSelected.toLowerCase() == (fleteras[i] as String).toLowerCase())
+							{
+								iniciarVistaFleteras(fleteraSelected);
+								updateListas = false;
+								break;
+							}
+						}
+					}
+					else
+					{
+						plantilla.indice = 0;
+						updateListas = false;
+					}
+				}
+			}
+			
+			
+			private var fleteras:Array;
+			private function armarInfo():ArrayCollection
+			{
+				var arregloFinal:ArrayCollection = new ArrayCollection();
+				fleteras = $sql.getPunteros(['fletera']);
+				var contador:int = 0;
+				
+				for (var n:int = 0; n < fleteras.length; n++) 
+				{
+					var current:OrdenDespacho = new OrdenDespacho();
+					var punTemp:Array = $sql.getPunteros([fleteras[n]]);
+					if(punTemp.length > 0)
+					{
+						current.fletera = fleteras[n];
+						current.numFila = n + 1;
+						current.totalMonto = $sql.getSumarCampo("totalMonto",punTemp);
+						current.noBultos = $sql.getSumarCampo("noBultos",punTemp);
+						current.totalListasArribo = punTemp.length.toString();
+						current.listasArribo = $sql.armarLista(punTemp);
+						current.punteros = punTemp;
+						current.FEA = fechaAntigua($sql.armarLista(punTemp));
+						current.numArribadas = $sql.getPunteros([fleteras[n],null,true]).length;
+						current.numXArribas = $sql.getPunteros([fleteras[n],null,false]).length;
+						
+						var valTiempo:Array = $sql.getPunteros([fleteras[n],current.FEAString]);
+					}
+					
+					arregloFinal.addItem(current);
+				}
+				return arregloFinal;
+			}
+			
+			
+			
+			private function fechaAntigua($collection:ArrayCollection):Date
+			{
+				var sort:Sort = new Sort();  
+				sort.fields = [new SortField("FEA", false, false, true)];  
+				
+				$collection.sort = sort;  
+				$collection.refresh();  
+				
+				return ($collection[0] as OrdenDespacho).FEA;
+			}
+			
+			
+			private function cambiarVista(evt:EventoRegistrarArribo):void
+			{
+				iniciarVistaFleteras(evt.fleteraSelect);
+			}
+			
+			
+			private function iniciarVistaFleteras($fletera:String):void
+			{
+				/*stackRegistrar.selectedIndex = 1;*/
+				plantilla.indice = 1;
+				cmpTitulo.isVisble = true;
+				var punteros:Array = $sql.getPunteros([$fletera]);
+				
+				vistaOperacion.dataProvider($sql.armarLista(punteros));
+				flete = $fletera;
+				fleteraSelected = $fletera;
+			}
+			
+			
+			private function cambiarVistaPrincipal(evt:Event):void
+			{
+				/*stackRegistrar.selectedIndex = 0;*/
+				plantilla.indice = 1;
+			}
+			
+			
+			private var fleteraSelected:String;
+			private var updateListas:Boolean;
+			public function set recibeConfirmacionInsertOrden($confirmacion:Boolean):void
+			{
+				if($confirmacion)
+				{
+					alertaSingleton.show('La operación ha sido exitosa.', catalogoAlertas.TIT_CONF_operacionExitosa );
+					dispatchEvent(new Event("recargarPendientes"));
+					
+					var evtr:EventoRegistrarArribo = new EventoRegistrarArribo(EventoRegistrarArribo.OBTENER_LISTA_ORDENES_ARRIBO);
+					evtr.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(evtr);
+					updateListas = true;
+					vistaOperacion.gpProgreso.resetAll();
+					
+					Services.getScoring("reportes/obtenerOrdenDespacho/" + RegistrarArribo_VistaProgreso.ordenDespacho, httpRequestComplete, httpRequestError);
+					
+				}
+			}
+			
+			private function httpRequestComplete( event:Event ):void 
+			{ 
+				alertaSingleton.remove(true);
+				trace( event.target.data );
+				var data:Object = JSON.parse(event.target.data);
+				
+				generarCSV(data);
+			}
+			
+			private function generarCSV(data:Object):void {
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Cliente");
+				fila[2] = hoja.addItem("Catálogo");
+				fila[3] = hoja.addItem("Concepto");
+				fila[4] = hoja.addItem("Fabrica");
+				fila[5] = hoja.addItem("Pedido Interno");
+				fila[6] = hoja.addItem("FEE");
+				fila[7] = hoja.addItem("Precio Unitario");
+				fila[8] = hoja.addItem("Piezas");
+				fila[9] = hoja.addItem("Importe");
+				fila[10] = hoja.addItem("Costo Unitario");
+				fila[11] = hoja.addItem("Fecha Tramitación");
+				fila[12] = hoja.addItem("Fecha Compra");
+				fila[13] = hoja.addItem("Fecha Declarar arribo");
+				fila[14] = hoja.addItem("Fecha Arribo");
+				
+				for(var i:int = 0; i < data.current.length; i++){
+					fila = new Array();
+					fila[0] = i + 1;
+					fila[1] = '"' + data.current[i].cliente + '"';
+					fila[2] = '"' + data.current[i].codigo + '"';
+					fila[3] = '"' + data.current[i].descripcion + '"';
+					fila[4] = '"' + data.current[i].fabrica + '"';
+					fila[5] = '"' + data.current[i].cpedido + '"';
+					fila[6] = '"' + data.current[i].fecha + '"';
+					fila[7] = '"' + data.current[i].precioUnitario + '"';
+					fila[8] = '"' + data.current[i].piezas + '"';
+					fila[9] = '"' + data.current[i].importe + '"';
+					fila[10] = '"' + data.current[i].costo + '"';
+					fila[11] = '"' + data.current[i].fechaTramitacion + '"';
+					fila[12] = '"' + data.current[i].fechaCompra + '"';
+					fila[13] = '"' + data.current[i].fechaDeclararArribo + '"';
+					fila[14] = '"' + data.current[i].fechaArribo + '"';
+					hoja.addItem('\r' + fila);
+				}
+				
+				file.save(hoja, RegistrarArribo_VistaProgreso.ordenDespacho + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+			}
+			
+			private function httpRequestError( error:ErrorEvent ):void { 
+				trace( "An error occured: " + error );   
+				alertaSingleton.remove(true);
+			}
+			
+			protected function cmpTitulo_vistaAnteriorHandler(event:EventoGestorCompras):void
+			{
+				dispatchEvent(new Event('cambiarPrincipal',true));
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				vistaOperacion.gpProgreso.clicCancelar();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" visible="false" includeInLayout="false">
+		<!--<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="REGISTRAR ARRIBO" />-->
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="REGISTRAR ARRIBO" subTitulo="{flete}" vistaAnterior="cmpTitulo_vistaAnteriorHandler(event)"/>
+		
+		<registrarArribo:RegistrarArribo_ListaFleteras id="cmpListaFletera" width="100%" height="100%" />
+		<s:VGroup id="hgpGraficas" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" gap="15" paddingBottom="20" paddingTop="20" paddingLeft="20" paddingRight="20">
+			<label:Titulo_15_Helvetica fontWeight="bold" width="100%" text="AA / FLETERAS" textAlign="center" fontSize="{sizeFonTitulos}" color="#404040"/>
+			<registrarArribo:Grafica_RegistrarArribo_Agentes id="grafAA" width="100%" height="100%" maxHeight="583" maxWidth="583"/>
+			<s:Spacer height="5%" />
+			<label:Titulo_15_Helvetica fontWeight="bold" width="100%" text="GUÍAS" textAlign="center" fontSize="{sizeFonTitulos}" color="#404040"/>
+			<registrarArribo:Grafica_RegistrarArribo_Guias id="grafGuias" width="100%" height="100%" maxHeight="583" maxWidth="583"/>
+		</s:VGroup>  
+		
+		<operacion:RegistrarArribo_VistaOperacion id="vistaOperacion" width="100%" height="100%" />
+	</s:HGroup>  
+	
+	
+	<plantilla:Plantilla_VistaInicial id="plantilla" width="100%" height="100%" />
+</s:Group>

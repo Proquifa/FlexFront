@@ -1,0 +1,49 @@
+package mx.com.proquifa.proquifanet.rsl.vista.eventos.comun
+{
+	import flash.events.Event;
+
+	public class EventoComun extends Event
+	{
+		
+		public var current:*;
+		public var selectedIndex:int;
+		public var selectedItem:*;
+		public var newDate:Date;
+		public var obj:Object;
+		
+		public static const HEADER_CLICK:String = "clickHeaderGridEventoComun";
+		public static const REAJUSTAR_LETRA:String = "reajustarTamanoLetra";
+		public static const ORDENAR_LETR:String = "ordenarXLetra";
+		public static const ORDENAR_ABC:String = "ordenarABCXLetra";
+		public static const ORDENAR_NOMB:String = "ordenarNombXLetra";
+		public static const ORDENAR_PROVEE:String = "ordenarProvee";
+		public static const ORDENAR_PROVEE_LETRA:String = "ordenarProveeXLetra";
+		public static const OCULTA_POPUP_MENU_ORDENAR:String ="ocultaPopUpMenuOrdenar";
+		public static const CLICK_DATEPICKER:String ="changeDate";
+		public static const CLOSE_DATEPICKER:String ="closeDate";
+		public static const CLICK_BOTONERA:String="clickBotonera";
+		public static const CLICK_CUADRICULA:String="clickCuadricula";
+		public static const CLICK_VALORACION:String="clickValoracion";
+		public static const CHANGE_COMBO:String="changeCombo";
+		public static const SELECT_ITEM_RADIO:String="selectedItemRadio";
+		
+		public static const SELECCIONAR_MENU_CATALOGO:String = "seleccionarMenuCatalogoLibreria";
+		public static const REGRESAR_A_CATALOGO_DEFAULT:String = "regresarACatalogoDefaultLibreria";
+		
+		public static const SELECCIONAR_CONFIGURACION_RUTAS:String = "seleccionarConfiguracionRutas";
+		public static const REGRESAR_A_MENU_CONFIGURACION:String = "regresarMenuConfiguracion";
+		
+		
+		public static const DESCARGAR_DOCUMENTO_MAIL_BOT:String = "descargarDocumentoMAilBot";
+		
+		 
+		public function EventoComun(type:String, bubbles:Boolean = true, cancelable:Boolean = false)
+		{
+			super(type,bubbles,cancelable)
+		}
+		
+		public override function clone():Event{
+			return new EventoComun(type,bubbles,cancelable);
+		}
+	}
+}

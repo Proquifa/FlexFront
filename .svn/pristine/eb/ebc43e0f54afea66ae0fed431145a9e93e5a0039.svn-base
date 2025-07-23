@@ -1,0 +1,672 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:chekbox="skins.skin.chekbox.*" 
+		 xmlns:input="skins.skin.textinput.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*"
+		 width="100%" height="100%" xmlns:textarea="skins.skin.textarea.*" xmlns:shaders="skins.skin.shaders.*" >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.agenteAduanal.EventoCatAgenteAduanalGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.EffectEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			private var activaCambios:Boolean;
+			private var seEstaEditando:Boolean = false;
+			[Bindable]	private var _agente:AgenteAduanal;
+			[Bindable]	private var _agenteRespaldo:AgenteAduanal;
+			[Bindable]	private var _seGuardaImagen:Boolean;
+			[Bindable]	private var _ocultarMostrarMenuBool:Boolean = true;
+			[Bindable]  private var clickEnHabilitado:Boolean;
+			
+			
+			public function ocultaGrupoImagen():void{
+				if( _agente != null ){
+					if( isNaN( _agente.idAgenteAduanal) ){
+						//YA NOS E HACE NADA
+					}else{
+						_ocultarMostrarMenuBool = true;
+						_seGuardaImagen=false; 
+						grpInfo.percentHeight = 100;
+						grpInfo.percentWidth = 100;
+						if( this.lnkCancelar.visible ){
+							grpGuardarCancelar.visible = false;
+							this.lnkEditar.visible = true;
+						}
+					}
+				}
+			}
+			public function set recibeAgenteSeleccionado($agente:AgenteAduanal):void
+			{
+				recibeAgenteFlujo( $agente );
+			}
+			
+			public function recibeAgenteFlujo($age:AgenteAduanal):void
+			{
+				habilitaTextos(false);
+				_agente = $age;
+				_agenteRespaldo = ObjectUtil.copy( $age ) as AgenteAduanal;
+				_seGuardaImagen = false;
+				activaCambios = false;
+				grpBotonEditar.visible = true;
+				cargaPais();
+				grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = false;
+				grpBotones.visible = this.grpBotones.includeInLayout = false;
+				grpImagen.visible = false;
+				
+				clickEnHabilitado = false;
+				this.chkHabilitado.selected = _agente.habilitado;
+				
+				if( isNaN( _agente.idAgenteAduanal ) )//es nuevo proveedor por agregar
+				{ 
+					grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = true;
+					this.cmbPais.selectedIndex = 0;
+					_ocultarMostrarMenuBool = true;
+					seEstaEditando=false;
+					editarInfo();
+				}
+				else
+				{
+					grpBotones.visible = this.grpBotones.includeInLayout = true;
+					if( this._agente.habilitado )
+					{
+						this.clickEnHabilitado = true;
+					}
+				} 
+			}
+			
+			private function cargaPais():void
+			{
+				if( _agente == null || _agente.pais == null || _agente.pais == '' )
+				{
+					cmbPais.selectedIndex = 0;
+				}
+				else if( cmbPais.dataProvider != null && cmbPais.dataProvider.length > 0 )
+				{
+					this.cmbPais.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbPais.dataProvider as ArrayCollection , _agente.pais );
+				}
+				else
+				{
+					setTimeout( cargaPais, 500 );
+				}
+			}
+			
+			/*	private function validaInfo():Boolean
+			{
+				var valida:Boolean = false;
+				if( this.txtNombre.text != '' )
+				{
+					if( this.txtRazonSocial.text != '' )
+					{
+						valida = true;
+					}
+					else
+					{ 
+						valida = false;
+					}
+				}
+				else
+				{ 
+					valida = false; 
+				}
+				return valida;
+			}
+			
+			
+			 **
+			 * regresa al componenteCatProMenu.xmlx el proveedor con sus cambios
+			 *
+			public function regresaProveedor():void
+			{
+				if(activaCambios)
+				{
+					if( validaInfo() )
+					{
+						advertenciaGuardar();
+						return;
+					}
+					else
+					{ 
+						alertaSingleton.show(catalogoAlertas.ADV_informacionIncompleta,catalogoAlertas.TIT_ADV_informacionIncompleta);
+						setTimeout( regresaIndiceInterior, 1000);	
+					} 
+				}
+			}
+			**
+			 * Funcion que determina si se guarda los avances modificados 
+			 *
+			private function advertenciaGuardar():void
+			{
+				alertaSingleton.show(catalogoAlertas.compradorPhs_guardaCambiosPartidaRequisicion,catalogoAlertas.TIT_ADV_atencion,"Cat_Pro_Empresa_Guardar","","","SI","NO");
+			}
+			
+			public function set recibeDelAlert( $dato:ResultAlert ):void
+			{
+				if( $dato == null )
+				{
+					return;
+				}
+				if( $dato.vieneD == "Cat_Pro_Empresa_Guardar" )
+				{
+					method1( $dato );
+				}
+			}
+			
+			**
+			 * Funcion privada q dispara el Evento Para guarda los avances modificados en la requisicion 
+			 *
+			public function method1( $dato:ResultAlert ):void{
+				if( $dato.botonSeleccionado == "SI" ){
+					setTimeout( guardaCambios, 500);	
+				}else if ($dato.botonSeleccionado == "NO"){
+					setTimeout( regresaIndiceInterior, 1000);
+				}else{
+					setTimeout( regresaIndiceInterior, 1000);	
+				} 
+			}
+			
+			private function regresaIndiceInterior():void
+			{
+				var evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.REGRESAR_INDICE_ANTERIOR_AGENTE );
+				evt.vieneDe = "Generales";
+				evt.indiceAnterior = 0;
+				dispatchEvent( evt );
+			} */
+			
+			private function enviaIdSeleccionado():void
+			{
+				var evtd:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.ACTUALIZA_AGENTES_ADUANALES );
+				evtd.idAgente = _agente.idAgenteAduanal;
+				evtd.habilitado = _agente.habilitado;
+				dispatchEvent( evtd ); 
+				guardaCambios();
+				var $evtP:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.OBTENER_AGENTES_ADUANALES );
+				dispatchEvent($evtP);
+			}
+			
+			private function guardaCambios( vieneDe:String = '' ):void
+			{
+				//se dispara el evento que regresa el proveedor al componente CatProMenu.mxml para guardar
+				activaCambios = false;
+				var seGuarda:Boolean = true;
+				var evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.GUARDA_AGENTE );
+				if( isNaN( _agente.idAgenteAduanal ) )
+				{
+					seGuarda = false;
+					if( txtNombre.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el nombre.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtRazonSocial.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar la razón social.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtPatente.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el numero de patente.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtDireccion.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar la dirección.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( cmbPais.selectedIndex < 0  )
+					{
+						alertaSingleton.show("Es necesario indicar indicar un país.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return
+					}
+					if( txtCiudad.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar la ciudad.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtEstado.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el estado.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					if( txtCP.text == "" )
+					{
+						alertaSingleton.show("Es necesario indicar el CP.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+						return;
+					}
+					seGuarda = true;
+					evt = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.CREA_NUEVO_AGENTE );
+				}
+				if( seGuarda )
+				{
+					
+					if( _seGuardaImagen)
+					{
+						_agente.bytes = referencia.bytes;
+						_agente.imagen = referencia.extensionArchivo;
+					}
+					else
+					{
+						_agente.bytes = _agente.bytes == null ? null:_agente.bytes;
+						_agente.imagen = _agente.imagen == null ? null:_agente.imagen;
+					}
+					
+					evt.agenteSeleccionado = this._agente;
+					evt.agenteSeleccionado.pais = cmbPais.selectedItem.valor; 
+					evt.agenteSeleccionado.ciudad = txtCiudad.text;
+					evt.agenteSeleccionado.cp = txtCP.text;
+					evt.agenteSeleccionado.descripcionAmpliada = txtDescripcionAmpliada.text;
+					evt.agenteSeleccionado.direccion1  = txtDireccion.text;
+					evt.agenteSeleccionado.estado = txtEstado.text;
+					if( txtNombre.text == '' || txtRazonSocial.text == '' )
+					{
+						return;
+					}
+					evt.agenteSeleccionado.habilitado = chkHabilitado.selected ;
+					evt.agenteSeleccionado.nombreComercial = txtNombre.text;
+					evt.agenteSeleccionado.nombreLegal = txtRazonSocial.text;
+					evt.agenteSeleccionado.numeroPatente = txtPatente.text;
+					evt.agenteSeleccionado.direccion2 = txtSegundaDireccion.text;
+					
+					if( isNaN( _agente.idAgenteAduanal ) )
+						evt.ventana = "CatAgenteAduanal_Empresa nuevo( Nombre: "+evt.agenteSeleccionado.nombreComercial+" )";
+					else
+						evt.ventana = "CatAgenteAduanal_Empresa ( idAgente: "+evt.agenteSeleccionado.idAgenteAduanal+" )";
+					
+					dispatchEvent( evt );
+				}
+			}
+			
+			public function set confirmaGuardado(confirmaGuardado:Boolean):void
+			{
+				if( confirmaGuardado == true)
+				{
+					var evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.ENVIA_AGENTE_ADUANAL);
+					evt.agenteSeleccionado = this._agente;
+					dispatchEvent( evt );
+					var evtd:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.ACTUALIZA_AGENTES_ADUANALES );
+					evtd.idAgente = _agente.idAgenteAduanal;
+					evtd.habilitado = _agente.habilitado;
+					dispatchEvent( evtd ); 
+					var $evtP:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.OBTENER_AGENTES_ADUANALES );
+					dispatchEvent($evtP);
+					
+					seEstaEditando=true;editarInfo('cancelar')
+				}
+			}
+			
+			public function set confirmaInsertar( $dato:Number ):void
+			{
+				if( isNaN( $dato ) )
+					return;
+				
+				var _agenteNew:AgenteAduanal = new AgenteAduanal();
+				_agenteNew = ObjectUtil.copy(this._agente) as AgenteAduanal;
+				_agenteNew.idAgenteAduanal = $dato;
+				
+				grpBotonesAgrgar.visible = grpBotonesAgrgar.includeInLayout = false;
+				var evtd:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.ACTUALIZA_AGENTES_ADUANALES );
+				evtd.idAgente = _agente.idAgenteAduanal;
+				evtd.habilitado = _agente.habilitado;
+				dispatchEvent( evtd );
+				var $evtP:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.OBTENER_AGENTES_ADUANALES );
+				dispatchEvent($evtP);
+				var evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.ENVIA_AGENTE_ADUANAL);
+				evt.agenteSeleccionado = _agenteNew;
+				dispatchEvent( evt );
+				
+				seEstaEditando=true;editarInfo('cancelar')
+			}
+			
+			public function cancelaProveddor():void
+			{
+				var evtwd:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.ACTUALIZA_AGENTES_ADUANALES );
+				evtwd.idAgente = _agente.idAgenteAduanal;
+				evtwd.habilitado = _agente.habilitado;
+				dispatchEvent( evtwd );
+				_seGuardaImagen = false;
+			}
+			
+			
+			public function imagenMuestraOculta():void
+			{
+				if( _ocultarMostrarMenuBool)
+				{
+					_ocultarMostrarMenuBool = false;
+					grpImagen.visible = true;
+				}
+				else
+				{
+					grpInfo.percentWidth = 100;
+					grpImagen.visible = false;
+					_ocultarMostrarMenuBool = true;
+				} 
+				ocultar();
+			}
+			
+			
+			protected function editarInfo($vieneDe:String = ''):void 
+			{
+				if( seEstaEditando )
+				{
+					if( $vieneDe == 'cancelar' && !_ocultarMostrarMenuBool )
+					{
+						imagenMuestraOculta();
+						setTimeout( acomodaTiempo, 400 );
+						
+					}
+					else
+					{
+						grpGuardarCancelar.visible = false; 
+						this.lnkEditar.visible = true;
+						habilitaTextos(false);
+					}
+				}
+				else
+				{
+					setTimeout( muestraLinkCancelar, 250 );
+				}  
+			}
+			
+			private function muestraLinkCancelar():void
+			{
+				grpGuardarCancelar.visible = true; 
+				this.lnkEditar.visible = false;
+				habilitaTextos(true);
+			} 
+			
+			private function acomodaTiempo():void
+			{
+				grpGuardarCancelar.visible = false; 
+				this.lnkEditar.visible = true;
+				habilitaTextos(false);
+			}
+			
+			private function habilitaTextos( $seHabilita:Boolean):void
+			{
+				txtCiudad.editable = $seHabilita;
+				txtCP.editable = $seHabilita;
+				txtDescripcionAmpliada.editable = $seHabilita;
+				txtDireccion.editable = $seHabilita;
+				txtEstado.editable = $seHabilita;
+				txtNombre.editable = $seHabilita;
+				txtRazonSocial.editable = $seHabilita;
+				txtPatente.editable = $seHabilita;
+				txtSegundaDireccion.editable = $seHabilita;
+				cmbPais.openButton.enabled= $seHabilita;
+				cmbPais.textInput.enabled = $seHabilita;
+				cmbPais.focusEnabled = $seHabilita;
+				
+				if( _agente == null || isNaN( _agente.idAgenteAduanal ) )
+				{
+					chkHabilitado.enabled = chkHabilitado.selected = false;
+				}
+				else
+				{
+					chkHabilitado.enabled = $seHabilita;
+				}
+			}
+			
+			public function cancelaGuardado():void
+			{
+				recibeAgenteFlujo( _agenteRespaldo );
+			}
+			
+			/* En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			nativePath o ruta (donde se podra obtener el nombre del archivo)  y el ByteArray) */
+			private var file:File;
+			private var referencia:Referencia;
+			private function buscarArchivo():void
+			{
+				file = new File();
+				referencia = new Referencia();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				file.browse();
+			}
+			
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				trace("completeHandler: " + event);
+				creaReferencia();
+				this.btnRestablecer.includeInLayout = this.btnRestablecer.visible = true;
+			}
+			
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 * Metodo para crear una referencia (un renglon)
+			 */ 
+			private function creaReferencia():void
+			{
+				if( file.extension.toLocaleLowerCase() == 'jpeg' || file.extension.toLocaleLowerCase() == 'jpg' || 
+					file.extension.toLocaleLowerCase() == 'png' || file.extension.toLocaleLowerCase() == 'gif' )
+				{
+					referencia.bytes = file.data;
+					referencia.extensionArchivo = file.extension;
+					referencia.nombre = _agente.idAgenteAduanal.toString();
+					imgTemporal.source =  referencia.bytes;
+					_seGuardaImagen = true;
+				}
+				else
+				{
+					alertaSingleton.show( 'Formato de archivo no permitido', catalogoAlertas.TIT_ADV_operacionImposible );
+				}
+			}
+			
+			protected function grpImagenShow_effectEndHandler(event:EffectEvent):void
+			{
+				grpInfo.percentWidth = 70;
+				grpImagen.percentWidth = 30;
+			}
+			
+			protected function grpImagenHide_effectEndHandler(event:EffectEvent):void
+			{
+				grpInfo.percentWidth = 100;
+				grpImagen.width = 0;
+			}
+			
+			private function ocultar():void
+			{
+				this.btnRestablecer.includeInLayout = this.btnRestablecer.visible = false;
+			}
+			
+			public function set confirmaModificacion(confirmaGuardado:Boolean):void
+			{
+				if( confirmaGuardado == true)
+					trace("Se registro la modificacion");
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		
+		<s:Parallel id="grpImagenShow" effectEnd="grpImagenShow_effectEndHandler(event)">
+			<s:Fade duration="100" alphaFrom="0" alphaTo="1" startDelay="200"/>
+			<mx:Resize duration="300" widthFrom="0" widthTo="{(grpContenedorPrincipal.width / 3)-60}"/>
+		</s:Parallel>
+		
+		<s:Parallel id="grpImagenHide" effectEnd="grpImagenHide_effectEndHandler(event)">
+			<s:Fade duration="50" alphaFrom="1" alphaTo="0"/>
+			<mx:Resize duration="300" widthFrom="{grpImagen.width}" widthTo="0"/>
+		</s:Parallel>
+		
+	</fx:Declarations>
+	
+	
+	<s:HGroup width="100%" height="100%" gap="0" id="grpContenedorPrincipal">
+		
+		<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpInfo">
+			<s:BorderContainer borderVisible="false" width="100%" height="100%" backgroundColor="white" backgroundAlpha="0">
+				<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+					<s:HGroup width="100%" verticalAlign="bottom" >
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_empresaGris }"/>
+						<label:TituloBankGothic_30 text="EMPRESA"/>
+						<s:Spacer width="100%"/>
+						<s:HGroup visible="{ ( isNaN(_agente.idAgenteAduanal) ? false : true )}" >
+							<label:Texto_13_VerdeAzul text="Ultima actualización: "/>
+							<label:Fecha_13_VerdeAzul  fecha="{_agente.fua}"/>
+						</s:HGroup>
+					</s:HGroup>
+					<otros:divisionGruesa width="100%"/>
+					<s:Scroller id="sclGeneral" maxWidth="1050" width="100%" height="100%" minWidth="340">
+						<s:VGroup width="100%"  horizontalCenter="0" id="grpGeneral" paddingLeft="3" paddingRight="3" verticalAlign="middle" verticalCenter="0">
+							<s:Spacer height="20" />
+							<label:Titulo_16_pTop10 width="100%" text="GENERALES" textAlign="right"/>
+							<otros:division width="100%" />
+							<s:HGroup width="100%" verticalAlign="middle" paddingTop="10">
+								<label:Titulo_22_pTop10 text="ID: " paddingTop="0"/>
+								<label:Titulo_22_RojoClaro_pTop10 text="{ isNaN(_agente.idAgenteAduanal) ? 'Nuevo' : _agente.idAgenteAduanal.toString() }" paddingTop="0" width="100%"/>
+								<s:VGroup horizontalAlign="right" gap="10">
+									<chekbox:CheckRadioDefaultPQNet id="chkHabilitado" label="Habilitado" tipoCheck="cuadrado" nombreStiloFuente="default22" />
+								</s:VGroup>
+							</s:HGroup>
+							<s:HGroup width="100%" horizontalAlign="right">
+								<s:Image id="imgTemporalChica" source="{ ( _agente.bytes != null ? _agente.bytes : catalogoIconosBotones.getInstance().proveedoresDefault	) }" width="96" height="110" />
+							</s:HGroup>
+							<s:VGroup width="100%" gap="10">
+								<s:Spacer width="10"/>
+								<label:Titulo text="Nombre comercial:" paddingTop="0"/>
+								<input:txtInputBlancoDefaultPQNet  width="100%" text="{ _agente.nombreComercial}" change="activaCambios = true" id="txtNombre" />
+								<label:Titulo text="Nombre largo o legal:" paddingTop="0"/>
+								<input:txtInputBlancoDefaultPQNet  width="100%" text="{ _agente.nombreLegal }" change="activaCambios = true" id="txtRazonSocial" />
+								<label:Titulo text="# de Patente:" paddingTop="0"/>
+								<input:txtInputBlancoDefaultPQNet  width="100%" text="{ _agente.numeroPatente }" change="activaCambios = true" id="txtPatente" />
+							</s:VGroup>
+							<s:Spacer height="20" />
+							<s:VGroup width="100%" gap="10">
+								<label:Titulo_16_pTop10 width="100%" text="DESCRIPCIÓN AMPLIADA" textAlign="right"/>
+								<otros:division width="100%"/>
+								<textarea:txtAreaBlancoDefaultPQNet width="100%" height="100%" minHeight="70" text="{ _agente.descripcionAmpliada }" change="activaCambios = true" id="txtDescripcionAmpliada"/>
+							</s:VGroup>	
+							<s:Spacer height="20" />
+							<s:VGroup width="100%" gap="10">
+								<s:Spacer width="10"/>
+								<label:Titulo_16_pTop10 width="100%" text="DIRECCIÓN" textAlign="right"/>
+								<otros:division width="100%"/>
+							</s:VGroup>	
+							<s:HGroup width="100%" >
+								<s:VGroup width="55%" height="100%" gap="10">
+									<label:Titulo text="1º linea de dirección:" paddingTop="10"/>
+									<textarea:txtAreaBlancoDefaultPQNet width="100%" height="90" text="{ _agente.direccion1 }" change="activaCambios = true" id="txtDireccion"/>
+									<label:Titulo text="2º linea de dirección:" paddingTop="0"/>
+									<textarea:txtAreaBlancoDefaultPQNet width="100%" height="90" text="{ _agente.direccion2 }" change="activaCambios = true" id="txtSegundaDireccion"/>
+								</s:VGroup>
+								<s:Spacer width="10"/>
+								<s:VGroup  id="vBoxCidad" width="45%" height="100%" gap="10">
+									<label:Titulo text="País:" paddingTop="10"/>
+									<cmbCat:ComboCatalogos change="activaCambios = true;"  fontSize="14" width="100%" height="28" id="cmbPais" creationComplete="{ cmbPais.cargaPaises('--NINGUNO--') }"/>
+									<label:Titulo text="Ciudad:" paddingTop="0"/>
+									<input:txtInputBlancoDefaultPQNet  text="{ _agente.ciudad }" id="txtCiudad" change="activaCambios = true" width="100%" />
+									<label:Titulo text="Estado:" paddingTop="0"/>
+									<input:txtInputBlancoDefaultPQNet  text="{ _agente.estado }" id="txtEstado" change="activaCambios = true" width="100%" />
+									<label:Titulo text="CP:" paddingTop="0"/>
+									<input:txtInputBlancoDefaultPQNet  text="{ _agente.cp }" id="txtCP" change="activaCambios = true" width="100%" restrict="0-9" maxChars="5"/>
+								</s:VGroup>
+							</s:HGroup>
+						</s:VGroup>
+					</s:Scroller>
+					<s:VGroup width="100%" gap="10">
+						<otros:divisionGruesa width="100%"/>
+						<s:Group width="100%" id="grpBotones">
+							<s:HGroup width="100%" horizontalAlign="right" verticalAlign="middle" id="grpBotonEditar"  >
+								<pqNet:botonPqNetLargo label="Editar" id="lnkEditar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="seEstaEditando=false;editarInfo();imagenMuestraOculta()"/>
+							</s:HGroup>
+							<s:HGroup width="100%" id="grpGuardarCancelar" visible="false">
+								<pqNet:botonPqNetLargo label="Guardar" id="lnkGuardar" 
+													   click="seEstaEditando=true;editarInfo('guardar');guardaCambios()" 
+													   />
+								<s:Spacer width="100%"/>
+								<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" 
+													   click="seEstaEditando=true;editarInfo('cancelar');cancelaGuardado()"
+													   id="lnkCancelar" />
+							</s:HGroup>
+						</s:Group>
+						<s:HGroup id="grpBotonesAgrgar" width="100%" paddingTop="8">
+							<s:Spacer width="100%"/>
+							<pqNet:botonPqNetLargo icono="guardar"  click="guardaCambios()" label="AGREGAR"/>
+						</s:HGroup>
+					</s:VGroup>  
+				</s:VGroup>
+			</s:BorderContainer>
+		</contenedores:VGroupConPaddingStandardPqNet>
+		
+		
+		<s:Group width="0" height="100%" id="grpImagen" visible="false" showEffect="{grpImagenShow}" hideEffect="{grpImagenHide}">
+			<s:Rect width="100%" height="100%" >
+				<s:filters>
+					<shaders:sombraBevelFilter direccion="left"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="#eaeaea" />
+				</s:fill>
+			</s:Rect>
+			<contenedores:VGroupConPaddingStandardPqNet>
+				<s:HGroup width="100%" verticalAlign="bottom" >
+					<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_imagenGris }" />
+					<label:labelSubtitulo  text="LOGO"/>
+					<s:Spacer width="100%"/>
+				</s:HGroup>
+				<s:VGroup width="100%" gap="10" >
+					<otros:divisionHueca width="100%"/>
+					<s:VGroup width="100%" gap="10" verticalAlign="middle" horizontalAlign="center">
+						<s:Group width="137" height="137" toolTip="{'Formatos permitidos: JPEG, JPG, PNG, GIF'}" mouseOver="grpEtiquetaEditar.visible = true">
+							<s:Image id="imgTemporal" source="{ ( _agente.bytes != null ? _agente.bytes : catalogoIconosBotones.getInstance().proveedoresDefaultMax ) }" width="137" height="137" />
+							<s:Group width="{imgTemporal.width}" height="137" id="grpEtiquetaEditar" visible="false" click="buscarArchivo(); grpEtiquetaEditar.visible = false" mouseOut="grpEtiquetaEditar.visible = false" >
+								<s:Rect width="{imgTemporal.width}" height="30" verticalCenter="52" horizontalCenter="0" id="fondoAzulImagen" >
+									<s:fill>
+										<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+									</s:fill>
+								</s:Rect>
+								<s:Label color="white" id="lblEditarImagen" text="Editar" horizontalCenter="0" verticalCenter="52" />
+							</s:Group>
+						</s:Group>
+					</s:VGroup>
+					<s:HGroup width="100%"  horizontalAlign="center" id="btnRestablecer" visible="false" includeInLayout="false">
+						<pqNet:botonPqNetLargo label="Restablecer"  
+											   click="_agente.imagen != null  ? imgTemporal.source = _agente.bytes : imgTemporal.source = catalogoIconosBotones.getInstance().proveedoresDefaultMax;_seGuardaImagen=false; ocultar()" />
+					</s:HGroup>
+					<otros:division width="100%"/>
+				</s:VGroup>
+			</contenedores:VGroupConPaddingStandardPqNet>
+		</s:Group>
+		
+	</s:HGroup>
+</s:Group>

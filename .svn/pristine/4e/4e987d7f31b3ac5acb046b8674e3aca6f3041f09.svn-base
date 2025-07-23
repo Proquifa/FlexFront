@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:RegistrarArribo="mx.com.proquifa.vista.mapas.RegistrarArribo.*"
+		 xmlns:gestorCompras="mx.com.proquifa.vista.mapas.gestorCompras.*" 
+		 xmlns:arribo="mx.com.proquifa.vista.mapas.gestorCompras.arribo.*" 
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*"
+		 xmlns:compra="mx.com.proquifa.vista.mapas.tramitarCompra.*"
+		 width="100%" height="100%" 
+		 creationComplete="init(event)" 
+		 >
+	
+	<fx:Declarations>
+		<gestorCompras:MapaGestorCompras />
+		<arribo:MapaArriboGestorCompras />
+		<RegistrarArribo:MapaRegistrarArribo />
+		<compra:MapaTramitarCompraMateriales />
+		<compra:MapaTramitarCompraPublicaciones />
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.RegistarArribo.EventoRegistrarArribo;
+			import mx.com.proquifa.vista.eventos.tramitarCompra.EventoTramitarComprarMateriales;
+			import mx.com.proquifa.vista.eventos.tramitarCompra.EventoTramitarComprarPublicaciones;
+			import mx.com.proquifa.vista.vistas.registrarArribo.Vista_RegistrarArribo;
+			import mx.com.proquifa.vista.vistas.tramitarCompra.VistaTramitar_PrincipalMateriales;
+			import mx.com.proquifa.vista.vistas.tramitarCompra.VistaTramitar_PrincipalPublicaciones;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable] 
+			private var listaPendiente:ArrayCollection = new ArrayCollection([
+				{pendiente:'Materiales',conteo:null, subMenu:true, tipo:'MaterOrdenCompra'},
+				{pendiente:'Publicaciones',conteo:null, subMenu:true, tipo:'PublOrdenCompra'},
+				{pendiente:'Cargar Factura',conteo:null,tipo:'cargaFactura'},
+				{pendiente:'Registrar Arribo',conteo:null, subMenu:false, tipo:'registrarArribo'}
+			]);
+			
+			
+			private var cargarFactura:CargarFactura;
+			private var registrarArribo:Vista_RegistrarArribo;
+			private var tramitarCompra:VistaTramitar_PrincipalMateriales;
+			private var tramitarCompraPub:VistaTramitar_PrincipalPublicaciones;
+			
+			/*
+			+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			+  reload - Recarga la informacion solo para la pantalla incial.... 
+			+  update-Recarga la informacion pantalla incial y se propaga la informacion seleccionando el
+			+  proveedor que guardo la orden de compra si es que le queda alguna partida
+			+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			*/
+			
+			public static var accionCargarFactura:String = "reload"; 
+			private var selectIndex:int=0;
+			
+			protected function plantillagestorcompras1_pendienteSeleccionadoHandler(event:EventoGestorCompras):void
+			{
+				obtenerPendientes();
+				
+				switch(event.pendiente)
+				{
+					case "MaterOrdenCompra":
+					{
+						if (!tramitarCompra)
+							tramitarCompra = new VistaTramitar_PrincipalMateriales();
+						plantilla.agregarContenido(tramitarCompra);
+						
+						var eve:EventoTramitarComprarMateriales = new EventoTramitarComprarMateriales(EventoTramitarComprarMateriales.OBTENER_PEDIDOS_PENDIENTES_TRAMITAR_COMPRA_MATERIALES);
+						eve.internacional = true;
+						eve.publicaciones = false;
+						eve.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+						dispatchEvent(eve);
+						selectIndex = 0;
+						break;
+					}
+					case "PublOrdenCompra":
+					{
+						if (!tramitarCompraPub)
+							tramitarCompraPub = new VistaTramitar_PrincipalPublicaciones();
+						plantilla.agregarContenido(tramitarCompraPub);
+						
+						var evePub:EventoTramitarComprarPublicaciones = new EventoTramitarComprarPublicaciones(EventoTramitarComprarPublicaciones.OBTENER_PEDIDOS_PENDIENTES_TRAMITAR_COMPRA_PUBLICACIONES);
+						evePub.internacional = true;
+						evePub.publicaciones = true;
+						evePub.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+						dispatchEvent(evePub);
+						selectIndex = 1;
+						break;
+					}
+					case "cargaFactura":
+					{
+						if (!cargarFactura)
+							cargarFactura = new CargarFactura();
+						plantilla.agregarContenido(cargarFactura);
+						accionCargarFactura = "reload";
+						var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_COMPRAS_POR_PAGAR);
+						evento.usuario = DatosGlobales.getInstance()._usuario.usuario;
+						dispatchEvent(evento);
+						selectIndex = 2;
+						break;
+					}
+					case "registrarArribo":
+					{
+						if (!registrarArribo)
+							registrarArribo = new Vista_RegistrarArribo();
+						plantilla.agregarContenido(registrarArribo);
+						
+						var evtr:EventoRegistrarArribo = new EventoRegistrarArribo(EventoRegistrarArribo.OBTENER_LISTA_ORDENES_ARRIBO);
+						evtr.usuario = DatosGlobales.getInstance()._usuario.usuario;
+						dispatchEvent(evtr);
+						selectIndex = 3;
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			protected function init(evento:FlexEvent):void
+			{
+				obtenerPendientes();
+				plantilla.listaPendientes = listaPendiente;
+			}
+			
+			private function obtenerPendientes():void
+			{
+				var event:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.CARGAR_NUMERO_PENDIENTES_MENU);
+				event.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				event.rol = "";
+				dispatchEvent(event);
+			}
+			
+			public function set recibirIndicadorPendientes(value:ArrayCollection):void
+			{
+				var listaAux:ArrayCollection = ObjectUtil.copy(listaPendiente) as ArrayCollection;
+				for(var x:int = 0; x < listaAux.length;x++)
+				{
+					for(var y:int = 0; y < value.length;y++){
+						if((listaAux[x].pendiente == "Cargar Factura") && (value[y].pendiente == "cargarFactura")){
+							listaAux[x].conteo = value[y].conteo;
+							break;
+						}
+						else if((listaAux[x].pendiente == "Registrar Arribo") && (value[y].pendiente == "registrarArribo")){
+							listaAux[x].conteo = value[y].conteo;
+							break;
+						}
+					}
+				}
+				
+				listaPendiente = listaAux;
+				plantilla.listaPendientes = listaPendiente;
+				selectBloque();
+			}
+			
+			private function selectBloque():void
+			{
+				plantilla.lstPendientes.lstPendientes.selectedIndex = selectIndex;
+			}
+		]]>
+	</fx:Script>
+	
+	
+	
+	<plantilla:PlantillaGestorCompras id="plantilla" width="100%" height="100%" listaPendientes="{listaPendiente}" pendienteSeleccionadoPlantilla="plantillagestorcompras1_pendienteSeleccionadoHandler(event)" />
+</s:Group>

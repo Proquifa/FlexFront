@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:linkButton="skins.skin.linkButton.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*"
+		  width="100%"
+		  >
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			import spark.components.Label;
+			import spark.events.ElementExistenceEvent;
+			
+			[Bindable]
+			private var _infoGeneral:Facturacion;
+			private var _fpor:String="";
+			[Bindable]
+			private var mostrarNotasCredito:Boolean;
+			
+			public function recibeDatos( $dato:EventoConsultaFacturacion2013, fPor:String ):void
+			{
+				if( $dato == null )
+				{
+					return;
+				}
+				_infoGeneral = $dato.listaPrepago[0];
+				_fpor = fPor;
+				
+				if(_infoGeneral.folioNC && StringUtil.trim(_infoGeneral.folioNC).length > 0)
+				{
+					var arrayNotasCredito:Array = _infoGeneral.folioNC.split(",");
+					var enlaceDocumento:LinkButtonPQNet2;
+					grplnkNotasCredito.removeAllElements();
+					
+					mostrarNotasCredito = true;
+					
+					var etiquetaTemp:String;
+					for(var i:int = 0; i< arrayNotasCredito.length ; i++)
+					{
+						etiquetaTemp = arrayNotasCredito[i] as String; 
+						if(etiquetaTemp!= null && StringUtil.trim(etiquetaTemp).length>0)
+						{
+							enlaceDocumento = new LinkButtonPQNet2;
+							enlaceDocumento.label = etiquetaTemp;
+							enlaceDocumento.toolTip = "Ver documento";
+							grplnkNotasCredito.addElement(enlaceDocumento);	
+						}
+					}
+				}
+				else
+				{
+					mostrarNotasCredito = false;
+				}
+			}
+			
+			private function verPDF( $tipoDocumento:String ):void
+			{
+				var urlreq:URLRequest = new URLRequest();
+				
+				if( $tipoDocumento == 'xml' )
+				{
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + this._fpor +"/"+ _infoGeneral.factura +".xml";
+				}
+				else if( $tipoDocumento == 'factura')
+				{
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + this._fpor +"/"+ _infoGeneral.factura +".pdf";
+				}
+				else if( $tipoDocumento == 'pedido')
+				{
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + _infoGeneral.pedido +".pdf";
+				}
+				else if( $tipoDocumento == 'otro' )
+				{
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.COBROS_RUTA + this._infoGeneral.documento +".pdf";
+				}
+				navigateToURL( urlreq );
+			}
+			
+			private	var file:File = new File();
+			private function verXml():void{
+				file = new File();
+				file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+				var urlGeenral:String = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA;
+				var request:URLRequest = new URLRequest();
+				var variables:URLLoader = new URLLoader();
+				variables.dataFormat = URLLoaderDataFormat.BINARY;
+				request = new URLRequest( RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + this._fpor +"/"+ _infoGeneral.factura +".xml" ); 
+				variables.addEventListener(Event.COMPLETE, completeHandler);
+				variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+				try{
+					variables.load(request);
+				} 
+				catch (error:Error){
+					trace("Unable to load URL: " + error);
+				}
+			}
+			
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+				file.save( bytes, this._infoGeneral.factura +'.xml' );	
+			}
+			
+			private function avisaGuardadoArchivos(event:Event):void{
+				file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+				alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+			}
+			
+			private function verNotaCredito(event:Event):void
+			{
+				var _url:URLRequest = new URLRequest();
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + this._fpor +"/"+ event.target.label +".pdf";
+				navigateToURL(_url);
+			}
+			
+			protected function grplnkNotasCredito_elementAddHandler(event:ElementExistenceEvent):void
+			{
+				if(!(event.element is Label))
+				{
+					event.element.addEventListener(MouseEvent.CLICK,verNotaCredito);
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" paddingLeft="15" paddingRight="10" paddingBottom="10">
+		<label:Titulo_w100  text="Fecha facturación:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaFacturacion }"/>
+		<label:Titulo_w100  text="Factura:" />
+		<linkButton:LinkButtonPQNet2 label="{_infoGeneral.factura}" click="verPDF('factura')"/>
+		<label:Titulo_w100 id="lblArchXML" text="Archivo XML:" />
+		<linkButton:LinkButtonPQNet2 label="{ _infoGeneral.factura }.xml" click="verXml()"/>
+		<label:Titulo_w100  text="Facturó:" />
+		<label:Texto_w100  text="{_infoGeneral.responsable}" />
+		<label:Titulo_w100  text="Tipo de cambio:" />
+		<label:Texto_w100  text="${ UtilsFormatosNumericos.precisionADosDecimalesConComas( _infoGeneral.tcambio ) }" />
+		<label:Titulo_w100  text="Tipo:" />
+		<label:Texto_w100  text="{ _infoGeneral.tipo }" />
+		<label:Titulo_w100  text="Medio:" />
+		<label:Texto_w100  text="{ _infoGeneral.medio}" />
+	</s:VGroup>  
+	<panelCtaDetalle:SubHeader2 label="ENVÍO DE FACTURA"/>
+	<s:VGroup width="100%" paddingLeft="15" paddingRight="10" paddingBottom="10">
+		<label:Titulo_w100  text="Fecha envío:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaEnvio}"/>
+		<label:Titulo_w100  text="Contacto:" />
+		<label:Texto_w100  text="{ _infoGeneral.contacto }" />
+		<label:Titulo_w100  text="Fecha envío ProquifaNet:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaProquifa}"/>
+		<label:Titulo_w100  text="Cuerpo del correo:" />
+		<label:Texto_w100  text="{ _infoGeneral.comentarios == null ? 'Pendiente' : _infoGeneral.comentarios }" />
+	</s:VGroup>  
+	<panelCtaDetalle:SubHeader2 label="VALIDACIÓN DE COBRO SC"/>
+	<s:VGroup width="100%" paddingLeft="15" paddingRight="10" paddingBottom="10">
+		<label:Titulo_w100  text="Monto cobrado:" />
+		<label:Texto_w100  text="${ UtilsFormatosNumericos.precisionADosDecimalesConComas( _infoGeneral.importe ) +' '+_infoGeneral.monedaPago }" />
+		<label:Titulo_w100  text="Tipo de cambio:" />
+		<label:Texto_w100  text="{ _infoGeneral.tcambio }" />
+		<label:Titulo_w100  text="Fecha de pago:" />
+		<label:Fecha fecha="{_infoGeneral.fechaPago}"/>
+		<label:Titulo_w100  text="Documento que ampara:" />
+		<linkButton:LinkButtonPQNet2 label="Ver" click="verPDF('otro')"/>
+		<label:Titulo_w100  text="Notas de crédito aplicadas:" visible="{mostrarNotasCredito}" includeInLayout="{mostrarNotasCredito}"/>
+		<s:HGroup id="grplnkNotasCredito" elementAdd="grplnkNotasCredito_elementAddHandler(event)" width="100%" visible="{mostrarNotasCredito}" includeInLayout="{mostrarNotasCredito}"/>
+	</s:VGroup>
+</s:VGroup>

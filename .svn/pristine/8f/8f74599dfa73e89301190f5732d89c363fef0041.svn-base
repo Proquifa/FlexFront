@@ -1,0 +1,609 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  xmlns:chekbox="skins.skin.chekbox.*"
+		  width="100%" height="100%"
+		  creationComplete="init()"
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespacho;
+			import mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespachoLetras;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.components.HGroup;
+			import spark.components.VGroup;
+			import spark.events.IndexChangeEvent;
+			
+			import org.apache.flex.collections.ArrayList;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.skin.chekbox.DefaultPQNetRadio;
+			
+			private var _idImportador:Number;
+			private var _idExportador:Number;
+			private var _fleteraSelect:String="";
+			private var _idAgenteA:Number
+			private var _packingSelect:String="";
+			private var _incotermSelect:String="";
+			private var _limiteMax:Number;
+			private var _limiteMin:Number;
+			private var _nomImport:String;
+			private var _nomExport:String;
+			private var _nomAgente:String;
+			
+			private var _fletera:Array = new Array("fedex","tnl","odm","agenteAduanal");
+			private var _packing:Array = new Array("Simplificado","Detallado","Ambos");
+			private var _icoterm:Array = new Array("EXW","FCA","CIP","DAT","DAP","FAS","CFR","DDP","FOB","CIF");
+			private var _expo:Array;
+			private var _impo:Array;
+			private var _agente:Array;
+			private var agenteAduanal:ArrayCollection = new ArrayCollection();
+			private var currentOrden:OrdenDespacho;
+			
+			public function resetAll():void
+			{
+				init();
+			}
+			
+			protected function init():void
+			{
+				currentOrden = new OrdenDespacho();
+				_idImportador = 0;
+				_idExportador = 0;
+				_fleteraSelect = "";
+				_idAgenteA = 0;
+				_packingSelect = "";
+				_incotermSelect = "";
+				_limiteMax = 0;
+				_limiteMin = 0;
+				
+				creaFletera();
+				
+				var evt:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_INFORMACION_AJUSTES_IMPORTADOR);
+				evt.tipoAjuste = "Importador";
+				dispatchEvent(evt);
+				
+				var exp:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_INFORMACION_AJUSTES_EXPORTADOR);
+				exp.tipoAjuste = "Exportador";
+				dispatchEvent(exp);
+				
+				var agent:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_INFORMACION_AGENTES_ADUANALES);
+				agent.habilitado = true;
+				dispatchEvent(agent);
+				
+				listaIcoterm.dataProvider = new ArrayList(_icoterm);
+				listaPackingList.dataProvider = new ArrayList(_packing);
+				resizeFont();
+			}
+			
+			private function recibeInfoAjustes():void
+			{
+				
+			}
+			
+			
+			/**+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 * 
+			 *              SE CREA IMPORTADORES
+			 * 
+			 * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			public function set recibeListaImportadores($importadores:ArrayCollection):void
+			{
+				if(!$importadores)
+					return;
+				
+				listaImportadores.dataProvider = $importadores;
+			}
+			
+			/**
+			 * ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			
+			
+			/**+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 * 
+			 *              SE CREA EXPORTADORES
+			 * 
+			 * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			public function set recibeListaExportadores($exportadores:ArrayCollection):void
+			{
+				if(!$exportadores)
+					return;
+				
+				listaExportador.dataProvider = $exportadores;
+			}
+			
+			/**
+			 * ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			
+			
+			/**+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 * 
+			 *              SE CREA FLETERA
+			 * 
+			 * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			public function creaFletera():void
+			{
+				listaFletera.dataProvider = new ArrayList(_fletera);
+			}
+			
+			/**
+			 * ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			
+			
+			
+			
+			/**+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 * 
+			 *              SE CREA AGENTE ADUANAL
+			 * 
+			 * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			public function set recibeListaAgentes($agentes:ArrayCollection):void
+			{
+				if(!$agentes)
+					return;
+				
+				listaAgenteAduanal.dataProvider = $agentes;
+				agenteAduanal= ObjectUtil.copy($agentes) as ArrayCollection;
+			}
+			
+			private function obtenerLimites():void
+			{
+				for (var i:int = 0; i < agenteAduanal.length; i++) 
+				{
+					if(agenteAduanal[i].idAgenteAduanal == idAgenteA)
+					{
+						limiteMax = agenteAduanal[i].limiteConsolidacionMax;
+						limiteMin= agenteAduanal[i].limiteConsolidacionMin;
+					}
+				}
+				var event:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ENVIAR_INFORMACION_AJUSTES);
+				event.montoMax = limiteMax
+				event.montoMin = limiteMin
+				dispatchEvent(event);
+				
+			}
+			
+			/**
+			 * ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			
+			
+			
+			
+			/**+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 * 
+			 *              SE CREA PACKING LIST
+			 * 
+			 * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			public function creaPacking():void
+			{
+				listaPackingList.dataProvider = new ArrayList(_packing);
+			}
+			
+			/**
+			 * ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			
+			
+			
+			/**+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 * 
+			 *              SE CREA INCOTERM
+			 * 
+			 * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			public function creaIncoterm():void
+			{
+				listaIcoterm.dataProvider = new ArrayList(_icoterm);
+			}
+			
+			/**
+			 * ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+			 */
+			
+			[Bindable] private var font20:Number =20;
+			[Bindable] private var radioW:int;
+			[Bindable] private var radioH:int;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				font20 = (20/2021)*(unscaledWidth);
+				font20 = font20 > 20 ? 20:font20;
+				font20 =  font20 < 8 ? 8:font20;
+				trace("Este es width: "+unscaledWidth);
+			}
+			public function resizeFont():void{
+				font20 = (20/307)*(listaIcoterm.width);
+				font20 = font20 > 20 ? 20:font20;
+				font20 =  font20 < 8 ? 8:font20;
+			}
+			
+			protected function clickIcoterm(event:MouseEvent):void
+			{
+				var numClick:String = event.currentTarget.id;
+				/*for (var i:int = 0; i < _icoterm.length; i++) 
+				{
+					var espacio:HGroup = HGroup( grpRadioIcoterm.getElementAt(i));
+					var tmpRadio:DefaultPQNetRadio = new DefaultPQNetRadio();
+					tmpRadio =DefaultPQNetRadio( espacio.getElementAt(1));
+					if (tmpRadio.id == numClick )
+					{
+						tmpRadio.selected = true;
+						_incotermSelect = tmpRadio.id;
+					}
+					else
+					{
+						tmpRadio.selected = false;
+					}
+				}*/
+				
+			}
+			
+			public function get idImportador():Number
+			{
+				return _idImportador;
+			}
+			
+			public function set idImportador(value:Number):void
+			{
+				_idImportador = value;
+			}
+			
+			public function get idExportador():Number
+			{
+				return _idExportador;
+			}
+			
+			public function set idExportador(value:Number):void
+			{
+				_idExportador = value;
+			}
+			
+			public function get fleteraSelect():String
+			{
+				return _fleteraSelect;
+			}
+			
+			public function set fleteraSelect(value:String):void
+			{
+				_fleteraSelect = value;
+			}
+			
+			public function get idAgenteA():Number
+			{
+				return _idAgenteA;
+			}
+			
+			public function set idAgenteA(value:Number):void
+			{
+				_idAgenteA = value;
+			}
+			
+			public function get packingSelect():String
+			{
+				return _packingSelect;
+			}
+			
+			public function set packingSelect(value:String):void
+			{
+				_packingSelect = value;
+			}
+			
+			public function get incotermSelect():String
+			{
+				return _incotermSelect;
+			}
+			
+			public function set incotermSelect(value:String):void
+			{
+				_incotermSelect = value;
+			}
+			
+			public function get limiteMax():Number
+			{
+				return _limiteMax;
+			}
+			
+			public function set limiteMax(value:Number):void
+			{
+				_limiteMax = value;
+			}
+			
+			public function get limiteMin():Number
+			{
+				return _limiteMin;
+			}
+			
+			public function set limiteMin(value:Number):void
+			{
+				_limiteMin = value;
+			}
+			
+			public function validar():Boolean
+			{
+				var tmp:Boolean = false;
+				if(idImportador == 0 || idExportador == 0 || fleteraSelect == "" || idAgenteA == 0 || packingSelect == "" || incotermSelect == "")
+				{
+					alertaSingleton.show("Faltan valores por seleccionar",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					EventoGestorCompras.completadoAjustes = false;
+				}
+				else
+				{
+					tmp = true;
+					EventoGestorCompras.completadoAjustes = true;
+					obtenerLimites();
+				}
+				
+				return tmp;
+			}
+			
+			public function setOrdenDespacho($info:OrdenDespacho):void
+			{
+				var valorTemp:String;
+				var espacio:HGroup;
+				var tmpRadio:DefaultPQNetRadio;
+				var j:int;
+				var item:Object;
+				var itemString:String;
+				
+				if($info.idImportador != 0)
+				{
+					valorTemp = $info.idImportador.toString();
+					
+					for (j=0; j < listaImportadores.dataProvider.length; j++)
+					{
+						item = listaImportadores.dataProvider[j];
+						if (item.idEmpresa == valorTemp )
+						{
+							listaImportadores.selectedIndex=j;
+							idImportador = Number(valorTemp);
+							nomImport = item.alias;
+							break;
+						}
+					}
+				}
+				
+				if($info.idExportador != 0)
+				{
+					valorTemp = $info.idExportador.toString();
+					
+					for (j=0; j < listaExportador.dataProvider.length; j++)
+					{
+						item = listaExportador.dataProvider[j];
+						if (item.idEmpresa== valorTemp )
+						{
+							listaExportador.selectedIndex = j;
+							idExportador = Number(valorTemp);
+							nomExport = item.alias;
+							break;
+						}
+					}
+				}
+				
+				if($info.idAgenteAduanal != 0)
+				{
+					valorTemp = $info.idAgenteAduanal.toString();
+					
+					for (j=0; j < listaAgenteAduanal.dataProvider.length; j++)
+					{
+						item = listaAgenteAduanal.dataProvider[j];
+						if (item.idAgenteAduanal == valorTemp )
+						{
+							listaAgenteAduanal.selectedIndex = j;
+							idAgenteA = Number(valorTemp);
+							nomAgente = item.nombreComercial;
+							break;
+						}
+					}
+					obtenerLimites();
+				}
+				
+				if($info.pakinglist != "")
+				{
+					valorTemp = $info.pakinglist;
+					
+					for (j=0; j < listaPackingList.dataProvider.length; j++)
+					{
+						itemString = listaPackingList.dataProvider.getItemAt(j) as String;
+						if (itemString == valorTemp )
+						{
+							listaPackingList.selectedIndex = j;
+							_packingSelect = valorTemp;
+							
+						}
+					}
+				}
+				
+				if($info.fletera != "")
+				{
+					valorTemp = $info.fletera;
+					
+					for (j=0; j < listaFletera.dataProvider.length; j++)
+					{
+						itemString = listaFletera.dataProvider.getItemAt(j) as String;
+						if (itemString == valorTemp )
+						{
+							listaFletera.selectedIndex = j;
+							fleteraSelect = valorTemp;
+						}
+					}
+				}
+				
+				if($info.incoterm != "")
+				{
+					valorTemp = $info.incoterm;
+					for (var i:int = 0; i < listaIcoterm.dataProvider.length; i++) 
+					{
+						itemString = listaIcoterm.dataProvider.getItemAt(i) as String;
+						if (itemString == valorTemp )
+						{
+							listaIcoterm.selectedIndex = i;
+							_incotermSelect = valorTemp;
+						}
+					}
+				}
+			}
+			
+			public function get nomImport():String
+			{
+				return _nomImport;
+			}
+			
+			public function set nomImport(value:String):void
+			{
+				_nomImport = value;
+			}
+			
+			public function get nomExport():String
+			{
+				return _nomExport;
+			}
+			
+			public function set nomExport(value:String):void
+			{
+				_nomExport = value;
+			}
+			
+			public function get nomAgente():String
+			{
+				return _nomAgente;
+			}
+			
+			public function set nomAgente(value:String):void
+			{
+				_nomAgente = value;
+			}
+			
+			protected function itemClicListImpo(event:IndexChangeEvent):void
+			{
+				idImportador = listaImportadores.selectedItem.idEmpresa;
+				nomImport = listaImportadores.selectedItem.alias;
+			}
+			
+			protected function itemClicListExp(event:IndexChangeEvent):void
+			{
+				idExportador = listaExportador.selectedItem.idEmpresa;
+				nomExport = listaExportador.selectedItem.alias;
+			}
+			
+			protected function itemClicListFletera(event:IndexChangeEvent):void
+			{
+				fleteraSelect = listaFletera.selectedItem;
+			}
+			
+			protected function itemClicListAAduanal(event:IndexChangeEvent):void
+			{
+				idAgenteA = listaAgenteAduanal.selectedItem.idAgenteAduanal;
+				nomAgente = listaAgenteAduanal.selectedItem.nombreComercial;
+				min = listaAgenteAduanal.selectedItem.montoMinimo;
+				max = listaAgenteAduanal.selectedItem.montoMaximo;
+			}
+			
+			protected function itemClicListPList(event:IndexChangeEvent):void
+			{
+				packingSelect = listaPackingList.selectedItem;
+			}
+			
+			protected function itemClicListInco(event:IndexChangeEvent):void
+			{
+				incotermSelect = listaIcoterm.selectedItem;
+				
+			}
+			[Bindable]static public var min:Number;
+			[Bindable]static public var max:Number;
+		]]>
+	</fx:Script>
+	
+	
+	
+	<s:HGroup width="100%" height="100%" gap="10" paddingTop="20" verticalAlign="middle">
+		
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center" >
+			<label:Titulo text="IMPORTADOR" textAlign="center" fontSize="{font20}" width="100%"/>
+			<s:List id="listaImportadores" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					selectedIndex="0" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespacho"
+					changing="itemClicListImpo(event)"
+					/>
+		</s:VGroup>  
+		<otros:divisionDegradadoVertical color="0xe8e8e7" height="90%"  />
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center"  >
+			<label:Titulo text="EXPORTADOR"  textAlign="center" fontSize="{font20}" width="100%"/>
+			<s:List id="listaExportador" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					selectedIndex="0" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespacho"
+					changing="itemClicListExp(event)"
+					/>
+		</s:VGroup>  
+		<otros:divisionDegradadoVertical color="0xe8e8e7" height="90%"  />
+		
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center"  >
+			<label:Titulo text="FLETERA"  textAlign="center" fontSize="{font20}" width="100%"/>
+			<s:List id="listaFletera" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					selectedIndex="0" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespacho"
+					changing="itemClicListFletera(event)"
+					/>
+		</s:VGroup>  
+		<otros:divisionDegradadoVertical color="0xe8e8e7" height="90%"  />
+		
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center" >
+			<label:Titulo text="AGENTE ADUANAL"  textAlign="center" fontSize="{font20}" width="100%"/>
+			<s:List id="listaAgenteAduanal" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					selectedIndex="0" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespacho"
+					changing="itemClicListAAduanal(event)"
+					/>
+			
+		</s:VGroup>  
+		<otros:divisionDegradadoVertical color="0xe8e8e7" height="90%" />
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center"  >
+			<label:Titulo text="PACKING LIST"  textAlign="center" fontSize="{font20}" width="100%"/>
+			<s:List id="listaPackingList" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					selectedIndex="0" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespachoLetras"
+					changing="itemClicListPList(event)"
+					/>
+		</s:VGroup>  
+		<otros:divisionDegradadoVertical color="0xe8e8e7" height="90%" />
+		
+		<s:VGroup id="tam" width="100%" height="100%" horizontalAlign="center" >
+			<label:Titulo text="INCOTERM"  textAlign="center" fontSize="{font20}" width="100%"/>
+			<s:List id="listaIcoterm" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					selectedIndex="0" contentBackgroundAlpha="0" 
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGenerarOrden_ordenDespachoLetras"
+					changing="itemClicListInco(event)"
+					/>
+		</s:VGroup>  
+		<!--<otros:divisionDegradadoVertical color="0xe8e8e7" height="90%" />-->
+		
+		
+		
+	</s:HGroup>  
+	
+	
+	
+	
+</s:VGroup>

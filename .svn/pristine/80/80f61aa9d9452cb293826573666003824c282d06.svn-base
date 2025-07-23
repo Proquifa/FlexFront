@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:flechasiguiente="skins.botones.flechasiguiente.*"
+		  xmlns:otros="skins.otros.*"
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  width="100%" height="100%" xmlns:sinicono="skins.botones.largocolor.sinicono.*" xmlns:largo="skins.botones.largo.*" xmlns:pqNet1="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!--creationComplete="datagridpqnet1_resizeHandler()"-->
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.dns.SRVRecord;
+			import flash.utils.getTimer;
+			
+			import flashx.textLayout.formats.Direction;
+			
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.eventos.EventoInspectorPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.pieChartDinamico.PieDinamico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.pieChartDinamico.pqNetPiesChartDinamico;
+			import mx.events.ListEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoIconosGrid;
+			import skins.catalogos.catalogoInfoGraficas;
+			[Bindable]	public var tituloEstado:String;
+			[Bindable]	private var _partidasTotales:int;
+			[Bindable]	private var _partidasET:int=0;
+			[Bindable]	private var _partidasFT:int=0;
+			[Bindable]	private var _totalOC:int=0;
+			
+			private var time:Number;
+
+			public function iniciarTabla($accion:Boolean = false):void{
+				if($accion){
+					var trivent:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.PARTIDAS_A_INSPECCION);
+					trivent.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+					dispatchEvent(trivent);
+					time = getTimer();
+				}
+			}
+			protected function tabla_itemClickHandler($event:ListEvent):void
+			{
+				if($event.columnIndex == 9){
+					var eventt:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.SELECCIONA_OPCION);
+					eventt.idOpcionSeleccionada = "VistaPlan";
+					eventt.nombreProveedor = ($event.currentTarget.selectedItem as PartidaInspeccion).nombreProveedor;
+					dispatchEvent(eventt);
+				}
+			}
+			[Bindable] private var _listaPartidaInspeccionUniverso:ArrayCollection;
+			[Bindable] private var _listaPartidaInspeccionTrabajo:ArrayCollection;
+			[Bindable] private var _listaPartidaInspeccionGrid:ArrayCollection;
+			/**
+			 * recibo la lista del mapa MapaInspectorPhs
+			 */
+			public function set recibeListaPartidaCompra($lista:ArrayCollection):void{
+				if($lista == null ) return;
+				if( $lista.length == 0 ) grpGraficas.removeAllElements();
+				grpGraficas.percentHeight = $lista.length == 0 ? 0 : 100;
+				trace("TIEMPO RESPUESTA SERVICIO: "+(getTimer() - time ));
+				_listaPartidaInspeccionUniverso = new ArrayCollection();
+				_listaPartidaInspeccionUniverso = $lista;
+				_listaPartidaInspeccionTrabajo = new ArrayCollection();
+				//_listaPartidaInspeccionTrabajo = UtilsGrid.queryAgrupaYAcumula(_listaPartidaInspeccionUniverso, "nombreProveedor");
+				//_listaPartidaInspeccionTrabajo = UtilsGrid.queryAgrupa(_listaPartidaInspeccionUniverso, "nombreProveedor");
+				_listaPartidaInspeccionTrabajo = UtilsGrid.queryQuitarRepetidos(_listaPartidaInspeccionUniverso, "nombreProveedor");
+				_totalOC = (UtilsGrid.queryQuitarRepetidos(_listaPartidaInspeccionUniverso, "compra") as ArrayCollection).length;
+				/** creo una lista con las ordenes de compra */
+				var arrTempo:ArrayCollection = UtilsGrid.queryQuitarRepetidos(_listaPartidaInspeccionUniverso, "compra");
+				for(var v:int= 0; v < arrTempo.length; v++){
+					/** tomo las q coinciden en el universo para hacer el conteo*/
+					var arrTres:ArrayCollection = UtilsGrid.queryCampoX(_listaPartidaInspeccionUniverso, "compra", (arrTempo[v] as PartidaInspeccion).compra );
+					/** si la orden de compra tiene una partidas con numFechaInicioInspeccionDias mayor a 0 entonces la orden de compra ya esta fuera de tiempo
+					 * hago el conteo de las q tengan mas de 0 dias de recibidas */
+					(arrTempo[v] as PartidaInspeccion).numFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTres, "numFechaInicioInspeccionDias", 0);
+					if( (arrTempo[v] as PartidaInspeccion).numFT > 0 ){
+						(arrTempo[v] as PartidaInspeccion).numET = 0;
+					}else{
+						/** si el conteo da 0 entonces la orden de compra esta en tiempo */
+						(arrTempo[v] as PartidaInspeccion).numET = 1;
+					}
+				}
+				_partidasET = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numET", 0);
+				_partidasFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numFT", 0);
+				_listaPartidaInspeccionGrid = new ArrayCollection();
+				trace("TIEMPO PROCESO DATOS: "+( getTimer() - time) );
+				datosPorProveedor(_listaPartidaInspeccionTrabajo);
+			}
+			/**
+			 * genero el arreglo final de trabajo en base a los nombres de proveedor
+			 */
+			private function datosPorProveedor($lista:ArrayCollection):void{
+				for(var k:int = 0; k < $lista.length; k++){
+					var arrTempor:ArrayCollection = new ArrayCollection();
+					arrTempor = UtilsGrid.queryCampoX(_listaPartidaInspeccionUniverso, "nombreProveedor", $lista[k].nombreProveedor);
+					($lista[k] as PartidaInspeccion).numFila = k+1;
+					($lista[k] as PartidaInspeccion).numPartidas = arrTempor.length;
+					($lista[k] as PartidaInspeccion).numRechazosXDoc = UtilsGrid.conteoCampoX(arrTempor, "rechazoXDoc", "true");
+					($lista[k] as PartidaInspeccion).numRechazosXIns = UtilsGrid.conteoCampoX(arrTempor, "rechazoXInsp", "true");
+					($lista[k] as PartidaInspeccion).numRechazosXDocAbiertos = (UtilsGrid.queryADosCampos(arrTempor, "rechazoXDoc", "true", "estadoRechazo","Cerrado") as ArrayCollection).length;
+					($lista[k] as PartidaInspeccion).numRechazosXInsAbiertos = (UtilsGrid.queryADosCampos(arrTempor, "rechazoXInsp", "true", "estadoRechazo","Cerrado") as ArrayCollection).length;
+					($lista[k] as PartidaInspeccion).numRechazosXDocCerrados = (UtilsGrid.queryADosCampos(arrTempor, "rechazoXDoc", "true", "estadoRechazo","Abierto") as ArrayCollection).length;
+					($lista[k] as PartidaInspeccion).numRechazosXInsCerrados = (UtilsGrid.queryADosCampos(arrTempor, "rechazoXInsp", "true", "estadoRechazo","Abierto") as ArrayCollection).length;
+					var strManejoMasCritico:String;
+					var intConteoCongelacion:int = UtilsGrid.conteoCampoX(arrTempor, "manejo", "Congelación");
+					var intConteoRefrigeracion:int = UtilsGrid.conteoCampoX(arrTempor, "manejo", "Refrigeración");
+					var intConteoAmbiente:int = UtilsGrid.conteoCampoX(arrTempor, "manejo", "Ambiente");
+					var intConteoNA:int = UtilsGrid.conteoCampoX(arrTempor, "manejo", "NA");
+					if(intConteoNA > 0) strManejoMasCritico = "NA";
+					if(intConteoAmbiente > 0) strManejoMasCritico = "Ambiente";
+					if(intConteoRefrigeracion > 0) strManejoMasCritico = "Refrigeración";
+					if(intConteoCongelacion > 0) strManejoMasCritico = "Congelación";
+					($lista[k] as PartidaInspeccion).manejoMasCritico = strManejoMasCritico;
+					($lista[k] as PartidaInspeccion).numManejoMasCritico = UtilsGrid.conteoCampoX(arrTempor, "manejo", strManejoMasCritico);
+					var fechaMasChica:Date = UtilsGrid.queryFechaMenor(arrTempor, "fechaEstimadaEntrega");
+					($lista[k] as PartidaInspeccion).FEEMasCercana = fechaMasChica;
+					($lista[k] as PartidaInspeccion).fechaEstimadaEntrega = fechaMasChica;
+					($lista[k] as PartidaInspeccion).FEEMasCercanaString = UtilsFecha.formatoFechaDDMMMYYYY( $lista[k].FEEMasCercana );
+					($lista[k] as PartidaInspeccion).pedidosInternosAsociados = (UtilsGrid.queryQuitarRepetidos(arrTempor, "pedido") as ArrayCollection).length;
+					($lista[k] as PartidaInspeccion).situacionMasCritica = ($lista[k] as PartidaInspeccion).enTiempo;
+					($lista[k] as PartidaInspeccion).numSituacionMasCritica = UtilsGrid.conteoCampoX(arrTempor, "enTiempo", ($lista[k] as PartidaInspeccion).enTiempo); 
+					//($lista[k] as PartidaInspeccion).numOrdenesCompra;
+				}
+				if( _listaPartidaInspeccionUniverso.length > 0 ) crearGraficas( ObjectUtil.copy(_listaPartidaInspeccionUniverso) as ArrayCollection);
+			}
+			////////		CREAR GRAFICAS
+			[Bindable]	private var _componenteArregloPies:pqNetPiesChartDinamico = null;
+			private var _listaGraficas:ArrayCollection;
+			private function crearGraficas($lista:ArrayCollection):void{
+				_listaGraficas = new ArrayCollection();
+				var subtituloAllCharts:String = "OC a inspección";
+				////////////////////////////////////////////
+				_listaGraficas.addItem( setteaGrafica("Situación\npartidas", subtituloAllCharts, catalogoInfoGraficas.JOBS, Util.getInstance().consultaPieChartConteoXCampo($lista,"enTiempo")) );
+				_listaGraficas.addItem( setteaGrafica("Manejo\npartidas", subtituloAllCharts, catalogoInfoGraficas.MANEJO_PARTIDAS, Util.getInstance().consultaPieChartConteoXCampo($lista,"manejo")) );
+				_listaGraficas.addItem( setteaGrafica("Proveedores", subtituloAllCharts, catalogoInfoGraficas.PROVEEDORES, Util.getInstance().consultaPieChartConteoXCampo($lista,"nombreProveedor")) );
+				_listaGraficas.addItem( setteaGrafica("Origen", subtituloAllCharts, catalogoInfoGraficas.ORIGEN, Util.getInstance().consultaPieChartConteoXCampo($lista,"origen")) );
+					var arrRechazos:ArrayCollection = new ArrayCollection([
+						{tipo: "Rechazos por Documentación", total: UtilsGrid.conteoADosCampos($lista, "rechazoXDoc", "true", "rechazoXInsp", "false") },
+						{tipo: "Rechazos por Inspección", total: UtilsGrid.conteoADosCampos($lista, "rechazoXDoc", "false", "rechazoXInsp", "true") },
+						{tipo: "Rechazos por Inspección y Documentación", total: UtilsGrid.conteoADosCampos($lista, "rechazoXDoc", "true", "rechazoXInsp", "true") }
+					]);
+				_listaGraficas.addItem( setteaGrafica("Rechazos\nDOC vs INS", subtituloAllCharts, catalogoInfoGraficas.RECHAZOS, arrRechazos) );
+				_listaGraficas.addItem( setteaGrafica("Tipos\npartidas", subtituloAllCharts, catalogoInfoGraficas.TIPOS_PARTIDAS, Util.getInstance().consultaPieChartConteoXCampo($lista,"tipo")) );
+				//AGREGAR PIES AL COMPONENTE
+				if(_componenteArregloPies == null){
+					_componenteArregloPies = new pqNetPiesChartDinamico();
+					grpGraficas.addElement(_componenteArregloPies);
+				}
+				_componenteArregloPies.iniciarGraficas( _listaGraficas );
+				trace("TIEMPO PROCESO Y MUESTRA DE INFORMACION: "+(getTimer() - time));
+			}
+			private function setteaGrafica( 
+											$titulo:String, 
+											$subTitulo:String, 
+											$info:String, 
+											$dataProvider:ArrayCollection, 
+											$tipo:int = 0, 
+											$popUp:Boolean = true
+			):PieDinamico{
+				var pieRegreso:PieDinamico = new PieDinamico();
+				pieRegreso.lblTitulo = $titulo;
+				pieRegreso.subTitulo = $subTitulo;
+				pieRegreso.infoGeneralDeLaGrafica = $info;
+				pieRegreso.tipoPie = $tipo;
+				pieRegreso.arregloAlimentador = $dataProvider;
+				pieRegreso.popUpHabilitado = $popUp;
+				return pieRegreso;
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<label:labelTitulo width="100%" fontSize="25" fontWeight="normal" paddingTop="10"
+						   text="{tituloEstado}"/>
+	</s:HGroup>
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%" paddingTop="10">
+		<s:Label width="100%" fontFamily="Bank Gothic" fontSize="20" fontWeight="bold" text="LISTADO"/>
+		<s:Label fontFamily="Bank Gothic" fontSize="20" fontWeight="bold"
+				 text="{_listaPartidaInspeccionTrabajo.length} Proveedores : {_totalOC} OC  ·  {_partidasET} ET  ·  {_partidasFT} FT" textAlign="right"/>
+		<s:Label id="lblTotalPartidas" fontSize="20" fontWeight="bold"/>
+	</s:HGroup>
+	<!--<s:Scroller width="100%" height="100%">-->
+		<s:VGroup width="100%" height="100%" gap="0">
+					<otros:divisionGruesa width="100%"/>
+	<pqNet:dataGridPqNet id="tablaGrid" width="100%" height="100%" dataProvider="{_listaPartidaInspeccionTrabajo}"
+						 itemClick="tabla_itemClickHandler(event)"
+						 porcentajesColumnasPq="{ [5,15,13,10,10,10,10,10,10,4] }"
+						 rowHeight="60"
+						 >
+		<!--resize="datagridpqnet1_resizeHandler()"-->
+		<pqNet:columns>
+			<mx:DataGridColumn dataField="numFila" headerText="#" />
+			<mx:DataGridColumn dataField="nombreProveedor" headerText="Proveedor" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{data.nombreProveedor}" textAlign="center"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+								<s:Label width="100%" 
+										 text="{ data.paisProveedor}" textAlign="center"
+										 color="0x{catalogoColores.LABEL_CASI_NEGRO}" color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn dataField="origen" headerText="Origen" />
+			<mx:DataGridColumn headerText="FEE más próxima" headerWordWrap="true" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" 
+										 color="0x{catalogoColores.LABEL_ROJO}" 
+										 text="{data.FEEMasCercanaString}" textAlign="center" />
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn dataField="manejoMasCritico" headerText="Manejo más crítico" headerWordWrap="true" > 
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{data.manejoMasCritico}" textAlign="center"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+								<s:Label width="100%" color="0x{catalogoColores.LABEL_CASI_NEGRO}" textAlign="center"
+										 text="{'#P ' +data.numManejoMasCritico}"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn dataField="situacionMasCritica" headerText="Situación más crítica" headerWordWrap="true" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal" textAlign="center"
+										 text="{data.situacionMasCritica}"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+								<s:Label width="100%" color="0x{catalogoColores.LABEL_CASI_NEGRO}" textAlign="center"
+										 text="{'#P ' +data.numSituacionMasCritica}"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn dataField="pedidosInternosAsociados" headerText="PI's asociados" headerWordWrap="true" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal"
+										 text="{data.pedidosInternosAsociados}"
+										 textAlign="center"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+								<s:Label width="100%" color="0x{catalogoColores.LABEL_CASI_NEGRO}" text="#P {data.numPartidas}" textAlign="center"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn dataField="numRechazosXDoc" headerText="Rechazos por documentación" headerWordWrap="true" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal" textAlign="center"
+										 text="{data.numRechazosXDoc}"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+								<s:Label width="100%" color="0x{catalogoColores.LABEL_CASI_NEGRO}" textAlign="center"
+										 text="{data.numRechazosXDocAbiertos}A : {data.numRechazosXDocCerrados}C"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn dataField="numRechazosXIns" headerText="Rechazos por inspección" headerWordWrap="true" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoColores;
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<s:VGroup width="100%">
+								<s:Label width="100%" fontSize="12" fontWeight="normal" textAlign="center"
+										 text="{data.numRechazosXIns}"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+								<s:Label width="100%" color="0x{catalogoColores.LABEL_CASI_NEGRO}" textAlign="center"
+										 text="{data.numRechazosXInsAbiertos}A : {data.numRechazosXInsCerrados}C"
+										 color.selected="0x{catalogoColores.GRID_LBL_SELECTED}"/>
+							</s:VGroup>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn>
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoIconosGrid;
+								]]>
+							</fx:Script>
+						<mx:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" horizontalCenter="0" />
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+		</pqNet:columns>
+	</pqNet:dataGridPqNet>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup id="grpGraficas" width="100%" height="0" paddingTop="35" />
+			</s:VGroup>
+	<!--</s:Scroller>-->
+</s:VGroup>

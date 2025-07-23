@@ -1,0 +1,486 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" implements="mx.managers.IFocusManagerContainer"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="500" height="810" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:popUp="skins.popUp.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*">
+	<fx:Script>
+		<![CDATA[
+			import flashx.textLayout.edit.SelectionState;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Direccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.IFlexDisplayObject;
+			import mx.managers.ISystemManager;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			import skins.panel.componentes.txtTitulo;
+			
+			import vista.evento.EventoEVReqMovil;
+			import vista.evento.EventoEvExpoMed;
+			
+			
+			private var _popUpRutas:VendedorRutasContactosPopUp;
+			
+			[Bindable]
+			public var _contacto:Contacto;
+			[Bindable]
+			public var _idCliente:int;
+			[Bindable]
+			public var _creaContacto:Boolean;
+			[Bindable]
+			private var _tipoEvento:String;
+			
+			private var _presionado:Boolean;
+			
+			private var _idContacto:int = 0;
+			private var _origen:String;
+			
+			
+			[Bindable]
+			private var _perteneceExpoFarma:Boolean = false;
+			public function validaOrigen( $origen:String = '' ):void{
+				if( $origen == 'expoPharma' || $origen == "expoMed"){
+					_perteneceExpoFarma = true;
+					this.cmbPais.cargaPaises('--NINGUNO--');
+				}else{
+					_perteneceExpoFarma = false;
+				}
+				
+				
+				_origen = $origen;
+				
+				unicaVez();
+				cmbDecision.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbDecision.dataProvider as ArrayCollection,  _contacto.nivelDecision );
+				if( cmbDecision.selectedIndex  == -1 ){ cmbDecision.selectedIndex = 0; } 
+				cmbPuesto.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbPuesto.dataProvider as ArrayCollection,  _contacto.nivelPuesto );
+				if( cmbPuesto.selectedIndex  == -1 ){ cmbPuesto.selectedIndex = 0; } 
+			}
+			private var soloUnaVez:Boolean = false;
+			private function unicaVez():void{
+				if( !soloUnaVez){
+					soloUnaVez = true;
+					if( _perteneceExpoFarma ){
+						this.cmbPais.cargaPaises('--NINGUNO--');
+					}else{
+						this.cmbPais.cargaPaises('');
+					}
+				}
+			}
+			public function get defaultButton():IFlexDisplayObject{
+				// TODO Auto Generated method stub
+				return txtNombre; // <-- PLACE THE REFERENCE FOR SOME DEFAULT FOCUSABLE COMPONENT HERE (DEFAULT BUTTON OR WHATEVER)
+			}
+			public function set defaultButton(value:IFlexDisplayObject):void{
+				// TODO Auto Generated method stub
+				
+			}
+			override public function get systemManager():ISystemManager{
+				return super.systemManager;
+				// TODO Auto Generated method stub
+				//return null;
+			}
+			
+			public function editaContacto( $contacto:Contacto, $idCliente:int = 0 ):void{
+				_creaContacto = false;
+				_contacto = new Contacto();
+				_contacto = $contacto;
+				cargaDirecciones($idCliente);
+				cmbDecision.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbDecision.dataProvider as ArrayCollection,  _contacto.nivelDecision );
+				if( cmbDecision.selectedIndex  == -1 ){ cmbDecision.selectedIndex = 0; } 
+				cmbPuesto.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbPuesto.dataProvider as ArrayCollection,  _contacto.nivelPuesto );
+				if( cmbPuesto.selectedIndex  == -1 ){ cmbPuesto.selectedIndex = 0; } 
+				retardo();
+				_tipoEvento = 'modifica';
+			}
+			public function creaContacto( $contacto:Contacto ):void{
+				_creaContacto = true;
+				_contacto = new Contacto();
+				_contacto.habilitado = true;
+				_contacto.empresa = $contacto.empresa;
+				_contacto.idEmpresa = $contacto.idEmpresa;
+				_contacto.tipo = 'Clientes';
+				cargaDirecciones( $contacto.idEmpresa );
+				_tipoEvento = 'inserta';
+			}
+			private function cargaDirecciones( $idCliente:int = 0 ):void{
+				_idContacto = 0;
+				this.btnGuardar.enabled = true;
+				var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.CARGAR_DIRECCIONES_CLIENTE );
+				evt.idCliente = $idCliente;
+				dispatchEvent( evt );
+			}
+			
+			protected function retardo():void{
+				if( cmbPais.dataProvider != null && (cmbPais.dataProvider as ArrayCollection ).length > 1){
+					cmbPais.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbPais.dataProvider as ArrayCollection,  _contacto.direccion.pais );
+				}else{
+					setTimeout( retardo, 500 );
+				}
+			}
+			
+			protected function abrirPopUpRutas(event:MouseEvent):void{
+				if( this._popUpRutas == null ){
+					_popUpRutas = VendedorRutasContactosPopUp( PopUpManager.createPopUp( this, VendedorRutasContactosPopUp, false ) );
+					_popUpRutas.addEventListener( EventoEVReqMovil.RECIBE_DIRECCION_SELECCIONADA, recibeDireccionContactoSeleccionada );
+					_popUpRutas.addEventListener( EventoEVReqMovil.CANCELA_DIRECCIONES_CONTACTO_POUP, cierraDireccionContacto );
+				}else{	
+					PopUpManager.addPopUp( _popUpRutas, this, false);
+				}	
+				_popUpRutas._btnGuardaActivado = true;
+				_popUpRutas._contacto = this._contacto;
+				_popUpRutas.x = event.stageX;
+				_popUpRutas.y = event.stageY - 145;
+				if( this._contacto.direccion != null && !isNaN( _contacto.direccion.idLugar ) && _contacto.direccion.idLugar != 0 ){
+					_popUpRutas.inicia( _contacto.direccion.idLugar );
+				}else{
+					_popUpRutas.inicia( 0 );
+				}
+				this.currentState = 'selected';
+				_presionado = true;
+			}
+			public function recibeDireccionContactoSeleccionada( $evt:EventoEVReqMovil ):void{
+				this._tipoEvento = 'asocia';
+				this._contacto.direccion = $evt.direccion;
+				cmbPais.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( cmbPais.dataProvider as ArrayCollection,  _contacto.direccion.pais );
+			}
+			public function cierraDireccionContacto( $direccion:EventoEVReqMovil ):void{
+				this.currentState = 'normal';
+				_presionado = false;
+				PopUpManager.removePopUp( _popUpRutas );
+			}
+			private function salirPopUpContacto():void{
+				limpia();
+				var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.CANCELA_DATOS_CONTACTO_POUP );
+				dispatchEvent( evt );
+			}
+			private function limpia():void{
+				_contacto = new Contacto();
+				_contacto.direccion = new Direccion();
+				_perteneceExpoFarma = false;
+				this.cmbPais.selectedIndex = 0;
+				this.cmbDecision.selectedIndex = 0;
+				this.cmbPuesto.selectedIndex = 0;
+			}
+			protected function btnRutas_mouseOutHandler(event:MouseEvent):void{
+				if( !_presionado ){
+					this.currentState = 'normal';
+				}
+			}
+			protected function btnRutas_mouseOverHandler(event:MouseEvent):void{
+				this.currentState = 'selected';
+			}
+			
+			private function validaContenido():Boolean{
+				var valida:Boolean = true;
+				if(txtNombre.text == "" ) {
+					alertaSingleton.show('Es obligatorio el Nombre del Contacto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				if(txtTitulo.text == "" ) {
+					alertaSingleton.show('Es obligatorio el Titulo del Contacto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				if(txtPuesto.text == "" ) {
+					alertaSingleton.show('Es obligatorio la descripción del Puesto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				if(cmbPuesto.selectedIndex == 0 ) {
+					alertaSingleton.show('Es obligatorio seleccionar un Puesto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				if(txtDepartamento.text == "" ) {
+					alertaSingleton.show('Es obligatorio el Departamento del Contacto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				if(txtTel1.text == "" ) {
+					alertaSingleton.show('Es obligatorio el telefono del Contacto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				if(txtEmail.text == "" ) {
+					alertaSingleton.show('Es obligatorio el Email del Contacto',catalogoAlertas.TIT_ADV_operacionImposible);
+					valida = false;
+					return valida;
+				}
+				
+				
+				if( !_perteneceExpoFarma ){
+					if(txtEstado.text == "" ) {
+						alertaSingleton.show('Es obligatorio el Estado',catalogoAlertas.TIT_ADV_operacionImposible);
+						valida = false;
+						return valida;
+					}
+					if(txtdireccion.text == "" ) {
+						alertaSingleton.show('Es obligatoria la Dirección',catalogoAlertas.TIT_ADV_operacionImposible);
+						valida = false;
+						return valida;
+					}
+					if(txtDelegacion.text == "" ) {
+						alertaSingleton.show('Es obligatoria la Delegación',catalogoAlertas.TIT_ADV_operacionImposible);
+						valida = false;
+						return valida;
+					}
+					if(txtCP.text == "" ) {
+						alertaSingleton.show('Es obligatorio el CP',catalogoAlertas.TIT_ADV_operacionImposible);
+						valida = false;
+						return valida;
+					}	
+				}
+				return valida;
+				
+			}
+			[Bindable]
+			private var confirmaSoloUnaVez:Boolean = false;
+			private function guardaContacto():void{
+				if ( validaContenido()  ){
+					var evt:*; 
+					if( _creaContacto ){
+						//evento para crear Contacto
+				 		evt = new EventoEVReqMovil( EventoEVReqMovil.GUARDA_CONTACTO_NUEVO ); 
+					}else{
+						//evento para editar Contacto
+						if( _origen == 'expoPharma' || _origen == "expoMed"){
+							
+							evt = new EventoEvExpoMed( EventoEvExpoMed.EDITAR_CONTACTO_EXPO_MED );
+							
+						}else{
+							
+							evt = new EventoEVReqMovil( EventoEVReqMovil.EDITA_CONTACTO );
+						}
+					}
+					evt.nuevoContacto = ObjectUtil.copy( this._contacto ) as Contacto;
+					
+					//if( _origen != 'expoPharma' && _origen != "expoMed"){
+					
+					if( _contacto.direccion == null || isNaN( _contacto.direccion.idLugar ) || _contacto.direccion.idLugar == 0 ){
+						_tipoEvento = 'inserta';
+					}
+					//}
+					
+					if (_tipoEvento == 'inserta'){
+						evt.nuevoContacto.direccion = new Direccion();
+						evt.nuevoContacto.direccion.idCliente = _contacto.idEmpresa;
+					}
+					evt.tipo = this._tipoEvento;
+					evt.nuevoContacto.nombre = txtNombre.text;
+					evt.nuevoContacto.titulo = txtTitulo.text;
+					evt.nuevoContacto.puesto = txtPuesto.text;
+					evt.nuevoContacto.departamento = txtDepartamento.text;
+					evt.nuevoContacto.telefono = txtTel1.text;
+					evt.nuevoContacto.telefonoN = txtTel2.text;
+					evt.nuevoContacto.fax = txtFax.text;
+					evt.nuevoContacto.EMail = txtEmail.text;
+					//valida direccion, para contacto expofarma
+					if( _perteneceExpoFarma ){
+						if( cmbPais.selectedIndex == 0 && txtEstado.text == '' && txtdireccion.text == '' && txtDelegacion.text == '' && txtCP.text == '' ){
+							evt.nuevoContacto.direccion = null;
+						}else{
+							evt.nuevoContacto.direccion.pais =  ( cmbPais.selectedItem as CatalogoItem ).valor;
+							evt.nuevoContacto.direccion.estado = txtEstado.text;
+							evt.nuevoContacto.direccion.calle = txtdireccion.text;
+							evt.nuevoContacto.direccion.municipio = txtDelegacion.text;
+							evt.nuevoContacto.direccion.codigoPostal = txtCP.text;
+						}
+					}else{
+						evt.nuevoContacto.direccion.pais =  ( cmbPais.selectedItem as CatalogoItem ).valor;
+						evt.nuevoContacto.direccion.estado = txtEstado.text;
+						evt.nuevoContacto.direccion.calle = txtdireccion.text;
+						evt.nuevoContacto.direccion.municipio = txtDelegacion.text;
+						evt.nuevoContacto.direccion.codigoPostal = txtCP.text;
+					}
+					evt.nuevoContacto.nivelDecision = this.cmbDecision.selectedItem.valor;
+					evt.nuevoContacto.nivelPuesto = this.cmbPuesto.selectedItem.valor;
+					
+					/* 					if( _tipoEvento == 'modifica' ){ */
+					
+					/* evt.nuevoContacto.agregadoExpo = false; */
+					
+					/* 	}else{  */
+					
+					//evt.nuevoContacto.agregadoExpo = _perteneceExpoFarma;
+					if(_origen == "expoPharma")
+						evt.nuevoContacto.origenRegistro = "ExpoPharma";
+					else if(_origen == "expoMed")
+						evt.nuevoContacto.origenRegistro = "ExpoMed";
+					
+					//} 
+					evt.ubicacion = '';
+					dispatchEvent( evt );
+					btnGuardar.enabled = false;
+				}
+				confirmaSoloUnaVez = true;
+			}
+			public function set recibeContacto( $dato:int ):void{
+				btnGuardar.enabled = true;
+				if ( isNaN( $dato ) || $dato == 0 ){
+					return;
+				}
+				if(confirmaSoloUnaVez){
+					_idContacto = $dato;
+					alertaSingleton.show( catalogoAlertas.CONF_seGuardaronLosDatos,catalogoAlertas.TIT_CONF_operacionExitosa );
+					
+					if(_origen == "expoMed"){
+						
+						dispatchEvent( new EventoEvExpoMed(EventoEvExpoMed.CARGAR_TODOS_LOS_CONTACTOS_HABILITADOS));
+						
+					}else{
+						
+						var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.CARAGAR_CONTACTOS );
+						evt.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+						dispatchEvent( evt );
+					}
+					
+					var $evtLimpia:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.LIMPIA_ID_CONTACTO );
+					dispatchEvent( $evtLimpia );
+					confirmaSoloUnaVez = false;
+				}
+			} 
+			public function set recibirContactos( $datos:ArrayCollection ):void{
+				if( _idContacto != 0){
+					$datos = new ArrayCollection();
+					var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.SELECCIONA_CONTACTO );
+					evt.idContacto = _idContacto;
+					dispatchEvent( evt );
+					salirPopUpContacto();
+					_idContacto = 0;
+				}
+			}
+			
+			public function set recibirContactosParaExpoMed( $datos:ArrayCollection ):void{
+				if( _idContacto != 0){
+					$datos = new ArrayCollection();
+					var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.SELECCIONA_CONTACTO );
+					evt.idContacto = _idContacto;
+					dispatchEvent( evt );
+					salirPopUpContacto();
+					_idContacto = 0;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="selected" />
+	</s:states>
+	<popUp:PopUpBlanco  width="100%" height="100%"/>
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		<s:Label fontWeight="bold" fontSize="15" text="Contacto"/>
+		<otros:division width="100%" />
+		<s:Spacer width="15"/>
+		<s:VGroup width="100%" height="100%"  paddingLeft="15" paddingRight="15"  >
+			<s:HGroup width="100%">
+				<s:Label text="Nombre:" fontWeight="bold" width="70%"/>
+				<s:Spacer width="15"/>
+				<s:Label text="Título:" fontWeight="bold" width="30%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:TextInput fontStyle="normal"  width="70%" id="txtNombre" text="{ _contacto.nombre }" />
+				<s:Spacer width="15"/>
+				<s:TextInput fontStyle="normal" width="30%" id="txtTitulo" text="{ _contacto.titulo }"  maxChars="5"/>
+			</s:HGroup>
+			<s:Spacer width="15"/>
+			<s:HGroup width="100%">
+				<s:Label text="Departamento:" fontWeight="bold" width="50%"/>
+				<s:Spacer width="15"/>
+				<s:Label text="Nivel de decisión:" fontWeight="bold" width="50%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:TextInput fontStyle="normal" width="50%" id="txtDepartamento" text="{ _contacto.departamento }" />
+				<s:Spacer width="15"/>
+				<cmbCat:ComboCatalogos width="50%" id="cmbDecision" creationComplete="this.cmbDecision.cargarDecision('--NINGUNO--')"/>
+			</s:HGroup>
+			<s:Spacer width="15"/>
+			<s:HGroup width="100%">
+				<s:Label text="Puesto:" fontWeight="bold" width="50%"/>
+				<s:Spacer width="15"/>
+				<s:Label text="Descripción del puesto:" fontWeight="bold" width="50%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<cmbCat:ComboCatalogos id="cmbPuesto" creationComplete="this.cmbPuesto.cargarPuestos('--NINGUNO--')" width="50%"  />
+				<s:Spacer width="15"/>
+				<s:TextInput fontStyle="normal"  width="50%"  text="{ _contacto.puesto }" id="txtPuesto" />
+			</s:HGroup>
+			<s:Spacer width="15"/>
+			<s:HGroup width="100%">
+				<s:Label text="Tel1:" fontWeight="bold" width="50%"/>
+				<s:Spacer width="15"/>
+				<s:Label text="Tel2:" fontWeight="bold" width="50%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:TextInput fontStyle="normal"  width="50%" id="txtTel1" text="{ _contacto.telefono }" />
+				<s:Spacer width="15"/>
+				<s:TextInput fontStyle="normal" width="50%" id="txtTel2" text="{ _contacto.telefonoN }" />
+			</s:HGroup>
+			<s:Spacer width="15"/>
+			<s:Label text="Fax:" fontWeight="bold" />
+			<s:TextInput fontStyle="normal" width="100%" id="txtFax" text="{ _contacto.fax }" />
+			<s:Spacer width="15"/>
+			<s:Label text="E-Mail:" fontWeight="bold" />
+			<s:TextInput fontStyle="normal" width="100%" id="txtEmail" text="{ _contacto.EMail }" />
+			<s:Spacer height="15"/>
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:Label fontWeight="bold" fontSize="15" text="Dirección"/>
+				<s:Spacer width="100%"/>
+				<!--<s:Image source="{catalogoIconosGrid.getInstance().render_Star}" click="abrirPopUpRutas(event)" id="btnRutas"/>-->
+				<s:Image click="abrirPopUpRutas(event);_presionado = true" id="btnRutas" mouseOut="btnRutas_mouseOutHandler(event)"  mouseOver="btnRutas_mouseOverHandler(event)"
+						 source="{catalogoIconosGrid.getInstance().direccion}"
+						 source.selected="{catalogoIconosGrid.getInstance().direcciondown}"/>
+			</s:HGroup>
+		</s:VGroup>
+		<otros:division width="100%"/>
+		<s:Spacer width="15"/>
+		<s:VGroup width="100%" height="100%"  paddingLeft="15" paddingRight="15" >
+			<s:HGroup width="100%">
+				<s:Label text="País:" fontWeight="bold" width="50%"/>
+				<s:Spacer width="15"/>
+				<s:Label text="Estado:" fontWeight="bold" width="50%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<cmbCat:ComboCatalogos id="cmbPais" change="_tipoEvento = 'modifica'" width="50%"/>
+				<s:Spacer width="15"/>
+				<s:TextInput fontStyle="normal" width="50%" id="txtEstado" text="{ _contacto.direccion.estado }" change="_tipoEvento = 'modifica'"/>
+			</s:HGroup>
+			<s:Spacer width="15"/>
+			<s:Label text="Calle, número y colonia:" fontWeight="bold" />
+			<s:TextArea fontStyle="normal" width="100%" id="txtdireccion" text="{ _contacto.direccion.calle  }" change="_tipoEvento = 'modifica'"/>
+			<s:Spacer width="15"/>
+			<s:HGroup width="100%">
+				<s:Label text="Delegación o municipio:" fontWeight="bold" width="50%"/>
+				<s:Spacer width="15"/>
+				<s:Label text="Código Postal:" fontWeight="bold" width="50%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:TextInput fontStyle="normal" width="50%" id="txtDelegacion" text="{ _contacto.direccion.municipio }" change="_tipoEvento = 'modifica'"/>
+				<s:Spacer width="15"/>
+				<s:TextInput fontStyle="normal" width="50%" id="txtCP" text="{ _contacto.direccion.codigoPostal }" restrict="0-9" change="_tipoEvento = 'modifica'"/>
+			</s:HGroup>
+		</s:VGroup>
+		<s:Spacer width="10"/>
+		<otros:division width="100%"/>
+		<s:Spacer width="10"/>
+		<s:HGroup width="100%">
+			<pqNet:botonPqNetLargo label="Cancelar" click="salirPopUpContacto()"/>
+			<s:Spacer width="100%"/>
+			<pqNet:botonPqNetLargo label="Guardar" click="guardaContacto()" id="btnGuardar"/>
+		</s:HGroup>
+	</s:VGroup>
+</s:Group>

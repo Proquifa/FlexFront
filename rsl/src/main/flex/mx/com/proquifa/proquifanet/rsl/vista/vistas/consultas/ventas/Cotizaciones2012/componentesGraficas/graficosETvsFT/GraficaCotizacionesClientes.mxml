@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			public var _currentType:String;
+			private  var _infoClienteET:ArrayCollection;
+			private  var _infoClienteFT:ArrayCollection;
+			private var totalCotizacion:Object;
+			private var total:int = 0;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET"){
+						if(_infoClienteET != null)						
+							myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClienteET,null,"cotizacionesTotal",true, total);
+					}
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClienteFT,null,"cotizacionesTotal", true, total);	
+				}
+			}
+			
+			public function set obtenerInfoGrafico($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoClienteET  = new ArrayCollection();
+				_infoClienteFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+ 				var arrayTemp:Array =  new Array();
+				arrayTemp = $infoGrafica.source; 
+			
+			/**
+			 * Se dividen todos los clientes en Tiempo Vs los Fuera de Tiempo y se ordenan
+			 * */ 
+				
+				var arrayClienteET:Array = new Array();
+				var arrayClienteFT:Array = new Array();
+				
+				arrayClienteET = arrayTemp.filter(ObtenerTodosClientesET);
+				arrayClienteFT = arrayTemp.filter(ObtenerTodosClientesFT);
+				arrayClienteET.sortOn("cliente");
+				arrayClienteFT.sortOn("cliente");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+		
+			/**
+			 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada cliente,
+			 * quitando los duplicados
+			 * */
+				
+				keys= new Object();
+				var arrayTotalClientesET:Array = new Array();
+				arrayTotalClientesET = arrayClienteET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalClientesFT:Array = new Array();
+				arrayTotalClientesFT = arrayClienteFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Cliente
+				 * */
+				
+				FormarAClientes(arrayTotalClientesET,arrayClienteET,"CLIENTE_ET",_infoClienteET);
+				FormarAClientes(arrayTotalClientesFT,arrayClienteFT,"CLIENTE_FT",_infoClienteFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClienteET,null,"cotizacionesTotal",true,total);
+				else
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoClienteFT,null,"cotizacionesTotal",true, total);
+				
+				//Para liberar memoria
+				arrayTotalClientesET = new Array();
+				arrayClienteET= new Array();
+				arrayTotalClientesFT= new Array();
+				arrayClienteFT= new Array();
+			}
+			
+			private function calcularTotales(listaCotiza:ArrayCollection):void{
+				for each (var partida:PartidaCotizacion in listaCotiza) 
+				{
+					if(!totalCotizacion.hasOwnProperty(partida.cotizacion)){
+						totalCotizacion[partida.cotizacion]=1;
+						total++;
+					}
+				}
+				
+			}
+			
+			private function FormarAClientes(TotalClientes:Array,clientesInfo:Array,etiqueta:String,infoCliente:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCotizaciones:int;
+				var totalMonto:Number;
+				
+				var currentPartidaCoti:PartidaCotizacion; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalClientes.length; i++){
+					j=0;
+					keys = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalCotizaciones =0;
+					totalMonto =0;
+					currentPartidaCoti = clientesInfo[j] as PartidaCotizacion;
+					while( (TotalClientes[i] as PartidaCotizacion).cliente == currentPartidaCoti.cliente ){
+						totalPartidas += currentPartidaCoti.partida;
+						totalPiezas += currentPartidaCoti.cantidad;
+						totalMonto += currentPartidaCoti.precio;
+						
+						if(!keys.hasOwnProperty(currentPartidaCoti.cotizacion)){
+							keys[currentPartidaCoti.cotizacion]= currentPartidaCoti.cotizacion;
+							totalCotizaciones++;
+						}
+						
+						clientesInfo.shift();
+						if(clientesInfo.length >0)
+							currentPartidaCoti = clientesInfo[j] as PartidaCotizacion;
+						else
+							currentPartidaCoti =new PartidaCotizacion();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalClientes[i] as PartidaCotizacion).cliente.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes =1;
+					itemResumenConsulta.cotizacionesTotal = totalCotizaciones;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoCliente.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			
+			public function quitaDuplicados(item:PartidaCotizacion, idx:uint, _clientes:Array):Boolean{
+				if (keys.hasOwnProperty(item.cliente)) {
+					return false;
+				} else {
+					keys[item.cliente] = item.cliente;
+					return true;
+				}
+			}
+			
+			private function ObtenerTodosClientesET(item:Object, idx:uint, _clientes:Array):Boolean
+			{
+				return item.conforme == "SC" ? true : false;
+			}
+			
+			private function ObtenerTodosClientesFT(item:Object, idx:uint, _clientes:Array):Boolean
+			{
+				return item.conforme == "SNC" ? true : false;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="piezasTotal"/>
+						</graficas:series>
+					</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+					<componentes:tituloChartTablero width="100%" text="CLIENTES" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>

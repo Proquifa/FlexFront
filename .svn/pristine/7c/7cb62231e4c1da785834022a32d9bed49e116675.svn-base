@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="100%" height="100%"
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		  resize="resize_ventana(event)"
+		  >
+	<fx:Script>
+
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.cargarAcuseRecibido.PopUpImprimirAcuse;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			[Bindable] public var dataProvider:ArrayCollection = new ArrayCollection();
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFontAgente:Number;
+			private var ventanaImprimir:PopUpImprimirAcuse = null;
+			public var popupMostrado:Boolean;
+			public var permitirImpresion:Boolean;
+			public var currentOrden:OrdenDespacho;
+			[Bindable] public  var cargarVentana:Boolean;
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				lstOrdenCompra.dataProvider = UtilsGrid.queryCampoXLike(dataProvider,"folio",txtBuscador.text);
+			}
+			
+			protected function lstOrdenCompra_changingHandler(event:IndexChangeEvent):void
+			{
+				var eve:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_RUTAS_IMAGENES_GENERAR_ACUSE);
+				eve.ordenDespacho = lstOrdenCompra.selectedItem;
+				eve.altaCalidadImpresion = false;
+				eve.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(eve);
+				currentOrden = lstOrdenCompra.selectedItem;
+			}
+			public function set recibeOrdenDespacho($ordenes:ArrayCollection):void
+			{
+				if($ordenes == null || $ordenes.length == 0)
+					return;
+				lstOrdenCompra.dataProvider = $ordenes;
+				dataProvider = $ordenes;
+			}
+			
+			public function setData(value:ArrayCollection):void
+			{
+				var x:int;
+				imagenVisualizaId.source = null;
+				permitirImpresion = false;
+				if(value == null || value.length == 0){
+					lstOrdenCompra.dataProvider = new ArrayCollection();
+				}
+				var totalMonto:Number=0;
+				var totalPiezas:int;
+				var totalOD:int;
+				
+				for(x=0;x<value.length;x++){
+					totalMonto += value[x].totalMonto;
+					totalPiezas += value[x].totalPiezas;
+					totalOD += value[x].totalOD;
+				}
+				if(value.length>0)
+					lblNombreAgente.text = value[0].nombreAgenteAduanal;
+				
+				dataProvider = ObjectUtil.copy(value) as ArrayCollection;
+				lstOrdenCompra.dataProvider = dataProvider 
+				lblTotalMonto.text = 'Monto: $ '+UtilsFormatosNumericos.precisionADosDecimalesConComas(totalMonto);
+				lblTotalOD.text = "OD: "+value.length;
+				lblTotalPiezas.text = totalPiezas == 1 ? totalPiezas +' Pieza':totalPiezas+' Piezas';
+			}
+			
+			protected function resize_ventana(event:ResizeEvent):void
+			{
+				sizeFont = (16 / 2005) * (unscaledWidth);
+				sizeFontAgente = (20 / 2005) * (unscaledWidth);
+				
+				sizeFont = sizeFont > 16 ? 16:sizeFont;
+				sizeFont = sizeFont < 10 ? 10:sizeFont;
+				
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+			}
+			public function set recibeRutasImagenes(value:String):void
+			{
+				if(value == null){
+					permitirImpresion= false;
+					return ;
+				}
+				if(value == ""){
+					alertaSingleton.show("No se pudo encontrar la imagen",catalogoAlertas.TIT_ADV_atencion);
+					permitirImpresion= false;
+					return;
+				}
+				var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + value);
+				var img:Loader = new Loader();
+				img.load(url);
+				img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);
+			}
+			public function loaded(e:Event):void
+			{
+				var bitmap:Bitmap = e.target.content;
+				imagenVisualizaId.source = bitmap;
+				e.target.removeEventListener(Event.COMPLETE,loaded);
+				permitirImpresion = true;
+			}
+			
+			protected function imprimir(event:MouseEvent):void
+			{
+				if(permitirImpresion){
+					var eve:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_RUTAS_IMAGENES_IMPRESION_GENERAR_ACUSE);
+					eve.ordenDespacho = lstOrdenCompra.selectedItem;
+					eve.altaCalidadImpresion = true;
+					eve.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(eve);
+				}
+				else{
+					alertaSingleton.show("No se puede imprimir",catalogoAlertas.TIT_ADV_atencion);					
+				}
+				
+			}
+			public function set recibeRutasImagenesAImprimir(value:String):void
+			{
+				if(value == null)
+					return ;
+				
+				var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + value);
+				var img:Loader = new Loader();
+				img.load(url);
+				img.contentLoaderInfo.addEventListener(Event.COMPLETE,loadedPrint);
+			}
+			
+			private var pagePrint:BitmapData;
+			private var frame:Sprite = new Sprite();
+			private	var myPrintJob:PrintJob = new PrintJob();
+			private var options:PrintJobOptions = new PrintJobOptions();
+			public function loadedPrint(e:Event):void
+			{
+				var bitmap:Bitmap = e.target.content;
+				pagePrint = bitmap.bitmapData;
+				e.target.removeEventListener(Event.COMPLETE,loadedPrint);
+				
+				var matrix:Matrix = new Matrix();
+				
+				matrix.scale((584/pagePrint.width), (764/pagePrint.height));
+				/*frame.graphics.lineStyle(1);*/
+				frame.graphics.beginBitmapFill(pagePrint, matrix, true);
+				frame.graphics.drawRect(0, 0,590,780);
+				frame.graphics.endFill();
+				
+				myPrintJob = new PrintJob();
+				options = new PrintJobOptions();
+				
+				options.printAsBitmap = true;
+				
+				myPrintJob.start();
+				
+				try {
+					myPrintJob.addPage(frame, null, options);
+						if( ventanaImprimir == null ){
+							ventanaImprimir = PopUpImprimirAcuse(PopUpManager.createPopUp( this, PopUpImprimirAcuse, true ) );
+							PopUpManager.centerPopUp( ventanaImprimir );
+							ventanaImprimir.setAcuseFolio(lstOrdenCompra.selectedItem.acuseRecibo);
+							ventanaImprimir.addEventListener("aceptarPopUP",cerrarPopUp);
+							ventanaImprimir.addEventListener("reimprimirPopUP",volverImprimir);
+						}else{
+							PopUpManager.addPopUp( ventanaImprimir , this, true );
+						}
+				}
+				catch(e:Error) {
+					trace ("Had problem adding the page to print job: " + e);
+				}
+				
+				try {
+					myPrintJob.send();
+				}
+				catch (e:Error) {
+					trace ("Had problem printing: " + e);    
+				}
+			}
+			
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( ventanaImprimir );
+				ventanaImprimir = null;
+				
+				var eve:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.CERRAR_PENDIENTE_GENERAR_ACUSE);
+				eve.ordenDespacho = lstOrdenCompra.selectedItem;
+				eve.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(eve);
+				cargarVentana = true;
+				
+				dispatchEvent( new Event("recargarPendientes",true));
+			}
+			private function volverImprimir(event:Event):void
+			{
+				myPrintJob.start();
+				
+				try {
+					myPrintJob.addPage(frame, null, options);
+				}
+				catch(e:Error) {
+					trace ("Had problem adding the page to print job: " + e);
+				}
+				
+				try {
+					myPrintJob.send();
+				}
+				catch (e:Error) {
+					trace ("Had problem printing: " + e);    
+				}
+			}
+			public function set recibeRespuesta(value:Boolean):void
+			{
+				if(value){
+					var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_ORDEN_DESPACHO_COMPLETAS_GENERAR_ACUSE);
+					evento.usuario =DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(evento);
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" gap="0"> 
+		<s:HGroup width="100%" height="100%" paddingLeft="5" paddingTop="20" gap="0">
+			<s:VGroup id="grpOrden" width="30%" height="100%" gap="20"> <!--gap = 10-->
+				<s:Label styleName="tab_texto_14_Helvetica" id="lblNombreAgente" fontWeight="bold" fontSize="{sizeFontAgente}" color="#008893" text="" width="100%" textAlign="left" />
+				<s:TextInput prompt="Orden De Despacho" id="txtBuscador" width="100%" maxWidth="{grpOrden.width}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)"/>
+				<s:VGroup width="100%" height="100%" gap="0">
+					<otros:LineaDivision width="100%" height="1" color="#707070" />
+					<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+							selectedIndex="0" id="lstOrdenCompra" contentBackgroundAlpha="0"
+							itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.OrdenDespachoDisponibles_generarAcuse"
+							changing="lstOrdenCompra_changingHandler(event)"
+							/>
+					<otros:LineaDivision width="100%" height="1" color="#707070" />
+					<s:HGroup width="100%" paddingTop="10" paddingBottom="20" verticalAlign="middle" horizontalAlign="center" paddingLeft="20" paddingRight="20">
+						<s:HGroup width="10%" maxWidth="50" height="100%" >
+							<s:Label styleName="tab_texto_14_Helvetica"  fontSize="{sizeFont}" text="" textAlign="left" width="100%" />
+						</s:HGroup>
+							<s:HGroup width="100%" height="100%" gap="5" horizontalAlign="center">
+								<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalOD" width="25%" text="OD: 0" textAlign="left" fontSize="{sizeFont}"/>
+								<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalPiezas" width="30%" text="0 Piezas" textAlign="left" fontSize="{sizeFont}"/>
+								<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalMonto" width="55%" text="Monto: $ 0.00" textAlign="left" fontSize="{sizeFont}"/>
+							</s:HGroup>
+						
+					</s:HGroup>  
+				</s:VGroup>  
+			</s:VGroup>  
+			<s:HGroup height="100%" verticalAlign="middle" paddingLeft="16" paddingRight="20" paddingTop="20" paddingBottom="20">
+				<otros:divisionDegradadoVertical height="100%" /> 
+			</s:HGroup>
+			<s:VGroup width="80%" height="100%" paddingRight="20" gap="0">
+				<s:HGroup width="100%" height="93%" horizontalAlign="center" verticalAlign="middle">
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#f4f4f5" />
+							</s:fill>
+						</s:Rect>
+						<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+							<mx:Image verticalAlign="middle" horizontalAlign="center" width="100%" height="100%" id="imagenVisualizaId"/>
+						</s:VGroup>  
+						
+					</s:Group>
+					
+				</s:HGroup>	
+				
+				<s:VGroup width="100%" height="7%" horizontalAlign="right" verticalAlign="middle" gap="0">
+					<s:VGroup width="100%" height="100%" maxWidth="130" maxHeight="25" horizontalAlign="center" verticalAlign="middle" click="imprimir(event)">
+						<s:Group width="100%" height="100%" >
+							<s:Rect width="100%" height="100%">
+								<s:fill>
+									<s:SolidColor color="#0c8994" />
+								</s:fill>
+							</s:Rect>
+							<s:Label styleName="TituloNovecento_18" fontSize="18" fontWeight="bold" text="IMPRIMIR" color="#FFFFFF" width="100%" height="100%" textAlign="center" verticalAlign="middle" /> 
+						</s:Group>  
+					</s:VGroup>  
+				</s:VGroup>  
+				
+				
+				
+			</s:VGroup>  
+		</s:HGroup>  
+		
+	</s:VGroup>  
+	
+</s:VGroup>

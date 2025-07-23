@@ -1,0 +1,694 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		  xmlns:menuFlotante="skins.skin.menuFlotante.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" gap="0" 
+		  creationComplete="init(event)" 
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.ValorAdicional;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			private var _proveedoresArray:ArrayCollection;
+			private var _universoAgentes:ArrayCollection;
+			private var _valoresActuales:ArrayCollection;
+			private var _botonActual:String;
+			private var clickeado:String;
+			private var _clickeado:String;
+			private var _currentIndex:Number;
+			private var _nivelSelected:String;
+			private var _rutaSelected:String;
+			private var _todos:Boolean;
+			private var _sql:Query;
+			private var _sqlAgentes:Query;
+			private var _sqlProductos:Query;
+			private var _nombresCorporativos:Array;
+			private var _nombresCompradores:Array;
+			private var _nombresPagadores:Array;
+			private var listaCorporativos:ArrayCollection;
+			private var _compradores:ArrayCollection;
+			private var _pagadores:ArrayCollection;
+			private var _dummy:ValorAdicional;
+			
+			private var tipoRegion:Array = new Array ('NACIONAL','INTERNACIONAL');
+			
+			private var tipoProductos:Array = new Array ('ASESORÍAS','CAPACITACIONES','ESTÁNDARES', 
+				'LABWARE','MEDICAMENTOS','PUBLICACIONES','REACTIVOS');
+			
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener("escuchaSubMenuBusqueda",busquedaSubMenu,false,0,true);
+				addEventListener("terminoAnimacion",terminoAnimacion,false,0,true);
+				btn1.arrayValores = tipoProductos;
+				btn4.arrayValores = tipoRegion;
+				btn0.seleccionar();
+				_botonActual = clickeado = "estrategicos";
+				_todos = true;
+			}
+			
+			private function cargarValoresCombos():void
+			{
+				var solComprador:EventoCatProGeneral = new EventoCatProGeneral(EventoCatProGeneral.OBTENER_VALORES_COMPRADOR);
+				solComprador.tipo = "comprador";
+				dispatchEvent(solComprador);
+				
+				var solPagador:EventoCatProGeneral = new EventoCatProGeneral(EventoCatProGeneral.OBTENER_VALORES_PAGADOR);
+				solPagador.tipo = "Contabilidad";
+				dispatchEvent(solPagador);
+			}
+			
+			private function hacerArrayaValorMostrado($array:Array):ArrayCollection
+			{
+				var tempArray:ArrayCollection = new ArrayCollection();
+				if($array.length > 0)
+				{
+					for(var g:int=0; g<$array.length; g++)
+					{
+						var curr:ValorAdicional = new ValorAdicional;
+						curr.valorMostrado = $array[g];
+						tempArray.addItem(curr);
+					}
+				}
+				return tempArray;
+			}
+			
+			public function set recibeCompradores($compradores:ArrayCollection):void
+			{
+				if ($compradores == null) return;
+				
+				_compradores = ObjectUtil.copy($compradores) as ArrayCollection;
+				_nombresCompradores = new Array();
+				for (var g:int=0; g<$compradores.length; g++)
+				{
+					var curr:Empleado = $compradores[g] as Empleado;
+					_nombresCompradores.push(curr.nombre);
+				}
+				btn5.arrayValores = _nombresCompradores;
+			}
+			
+			private function obtenerID($nombre:String, $tipo:String):Number
+			{
+				var _id:Number=0;
+				var current:Empleado;
+				var c:int;
+				
+				switch($tipo.toLowerCase())
+				{
+					case "comprador":
+					{
+						for(c=0; c < _compradores.length; c++)
+						{
+							current = _compradores[c] as Empleado;
+							if(current.nombre.toLowerCase() == $nombre.toLowerCase())
+							{
+								_id = current.clave;
+							}
+						}
+						break;
+					}
+					case "pagador":
+					{
+						for(c=0; c < _pagadores.length; c++)
+						{
+							current = _pagadores[c] as Empleado;
+							if(current.nombre.toLowerCase() == $nombre.toLowerCase())
+							{
+								_id = current.clave;
+							}
+						}
+						break;
+					}
+				}
+				return _id;
+			}
+			
+			public function set recibePagadores($pagadores:ArrayCollection):void
+			{
+				if ($pagadores == null) return;
+				
+				_pagadores = ObjectUtil.copy($pagadores) as ArrayCollection;
+				_nombresPagadores = new Array();
+				for (var n:int=0; n < $pagadores.length; n++)
+				{
+					var curr:Empleado = $pagadores[n] as Empleado;
+					_nombresPagadores.push(curr.nombre);
+				}
+				btn6.arrayValores = _nombresPagadores;
+			}
+			
+			public function set recibeAgentes($datos:ArrayCollection):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				
+				_sqlAgentes = new Query($datos,["nombre","valor","valorSecundario"],true);
+			}
+			
+			public function set recibeTipoProductos($datos:ArrayCollection):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				
+				_sqlProductos = new Query($datos,["nombre","valor","valorSecundario"],true);
+			}
+			
+			public function set recibeUniversoAgentes($datos:ArrayCollection):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				
+				_universoAgentes = ObjectUtil.copy($datos) as ArrayCollection;
+				var arraTemp:Array = new Array();
+				for(var y:int=0; y<$datos.length; y++)
+				{
+					arraTemp.push(($datos[y] as AgenteAduanal).nombreComercial);
+				}
+				btn3.arrayValores = StringFunciones.removerDuplicados(arraTemp)
+			}
+			
+			private function sendProveedoresPadre($arreglo:ArrayCollection):void
+			{
+				var evt:EventoCatProGeneral = new EventoCatProGeneral(EventoCatProGeneral.ENVIO_PROVEDORES_BUSCADOS);
+				evt.proveedoresResultantes = $arreglo;
+				dispatchEvent(evt);	
+			}
+			
+			public function recibeProveedores($array:ArrayCollection):void
+			{
+				if ($array)
+				{
+					dispatchEvent(new EventoCatProGeneral(EventoCatProGeneral.OBTENER_LISTA_DE_AGENTES));
+					dispatchEvent(new EventoCatProGeneral(EventoCatProGeneral.OBTENER_UNIVERSO_AGENTES));
+					dispatchEvent(new EventoCatProGeneral(EventoCatProGeneral.OBTENER_LISTA_TIPO_PRODUCTOS));
+					cargarValoresCombos();
+					_proveedoresArray = $array;
+					_valoresActuales = ObjectUtil.copy(_proveedoresArray) as ArrayCollection;
+					_sql = new Query(_proveedoresArray,["nombre","socioComercial","pais","comprador","pagador"],true);
+					_todos = false;
+					_botonActual ="";
+					deseleccionarBotones(0);
+					seleccionarBoton("estrategicos");
+				}
+			}
+			
+			private function terminoAnimacion(evt:Event):void
+			{
+				if(_clickeado != _botonActual)
+				{
+					marcarBotonSeleccionado(_botonActual);
+				}
+			}
+			
+			private function marcarBotonSeleccionado($boton:String):void
+			{
+				switch($boton)
+				{
+					case "estrategicos":
+					{
+						btn0.marcarSeleccionado();
+						_clickeado = $boton
+						break;
+					}
+					case "tipoProducto":
+					{
+						btn1.marcarSeleccionado();
+						_clickeado = $boton
+						break;
+					}
+					case "proveedores":
+					{
+						btn2.marcarSeleccionado();
+						_clickeado = $boton
+						break;
+					}
+					case "agenteAduanal":
+					{
+						btn3.marcarSeleccionado();
+						_clickeado = $boton
+						break;
+					}
+					case "region":
+					{
+						btn4.marcarSeleccionado();
+						_clickeado = $boton
+						break;
+					}
+				}
+			}
+			
+			public function switchClientes():void
+			{
+				textBusqueda.text = "";
+				deseleccionarBotones(0);
+				btn0.seleccionar();
+				seleccionarBoton("estrategicos");
+				_todos = false;
+			}
+			
+			private function deseleccionarBotones($index:Number):void
+			{	
+				switch($index)
+				{
+					case 0:
+					{
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 1:
+					{
+						btn0.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 2:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 3:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 4:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 5:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 6:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						break;
+					}
+				}
+			}
+			
+			protected function clickBotoneraBusqueda(event:Event):void
+			{
+				if(_clickeado != event.currentTarget.tipoBoton)
+				{
+					clickeado = event.currentTarget.tipoBoton;
+					//deseleccionarBotones();
+					seleccionarBoton(clickeado);
+				} 	
+			}
+			
+			private function seleccionarBoton($boton:String):void
+			{
+				switch($boton)
+				{
+					case "estrategicos":
+					{
+						if(_botonActual != "estrategicos")
+							buscarEstrategicos();
+						_currentIndex = 0;
+						btn0.seleccionar();
+						deseleccionarBotones(_currentIndex);
+						_nivelSelected = btn0.subMenuSelected;
+						_botonActual = _clickeado = $boton
+						break;
+					}
+					case "tipoProducto":
+					{
+						_currentIndex = 1;
+						break;
+					}
+					case "proveedores":
+					{
+						if(!_todos)
+						{
+							_todos = true;
+							textBusqueda.text = "";
+							sendProveedoresPadre(_proveedoresArray);
+							_valoresActuales = ObjectUtil.copy(_proveedoresArray) as ArrayCollection;
+						}
+						_botonActual =_clickeado = $boton;
+						_currentIndex = 2;
+						btn2.seleccionar();
+						deseleccionarBotones(_currentIndex);
+						break;
+					}
+					case "agenteAduanal":
+					{
+						_currentIndex = 3;
+						break;
+					}
+					case "region":
+					{
+						_currentIndex = 4;
+						break;
+					}
+					case "comprador":
+					{
+						_currentIndex = 5;
+						break;
+					}
+					case "pagador":
+					{
+						_currentIndex = 6;
+						break;
+					}
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			private function buscarEstrategicos():void
+			{
+				var arrTemp:Array = new Array();
+				var universoTemp:ArrayCollection = new ArrayCollection();
+				arrTemp = _sql.getPunteros([null,"true",null]);
+				universoTemp = _sql.armarLista(arrTemp);
+				_valoresActuales = ObjectUtil.copy(universoTemp) as ArrayCollection;
+				sendProveedoresPadre(universoTemp);
+				_todos = false;
+			}
+			
+			private function busquedaSubMenu(evt:Event):void
+			{
+				var menu:String="";
+				var menuArray:Array = new Array();
+				var tmpPunteros:Array = new Array();
+				var nuevoUniverso:ArrayCollection = new ArrayCollection();
+				var punterosBusqueda:Array = new Array();
+				var tmpNombres:ArrayCollection
+				
+				if(_currentIndex == 1)
+				{
+					btn1.seleccionar();
+					_botonActual =_clickeado = clickeado;
+					textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = StringFunciones.noAccent(btn1.subMenuSelected.toLowerCase());
+					menuArray = _sqlProductos.getPunteros([null,menu],"nombre");
+					tmpNombres = _sqlProductos.armarLista(menuArray); 
+					
+					for(var t:int=0; t<tmpNombres.length; t++)
+					{
+						var current:ValorAdicional = tmpNombres[t] as ValorAdicional;
+						tmpPunteros = _sql.getPunteros([current.nombre.toString().toLowerCase()]);
+						if(tmpPunteros.length > 0)
+						{
+							punterosBusqueda.push(tmpPunteros);
+						}
+					}
+					
+					tmpPunteros = new Array();
+					tmpPunteros = UtilsGrid.generateArrayBiToArrayUni(punterosBusqueda);
+					
+					nuevoUniverso = _sql.armarLista(StringFunciones.removerDuplicados(tmpPunteros));
+					if(nuevoUniverso.length > 0)
+					{
+						_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+						sendProveedoresPadre(nuevoUniverso);
+					}
+					else
+					{
+						sendProveedoresPadre(new ArrayCollection());
+					}
+					_todos = false;
+				}
+				if(_currentIndex == 3)
+				{
+					btn3.seleccionar();
+					_botonActual =_clickeado = clickeado;
+					textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = StringFunciones.noAccent(btn3.subMenuSelected.toLowerCase());
+					menuArray = _sqlAgentes.getPunteros([null,menu]);
+					tmpNombres = _sqlAgentes.armarLista(menuArray); 
+					
+					for(var h:int=0; h<tmpNombres.length; h++)
+					{
+						var currentVa:ValorAdicional = tmpNombres[h] as ValorAdicional;
+						tmpPunteros = _sql.getPunteros([currentVa.nombre.toString().toLowerCase()]);
+						if(tmpPunteros.length > 0)
+						{
+							punterosBusqueda.push(tmpPunteros);
+						}
+					}
+					tmpPunteros = new Array();
+					tmpPunteros = UtilsGrid.generateArrayBiToArrayUni(punterosBusqueda);
+					
+					nuevoUniverso = _sql.armarLista(StringFunciones.removerDuplicados(tmpPunteros));
+					if(nuevoUniverso.length > 0)
+					{
+						_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+						sendProveedoresPadre(nuevoUniverso);
+					}
+					else
+					{
+						sendProveedoresPadre(new ArrayCollection());
+					}
+					_todos = false;
+				}
+				if(_currentIndex == 4)
+				{
+					btn4.seleccionar();
+					_botonActual =_clickeado = clickeado;
+					textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = StringFunciones.noAccent(btn4.subMenuSelected.toLowerCase());
+					menuArray = _sql.getPunteros([null,null,"pais"]);
+					tmpNombres = _sql.armarLista(menuArray); 
+					
+					for(var y:int=0; y<menuArray.length; y++)
+					{
+						if(menu == "nacional")
+						{
+							tmpPunteros = _sql.getPunteros([null,null,"mexico"]);
+							if(tmpPunteros.length > 0)
+							{
+								punterosBusqueda.push(tmpPunteros);
+							}
+						}
+						else
+						{
+							if(menuArray[y] != "mexico")
+							{
+								tmpPunteros = _sql.getPunteros([null,null,menuArray[y]]);
+								if(tmpPunteros.length > 0)
+								{
+									punterosBusqueda.push(tmpPunteros);
+								}
+							}
+						}
+					}
+					tmpPunteros = new Array();
+					tmpPunteros = UtilsGrid.generateArrayBiToArrayUni(punterosBusqueda);
+					
+					nuevoUniverso = _sql.armarLista(StringFunciones.removerDuplicados(tmpPunteros));
+					if(nuevoUniverso.length > 0)
+					{
+						_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+						sendProveedoresPadre(nuevoUniverso);
+					}
+					else
+					{
+						sendProveedoresPadre(new ArrayCollection());
+					}
+					_todos = false;
+				}
+				if(_currentIndex == 5)
+				{
+					tmpPunteros = new Array();
+					btn5.seleccionar();
+					_botonActual =_clickeado = clickeado;
+					textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = obtenerID(btn5.subMenuSelected,"comprador").toString();
+					menuArray = _sql.getPunteros([null,null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					if(nuevoUniverso.length > 0)
+					{
+						_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+						sendProveedoresPadre(nuevoUniverso);
+					}
+					else
+					{
+						sendProveedoresPadre(new ArrayCollection());
+					}
+					_todos = false;
+				}
+				if(_currentIndex == 6)
+				{
+					tmpPunteros = new Array();
+					btn6.seleccionar();
+					_botonActual =_clickeado = clickeado;
+					textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = obtenerID(btn6.subMenuSelected,"pagador").toString();
+					menuArray = _sql.getPunteros([null,null,null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					if(nuevoUniverso.length > 0)
+					{
+						_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+						sendProveedoresPadre(nuevoUniverso);
+					}
+					else
+					{
+						sendProveedoresPadre(new ArrayCollection());
+					}
+					_todos = false;
+				}
+			}
+			
+			
+			// +++++++++++++++++++++++++++++++++++++++ BUSQUEDA +++++++++++++++++++++++++++++++++++++++
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private	var temporizador:Timer;
+			private function filtroPorTexto():void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaHab:ArrayCollection = new ArrayCollection();
+				var _listaDeshab:ArrayCollection = new ArrayCollection();
+				listaAFiltrar = ObjectUtil.copy( _proveedoresArray ) as ArrayCollection;
+				
+				if (StringUtil.trim(textBusqueda.text).length > 0 )
+				{
+					if(temporizador == null)
+					{
+						temporizador = new Timer(500,0);
+						temporizador.addEventListener(TimerEvent.TIMER,filtrarClientes,false,0,true);
+					}
+					if(temporizador)
+					{
+						if(temporizador.running)
+						{
+							temporizador.reset();
+							temporizador.start();
+						}
+						else
+						{
+							temporizador.start();
+						}
+					}
+				}
+				else
+				{
+					sendProveedoresPadre(_valoresActuales);
+				}
+			}
+			
+			
+			private function filtrarClientes(event:TimerEvent):void
+			{
+				temporizador.stop();
+				if (StringUtil.trim( textBusqueda.text).length > 0)
+				{
+					var sqlBusqueda:Query;
+					var punteroCliente:Array = new Array();
+					var nom:String;
+					var parecidos:Array = new Array();
+					var arreTemp:Array = new Array();
+					var arregloTe:ArrayCollection = new ArrayCollection();
+					
+					sqlBusqueda = new Query(_valoresActuales,["nombre"],true);
+					punteroCliente = new Array();
+					nom = StringUtil.trim( textBusqueda.text).toLowerCase();
+					parecidos = sqlBusqueda.getCampoLikeLowerCase("nombre",nom);
+					
+					if (parecidos.length > 0)
+					{
+						for ( var i:int = 0; i<parecidos.length; i++)
+						{
+							punteroCliente.push(sqlBusqueda.getPunteros([parecidos[i],null]));
+						}
+					}
+					//  ---------------------------------- ORDENA Y ELIMINA REPETIDOS  ----------------------------------
+					arreTemp = UtilsGrid.generateArrayBiToArrayUni(punteroCliente);
+					arregloTe = sqlBusqueda.armarLista(StringFunciones.removerDuplicados(arreTemp));
+					sendProveedoresPadre(arregloTe);
+				}
+			}
+			
+			// +++++++++++++++++++++++++++++++++++++++ BUSQUEDA +++++++++++++++++++++++++++++++++++++++
+			
+		]]>
+	</fx:Script>
+	
+	<s:Group width="100%" height="100%">
+		
+		<s:VGroup width="100%" height="100%" paddingTop="93" horizontalAlign="center" gap="10" >
+			<otros:division width="100%" />
+			<s:TextInput fontStyle="normal" id="textBusqueda" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" 
+						 prompt="Proveedores" text="" change="filtroPorTexto()" />
+		</s:VGroup>
+		
+		<s:VGroup width="100%" height="80" gap="0" >
+			<otros:divisionGruesa width="100%"/>
+			<s:Group width="100%" horizontalCenter="1" >
+				<s:layout>
+					<s:HorizontalLayout gap="0" horizontalAlign="center"/>
+				</s:layout>
+				<menuFlotante:OverLayerMenu id="btn2" tipoBoton="proveedores" click="clickBotoneraBusqueda(event)" width="100%"/>
+				<menuFlotante:OverLayerMenu id="btn1" tipoBoton="tipoProducto" click="clickBotoneraBusqueda(event)" width="100%"/>
+				<menuFlotante:OverLayerMenu id="btn3" tipoBoton="agenteAduanal" click="clickBotoneraBusqueda(event)" width="100%"/>
+				<menuFlotante:OverLayerMenu id="btn0" tipoBoton="estrategicos" click="clickBotoneraBusqueda(event)" width="100%"/>
+				<menuFlotante:OverLayerMenu id="btn4" tipoBoton="region" click="clickBotoneraBusqueda(event)" width="100%"/>
+				<menuFlotante:OverLayerMenu id="btn5" tipoBoton="comprador" click="clickBotoneraBusqueda(event)" width="100%"/>
+				<menuFlotante:OverLayerMenu id="btn6" tipoBoton="pagador" click="clickBotoneraBusqueda(event)" width="100%"/>
+			</s:Group>
+		</s:VGroup>
+	</s:Group>
+</s:VGroup>

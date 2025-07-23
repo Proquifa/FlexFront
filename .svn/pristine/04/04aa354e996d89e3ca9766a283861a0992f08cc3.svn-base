@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:tabla="skins.botones.tabla.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  xmlns:grafica="skins.botones.grafica.*" 
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet1="skins.skin.datagrid.pqNet.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:cancelacion ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cancelacionCotizacion.*"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  creationComplete="init()" xmlns:label="skins.skin.label.*"
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			private var cont:Number=0;
+			
+			
+			private function init():void{
+				cont=0;
+				validarLlenarGrid();
+				GridCancelacion.addEventListener("RegresarVistaPrincipal",regresaVistaPrincipal,false,0,true);
+				GridCancelacion.addEventListener("VistaGrafica",cambiarGrafica,false,0,true);
+				GridCancelacion.addEventListener("exportarGrid",cambiarGrafica,false,0,true);
+				addEventListener(EventoTableroClientes.ENVIAR_ARREGLO_CANCELACION,setArregloCancelacion,false,0,true);
+				
+			}
+			
+			public function seleccionaTabla():void{			
+				this.stackGeneral.selectedChild = this.vistaTabla;
+				validarLlenarGrid();
+			}
+			public function seleccionarGrafica():void{
+				this.stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			[Bindable]	private var _listaSeguimientoCotizacionCancelacion:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listaResumenConsultaCancelaciones:ArrayCollection = new ArrayCollection();
+			[Bindable] 	private var _arrayMarcas:ArrayCollection = new ArrayCollection();
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);
+			}
+			
+			private function regresaVistaPrincipal(event:Event):void
+			{
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);
+			}
+			
+			private function cambiarGrafica(event:Event):void
+			{
+				stackGeneral.selectedChild = vistaGrafico
+			}
+			
+			public function set recibeSeguimientoCotizacionCancelacion($lista:ArrayCollection):void
+			{
+				if($lista == null ) 
+					return;
+				
+				_listaSeguimientoCotizacionCancelacion = $lista;
+				
+				
+				//btnExportar.enabled =  _listaSeguimientoCotizacionCancelacion.length < 1 ? false : true;
+			}
+			
+			private function iniciarGrafica():void{
+				var arrT:ArrayCollection = UtilsGrid.queryQuitarRepetidos( _listaSeguimientoCotizacionCancelacion, "razon" );
+				for( var g:int = 0; g < arrT.length; g++ ){
+					var arrGrp:ArrayCollection = UtilsGrid.queryCampoX(_listaSeguimientoCotizacionCancelacion, "razon", (arrT[g] as SeguimientoCotizacion).razon);
+					(arrT[g] as SeguimientoCotizacion).piezas = UtilsGrid.sumatoria( arrGrp, "piezas" );
+					(arrT[g] as SeguimientoCotizacion).montoPartida = UtilsGrid.sumatoria( arrGrp, "montoPartida" );
+				}
+				_arrayMarcas = arrT;
+			} 
+			private function gridItemClickEvent(event:ListEvent):void{
+				if (event.columnIndex == 1 
+					&& (event.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion != null
+					&& (event.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion != ""
+				){
+					var urlreq:URLRequest;
+					var ruta:String;
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.COTIZACIONES_RUTA + (event.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}	 
+			}
+			
+			private function aplicarFormato($cantidad:Number):String{
+				var _stringRegreso:String;
+				_stringRegreso = '$ ' +UtilsFormatosNumericos.precisionADosDecimalesConComas($cantidad);
+				_stringRegreso = _stringRegreso.split(',').join('\'');
+				return _stringRegreso; 
+			}
+			
+			public function set recibeLinealCancelacionCot( $lista:ArrayCollection ):void{
+				if( $lista == null )
+					return;
+				myChart.dataProvider = myChart.aplicarFormatoTableroClientesSinPedidos( UtilsGrid.queryCampoX( $lista, "etiqueta", "CANCELACIONES_0" ));
+			}
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				cont++;
+				
+				if (cont >1){
+					validarLlenarGrid();
+				}
+			}
+			
+			private var _keyAnterior:String = "";
+			
+			protected function validarLlenarGrid():void
+			{
+				if( stackGeneral.selectedChild == vistaTabla ){
+					if( _event != null)// && _event.keyConsulta != _keyAnterior ){
+					{
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.idButtons = [];
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("CONSULTA_GRID_CANCELACIONES_COT");
+						dispatchEvent(eventEspera);
+						
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_CANCELACIONES_COT);
+						evet.parametros = new ParametrosBusquedaCliente;
+						evet.parametros = _event.parametros;
+						dispatchEvent( evet );
+						
+						cont++;
+						_keyAnterior = _event.keyConsulta;
+					}
+				}
+			}
+			
+			private function compareFunctio_montoPartida(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoPartida, item2.montoPartida);
+			}
+			
+			private function compareFunction_fechaCancelacion(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fechaCancelacion , item2.fechaCancelacion);
+			}
+			
+			private function setArregloCancelacion(evt:EventoTableroClientes):void
+			{
+				GridCancelacion.enviaArregloCancelacion(evt.arregloCancelacion);
+			}
+			
+		]]>
+	</fx:Script>
+	<label:Titulo text="CANCELACIÓN EN COTIZACIÓN" fontSize="14" fontFamily="Helvetica" paddingLeft="20" paddingBottom="5" paddingTop="15"/>
+	<otros:divisionGruesa width="100%" />
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" change="validarLlenarGrid()">
+	
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<cancelacion:CancelacionCotizacionGrid  id="GridCancelacion" width="100%" height="100%" paddingTop="-5" arreglo="{_listaSeguimientoCotizacionCancelacion}" />
+		</s:NavigatorContent>
+		
+		  <!--    ESTA ES LA VISTA MAXIMIZADA CON GRAFICA   -->
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%" >
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20" paddingTop="-5">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" paddingTop="45" paddingBottom="20" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total"/>
+						</graficas:series>
+					</graficas:PieChartPqGris>
+					<s:Label width="100%" paddingBottom="10" paddingLeft="20" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" verticalAlign="middle" paddingBottom="15" paddingTop="5" paddingRight="20" paddingLeft="20">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()" />
+						<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+				<!--<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_CLIENTES_CANCELACION_COTIZACION}" />-->
+			</s:HGroup>  
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

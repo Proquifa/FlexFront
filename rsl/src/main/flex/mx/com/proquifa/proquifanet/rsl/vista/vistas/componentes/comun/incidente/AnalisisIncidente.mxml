@@ -1,0 +1,1355 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:controls="mx.com.adobe.flex.extras.controls.*"  creationComplete="creaCanal()"
+		 xmlns:incidente="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.*"  
+		 xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+		 width="100%" height="100%" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:acordeon="skins.skin.acordeon.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" >
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComboCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAdministrador;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAnalisisincidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Procedimiento;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.ValidadorDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.contacto.BusquedaContactos;
+			import mx.controls.Alert;
+			import mx.controls.Text;
+			import mx.events.CloseEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			import mx.validators.NumberValidator;
+			import mx.validators.StringValidator;
+			
+			public var vieneDe:String;
+			public var _incidente:Incidente;
+			public var _empleado:Empleado;
+			private var _idGestion:Number;
+			//private var _agregarProcedimientos:ProcedimientosSGCIncidente = null; 
+			private var _abrirPopUpReferencias:ReferenciasIncidente = null;
+			private var _popUpContactos:BusquedaContactos = null;
+			[Bindable]
+			private var _idIncidente:Number;
+			[Bindable]
+			private var _listaReferencias:ArrayCollection;
+			private var _seCargoCombpNavegacion:Boolean;
+			private var _contacto:ValidadorDataGrid = new ValidadorDataGrid();
+			private var _validaQue:StringValidator;
+			private var _validaDonde:StringValidator;
+			private var _validaCuando:StringValidator;
+			private var _validaComo:StringValidator;
+			private var _validarPorQue:StringValidator;
+			private var _validaPosbleSolucion:StringValidator;
+			private var _validaProcedimientos:StringValidator;
+			private var _validaClientes:NumberValidator;
+			private var _validaProveedores:NumberValidator;
+			private var _validaCatalgo:NumberValidator;
+			private var _validaProductoVieneDe:String;
+			private var _confirmaGuardado:Number;
+			private var _referenciasAnalisis:ArrayCollection = null;
+			private var _cargaGestion:Gestion = null;
+			private var _estadoDeLaVentana:String = "";
+			private var _cmbSeleccionador:seleccionador = null;
+			[Bindable]
+			private var _contactoSeleccionado:Contacto = new Contacto();
+			[Bindable]
+			private var _listaProcedimientos:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var _listaClientes:ArrayCollection = null;
+			[Bindable]
+			private var _listaProovedores:ArrayCollection = null;
+			[Bindable]
+			private var _listaOrigen:ArrayCollection = null;
+			[Bindable]
+			private var _listaProductos:ArrayCollection = null;
+			[Bindable]
+			private var _listaTipo:Array = [{id:0, tipo:"Operativo"},
+				{id:2, tipo:"Gestión"},
+				{id:3, tipo:"Herramienta"},
+				{id:4, tipo:"Criterio"},
+				{id:5, tipo:"Queja"}];
+			[Bindable]
+			private var _opcionCombo:Array = [{llave:0, valor:"--NINGUNO--"}];
+			[Bindable]
+			private var _gerentePiloto:Empleado;
+			
+			private var _procedimientosAsociados:String = "";
+			
+			private var productorRegistro:Producer = new Producer();
+			private var canalRegistro:AMFChannel;
+			private var canalesRegistro:ChannelSet;
+			
+			private function seleccionarDatoEnCombo():void{
+				 
+					/* if( this._empleadoLogueado.subproceso != null ){
+						this.cmbEmpleadosHabilitados.selectedIndex = Util.indiceSeleccionadoComoObjetoConString( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._empleadoLogueado.subproceso );
+						this._indiceSeleccionado = Util.indiceSeleccionadoComoObjetoConString( this.cmbEmpleadosHabilitados.dataProvider as ArrayCollection,  this._empleadoLogueado.subproceso );
+						this.btnEnviar.enabled = false; 
+					}else{
+						this.cmbEmpleadosHabilitados.selectedIndex = 0;
+						this._indiceSeleccionado = 0;
+					}
+				  */
+			}
+			private function creaCanal():void{
+				this.productorRegistro.destination = "actualizacionService";
+				this.productorRegistro.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalRegistro = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesRegistro = new ChannelSet();
+				this.canalesRegistro.addChannel(canalRegistro);
+				this.productorRegistro.channelSet = this.canalesRegistro;
+				
+				if( DatosGlobales.getInstance()._usuario.subproceso == null ){
+					this.lblPilotoArriba.visible = true;this.lblPilotoArriba.percentWidth = 37;lblPiloto1.visible = true;
+					this.cmbSubProcesoArriba.percentWidth = 63;
+					this.lblPilotoAbajo.visible = false;this.lblPilotoAbajo.width = 0; lblPiloto.width = 0;
+					this.cmbSubProcesoAbajo.visible = true;this.cmbSubProcesoAbajo.percentWidth = 100;cmbSubProceso.percentWidth = 100;
+				}
+			}
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de Analisis de incidente","Error");
+			}
+			/////////////////////////////////////////////////////////////////Inician funciones de inicio de Analisis/////////////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo que inicia el Compoenente. Se traen los Clietes en el Metodo cargarClientesAlCombo, los Proovedores en el Metodo cargarProveedoresAlCombo
+			 * y los subProcesos al Metodo cargarSubProcesosAlComboOrigen
+			 */ 
+			public function inicia():void{
+				iniciaValidadores();
+				this._idIncidente = this._incidente.idIncidente;
+				cargaCombosIniciales();
+				cargaDatosIncidente();
+				this._estadoDeLaVentana = "";
+				/* this._listaProductos = new ArrayCollection();
+				this._listaProductos.addItem( this._opcionCombo ); */
+				this.cmbProducto.textInput.text = "--NINGUNO--";
+			}
+			/**
+			 * Metodo que manda a llamar del mapa los clientes , proveedores y el origen
+			 */ 
+			private function cargaCombosIniciales():void{
+				var eventoC:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_CLIENTES_EN_ELCOMBO );
+				eventoC.valorAdicional = "--NINGUNO--";
+				dispatchEvent( eventoC );
+				var eventoP:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_PROVEEDORES_EN_ELCOMBO );
+				eventoP.valorAdicional = "--NINGUNO--";
+				dispatchEvent( eventoP );
+				var eventoO:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_ORIGEN_EN_ELCOMBO );
+				eventoP.valorAdicional = "--NINGUNO--";
+				dispatchEvent( eventoO );
+			}
+			/**
+			 * Metodo para cargar datos de la Gestion del Incidente que aplican para esta ventana
+			 */ 
+			private function cargaDatosIncidente():void{
+				this._listaReferencias = this._incidente.referencias;
+				this.lblIncidente.text = this._incidente.folio;
+				this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				this.lblGestion.text = this._empleado.usuario;
+				this.lblPiloto.text = this._empleado.nombre;
+				this.lblPiloto1.text = this._empleado.nombre;
+				//evento que manda a llamar la Gestion por el id del Incidente y los entrega a traves del mapa en la funcion cargaDatos()
+				llamaGestion();
+			}	
+			/**
+			 * Metodo que manda a llamar los datos de la Gestion.
+			 */ 
+			private function llamaGestion():void{
+				cargarComboNavegacion();
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_GESTION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento ); 
+			}
+			/**
+			 * Metodo que inicia el Modo de Lectura para la consulta desde el Combo de Navegacion
+			 */ 
+			public function iniciaModoLectura( datos:Object ):void{
+				if( this._incidente == null){
+					this._incidente = new Incidente();
+				}
+				this.lblGestion.text = datos.empleadoLogueado.usuario;
+				this.lblPiloto.text = datos.empleadoLogueado.nombre;
+				this.lblPiloto1.text = datos.empleadoLogueado.nombre;
+				this.lblFecha.text = datos.fechaIncidente;
+				this.lblIncidente.text = datos.folioIncidente;
+				this._empleado = datos.empleadoLogueado;
+				this._incidente.idIncidente = datos.idIncidente;
+				this._idIncidente = datos.idIncidente;
+				cargaCombosIniciales();
+				llamaGestion();
+				deshabilitaComponentes();
+				this.hbxBotonesNormales.height = 0;
+				this.hbxBotonesNavegacion.height = 23;
+				this._estadoDeLaVentana = "soloLectura";
+				this.estadoVentana.text = "soloLectura";
+			}
+			/**
+			 * Metodo que decide si ya existen datos guardados para el Analisis, ya sean Parciales o Totales.
+			 * Si son Totales se decide con la variable aceptado. y solo se puede leer la información. 
+			 */ 
+			public function set cargaDatos(datos:Gestion):void{
+				if( datos == null ){
+					return;
+				}
+				this._cargaGestion = new Gestion();
+				this._cargaGestion = datos;
+				this._procedimientosAsociados = "";
+				this._procedimientosAsociados = datos.procedimientosAsociados;
+				actualizaTimer();
+			}
+			//------------ Inicio. Actualiza (recarga) los datos cada 1000 milisegundos (1seg.) ---------- 
+			
+			private var timer:Timer = new Timer(1000, 1);   
+			
+			private function actualizaTimer():void {   
+				timer.addEventListener(TimerEvent.TIMER_COMPLETE, timerCompleteHandler);   
+				timer.start();   
+			}   
+			
+			//private function timerCompleteHandler(event:TimerEvent):void{   
+			private function timerCompleteHandler(event:TimerEvent):void{
+				//private function gestion():void{
+				//se repite cuando se carga la gestion  tanto en modificacion como en consulta
+				if ( this._estadoDeLaVentana != "enModificacion"){
+					this.chkCliente.selected = this._cargaGestion.impactoCliente;
+					this.chkProducto.selected = this._cargaGestion.impactoProducto;
+					this.chkSistema.selected = this._cargaGestion.impactoSistema;
+					this._idGestion = this._cargaGestion.idGestion;
+					this.txtProblema.text = this._cargaGestion.problema;
+					this.txtQue.text = this._cargaGestion.descripcion;	
+					this.txtQuien.text = this._cargaGestion.quien;
+					this.txtDonde.text = this._cargaGestion.lugar;
+					this.txtCuando.text = this._cargaGestion.cuando;		
+					this.txtComo.text = this._cargaGestion.como;
+					this.txtPorQue.text = this._cargaGestion.causa;
+					this.txtPosibleSolucion.text = this._cargaGestion.solucion;
+					this.cmbTipo.text = this._cargaGestion.tipo;	
+					this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( this._cargaGestion.fecha );			
+					this.txtProcedimientos.text = "";
+					this._contacto = new ValidadorDataGrid();
+					if( this._cargaGestion.cliente > 0 ){
+						this.cmbCliente.selectedIndex = Util.indiceSeleccionado( this.cmbCliente.dataProvider as ArrayCollection,  this._cargaGestion.cliente );
+					}
+					if( this._cargaGestion.proveedor > 0 ){
+						this.cmbProveedor.selectedIndex = Util.indiceSeleccionado( this.cmbProveedor.dataProvider as ArrayCollection,  this._cargaGestion.proveedor );
+						obtenProductosXIdProovedor();
+					}
+					if( this._cargaGestion.subProceso > 0 ){
+						this.cmbOrigen.selectedIndex = Util.indiceSeleccionado( this.cmbOrigen.dataProvider as ArrayCollection,  this._cargaGestion.subProceso );
+						cambiaPiloto();
+					}
+					if( DatosGlobales.getInstance()._usuario.subproceso == null ){
+						if( isNaN( this._cargaGestion.subProcesoIncidente ) ){
+							this.cmbSubProceso.selectedIndex = 0;
+						}else{
+							this.cmbSubProceso.selectedIndex = Util.indiceSeleccionadoComoObjetoEIdLlave( this.cmbSubProceso.dataProvider as ArrayCollection, this._cargaGestion.subProcesoIncidente);
+						}
+					}
+					if( this._cargaGestion.referencias != null ){
+						this._listaReferencias = this._cargaGestion.referencias;
+					}
+					if( this._cargaGestion.procedimientos != null && this._cargaGestion.procedimientos.length > 0 ){
+						this._listaProcedimientos = this._cargaGestion.procedimientos
+						designaProcedimientosPorBD();
+					}			
+					this._confirmaGuardado = this._cargaGestion.idGestion;
+					if( this._cargaGestion.analisis == true ){					
+						this._estadoDeLaVentana = "soloLectura";
+						this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY(this._cargaGestion.fecha );
+						this.lblGestion.text = this._cargaGestion.nombreEmpleado;
+						deshabilitaComponentes();
+					}else{
+						this._estadoDeLaVentana = "enModificacion";
+						this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+						if(validarInfo()){
+							this.btnDecision.enabled = true;
+						}else{
+							habilitaComponentes();
+							this.btnDecision.enabled = false;
+						}
+					}
+					if( this._seCargoCombpNavegacion == false){
+						cargarComboNavegacion();
+					}else{
+						this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._cargaGestion.referencias ) as ArrayCollection;;
+						this._listaReferencias = ObjectUtil.copy( this._cargaGestion.referencias ) as ArrayCollection;;
+					}
+				}
+			}
+			
+			//------------ Fin. Actualiza los datos cada 1000 milisegundos (1seg.) ---------- 
+			/**
+			 * Metodo para deshabilitar componentes y dejarlo como solo lectura
+			 */
+			private function deshabilitaComponentes():void{
+				this.chkCliente.enabled =false;
+				this.chkProducto.enabled = false;
+				this.chkSistema.enabled = false;
+				this.cmbTipo.enabled = false;
+				this.cmbOrigen.enabled = false;
+				this.cmbSubProceso.enabled = false;
+				this.btnProcedimientoRelacionado.enabled = false;
+				this.txtProcedimientos.editable = false;
+				this.cmbCliente.enabled = false;
+				this.cmbProveedor.enabled = false;
+				this.cmbProducto.enabled = false;
+				this.txtProblema.editable = false
+				this.txtQue.editable = false;
+				this.txtQuien.editable = false;
+				this.txtDonde.editable = false;
+				this.txtCuando.editable = false;
+				this.txtComo.editable = false;
+				this.txtPorQue.editable = false;
+				this.btnGuardar.enabled = false;				
+				this.btnDecision.enabled = true;
+				this.cmbProducto.enabled = false;
+			} 
+			/**
+			 * Metodo que habilita todos los Componentes
+			 */ 
+			private function habilitaComponentes():void{
+				this.chkCliente.enabled =true;
+				this.chkProducto.enabled = true;
+				this.chkSistema.enabled = true;
+				this.cmbTipo.enabled = true;
+				this.cmbOrigen.enabled = true;
+				this.cmbSubProceso.enabled = true;
+				this.btnProcedimientoRelacionado.enabled = true;
+				this.txtProcedimientos.editable = true;
+				this.cmbCliente.enabled = true;
+				this.cmbProveedor.enabled = true;
+				this.cmbProducto.enabled = true;
+				this.txtProblema.editable = true;
+				this.txtQue.editable = true;
+				this.txtQuien.editable = true;
+				this.txtDonde.editable = true;
+				this.txtCuando.editable = true;
+				this.txtComo.editable = true;
+				this.txtPorQue.editable = true;
+				this.btnGuardar.enabled = true;	
+				this.btnDecision.enabled = true;
+			} 
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._listaReferencias != null ){
+					if( this._cmbSeleccionador == null ){
+						this._cmbSeleccionador = new seleccionador();
+					}
+					this.parent.stage.addEventListener(  EventoAnalisisincidente.REGRESA_LISTA_REFERENCIAS, recibeListaDeReferencias );
+					if( this._listaReferencias.source.length > 0 ){
+						for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+							( this._listaReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+							( this._listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaReferencias.getItemAt( i ) as Referencia ).folio;
+						}
+						this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaReferencias ) as ArrayCollection;
+					}
+					this._cmbSeleccionador.fechaIncidnete = this.lblFecha.text;
+					this._cmbSeleccionador.empleadoLogueado = this._empleado;
+					this._cmbSeleccionador.idIncidente = this._idIncidente;
+					this._cmbSeleccionador.folioIncidente = this.lblIncidente.text;
+					this._cmbSeleccionador.vieneDe = "analisisIncidente";
+					this._cmbSeleccionador.origen =  "analisis";
+					this.contenedorCombo.addChild( this._cmbSeleccionador );
+					this._seCargoCombpNavegacion = true;
+				}else{
+					this._seCargoCombpNavegacion = false;
+				}
+			}
+			/**
+			 * Metodo que inicia los validadores
+			 */ 		 
+			private function iniciaValidadores():void{
+				_validaQue = new StringValidator();				
+				_validaQue.source = this.txtQue;
+				_validaQue.property = "text";
+				_validaQue.requiredFieldError = "Debe escribir una descripción.";
+				_validaDonde = new StringValidator();
+				_validaDonde.source = this.txtDonde;
+				_validaDonde.property = "text";
+				_validaDonde.requiredFieldError = "Debe escribir una descripción.";
+				_validaCuando = new StringValidator();
+				_validaCuando.source = this.txtCuando;
+				_validaCuando.property = "text";
+				_validaCuando.requiredFieldError = "Debe escribir una descripción.";
+				_validaComo = new StringValidator();
+				_validaComo.source = this.txtComo;
+				_validaComo.property = "text";
+				_validaComo.requiredFieldError = "Debe escribir una descripción.";
+				_validarPorQue = new StringValidator();
+				_validarPorQue.source = this.txtPorQue;
+				_validarPorQue.property = "text";
+				_validaQue.requiredFieldError = "Debe escribir una descripción.";
+				_validaPosbleSolucion = new StringValidator();
+				_validaPosbleSolucion.source = this.txtPosibleSolucion;
+				_validaPosbleSolucion.property = "text";
+				_validaPosbleSolucion.requiredFieldError = "Debe escribir una descripción.";	
+				_validaProcedimientos = new StringValidator();
+				_validaProcedimientos.source = this.txtProcedimientos;
+				_validaProcedimientos.property = "text";
+				_validaProcedimientos.requiredFieldError = "Debe seleccionar al menos un procedimiento";
+				_validaClientes = new NumberValidator();
+				_validaClientes.source = this.cmbCliente;
+				_validaClientes.property = "selectedIndex";
+				_validaClientes.minValue = 0;
+				_validaClientes.lowerThanMinError = "Debe seleccionar una opcion valida";
+				_validaProveedores = new NumberValidator();
+				_validaProveedores.source = this.cmbProveedor;
+				_validaProveedores.property = "selectedIndex";
+				_validaProveedores.minValue = 0;
+				_validaProveedores.lowerThanMinError = "Debe seleccionar una opcion valida";		
+				_validaCatalgo = new NumberValidator();
+				_validaCatalgo.source = this.cmbProducto;
+				_validaCatalgo.property = "selectedIndex";
+				_validaCatalgo.minValue = 0;
+				_validaCatalgo.lowerThanMinError = "Debe seleccionar una opcion valida";		
+			}
+			/**
+			 * Metodo que recibe los Clientes del Mapa
+			 */
+			public function set cargarClientesAlCombo(datos:ArrayCollection):void{
+				if( datos == null ){
+					return;
+				}
+				this._listaClientes = new ArrayCollection();
+				this._listaClientes = datos;
+				this.cmbCliente.selectedIndex = 0;
+				//this.invocaGestion();
+			}
+			/**
+			 * Metodo que recibe los Proovedores del Mapa 
+			 */ 
+			public function set cargarProveedoresAlCombo(datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}
+				this._listaProovedores = new ArrayCollection();
+				this._listaProovedores = datos;
+				this.cmbProveedor.selectedIndex = 0;
+				//this.invocaGestion();
+			}
+			
+			/* 
+			* Funci&oacute;n que valida que los dos combos esten requisitados.
+			*/
+			private function invocaGestion():void{
+				// valida que los dos combos esten requisitados
+				if( this._listaClientes != null  &&
+					this._listaClientes.length > 0 &&
+					this._listaProovedores != null &&
+					this._listaProovedores.length >0 ){
+					//this.gestion();
+				}
+			}
+			
+			/**
+			 * Metodo que recibe todos los SubProcesos para el combo Origen estos son cargados desde una variable.
+			 */ 
+			public function set cargarSubProcesosAlComboOrigen(datos:ArrayCollection):void{
+				if( datos==null ){
+					return;
+				}
+				this._listaOrigen = new ArrayCollection();
+				this._listaOrigen = datos;
+				cambiaPiloto();
+			}
+			/////////////////////////////////////////////////////////////////Terminan funciones de inicio de Analisis/////////////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo para Invocar el PopUp de Procedimientos
+			 */ 
+			private function agregarProcedimiento():void{
+				this.agregarAcordeon();
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGAR_PROCEMIENTOS_SGC );
+				evento.listaProcedimientos = ObjectUtil.copy(this._listaProcedimientos) as ArrayCollection;
+				dispatchEvent( evento );	
+				/*if( this._agregarProcedimientos == null ){
+				this._agregarProcedimientos = ProcedimientosSGCIncidente( PopUpManager.createPopUp( this, ProcedimientosSGCIncidente, true ) );						
+				}else{
+				PopUpManager.addPopUp(_agregarProcedimientos,this,true);					
+				}
+				this._agregarProcedimientos.addEventListener( EventoAnalisisincidente.REGRESA_LISTA_PROCEDIMIENTOS, recibeListaDeProcedimeintos );
+				this._agregarProcedimientos.addEventListener( EventoAnalisisincidente.CIERRA_POP_UP_PROCEDIMIENTOS, cierraPopUpProcedimientos );				
+				if( this._listaProcedimientos.source.length > 0 ){
+				_agregarProcedimientos._listaPreCargada = ObjectUtil.copy(this._listaProcedimientos) as ArrayCollection;
+				}
+				this._agregarProcedimientos.inicia();*/
+			}
+			
+			private function agregarAcordeon():void{
+				var acordeon:AcordeonProcedimientosSGCIncidente = new AcordeonProcedimientosSGCIncidente();
+				//acordeon.procedimientosSeleccionados = this._procedimientosAsociados;
+				acordeon = PopUpManager.createPopUp(this,AcordeonProcedimientosSGCIncidente,true) as AcordeonProcedimientosSGCIncidente;
+				acordeon.procedimientosSeleccionados = this._procedimientosAsociados;
+				acordeon.addEventListener(EventoAnalisisincidente.REGRESA_LISTA_PROCEDIMIENTOS,recibeListaDeProcedimeintos);
+			}
+			
+			/**
+			 * Metodo que recibe la ListaCargada  de Procedimientos del PopUp 
+			 */ 
+			private function recibeListaDeProcedimeintos(evento:EventoAnalisisincidente):void{
+				this._listaProcedimientos = ObjectUtil.copy(evento.listaProcedimientos) as ArrayCollection;
+				this._procedimientosAsociados = evento.procesosAsociados;
+				designaProcedimientos();
+			}
+			/**
+			 * Metodo para designar los procedimientos a el texto
+			 */
+			private function designaProcedimientos():void{
+				this.txtProcedimientos.text = "";
+				for( var i:int = 0; i < this._listaProcedimientos.length; i++ ){
+					if( this._listaProcedimientos[i].activaProcedimiento == true ){
+						this.txtProcedimientos.text = this.txtProcedimientos.text + this._listaProcedimientos[i].nombre + "\n";
+					}
+				}
+			}
+			/**
+			 * Metodo para designar los procedimientos a el texto desde la BD
+			 */
+			private function designaProcedimientosPorBD():void{
+				this.txtProcedimientos.text = "";
+				for( var i:int = 0; i < this._listaProcedimientos.source.length; i++ ){
+					this.txtProcedimientos.text = this.txtProcedimientos.text + this._listaProcedimientos[i].nombre + "\n";
+					this._listaProcedimientos[i].activaProcedimiento = true; 
+				}
+			}
+			/**
+			 * Metodo para Cerrar el PopUp de Procedimientos
+			 
+			 * 
+			 * 
+			/**
+			 * Metodo para abrir el popUp de Referencias
+			 */
+			private function abrirReferencias():void{
+				if( this._abrirPopUpReferencias == null ){
+					this._abrirPopUpReferencias = ReferenciasIncidente( PopUpManager.createPopUp(this, ReferenciasIncidente, true) );
+				}else{
+					PopUpManager.addPopUp( _abrirPopUpReferencias,this,true);
+				}
+				this._abrirPopUpReferencias.addEventListener( EventoAnalisisincidente.REGRESA_LISTA_REFERENCIAS, recibeListaDeReferencias );
+				this._abrirPopUpReferencias.addEventListener( EventoAnalisisincidente.CIERRA_POP_UP_REFERENCIAS, cierraPopUpReferencias );
+				if( this._listaReferencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+						( this._listaReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaReferencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._abrirPopUpReferencias.listaReferencias = ObjectUtil.copy( this._listaReferencias ) as ArrayCollection;
+				}
+				this._abrirPopUpReferencias.folioIncidente = this._incidente.folio;
+				this._abrirPopUpReferencias.vieneD = "analisisIncidente";
+				this._abrirPopUpReferencias.iniciaReferencias();
+			}
+			/**
+			 * Metodo que recibe las Lsita de la Referencias del PopUp. Las referencias Precargadoas no podran ser eliminadas
+			 */ 
+			private function recibeListaDeReferencias(evento:EventoAnalisisincidente):void{
+				this._listaReferencias = evento.listaReferencias;
+				//if( this._listaReferencias.source.length > 0 ){
+				for( var i:int=0 ; i < this._listaReferencias.source.length ; i++ ){
+					( this._listaReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+					( this._listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaReferencias.getItemAt( i ) as Referencia ).folio;
+				}
+				if(this._cmbSeleccionador != null ){
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaReferencias ) as ArrayCollection;
+				}
+				//}					
+			}
+			/**
+			 * Metodo que cierra el PopUp Referencias
+			 */
+			private function cierraPopUpReferencias( evento:EventoAnalisisincidente):void{
+				this._abrirPopUpReferencias.removeEventListener( EventoAnalisisincidente.REGRESA_LISTA_REFERENCIAS, recibeListaDeReferencias );
+				this._abrirPopUpReferencias.removeEventListener( EventoAnalisisincidente.CIERRA_POP_UP_REFERENCIAS, cierraPopUpReferencias );
+				PopUpManager.removePopUp( this._abrirPopUpReferencias );
+			}
+			/**
+			 * Metodo para abrir el PopUp de Contactos
+			 */
+			private function abrePopUpContactos():void{
+				if(this._popUpContactos == null ){
+					this._popUpContactos = BusquedaContactos( PopUpManager.createPopUp(this, BusquedaContactos, true) );
+				}else{
+					PopUpManager.addPopUp( _popUpContactos,this,true);
+				}
+				this._popUpContactos._vieneD = "analisisIncidente";
+				this._popUpContactos.contactoNuevoVisible();
+				this._popUpContactos.addEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS, cierraPopUpContactos );
+				this._popUpContactos.addEventListener( EventoGenerico.REGRESA_CONTACTO_POP_UP_CONTACTOS, recibeContactoDePopUpContacto );
+			} 
+			/**
+			 * Metodo que recibe los datos del PopUp de Contactos
+			 */ 
+			private function recibeContactoDePopUpContacto(evento:EventoGenerico):void{
+				if( this._contacto == null){
+					this._contacto = new ValidadorDataGrid();
+				}
+				this._contacto = evento.contacto;
+			}
+			/**
+			 * Metodo que cierra el PopUp de Contactos
+			 */	
+			private function cierraPopUpContactos(evento:EventoGenerico):void{
+				this._popUpContactos.removeEventListener( EventoGenerico.CERRAR_POP_UP_CONTACTOS, cierraPopUpContactos );
+				this._popUpContactos.removeEventListener( EventoGenerico.REGRESA_CONTACTO_POP_UP_CONTACTOS, recibeContactoDePopUpContacto );
+				PopUpManager.removePopUp( this._popUpContactos );
+			}		  
+			/**
+			 * Metodo para obtener Los Catalogos de los Productos de un Proveedor. El mapa los depositara en el metodo recibeProductos()
+			 */ 
+			private function obtenProductosXIdProovedor():void{
+				if( this.cmbProveedor.selectedItem == null ){
+					return;					
+				}
+				if(this.cmbProveedor.selectedIndex == -1){
+					return;
+				}
+				if(this.cmbProveedor.selectedIndex == 0){
+					this.cmbProducto.enabled = false;
+					this.cmbProducto.selectedIndex = 0;
+				}else{
+					var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_CATALOGO_POR_ID_EMPRESA );
+					evento.idProveedor = this.cmbProveedor.selectedItem.llave;
+					evento.valorAdicional = "--NINGUNO--";
+					dispatchEvent( evento );
+				}
+			}
+			/**
+			 * Metodo que recibe los Productos del Mapa
+			 */ 
+			public function set recibeProductos(datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}
+				this._listaProductos = new ArrayCollection();
+				this._listaProductos = datos;
+				this.cmbProducto.selectedIndex = 0;
+				if( this._cargaGestion == null){
+					return;
+				}
+				if( this._cargaGestion.producto.toString() == "NaN" ){
+					return;
+				}else{
+					this.cmbProducto.selectedIndex = Util.indiceSeleccionado( this.cmbProducto.dataProvider as ArrayCollection, this._cargaGestion.producto );
+				}
+			}
+			/**
+			 * Metodo para obtener al gerente Piloto segun el subProceso seleccionado (Combo Origen) el dato se recibe en la funcion recibeGerentePiloto()
+			 */
+			private function cambiaPiloto():void{
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.OBTENER_GERENTE_PILOTO );
+				if(this.cmbOrigen.selectedItem == null){
+					evento.IdSubproceso = (this._listaOrigen.getItemAt( 0 ) as CatalogoItem).llave;
+				}else{
+					evento.IdSubproceso = this.cmbOrigen.selectedItem.llave;
+				}
+				dispatchEvent( evento );
+			} 
+			/**
+			 * Metodo Publico que recibe del Mapa el gerente Piloto
+			 */ 
+			public function set recibeGerentePiloto( empledo:Empleado ):void{
+				if( empledo == null){
+					return;
+				}
+				this._gerentePiloto = empledo;
+				this.lblPiloto.text = this._gerentePiloto.usuario;
+				this.lblPiloto1.text = this._gerentePiloto.usuario;
+			}
+			/**
+			 * Metodo para habilitar el Boton Decision y guardar los Datos Parciales llenados hasta el momento
+			 */
+			private function guardaCambios():void{
+				if( validarInfo() ){
+					this.btnDecision.enabled = true;
+				}else{
+					this.btnDecision.enabled = false;
+				}
+				guardaAnalisis();
+			}
+			/**
+			 * Metodo para validar los campos obligatorios
+			 */
+			private function validarInfo():Boolean{
+				var valida:Boolean = false;
+				
+				if( validaChecks() ){
+					if( validaDatosGenerales() ){						
+						if( validaDescripcion() ){
+							if( validaComboTipo() ){
+								valida = true;
+							}else{
+								valida = false;
+								Alert.show("Al seleccionar la opcion 'Queja' en el combo Tipo, se debe indicar un Cliente y un Contacto","¡Atención!");
+							}
+						}else{
+							//Alert.show("Se necesitan llenar todos los campos en la Descripción","Atención");
+						} 
+					}else{
+						//Alert.show("Se necesitan llenar los campos obligatorios en Datos Generales","Atención");
+					}
+					
+				}else{
+					//Alert.show("Necesitas al menos una opción seleccionada en Impacto","Atención");
+				}
+				
+				if( DatosGlobales.getInstance()._usuario.subproceso== null && this.cmbSubProceso.selectedIndex == 0 ){
+					valida = false;
+				}
+				return valida;				
+			} 
+			/**
+			 * Metodo para validar la seccion de Datos Generales
+			 */ 
+			private function validaDatosGenerales():Boolean{
+				var validacionCompleta:Boolean = false;
+				var comboCliente:ValidationResultEvent = this._validaClientes.validate();
+				var comboProveedor:ValidationResultEvent = this._validaProveedores.validate();
+				var comboProducto:ValidationResultEvent = this._validaCatalgo.validate();
+				
+				if(this._procedimientosAsociados == "falso"){
+					if ( comboCliente.type == ValidationResultEvent.VALID && comboProveedor.type == ValidationResultEvent.VALID){
+						validacionCompleta = true;
+					}
+				}
+				else{
+					var textoProcedimientos:ValidationResultEvent = this._validaProcedimientos.validate();
+					if ( comboCliente.type == ValidationResultEvent.VALID && comboProveedor.type == ValidationResultEvent.VALID && textoProcedimientos.type == ValidationResultEvent.VALID ){
+						validacionCompleta = true;
+						
+					}
+					else{
+						return false;
+					}
+				}
+				if( this.cmbProveedor.selectedIndex > 0 ){
+					if ( comboProducto.type == ValidationResultEvent.VALID ){
+						validacionCompleta = true;
+					}else{
+						validacionCompleta = false;
+					}
+				}
+				if(this.cmbProveedor.textInput.text == "" || this.cmbCliente.textInput.text == "" ){
+					validacionCompleta = false;
+				}
+				return validacionCompleta;
+			}
+			/**
+			 * Metodo para validar la seccion de Descripcion
+			 */ 
+			private function validaDescripcion():Boolean{
+				if(this.txtProblema.text == ""){
+					validacionCompleta = false;
+					return validacionCompleta;
+				}
+				var validacionCompleta:Boolean = false;
+				var textoQue:ValidationResultEvent = this._validaQue.validate();
+				var textoDonde:ValidationResultEvent = this._validaDonde.validate();
+				var textoCuando:ValidationResultEvent = this._validaCuando.validate();
+				var textoComo:ValidationResultEvent = this._validaComo.validate();
+				var textoPorQue:ValidationResultEvent  = this._validarPorQue.validate();
+				var textoPosibleSolucion:ValidationResultEvent = this._validaPosbleSolucion.validate();		 		
+				if ( textoQue.type == ValidationResultEvent.VALID && textoDonde.type == ValidationResultEvent.VALID && textoCuando.type == ValidationResultEvent.VALID 
+					&& textoComo.type == ValidationResultEvent.VALID && textoPorQue.type == ValidationResultEvent.VALID && textoPosibleSolucion.type == ValidationResultEvent.VALID )
+				{
+					return validacionCompleta = true;
+				}
+				
+				return validacionCompleta;
+			}
+			/**
+			 * Metodo para validar los checks al menos uno debe estar seleccionado
+			 */
+			private function validaChecks():Boolean{
+				var valida:Boolean = true;
+				if(this.chkCliente.selected == false){
+					if(this.chkProducto.selected == false){
+						if(this.chkSistema.selected == false){
+							valida = false;
+							return valida;
+						}
+					}
+				} 
+				return valida;
+			} 
+			/**
+			 * Metodo para validar el funcionamiento del ComoTipo (cmbTipo)
+			 */
+			private function validaComboTipo():Boolean{
+				var valida:Boolean = false;
+				if( this.cmbTipo.selectedLabel == "Queja" ){
+					if(this.cmbCliente.selectedIndex > 0){
+						if( this._contacto == null || this._contacto.columnaDosTexto == null  || this._contacto.columnaUnoTexto == null ){
+							return valida = false;
+						}
+						if( this._contacto.columnaDosTexto != "" && this._contacto.columnaUnoTexto != "" ){
+							valida = true;
+						}
+					}
+				}else{
+					valida = true;
+				}
+				return valida;
+			} 
+			/**
+			 * Metodo para habilitar el boton para Contactos
+			 */ 
+			private function habilitaContactos():void{
+				if(this.cmbTipo.selectedLabel == "Queja"){
+					this.btnContacto.enabled = true;
+				}else{
+					this.btnContacto.enabled = false;
+				}
+			} 
+			/**
+			 * Metodo que verifica el Catalogo seleccionado pertenezca a la lista
+			 */ 
+			private function CatalogoSeleccionado():void{
+				/* if( this.cmbProducto.selectedIndex == -1 ){
+				Alert.show( "El catálogo registrado para identificar al producto no existe", "Atención");
+				} */
+			}
+			/**
+			 * Metodo que verifica el tipo de Guardado que se realizara
+			 */ 
+			private function seleccionaAccion(vieneDe:String):void{
+				this._validaProductoVieneDe = vieneDe;	
+				if( this._confirmaGuardado.toString() != "NaN" ){					
+					if( this._confirmaGuardado != 0 ){
+						if( this._validaProductoVieneDe == "guardado"){
+							actualizaAnalisis();							
+						}else if( this._validaProductoVieneDe == "regresaListado" ){
+							actualizaAnalisis()		
+						}else if( this._validaProductoVieneDe == "avanzaADecision" ){
+							if( validarInfo() ){
+								actualizaAnalisis();		
+							} 
+						}
+						return;
+					}		
+				}
+				if( this._validaProductoVieneDe == "guardado"){
+					guardaCambios();
+				}else if( this._validaProductoVieneDe == "regresaListado" ){
+					//falta aplicar reset (lasventanas se reusan) y los datos no coinciden unos con otros.
+					guardaAnalisis();						
+				}else if( this._validaProductoVieneDe == "avanzaADecision" ){
+					if( validarInfo() ){
+						guardaAnalisis(); 
+					} 
+				}
+			}
+			/**
+			 * Metodo que Aplica para el Guardado Parcial o Total. Los datos se envian al mapa y regresa la respuesta en el metodo recibeConfirmacion();
+			 */ 
+			private function guardaAnalisis():void{
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.GUARDA_ANALISIS_INCIDENTE );
+				evento.gestion = new Gestion();
+				evento.gestion = obtenDatosGestion();	
+				dispatchEvent( evento );
+				var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.INICIA_ESPERA );
+				dispatchEvent( eventoAnimacion );
+			}
+			/**
+			 * Metodo que Aplica para Actualizar el Analisis Parcial o Total. Los datos se envian al mapa y regresa la respuesta en el metodo confirmaActualizacion();
+			 */ 
+			private function actualizaAnalisis():void{
+				if( validarInfo() ){
+					this.btnDecision.enabled = true;
+				}
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.ACTUALIZA_ANALISIS_INCIDENTE );
+				var gestion:Gestion = new Gestion();
+				gestion = obtenDatosGestion();
+				evento.nueva = gestion;				 
+				dispatchEvent(evento)
+				var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.INICIA_ESPERA );
+				dispatchEvent( eventoAnimacion );
+			}
+			/**
+			 * Metodo que regresa la Gestion con los datos Para Guardar
+			 **/
+			private function obtenDatosGestion():Gestion{
+				var gestion:Gestion = new Gestion();
+				gestion.empleado = this._empleado.clave; 
+				gestion.incidente = this._incidente.idIncidente;	
+				gestion.fecha = this._incidente.fecha; 				 
+				gestion.impactoCliente = this.chkCliente.selected;
+				gestion.impactoProducto = this.chkProducto.selected;
+				gestion.impactoSistema = this.chkSistema.selected;
+				gestion.tipo = this.cmbTipo.text;
+				gestion.subProceso = this.cmbOrigen.selectedItem.llave;
+				gestion.origen = this.cmbOrigen.selectedLabel;
+				if(this._procedimientosAsociados == ""){
+					gestion.procedimientosAsociados = "nulo";
+				}
+				else{
+					gestion.procedimientosAsociados = this._procedimientosAsociados;
+				}
+				
+				var empleado:Empleado = DatosGlobales.getInstance()._usuario;
+				if( DatosGlobales.getInstance()._usuario.subproceso == null){
+					
+					gestion.subProcesoIncidente = cmbSubProceso.selectedItem.llave;
+				}else{
+					gestion.subProcesoIncidente = _incidente.idSubprocesoRelacionado;
+				}
+				if( this.cmbCliente.selectedItem.llave == 0){
+					gestion.cliente = 0;
+				}else{
+					gestion.cliente = this.cmbCliente.selectedItem.llave;
+				}
+				if( this.cmbProveedor.selectedItem.llave == 0){
+					gestion.proveedor = 0;
+				}else{
+					gestion.proveedor = this.cmbProveedor.selectedItem.llave;
+				}
+				if( this.cmbProducto.selectedItem == null){
+					gestion.producto = 0;
+				}else{
+					gestion.producto = this.cmbProducto.selectedItem.llave;
+				}
+				if( cmbTipo.text == "Queja" ){
+					if( this._contacto != null ){
+						this._contactoSeleccionado = new Contacto();
+						if( this._contacto.columnaCinco.toString() != "NaN" && this._contacto.columnaCinco > 0 ){
+							gestion.contacto = this._contacto.columnaCinco;
+						}else if ( this._contacto.columnaDosTexto != null && this._contacto.columnaDosTexto != "" ){
+							gestion.contacto = 0;
+							gestion.nombreContacto = this._contacto.columnaUnoTexto;
+							gestion.correoContacto = this._contacto.columnaDosTexto;
+						}else if( this._cargaGestion.contacto.toString() != "NaN" && this._cargaGestion.contacto > 0 ){
+							gestion.contacto = this._cargaGestion.contacto
+						}else if( this._cargaGestion.correoContacto != ""){
+							gestion.nombreContacto = this._cargaGestion.nombreContacto;
+							gestion.correoContacto = this._cargaGestion.correoContacto;
+						}else if( this._cargaGestion.contacto.toString() != "NaN" && this._cargaGestion.contacto > 0 ){
+							gestion.contacto = this._cargaGestion.contacto;
+						}
+					}
+				}
+				if( gestion.contacto.toString() == "NaN"){
+					gestion.contacto = 0;
+				}
+				gestion.problema = this.txtProblema.text;
+				gestion.descripcion = this.txtQue.text;
+				gestion.quien = this.txtQuien.text;
+				gestion.lugar = this.txtDonde.text;
+				gestion.cuando = this.txtCuando.text;
+				gestion.como = this.txtComo.text;
+				gestion.causa = this.txtPorQue.text;
+				gestion.solucion = this.txtPosibleSolucion.text;
+				gestion.referencias = obtenREferenciasDelAnalisis();
+				gestion.procedimientos = this._listaProcedimientos;	
+				gestion.aceptadoString = "nulo";	
+				gestion.enviarCorreo = "";
+				if( this._validaProductoVieneDe == "avanzaADecision" ){
+					gestion.analisis = true;				 		
+				}
+				if( this._confirmaGuardado.toString() == "NaN"){
+					this._confirmaGuardado = 0;
+				}
+				if( this._confirmaGuardado > 0 ){
+					gestion.idGestion = this._confirmaGuardado;
+				}				 	
+				this._cargaGestion = gestion;
+				if( this._confirmaGuardado.toString() != "NaN" && this._confirmaGuardado > 0){
+					this._cargaGestion.idGestion = this._confirmaGuardado;
+				}					
+				return gestion;
+			}
+			/**
+			 * Metodo que Confirma el Incidente Guardado recibe este dato del Mapa
+			 */
+			public function set recibeConfirmacion(dato:Number):void{				
+				if( isNaN( dato ) ){	//isNaN( dato )
+					return;
+				}else{
+					if( this.estadoVentana.text == "soloLectura" ){
+						var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.TERMINA_ESPERA );
+						dispatchEvent( eventoAnimacion );
+						return;
+					}
+					this._confirmaGuardado = dato;
+					Alert.show("Se ha registrado correctamente el incidente con folio: " + this.lblIncidente.text,"Operación exitosa");
+					if( validarInfo() ){
+						deshabilitaComponentes();		
+						/**
+						 * Se dispara evento para actualizar las referencias del combo y de la gestion.
+						 */ 
+						var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_GESTION );
+						evento.idIncidente = this._incidente.idIncidente;
+						dispatchEvent( evento ); 
+					}
+				}
+				if( this._validaProductoVieneDe == "regresaListado"){
+					regresaAListadoIncidentes();
+				}else if( this._validaProductoVieneDe == "avanzaADecision"){
+					avanzaADecision();
+				}
+				var eventoAnimacion2:EventoEsperar = new EventoEsperar( EventoEsperar.TERMINA_ESPERA );
+				dispatchEvent( eventoAnimacion2 );
+			} 
+			/**
+			 * Metodo que recibe la confirmacion del ActualizaAnalisis recibe este dato del Mapa
+			 */
+			public function set confirmaActualizacion( dato:Boolean ):void{				
+				if( dato == false  ){
+					return;
+				}
+				if( this.estadoVentana.text == "soloLectura" ){
+					return;
+				}
+				if( validarInfo() ){
+					deshabilitaComponentes();
+				}
+				var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.TERMINA_ESPERA );
+				dispatchEvent( eventoAnimacion );
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorRegistro.send(mensaje);
+				if( this._validaProductoVieneDe == "regresaListado"){
+					regresaAListadoIncidentes();
+					return;
+				}else if( this._validaProductoVieneDe == "avanzaADecision"){
+					avanzaADecision();
+					return;
+				}
+				Alert.show("El incidente con folio: " + this.lblIncidente.text +" fue actualizado correctamente","Operación exitosa");
+				/**
+				 * Se dispara evento para actualizar las referencias del combo y de la gestion.
+				 */ 
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_GESTION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento ); 
+			} 
+			
+			private function obtenREferenciasDelAnalisis():ArrayCollection{
+				this._referenciasAnalisis = new ArrayCollection();
+				if(this._listaReferencias == null){
+					if(this._referenciasAnalisis == null){
+						this._referenciasAnalisis = new ArrayCollection();
+					}
+					return this._referenciasAnalisis;
+				}
+				if (this._listaReferencias.source.length > 0 ){
+					for( var i:int = 0; i < this._listaReferencias.source.length ; i++){
+						if( (this._listaReferencias.getItemAt( i ) as Referencia).origen == "Gestion" ){							
+							(this._listaReferencias.getItemAt( i ) as Referencia).idIncidente = this._incidente.idIncidente;
+							this._referenciasAnalisis.addItem( this._listaReferencias.getItemAt( i ) as Referencia );
+						}
+					}
+				}
+				return this._referenciasAnalisis;				
+			}
+			/*/**
+			* Metodo que obtiene la lista de los Procedimientos para Guardar
+			*/ 
+			/*private function obtenerProcedimientosSelecionados():ArrayCollection{
+			var listaFinalDeProcedimientos:ArrayCollection = new ArrayCollection;
+			if( this._listaProcedimientos == null ){
+			return listaFinalDeProcedimientos;
+			}else{
+			if( this._listaProcedimientos.source.length > 0 ){
+			for(var i:int = 0; i <  this._listaProcedimientos.source .length ; i++ ){
+			if( (this._listaProcedimientos.getItemAt( i ) as Procedimiento).activaProcedimiento == true){
+			listaFinalDeProcedimientos.addItem( this._listaProcedimientos.getItemAt( i ) );
+			}
+			}
+			}
+			}
+			return listaFinalDeProcedimientos;
+			}*/
+			private function warningGuardar():void{
+				if( this._estadoDeLaVentana == "soloLectura") {
+					avanzaADecision();
+					return;	
+				}
+				Alert.buttonWidth = 150;
+				Alert.yesLabel = "Si";
+				Alert.noLabel = "NO";
+				Alert.show("Una vez confirmado su 'ANÁLISIS' no podrá modificarlo posteriormente, ¿Desea continuar?", "¡Atención!", Alert.NO|Alert.YES, this, method2 );
+			}
+			public function method2(event:CloseEvent):void{
+				if(event.detail == Alert.YES){
+					seleccionaAccion('avanzaADecision');
+				}else{
+					return;
+				}
+			}
+			private function warningSalir():void{   	
+				if( this._estadoDeLaVentana == "soloLectura") {
+					reset();
+					regresaAListadoIncidentes();
+					return;	
+				}			
+				Alert.buttonWidth = 150;
+				Alert.yesLabel = "Si";
+				Alert.noLabel = "NO";
+				Alert.show("Está por abandonar la VISTA INCIDENTE GESTIÓN, ¿desea guardar los cambios antes de salir?", "¡Atención!", Alert.NO|Alert.YES, this, method1 );
+			}
+			public function method1(event:CloseEvent):void{
+				if( this._estadoDeLaVentana == "soloLectura") {
+					reset();
+					avanzaADecision();
+					return;	
+				}	
+				if(event.detail == Alert.YES){
+					seleccionaAccion('regresaListado');
+				}else{
+					regresaAListadoIncidentes();
+				}
+			}
+			//////////////////////////////////////////////////////////// funciones para Salir //////////////////////////////////////////////////////////////////////
+			/**
+			 * Metodo para aplicar el Reset
+			 */ 
+			private function reset():void{
+				this._incidente = new Incidente();
+				this.chkCliente.selected = false;
+				this.chkProducto.selected = false;
+				this.chkSistema.selected = false;
+				this.cmbTipo.selectedIndex = 0;
+				this.cmbOrigen.selectedIndex = 0;
+				this.cmbSubProceso.selectedIndex = 0;
+				this.txtProcedimientos.text = "";
+				this._listaProcedimientos = new ArrayCollection();
+				this._procedimientosAsociados = "";
+				this._listaReferencias = new ArrayCollection();
+				this.cmbCliente.selectedIndex = 0;
+				this.cmbProveedor.selectedIndex = 0;
+				this.cmbProducto.selectedIndex = 0;
+				this.txtProblema.text = "";
+				this.txtQue.text = "";
+				this.txtQuien.text = "";
+				this.txtDonde.text = "";
+				this.txtCuando.text = "";
+				this.txtComo.text = "";
+				this.txtPorQue.text = "";
+				this.txtPosibleSolucion.text = "";
+				this._cargaGestion = new Gestion();
+				this._idGestion = NaN;
+				this.confirmaActualizacion = 0;
+				this._confirmaGuardado = 0;
+				this.habilitaComponentes();
+				this.btnDecision.enabled = false;
+				this._contacto = null;	
+				if(this._cmbSeleccionador != null ){
+					this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+				}
+				if( this._listaProductos != null ){
+					this._listaProductos.removeAll();
+				}
+				/* if( this._listaClientes != null ){
+				this._listaClientes.removeAll();
+				this._listaClientes = null;
+				}
+				if( this._listaProovedores != null ){
+				this._listaProovedores.removeAll();
+				this._listaProovedores = null;
+				} */
+			}
+			/**
+			 * Metodo que nos regresa a la Ventana Listado de incidentes donde se encuentra la lista de Incidentes a Gestionar
+			 */ 
+			private function regresaAListadoIncidentes():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.REGRESA_A_LISTADO_INCIDENTES );
+				dispatchEvent( evento );
+				reset();
+				evento = new EventoGestionIncidente( EventoGestionIncidente.RESET );
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que nos permite avanzar a la Ventana de Decision del Incidente
+			 */ 
+			private function avanzaADecision():void{
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.AVANZA_A_DECISION_INCIDENTE );
+				if( this._confirmaGuardado.toString() != "NaN"  && this._confirmaGuardado > 0 ){
+					if( this._cargaGestion.idGestion.toString() == "NaN" || this._cargaGestion.idGestion == 0 ){
+						this._cargaGestion.idGestion = this._confirmaGuardado
+					}
+				}
+				//this._cargaGestion.referencias = this._listaReferencias;
+				evento.gestion = this._cargaGestion;
+				evento.incidente = this._incidente;
+				evento.empleado = this._empleado;
+				dispatchEvent( evento );
+				reset();
+			}
+			/**
+			 * Metodo que permitira regresar  a la ventana donde nos encontrabamos.  
+			 */ 
+			private function regresarAIndexOriginal():void{
+				reset();
+				habilitaComponentes();
+				var evento:EventoAdministrador = new EventoAdministrador( EventoAdministrador.REGRESA_ORIGEN );
+				dispatchEvent( evento );
+			}
+		]]>
+	</mx:Script>
+	
+	<mx:HBox width="100%" >
+		<!--<mx:Label fontSize="40" fontWeight="bold" text="Análisis"/>-->
+		<label:labelTitulo_Otros text="Análisis"/>
+		<mx:Spacer width="100%"/>
+		<mx:Label fontSize="40"  color="red" id="lblIncidente" visible="false"/> 
+		<mx:Label id="estadoVentana" visible="false"/>
+		<mx:HBox id="contenedorCombo"/>
+	</mx:HBox>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<!--<mx:Label fontSize="24" fontWeight="bold" text="Datos generales" width="100%"/>-->
+	<label:labelSubtitulo text="Datos generales" width="100%"/>
+	
+	<mx:HBox width="100%">
+		<mx:VBox width="22%">
+			<mx:Form width="100%">
+				<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Fecha: " >
+					<mx:Label id="lblFecha" fontWeight="normal"/>
+				</mx:FormItem> 
+				<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Gestión: ">
+					<mx:Label id="lblGestion" fontWeight="normal"/>
+				</mx:FormItem>
+				<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Impacto:  *"> 
+					<mx:HBox width="100%">
+						<s:CheckBox fontWeight="bold" fontSize="13" label="Cliente" id="chkCliente"/>
+						<mx:Spacer width="5%"/>
+						<s:CheckBox fontWeight="bold" fontSize="13" label="Producto" id="chkProducto"/>
+						<mx:Spacer width="5%"/>
+						<s:CheckBox fontWeight="bold" fontSize="13" label="Sistema" id="chkSistema"/>
+					</mx:HBox>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:VBox>
+		<mx:VBox width="25%">
+			<mx:Form width="100%">
+				<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Tipo: *">
+					<mx:HBox width="100%">
+						<mx:ComboBox id="cmbTipo" width="100%" dataProvider="{this._listaTipo}" labelField="tipo" change="habilitaContactos()"/>
+						<!--<mx:Button label="C" id="btnContacto" click="abrePopUpContactos()" enabled="false"/>-->
+						<s:Button styleName="botonNegroOld" label="C" id="btnContacto" click="abrePopUpContactos()" enabled="false"/>
+					</mx:HBox>
+				</mx:FormItem>
+				<s:HGroup width="100%">
+					<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Origen:  *" id="cmbSubProcesoArriba">
+						<mx:ComboBox width="100%" id="cmbOrigen" dataProvider="{this._listaOrigen}" labelField="valor" change="cambiaPiloto()"/>
+					</mx:FormItem>					
+				  <mx:FormItem  fontWeight="bold" fontSize="13" label="Piloto: " id="lblPilotoArriba" width="0" visible="false">
+					  <mx:Label id="lblPiloto1" width="100%" fontWeight="normal"/>
+				  </mx:FormItem>
+				</s:HGroup>
+				<s:HGroup width="100%">
+					<mx:FormItem fontWeight="bold" fontSize="13" label="SubProceso: *"  id="cmbSubProcesoAbajo" width="0" visible="false">
+						<comboPqNet:ComboCatalogos id="cmbSubProceso" creationComplete="cmbSubProceso.cargarSubProcesos('--NINGUNO--')" />
+					</mx:FormItem>
+					<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Piloto: " id="lblPilotoAbajo">
+						<mx:Label id="lblPiloto" width="100%" fontWeight="normal" />
+					</mx:FormItem>
+				</s:HGroup>
+			</mx:Form>
+		</mx:VBox>
+		<mx:VBox width="25%" height="100%">			
+			<mx:Form width="100%"  height="100%" >
+				<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Procedimiento relacionado: *">
+					<mx:HBox width="100%">
+						<mx:Spacer width="100%"/>
+						<!--<mx:Button id="btnProcedimientoRelacionado" fontSize="13" fontWeight="bold" label="+" click="agregarProcedimiento()"/>-->
+						<s:Button styleName="botonNegroOld" id="btnProcedimientoRelacionado" fontSize="13" fontWeight="bold" label="+" click="agregarProcedimiento()"/>
+					</mx:HBox>
+				</mx:FormItem>
+				<mx:TextArea width="100%"  id="txtProcedimientos" height="100%" editable="false"/>
+			</mx:Form>
+		</mx:VBox>
+		<mx:VBox width="28%">
+			<mx:Form width="100%">
+				<mx:FormItem width="100%" fontWeight="bold" fontSize="13" label="Cliente: ">
+					<s:ComboBox id="cmbCliente" dataProvider="{this._listaClientes}" labelField="valor" width="100%" />
+				</mx:FormItem>				
+				<mx:FormItem  width="100%" fontWeight="bold" fontSize="13" label="Proveedor: ">
+					<s:ComboBox  id="cmbProveedor"  dataProvider="{this._listaProovedores}" labelField="valor" change="obtenProductosXIdProovedor()" width="100%"/>
+				</mx:FormItem>
+				<mx:FormItem  width="100%" fontWeight="bold" fontSize="13" label="Producto: ">
+					<!--<controls:AutoComplete id="cmbProducto" width="100%" enabled="false" dataProvider="{this._listaProductos}" labelField="valor" 
+					focusOut="CatalogoSeleccionado()"/>-->
+					<s:ComboBox id="cmbProducto" dataProvider="{this._listaProductos}" labelField="valor"  width="100%" 
+								focusOut="CatalogoSeleccionado()"/>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:VBox>
+	</mx:HBox>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:HBox width="100%">
+		<!--<mx:Label fontWeight="bold" fontSize="24" text="Descripción"/>-->
+		<label:labelSubtitulo  text="Descripción"/>
+		<mx:Spacer width="100%"/>
+		<mx:LinkButton textDecoration="underline" color="#0C4AFC" label="Referencias" click="abrirReferencias()" visible="false"/>
+	</mx:HBox>
+	<acordeon:acordeonPqNet width="100%" height="100%" creationPolicy="all" openDuration="250">
+		<mx:VBox label="PROBLEMA" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtProblema"/>
+		</mx:VBox>
+		<mx:VBox label="¿Qué?" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtQue"/>
+		</mx:VBox>
+		<mx:VBox label="¿Quién?" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtQuien"/>
+		</mx:VBox>
+		<mx:VBox label="¿Dónde?" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtDonde"/>
+		</mx:VBox>
+		<mx:VBox label="¿Cuándo?" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtCuando"/>
+		</mx:VBox>
+		<mx:VBox label="¿Cómo?" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtComo"/>
+		</mx:VBox>
+		<mx:VBox label="¿Por qué?" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtPorQue"/>
+		</mx:VBox>
+		<mx:VBox label="POSIBLE SOLUCIÓN" fontSize="13" width="100%" height="100%">
+			<mx:TextArea width="100%" height="100%" id="txtPosibleSolucion"/>
+		</mx:VBox>		
+	</acordeon:acordeonPqNet>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:VBox width="100%" verticalGap="0">
+		<mx:HBox width="100%" id="hbxBotonesNormales">				
+			<!--<mx:Button label="SALIR" width="80" click="warningSalir()" />-->
+			<s:Button styleName="botonNegroOld" label="SALIR" width="80" click="warningSalir()" />
+			<mx:Spacer width="100%" />
+			<!--<mx:Button label="Guardar" click="seleccionaAccion('guardado')" id="btnGuardar"/>-->
+			<s:Button styleName="botonNegroOld" label="Guardar" click="seleccionaAccion('guardado')" id="btnGuardar"/>
+			<mx:Spacer width="100%" />
+			<!--<mx:Button label="Decisión" width="80" enabled="false" id="btnDecision" click="warningGuardar()"/>-->
+			<s:Button styleName="botonNegroOld" label="Decisión" width="80" enabled="false" id="btnDecision" click="warningGuardar()"/>
+		</mx:HBox>
+		<mx:HBox width="100%" id="hbxBotonesNavegacion" height="0" >				
+			<!--<mx:Button label="SALIR" width="80" visible="false" />-->
+			<s:Button styleName="botonNegroOld" label="SALIR" width="80" visible="false" />
+			<mx:Spacer width="100%" />
+			<!--<mx:Button label="Regresar" id="btnRegresar" click="regresarAIndexOriginal()"/>-->
+			<s:Button styleName="botonNegroOld" label="Regresar" id="btnRegresar" click="regresarAIndexOriginal()"/>
+		</mx:HBox>
+	</mx:VBox>
+	
+</mx:VBox>

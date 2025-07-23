@@ -1,0 +1,330 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos
+{
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.catalogos.FormulaPrecio")]
+	[Bindable]
+	public class FormulaPrecio
+	{
+		
+		private var _flete:Number;
+		private var _costoConsularizacion:Number;
+		private var _fleteDocumentacion:Number;
+		private var _costoFijo:Number;
+		private var _utilidad:Number;
+		private var _descuento:Number;
+		private var _igi:Number;
+		private var _dta:Number;
+		private var _honorariosAgenteA:Number;
+		private var _permiso:Number;
+		private var _numeroPiezas:Number;
+		private var _minimoOrdebCompra:Number;
+		private var _licenciamiento:Number;
+		private var _precioLista:Number; 
+		private var _valorAduana:Number;
+		private var _fleteDestino:Number;
+		private var _compuestaCostoF:Boolean;
+		private var _compuestaFactorU:Boolean;
+		private var _valor:Number;
+		private var _industria:Number;
+		private var _precioListaAnterior:Boolean;
+		
+		
+		//VARIABLES PARA VISTA
+		
+		private var _valorAduanaString:String; 
+		private var _honorariosAgenteAString:String;
+		private var _costoConsularizacionString:String;
+		private var _fleteDocumentacionString:String;
+		private var _permisoString:String;
+		private var _fleteDestinoString:String;
+		
+		public function FormulaPrecio()
+		{
+			_valorAduanaString = "0.00";
+			_honorariosAgenteAString = "0.00";
+			_costoConsularizacionString = "0.00";
+			_fleteDocumentacionString = "0.00";
+			_permisoString = "0.00";
+			_fleteDestinoString = "0.00";
+		}
+		
+		public function get precioListaAnterior():Boolean
+		{
+			return _precioListaAnterior;
+		}
+
+		public function set precioListaAnterior(value:Boolean):void
+		{
+			_precioListaAnterior = value;
+		}
+
+		public function get flete():Number
+		{
+			return _flete;
+		}
+		
+		public function set flete(value:Number):void
+		{
+			_flete = value;
+		}
+		
+		public function get costoConsularizacion():Number
+		{
+			return _costoConsularizacion;
+		}
+		
+		public function set costoConsularizacion(value:Number):void
+		{
+			_costoConsularizacion = value;
+			_costoConsularizacionString = UtilsFormatosNumericos.precisionADosDecimalesConComas(value);
+		}
+		
+		public function get fleteDocumentacion():Number
+		{
+			return _fleteDocumentacion;
+		}
+		
+		public function set fleteDocumentacion(value:Number):void
+		{
+			_fleteDocumentacion = value;
+			_fleteDocumentacionString = UtilsFormatosNumericos.precisionADosDecimalesConComas(value);
+		}
+		
+		public function get costoFijo():Number
+		{
+			return _costoFijo;
+		}
+		
+		public function set costoFijo(value:Number):void
+		{
+			_costoFijo = value;
+		}
+		
+		public function get utilidad():Number
+		{
+			return _utilidad;
+		}
+		
+		public function set utilidad(value:Number):void
+		{
+			_utilidad = value;
+		}
+		
+		public function get descuento():Number
+		{
+			return _descuento;
+		}
+		
+		public function set descuento(value:Number):void
+		{
+			_descuento = value;
+		}
+		
+		public function get igi():Number
+		{
+			return _igi;
+		}
+		
+		public function set igi(value:Number):void
+		{
+			_igi = value;
+		}
+		
+		public function get dta():Number
+		{
+			return _dta;
+		}
+		
+		public function set dta(value:Number):void
+		{
+			_dta = value;
+		}
+		
+		public function get honorariosAgenteA():Number
+		{
+			return _honorariosAgenteA;
+		}
+		
+		public function set honorariosAgenteA(value:Number):void
+		{
+			_honorariosAgenteA = value;
+			_honorariosAgenteAString = UtilsFormatosNumericos.precisionADosDecimalesConComas(value);
+		}
+		
+		public function get permiso():Number
+		{
+			return _permiso;
+		}
+		
+		public function set permiso(value:Number):void
+		{
+			_permiso = value;
+			_permisoString = UtilsFormatosNumericos.precisionADosDecimalesConComas(value);
+		}
+		
+		public function get numeroPiezas():Number
+		{
+			return _numeroPiezas;
+		}
+		
+		public function set numeroPiezas(value:Number):void
+		{
+			_numeroPiezas = value;
+		}
+		
+		public function get minimoOrdebCompra():Number
+		{
+			return _minimoOrdebCompra;
+		}
+		
+		public function set minimoOrdebCompra(value:Number):void
+		{
+			_minimoOrdebCompra = value;
+		}
+		
+		public function get licenciamiento():Number
+		{
+			return _licenciamiento;
+		}
+		
+		public function set licenciamiento(value:Number):void
+		{
+			_licenciamiento = value;
+		}
+		
+		public function get precioLista():Number
+		{
+			return _precioLista;
+		}
+		
+		public function set precioLista(value:Number):void
+		{
+			_precioLista = value;
+		}
+		
+		public function get valorAduana():Number
+		{
+			return _valorAduana;
+		}
+		
+		public function set valorAduana(value:Number):void
+		{
+			_valorAduana = value;
+			_valorAduanaString = UtilsFormatosNumericos.precisionADosDecimalesConComas(_valorAduana);
+		}
+		
+		public function get fleteDestino():Number
+		{
+			return _fleteDestino;
+		}
+		
+		public function set fleteDestino(value:Number):void
+		{
+			_fleteDestino = value;
+			_fleteDestinoString = UtilsFormatosNumericos.precisionADosDecimalesConComas(value);
+		}
+
+		public function get valorAduanaString():String
+		{
+			return _valorAduanaString;
+		}
+
+		public function set valorAduanaString(value:String):void
+		{
+			_valorAduanaString = value;
+		}
+
+		public function get honorariosAgenteAString():String
+		{
+			return _honorariosAgenteAString;
+		}
+
+		public function set honorariosAgenteAString(value:String):void
+		{
+			_honorariosAgenteAString = value;
+		}
+
+		public function get costoConsularizacionString():String
+		{
+			return _costoConsularizacionString;
+		}
+
+		public function set costoConsularizacionString(value:String):void
+		{
+			_costoConsularizacionString = value;
+		}
+
+		public function get fleteDocumentacionString():String
+		{
+			return _fleteDocumentacionString;
+		}
+
+		public function set fleteDocumentacionString(value:String):void
+		{
+			_fleteDocumentacionString = value;
+		}
+
+		public function get permisoString():String
+		{
+			return _permisoString;
+		}
+
+		public function set permisoString(value:String):void
+		{
+			_permisoString = value;
+		}
+
+		public function get fleteDestinoString():String
+		{
+			return _fleteDestinoString;
+		}
+
+		public function set fleteDestinoString(value:String):void
+		{
+			_fleteDestinoString = value;
+		}
+
+		public function get compuestaCostoF():Boolean
+		{
+			return _compuestaCostoF;
+		}
+
+		public function set compuestaCostoF(value:Boolean):void
+		{
+			_compuestaCostoF = value;
+		}
+
+		public function get compuestaFactorU():Boolean
+		{
+			return _compuestaFactorU;
+		}
+
+		public function set compuestaFactorU(value:Boolean):void
+		{
+			_compuestaFactorU = value;
+		}
+
+		public function get valor():Number
+		{
+			return _valor;
+		}
+
+		public function set valor(value:Number):void
+		{
+			_valor = value;
+		}
+
+		protected function get industria():Number
+		{
+			return _industria;
+		}
+
+		protected function set industria(value:Number):void
+		{
+			_industria = value;
+		}
+
+
+	}
+}

@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					xmlns:s="library://ns.adobe.com/flex/spark" 
+					xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+					xmlns:maps="mx.com.proquifa.proquifanet.rsl.vista.mapas.mapasComponentes.*" hideEffect="{fxFade}"
+					xmlns:panel="skins.panel.*" creationComplete="init()" xmlns:componentes="skins.panel.componentes.*">
+	<fx:Declarations>
+		<s:Fade id="fxFade" duration="400" alphaTo="0" startDelay="1300" />
+		<maps:MapaLogin/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.panel.componentes.skinBotonEntrar;
+			import skins.skin.combobox.skinComboBoxDefault;
+			
+			
+			private var _titulo:String = "";
+			
+			private var inicio:Number = 0;
+			public var vieneD:String;
+			[Bindable]
+			public var _datosUsuario:Empleado;
+			[Bindable]
+			public var _usuarios:ArrayCollection;
+			[Bindable]
+			public var ruta:String;
+			
+			[Bindable]
+			public function get titulo():String
+			{
+				return _titulo;
+			}
+
+			public function set titulo(value:String):void
+			{
+				_titulo = value;
+				/*if(!this.panelLogin){
+				this.panelLogin.titulo.texto = _titulo;
+				}*/
+			}
+
+			private function init():void{
+				addEventListener( KeyboardEvent.KEY_UP, keyDownListener);
+				addEventListener( KeyboardEvent.KEY_DOWN, cancela);
+				this.panelLogin.txtUsuario.addEventListener(FlexEvent.ENTER,validarTxt);
+				this.panelLogin.txtContrasena.addEventListener(FlexEvent.ENTER,validarTxt);
+				this.panelLogin.btnEntrar.addEventListener(MouseEvent.CLICK,validarClick);
+			}
+			private var userFoc:Boolean = true;// inicio con el usuario seleccionado en panelLogin por eso es true
+			
+			private function cancela( $:KeyboardEvent ):void{
+				if( $.keyCode == 9 ) $.preventDefault();// cancelo en keydown del tab
+			}
+			private function keyDownListener( $:KeyboardEvent ):void{
+				if( $.keyCode == 9 ){// tabulador
+					if( userFoc ){
+						panelLogin.txtContrasena.setFocus();
+						userFoc = false;
+					}else if( !userFoc ){
+						panelLogin.txtUsuario.setFocus();
+						userFoc = true;
+					}
+				}
+			}
+			private function validarTxt(event:FlexEvent):void{
+				this.validar();
+			}
+			
+			private function validarClick(event:MouseEvent):void{
+				this.validar();
+			}
+			// regresar a private al terminar tablero clientes
+			public function validar():void{
+				var evento:EventoGenerico = new EventoGenerico (EventoGenerico.VALIDAR_EMPLEADO_LOGIN );
+				var empleadoAValidar:Empleado = new Empleado();
+				empleadoAValidar.usuario = this.panelLogin.txtUsuario.text;
+				empleadoAValidar.password = this.panelLogin.txtContrasena.text;
+				evento.empleado = empleadoAValidar;
+				dispatchEvent( evento );
+				inicio = 1;
+			}
+			
+			/**
+			 *  Metodo utilizado para validar que el usario pertenezca a la aplicacions, ademas de recibir
+			 *  del Mapa la variable boolena que indica si el usuario es valido y obtener el id del usuario
+			 */ 
+			public  function set cierraLogin(resultado:Boolean):void{
+				if(this.inicio == 0){
+					return;
+				}
+				if(resultado == true){
+					panelLogin.btnEntrar.visible = false;
+					panelLogin.grpFlechas.visible = true;
+					panelLogin.fxRotate.play();
+					
+					var idUsuario:EventoGenerico = new EventoGenerico( EventoGenerico.OBTENER_ID_POR_USUARIO);
+					idUsuario.usuario = this.panelLogin.txtUsuario.text;
+					dispatchEvent( idUsuario );
+				}else{
+					//alertaSingleton.show("Usuario o Contraseña inválida", "Error");
+					alertaSingleton.show( catalogoAlertas.ERR_usuarioContraseniaNoValida, catalogoAlertas.TIT_ERR);
+				}									
+			}
+			
+			
+			/** 
+			 * Metodo para recibir el Id del Usuario y cerrar el Login 
+			 */ 
+			public  function set cierraLoginConIdUsiario(resultado:Empleado):void{
+				if( resultado == null ){
+					return;
+				}	
+				this._datosUsuario = resultado;
+				var usuarioCorrecto:Boolean = false;
+				if( this.panelLogin.txtUsuario.text.toLowerCase() == "administrador"){
+					usuarioCorrecto = true;
+				}else {
+					if(resultado.fase > 0)
+					{
+						switch( this.vieneD ){
+							case "direccionOperacionesSacAiesc":
+								if( resultado.nivel == 13 ) {
+									usuarioCorrecto = true;					 			
+								}	
+								break;
+							case "direccionDirectorGeneral":
+								if( resultado.nivel == 38 ) {
+									usuarioCorrecto = true;					 			
+								}
+								break;
+							case"direccionSistemasDeGestionAsistenteCalidad":
+								if( resultado.nivel == 16  || resultado.nivel == 29  ) {
+									usuarioCorrecto = true;					 			
+								}	
+								break;
+							case"direccionSistemasDeGestionDesarrolladorSistemas":
+								if(  resultado.nivel == 36 ) {
+									usuarioCorrecto = true;					 			
+								}	
+								break;
+							case"direccionSistemasDeGestionGSistemas":
+								if( resultado.nivel == 37 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionSistemasDeGestionRepresentanteDeDireccion":
+								if( resultado.nivel == 18 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionComercializacionVentasEV":
+								if( resultado.nivel == 3 ||  resultado.nivel == 8  ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionComercializacionVentasGV":
+								if( resultado.nivel == 34 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeFinanzasCobrosYPagosResponsableDeCobro":
+								if( resultado.nivel == 9 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeFinanzasCobrosYPagosResponsableDePagos":
+								if( resultado.nivel == 14  ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeServicioMantenimientoIntendente":
+								if( resultado.nivel == 20 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeServicioMantenimientoAsistenteDeMantenimiento":
+								if( resultado.nivel == 15 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeServicioMantenimientoGerenteDeMantenimiento":
+								usuarioCorrecto = true;
+								if( resultado.nivel == 21 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeServicioRHAsistenterh":
+								if( resultado.nivel == 16 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesAdministradorDeCatalogos":
+								if( resultado.nivel == 24 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesComprasComprador":
+								if( resultado.nivel == 12 ){
+									
+									if(resultado.roles && resultado.roles.length > 0){
+										var lengthC:int = resultado.roles.length;
+										for (var i:int = 0; i < lengthC; i++) 
+										{
+											if(resultado.roles[i]){
+												resultado.roles[i] = "Comprador_Master";
+												usuarioCorrecto = false;	
+												break;
+											}else
+												usuarioCorrecto = true;		
+										}
+									}else
+										usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesComprasCompradorPHS":
+								if( resultado.nivel == 4 ){ //ERangel DesPhs-USA
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesComprasGCompras":
+								if( resultado.nivel == 22 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesDespachosGDespachos":
+								if( resultado.nivel == 33 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesComprasResponsableAE":
+								if( resultado.nivel == 31 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesDespachosResponsableAS":
+								if( resultado.nivel == 6 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesDespachosGestorLogisticoOCC":
+								if( resultado.nivel == 23 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesDespachosGestorLogisticoPHS": //Evelyn DesPhs-USA
+								if( resultado.nivel == 4 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesDespachosPersonalDeTrafico":
+								if( resultado.nivel == 10  ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesDirectorDeOperaciones":
+								if( resultado.nivel == 1 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesSacEsac":
+								if( resultado.nivel == 8 || resultado.nivel == 32 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesSacGsac":
+								if( resultado.nivel == 19 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionDeFinanzasCobrosYPagosFacturacion":
+								if(resultado.nivel == 5){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"InsPhsUSA":
+								if(resultado.nivel == 31){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesComprasDespachosPHS":
+								if(resultado.nivel == 4){
+									usuarioCorrecto = true;
+								}
+								break;
+							case "ventas":
+								break;	
+							case"directorDeComercializacion":
+								if(resultado.nivel == 39){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"gestorDeRuta":
+								if(resultado.nivel == 40){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"esacMaster":
+								if(resultado.nivel == 41){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"consejo":
+								if(resultado.nivel == 42){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"contador":
+								if(resultado.nivel == 44){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"responsableCobrosYPagos":
+								if(resultado.nivel == 45){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"mensajeroGdl":
+								if( resultado.nivel == 46 ){
+									usuarioCorrecto = true;
+								}
+								break;
+							case"direccionOperacionesComprasCompradorMaster":
+								if( resultado.nivel == 12 ){
+									if(resultado.roles && resultado.roles.length > 0){
+										var length:int = resultado.roles.length;
+										for (var j:int = 0; j < length; j++) 
+										{
+											if(resultado.roles[j]){
+												resultado.roles[j] = "Comprador_Master";
+												usuarioCorrecto = true;	
+												break;}
+										}
+									}else
+										usuarioCorrecto = false;
+									
+								}
+								break;
+							case"guardiaSeguridad":
+								if( resultado.nivel == 47 ){
+									usuarioCorrecto = true;
+								}
+								break;
+						}
+					}
+					else
+					{
+						usuarioCorrecto = false;
+					}
+					
+				}				
+				if( usuarioCorrecto ){
+					//Este evento no regresa nad a vista todo se queda en el modelo y usa el mapaLoguin
+					var eventoEH:EventoGenerico = new EventoGenerico( EventoGenerico.OBTENER_EMPLEADOS_HABILITADOS );
+					dispatchEvent( eventoEH );
+					/**
+					 * Si el usuario es correcto se le dispara al mapaLogin el evento para traer el Array con los permisos del Usuario en la funcion recibePermisos();
+					 */ 
+					//se guarda en una Variable de una Clase global para el poyecto todos los datos del usuario logueado 
+					DatosGlobales.getInstance()._usuario = resultado;	
+					var evento:EventoGenerico = new EventoGenerico( EventoGenerico.TRAER_PERMISOS_USUARIO_LOGIN );	
+					evento.idEmpledo = resultado.idEmpleado;
+					dispatchEvent(evento);
+					var usuarioLogueado:EventoGenerico = new EventoGenerico( EventoGenerico.ENVIAR_USUARIO_LOGIN);
+					usuarioLogueado.empleado = this._datosUsuario;
+					this.dispatchEvent( usuarioLogueado );
+					//setTimeout( esperaAntesDeHacerLogin, 10, resultado);
+				}else{
+					//alertaSingleton.show("Este usuario no esta permitido para esta aplicación","Error");
+					panelLogin.btnEntrar.visible = true;
+					panelLogin.grpFlechas.visible = false;
+					alertaSingleton.show(catalogoAlertas.ERR_loginUsuarioNoPermitido, catalogoAlertas.TIT_ERR);
+				}
+			}
+			private function esperaAntesDeHacerLogin( $result:Empleado ):void{
+				DatosGlobales.getInstance()._usuario = $result;	
+				var evento:EventoGenerico = new EventoGenerico( EventoGenerico.TRAER_PERMISOS_USUARIO_LOGIN );	
+				evento.idEmpledo = $result.idEmpleado;
+				dispatchEvent(evento);
+				var usuarioLogueado:EventoGenerico = new EventoGenerico( EventoGenerico.ENVIAR_USUARIO_LOGIN);
+				usuarioLogueado.empleado = this._datosUsuario;
+				this.dispatchEvent( usuarioLogueado );
+			}
+			/**
+			 * Metodo que trae del MapaLogin los permisos del Usuario evento que cierra el Login
+			 */ 
+			public function set recibePermisos(dato:Object):void{
+				if( dato ){
+					return;
+				}
+				var usuarioLogueado:EventoGenerico = new EventoGenerico( EventoGenerico.ENVIAR_USUARIO_LOGIN);
+				usuarioLogueado.empleado = this._datosUsuario;	
+				this.dispatchEvent( usuarioLogueado );	
+			}
+			
+			/**
+			 * Metodo para ponerle la imagen de focus a la Contraseña cuando le das clik. 
+			 */ 
+			/*private function focusContrasena():void{
+			this.imgContrasenaFocus.visible = true;
+			this.imgContrasena.visible = false;
+			this.imgContrasenaLimpia.visible = false;
+			this.imgUsuarioConFoco.visible = false;							
+			if(this.txtUsuario.text == ""){					
+			this.imgUsuarioSinFoco.visible = true;
+			this.imgUsuarioLimpia.visible = false
+			}else{
+			this.imgUsuarioLimpia.visible = true;	
+			this.imgUsuarioSinFoco.visible = false;
+			}
+			} */
+			
+			/**
+			 * Metodo para ponerle la imagen de focus a el Usuario cuando le das click.
+			 */ 
+			/*private function focusCombo():void{
+			this.imgUsuarioConFoco.visible = true;
+			this.imgUsuarioSinFoco.visible = false;
+			this.imgUsuarioLimpia.visible = false;
+			this.imgContrasenaFocus.visible = false;								
+			if(this.txtContrasena.text == ""){	
+			this.imgContrasena.visible = true;	
+			this.imgContrasenaLimpia.visible = false;
+			}else{
+			this.imgContrasenaLimpia.visible = true;	
+			this.imgContrasena.visible = false;
+			}
+			}*/
+			
+			/**
+			 * Metodo usado para cambiar la imagen al boton cuando te posas en el.
+			 */ 
+			/*private function botonOverFocus():void{
+			this.imgBotonFocus.visible = true;
+			this.imgBoton.visible = false;
+			}*/
+			
+			/**
+			 * Metodo usado para cambiar la imagen normal al boton cuando te sales de el.
+			 */ 
+			/*private function botonOver():void{
+			this.imgBotonFocus.visible = false;
+			this.imgBoton.visible = true;
+			}  */
+		]]>
+	</fx:Script>
+	
+	<fx:Metadata>
+		[Event(name="usuarioLogueado", type="mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico")]
+	</fx:Metadata>
+	<!--<s:layout>
+	<s:HorizontalLayout verticalAlign="middle"/>
+	</s:layout>-->
+	<!--<s:Spacer width="60%"/>-->
+	<panel:panelLogin datos="{this.titulo}" id="panelLogin" />
+	<!--<s:Spacer width="20%"/>-->
+	
+	<mx:NumericStepper width="0" height="0" visible="false"/>
+	<s:NumericStepper width="0" height="0" visible="false" />
+</s:NavigatorContent>

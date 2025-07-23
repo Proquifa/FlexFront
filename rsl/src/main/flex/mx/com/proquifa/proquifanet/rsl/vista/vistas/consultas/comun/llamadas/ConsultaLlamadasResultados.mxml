@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009"
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:s="library://ns.adobe.com/flex/spark"  
+									  xmlns:mx="library://ns.adobe.com/flex/mx"  
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:label="skins.skin.label.*" 
+									  xmlns:otros="skins.otros.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+									  width="100%" height="100%"
+									  creationComplete="inicia()" 
+									  >
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.comun.llamadas.EventoConsultaLLamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.GraficoLlamadasCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.GraficoLlamadasDestino;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.GraficoLlamadasETVsFT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.GraficoLlamadasEstado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.GraficoLlamadasTipo;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.graficosETvsFT.GraficaLlamadaAbiertoVsCerrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.graficosETvsFT.GraficaLlamadaClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.graficosETvsFT.GraficaLlamadaDestinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.graficosETvsFT.GraficaLlamadaTipos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.llamadas.componentesGraficos.graficosETvsFT.GraficoLlamadasETVsFT_Secundaria;
+			import mx.core.IVisualElement;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable] private var _estado:ArrayCollection;
+			[Bindable] private var _datosGrafica:ArrayCollection;
+			[Bindable] private var _graficaAtendio:ArrayCollection;
+			[Bindable] private var _graficaEmpresa:ArrayCollection;
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var graficas1erNivel:ContenedorGraficas = new ContenedorGraficas();
+			
+			/**
+			 * Metodo que recibe del mapa las lista de las Llamadas
+			 */ 
+			public function set recibeLlamadas( datos:ArrayCollection  ):void{
+				if( datos == null ) return;
+				
+				dtgrid.dataProvider = new ArrayCollection;
+				var arrTemp:ArrayCollection = ObjectUtil.copy(datos) as ArrayCollection;
+				
+				dtgrid.dataProvider = arrTemp;
+				
+				if (datos.length > 0 ){
+					headGrid.btnExportar.enabled = true;
+				}
+				else{
+					headGrid.btnExportar.enabled = false;
+				}
+			} 
+			
+			public function cargaGraficas( datos:ArrayCollection ):void{
+				_graficaAtendio = new ArrayCollection();
+				_datosGrafica = new ArrayCollection();
+				_graficaEmpresa = new ArrayCollection();
+				_datosGrafica = datos;
+				var abiertosTemp:int = 0;
+				var cerradosTemp:int = 0;
+				for( var i:int = 0; i < _datosGrafica.length; i++){
+					
+					creaGraficaAtendio( (_datosGrafica.getItemAt( i ) as Llamada).atendio );
+					creaGraficaEmpresa( (_datosGrafica.getItemAt( i ) as Llamada).empresa );	
+					
+					if ( (_datosGrafica.getItemAt( i ) as Llamada).estado == "EN ESPERA" ){
+						abiertosTemp = abiertosTemp + 1;
+					}else{
+						cerradosTemp = cerradosTemp + 1;
+					}
+				}
+				_estado = new ArrayCollection([
+					{estado:"EN ESPERA ", Monto: abiertosTemp , EtiquetaMonto: "EN ESPERA ( "+ abiertosTemp  + " )" },
+					{estado:"CERRADAS", Monto: cerradosTemp , EtiquetaMonto: "CERRADAS ( "+ cerradosTemp + " )"}
+				]);	
+			}
+			/**
+			 * Metodo para crear la grafica de las empresa que estan llamando.
+			 */ 
+			private function creaGraficaEmpresa(dato:String):void{
+				var usuario:CatalogoItem = new CatalogoItem();
+				var sumoDato:Boolean = false;
+				usuario.valor = dato;
+				if( _graficaEmpresa.length == 0){
+					usuario.llave = 1;
+					_graficaEmpresa.addItem( usuario );
+				}else{
+					for( var u:int = 0; u < _graficaEmpresa.length; u++){ //la primera incrementa con el add, en la segunda usa el mismo dato
+						if( dato == ( _graficaEmpresa.getItemAt( u ) as CatalogoItem).valor ){
+							(_graficaEmpresa.getItemAt( u ) as CatalogoItem).llave =  (_graficaEmpresa.getItemAt( u ) as CatalogoItem).llave + 1;
+							sumoDato = true;
+						}
+					}
+					if( sumoDato == false){
+						usuario.llave = 1;
+						_graficaEmpresa.addItem( usuario );
+					}
+				}
+			}
+			/**
+			 * Metodo para determinar crear la grafica de las personas que atienden la llamada, el dato que recibe 
+			 * es el nombre de la persona que atendio.
+			 */ 
+			private function creaGraficaAtendio(dato:String):void{
+				var usuario:CatalogoItem = new CatalogoItem();
+				var sumoDato:Boolean = false;
+				usuario.valor = dato;
+				if( _graficaAtendio.length == 0){
+					usuario.llave = 1;
+					_graficaAtendio.addItem( usuario );
+				}else{
+					for( var u:int = 0; u < _graficaAtendio.length; u++){ //la primera incrementa con el add, en la segunda usa el mismo dato
+						if( dato == ( _graficaAtendio.getItemAt( u ) as CatalogoItem).valor ){
+							(_graficaAtendio.getItemAt( u ) as CatalogoItem).llave =  (_graficaAtendio.getItemAt( u ) as CatalogoItem).llave + 1;
+							sumoDato = true;
+						}
+					}
+					if( sumoDato == false){
+						usuario.llave = 1;
+						_graficaAtendio.addItem( usuario );
+					}
+				}
+			}
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible){
+					compararVistas();
+				}
+			}
+			/**
+			 * Metodo para iniciar 
+			 */ 
+			private function inicia():void{
+				headGrid.btnExportar.enabled = false;
+				
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				
+				var graficas:ArrayCollection = new ArrayCollection();
+				var graficaEncimada:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new GraficoLlamadasCliente());
+				graficas.addItem(new GraficoLlamadasDestino());
+				graficas.addItem(new GraficoLlamadasEstado());
+				graficas.addItem(new GraficoLlamadasTipo());
+				graficaEncimada.addItem(new GraficoLlamadasETVsFT());
+				
+				graficas1erNivel.insertarGraficas(graficas,graficaEncimada);
+				agregarEspacioTrabajo(graficas1erNivel);
+				
+				var graficas2doNivel:ContenedorGraficas = new ContenedorGraficas();
+				graficas2doNivel.tipoDeBotonBack = "flecha";
+				graficas2doNivel.addEventListener("btnRegresarConsultasGraficasPrincipal",buttonRegresar_clickEventListener,false,0,true);
+				
+				var arrGraficas:ArrayCollection = new ArrayCollection();
+				
+				arrGraficas.addItem(new GraficaLlamadaAbiertoVsCerrado());
+				arrGraficas.addItem(new GraficaLlamadaClientes());
+				arrGraficas.addItem(new GraficaLlamadaDestinos());
+				arrGraficas.addItem(new GraficaLlamadaTipos());
+				arrGraficas.addItem(new GraficoLlamadasETVsFT_Secundaria());
+				graficas2doNivel.insertarGraficasInverso( arrGraficas );
+				espacioSelectedGrafica.addElement( graficas2doNivel );
+				
+				addEventListener(EventoConsultaLLamada.MOSTRAR_SELECTED_GRAFICA, muestraOcultaSelectedGafica);
+			}
+			
+			public function muestraOcultaSelectedGafica(evt:EventoConsultaLLamada):void
+			{
+				conceptoPie.text = evt.tipo.toUpperCase();
+				
+				if(evt.valorAdicional =="grafETVsFT")
+				{
+					stack.selectedIndex=evt.seleccionarGraficas; 
+					var eventoSetFiltro:EventoConsultaLLamada = new EventoConsultaLLamada(EventoConsultaLLamada.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+					eventoSetFiltro.tipo = evt.tipo; 
+					dispatchEvent(eventoSetFiltro); 
+				} 
+				
+			}
+			private function buttonRegresar_clickEventListener(event:Event):void
+			{
+				stack.selectedIndex=0;
+			}
+			
+			public function set mostrarOcultarTab($tabGrafica:Boolean):void
+			{
+				imgTab.visible = $tabGrafica;
+				
+				if(vistaSelected == _GRAFICAS)
+				{
+					vistaSelected = _TABLA_GRID;
+					compararVistas();
+				}
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void
+			{
+				if(espacio == null)
+				{
+					return;
+				}
+				graficos.addItem(espacio);
+				if(graficos.length == 1)
+				{
+					espacioGraficas.removeAllElements();
+					espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			
+			protected function headerparagridconsultas1_clickExportarHandler(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Fecha");
+				fila[2] = hoja.addItem("Empresa");
+				fila[3] = hoja.addItem("Contacto");
+				fila[4] = hoja.addItem("Asunto");
+				fila[5] = hoja.addItem("Comentarios");
+				fila[6] = hoja.addItem("Destino");
+				fila[7] = hoja.addItem("Atendió");
+				fila[8] = hoja.addItem("Estado");
+				
+				for(var i:int = 0; i < dtgrid.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = (dtgrid.dataProvider[i] as Llamada).numFila;
+					fila[1] = '"' + dtgrid.dataProvider[i].fechaHoraFormato + '"';
+					fila[2] = '"' + (dtgrid.dataProvider[i] as Llamada).empresa + '"';
+					fila[3] = '"' + (dtgrid.dataProvider[i] as Llamada).contacto + '"';
+					fila[4] = '"' + (dtgrid.dataProvider[i] as Llamada).asunto + '"';
+					fila[5] = '"' + (dtgrid.dataProvider[i] as Llamada).comentarios + '"';
+					fila[6] = '"' + (dtgrid.dataProvider[i] as Llamada).destino + '"';
+					fila[7] = '"' + (dtgrid.dataProvider[i] as Llamada).atendio + '"';
+					fila[8] = '"' + (dtgrid.dataProvider[i] as Llamada).estado + '"';
+					hoja.addItem('\r' + fila);
+				}
+				file.save(hoja,"ConsultaLlamadas-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" id="gridConsultaLlamadas" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<consultas:HeaderParaGridConsultas id="headGrid" mostrarBtnExportar="true" clickExportar="headerparagridconsultas1_clickExportarHandler(event)"/>
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter width="100%" height="100%" id="dtgrid" anchoColumnas="{['45','125','=','=','=','=','90','90','90']}" tipoDeConsulta="Llamadas"
+														 disableDragableColumns="{[0]}" disableResizableColumns="{[0]}">
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn  headerText="#" dataField="numFila"/>
+					<mx:AdvancedDataGridColumn  headerText="Fecha" dataField="fechaHoraFormato"/>
+					<mx:AdvancedDataGridColumn  headerText="Empresa" dataField="empresa"/>
+					<mx:AdvancedDataGridColumn  headerText="Contacto" dataField="contacto"/>
+					<mx:AdvancedDataGridColumn  headerText="Asunto" dataField="asunto"/>
+					<mx:AdvancedDataGridColumn  headerText="Comentarios" dataField="comentarios" textAlign="center"/>
+					<mx:AdvancedDataGridColumn  headerText="Destino" dataField="destino"/>
+					<mx:AdvancedDataGridColumn  headerText="Atendió" dataField="atendio"/>
+					<mx:AdvancedDataGridColumn  headerText="Estado" dataField="estado"/>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>
+	</comun:espacioA>
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" >
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas"/>			
+				</s:HGroup>
+			</s:VGroup>	
+			<s:VGroup height="100%" width="100%" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" gap="0" paddingTop="28" paddingLeft="10" paddingRight="20">
+				<label:Titulo id="conceptoPie" maxWidth="{this.width}" paddingTop="0" paddingBottom="6"/>
+				<otros:divisionGruesa width="100%"/>
+				<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica"/>
+			</s:VGroup>
+		</pq:MobViewStack>
+	</comun:espacioB>
+</comun:ContenedorComparacionConsultas>

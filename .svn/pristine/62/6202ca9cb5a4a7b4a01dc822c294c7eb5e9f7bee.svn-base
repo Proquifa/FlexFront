@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:ns="vista.vistas.ev_AtenderPoolDeVisitas.*" 
+		 xmlns:ns1="vista.vistas.ev_AtenderPoolDeVisitas.Graficas.*"
+		 xmlns:vistas="vista.vistas.*"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%"
+		 creationComplete="init(event)"
+		 resize="calc(event)" xmlns:ns2="vista.ev_AtenderPoolDeVisitas.Graficas.*" xmlns:ns3="vista.ev_AtenderPoolDeVisitas.*" xmlns:vista="vista.*" xmlns:plantilla="vista.plantilla.*" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import vista.evento.EventoEVAtenderPoolVisitas;
+			import vista.evento.EventoVentasGV;
+			
+			[Bindable] public var sizeFontAgente:Number = 20;
+			[Bindable] public var sizeFonTitulos:Number = 30;
+			[Bindable] public var sizeFont:Number = 15;
+			public var _sql:Query;
+			public var recargar:Boolean;
+			public var contactosRespaldo:ArrayCollection;
+			
+			protected function vistaAnterior(event:EventoVentasGV):void
+			{
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				cmpTitulo.subTitulo2 = "";
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpGrid);
+				plantilla.cargarGraficas(hgpGraficas);
+				plantilla.cargarOperacion(vgpAtenderPool);
+				plantilla.cargarLeyenda(footer);
+				addEventListener(EventoEVAtenderPoolVisitas.CLIC_PLANIFICAR_CLIENTES,seleccionarPlanificar);
+			}
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontAgente = (20 / 2005) * (unscaledWidth);
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;	
+				
+				sizeFonTitulos = (30 / 2005) * (unscaledWidth);
+				sizeFonTitulos = sizeFonTitulos > 20 ? 20:sizeFonTitulos;
+				sizeFonTitulos = sizeFonTitulos < 15 ? 15:sizeFonTitulos;
+				
+				sizeFont = (15 / 2005) * (unscaledWidth);
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 12 ? 12:sizeFont;
+			}
+			
+			private function seleccionarPlanificar(event:EventoEVAtenderPoolVisitas):void
+			{
+				plantilla.indice = 1;
+				cmpTitulo.isVisble = true;
+				cmpTitulo.subTitulo2 = event.cliente;
+				
+				var universoActual:ArrayCollection = new ArrayCollection;
+				var punterosCliente:Array;
+				punterosCliente = _sql.getPunteros([event.cliente]);
+				for (var i:int = 0; i < punterosCliente.length; i++) 
+				{
+					universoActual.addItem( ObjectUtil.copy(_sql.universo.getItemAt(punterosCliente[i])) as SolicitudVisita );
+				}
+				
+				vgpAtenderPool.setUniversoClientes(universoActual);
+				
+				if(universoActual.length > 0){
+					var evento:EventoEVAtenderPoolVisitas = new EventoEVAtenderPoolVisitas(EventoEVAtenderPoolVisitas.OBTENER_CONTACTOS_POR_CLIENTE);
+					evento.idCliente = universoActual[0].idCliente;
+					evento.habilitado = 1;
+					dispatchEvent(evento);
+				}
+			}
+			
+			public function set recibirVisitasSolicitadas(visitasSolicitadas:ArrayCollection):void
+			{
+				cmpGrid.data(visitasSolicitadas);
+			}
+			public function set recibirUniversoVisitasSolicitadas(universo:ArrayCollection):void
+			{
+				_sql = new Query(universo,["nombreCliente","tipoSolicitud","asunto","contactoNombre"],false);
+				
+				if(recargar){
+					if(vgpAtenderPool && vgpAtenderPool.currentSV){
+						
+						var universoActual:ArrayCollection = new ArrayCollection;
+						var punterosCliente:Array;
+						punterosCliente = _sql.getPunteros([vgpAtenderPool.currentSV.nombreCliente]);
+						for (var i:int = 0; i < punterosCliente.length; i++) 
+						{
+							universoActual.addItem( ObjectUtil.copy(_sql.universo.getItemAt(punterosCliente[i])) as SolicitudVisita );
+						}
+						
+						if(universoActual.length >0){
+							vgpAtenderPool.setListaContactosClientes(contactosRespaldo);
+							vgpAtenderPool.setUniversoClientes(universoActual);
+						}else{
+							plantilla.indice = 0;
+							cmpTitulo.isVisble = false;
+							cmpTitulo.subTitulo2 = "";
+						}
+						
+						recargar = false;
+					}
+				}
+			}
+			public function set recibirGraficaTipoVisitaPoolVisitas(listaGraficas:ArrayCollection):void
+			{
+				grafVisitas.dataVisitas(listaGraficas);
+			}
+			public function set recibirGraficaClientesPoolVisitas(listaGraficas:ArrayCollection):void
+			{
+				grafClientes.dataClientes(listaGraficas);
+			}
+			
+			public function set setRecibirRespuestaSolicituesAgruapdas(respuesta:Boolean):void
+			{
+				if(respuesta){
+					alertaSingleton.show("Se agruparon las visitas con éxito");
+					
+					var eventAP:EventoEVAtenderPoolVisitas = new EventoEVAtenderPoolVisitas(EventoEVAtenderPoolVisitas.OBTENER_VISITAS_SOLICITADAS);
+					eventAP.usuario = DatosGlobales.getInstance()._usuario.idEmpleado; 
+					dispatchEvent(eventAP);
+					
+					recargar = true;
+				}
+				/////AUN FALTARIA
+				dispatchEvent( new Event("recargarPendientes",true));
+			}
+			
+			public function set recibeContactos($contactos:ArrayCollection):void
+			{
+				if($contactos == null)
+					return;
+				
+				contactosRespaldo = ObjectUtil.copy($contactos) as ArrayCollection;
+				vgpAtenderPool.setListaContactosClientes($contactos);
+			}
+			
+			public function set recibeActualizarExitoContactos(value:Boolean):void
+			{
+				if(value){
+					var eventAP:EventoEVAtenderPoolVisitas = new EventoEVAtenderPoolVisitas(EventoEVAtenderPoolVisitas.OBTENER_VISITAS_SOLICITADAS);
+					eventAP.usuario = DatosGlobales.getInstance()._usuario.idEmpleado; 
+					dispatchEvent(eventAP);
+					
+					recargar = true;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" gap="0" visible="false" includeInLayout="false">
+		<!--<ns3:HeaderVentasEV id="cmpTitulo" width="100%" titulo="POOL DE VISITAS" vistaAnterior="vistaAnterior(event)" />-->
+		<plantilla:HeaderVentasGV id="cmpTitulo" width="100%" titulo="POOL DE VISITAS" vistaAnterirorHeaderGV="vistaAnterior(event)" />
+		<ns3:VistaGridAtenderPool width="100%" height="100%" id="cmpGrid"/>
+		
+		
+		<s:VGroup id="hgpGraficas" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" gap="15" paddingBottom="20" paddingTop="20" paddingLeft="20" paddingRight="20">
+			<label:Titulo_15_Helvetica fontWeight="bold" width="100%" text="CLIENTES" textAlign="center" fontSize="{sizeFonTitulos}" color="#404040"/>
+			<ns2:GraficasPoolVisitas id="grafClientes" width="100%" height="100%" maxHeight="583" maxWidth="583"/>
+			<s:Spacer height="5%" />
+			<label:Titulo_15_Helvetica fontWeight="bold" width="100%" text="TIPO DE VISITAS" textAlign="center" fontSize="{sizeFonTitulos}" color="#404040"/>
+			<ns2:GraficasPoolVisitas id="grafVisitas" width="100%" height="100%" maxHeight="583" maxWidth="583"/>
+		</s:VGroup> 
+		
+		<s:VGroup width="100%" height="100%"  gap="0">
+			<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" id="footer">
+				<s:HGroup paddingLeft="-14" width="100%" >
+					<otros:division width="100%" grueso="1" color="#404040"/>
+				</s:HGroup>
+				<s:HGroup width="60%" height="100%" gap="25" verticalAlign="middle" horizontalAlign="center">
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="right">
+						<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().crm_icono}" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" text="CRM"/>
+					</s:HGroup>
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="left">
+						<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().soluciones_icono}" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" textAlign="center" text="Solicitudes"/>
+					</s:HGroup>  
+				</s:HGroup>  
+				
+			</s:VGroup>  
+		</s:VGroup>
+		
+		<ns3:PoolVisitasVistaOperacion  id="vgpAtenderPool" width="100%" height="100%" />
+	</s:VGroup>  
+	
+	<vista:Plantilla_VistaInicial id="plantilla" width="100%" height="100%" />
+</s:Group>

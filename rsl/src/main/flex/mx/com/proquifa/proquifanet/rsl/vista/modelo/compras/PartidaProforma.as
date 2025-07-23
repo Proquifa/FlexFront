@@ -1,0 +1,585 @@
+	////////////////////////////////////////////////////////////////////////////////
+	//Code stub generated with:
+	//                                Crocus Modeller
+	//                      Robust UML editor for AS3 & Flex devs.
+	//                             http://CrocusModeller.com
+	//
+	////////////////////////////////////////////////////////////////////////////////
+	
+	
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.compras{
+	
+	/**
+	 * partidaProforma
+	 *
+	 * @author El Osva
+	 */
+	import flashx.textLayout.formats.Float;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaPedido;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.compras.tramitadorocphs.PartidaProforma")]
+	[Bindable]
+	public class PartidaProforma extends PartidaPedido{
+			////////////////
+			// PROPERTIES //
+			////////////////
+			
+			private var _idPartidaProforma:int;
+			private var _idProforma:int;
+			private var _minCompra:int;
+			private var _maxCompra:int;
+			private var _intervaloMenor:int;
+			private var _intervaloMayor:int;
+			
+			private var _partidasProgramadas:Number;		
+			private var _partidasRegulares:Number;
+			private var _partidasFE:Number;
+			private var _costoCDesc:Number;
+			
+			private var _proformaAbierta:Boolean;
+			private var _parciales:Boolean;
+			
+			private var _FEE:Date;
+			private var _fechaTramitacion:Date;
+			private var _fechaCierre:Date;
+			
+			private var _notas:ArrayCollection;
+			private var _notasOcultas:ArrayCollection;
+			
+			private var _paisProveedor:String;
+			private var _monedaProveedor:String;
+			private var _folioProforma:String;
+			private var _destino:String;
+			private var _tipoCarro:String;
+			private var _conceptoProducto:String;
+			private var _origenProforma:String;
+			
+			///////////////////////
+			// PVariables agregadas solo para Flex
+			///////////////////////
+		
+			private var _numPartidasPorProveedor:int;
+			private var _numPartidasConProforma:int;
+			private var _numPedidosAsociados:int;
+			private var _numProformasTotales:int;
+			private var _numProformasFR:int;
+			private var _numProformasFE:int;
+			private var _numProformasFP:int;
+			private var _numProformasProceso:int;
+			private var _numProformasEnviar:int;
+			private var _numPartidasRegulares:int;
+			private var _numPartidasExpress:int;
+			private var _numPartidasProgramdas:int;
+			private var _numPartidasProceso:int;
+			private var _numPartidasEnviar:int;
+			private var _numPartidasCarroStock:int;
+			private var _numPartidasCarroBOrder:int;
+			private var _numPartidasCarroProg:int;
+			private var _numPartidasCarroCM:int;
+			private var _numPartidasCarroCN:int;
+			private var _numPartidasCarroCO:int;
+			
+			private var _checkParaProforma:Boolean;
+			private var _ultimaProforma:Boolean;
+			
+			private var _fechaFEE_Formato:String;
+			
+			private var _numDiasFEE:int;
+			private var _enTiempo:String;
+			
+			private var _ultimo:String = "";
+			///////////////////////
+			// GETTERS/SETTERS
+			///////////////////////
+			
+			public function get ultimo():String
+			{
+				return _ultimo;
+			}
+
+			public function set ultimo(value:String):void
+			{
+				_ultimo = value;
+			}
+
+			public function get enTiempo():String
+			{
+				_enTiempo = "unset";
+				if(FEE != null){ 
+					if( UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), FEE ) <= 0 ){
+						_enTiempo = "FT";
+					}else if ( UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), FEE ) <= 4 ){
+						_enTiempo = "UR";
+					} else if( UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), FEE ) >= 5 ){
+						_enTiempo = "ET";
+					}
+				}
+				return _enTiempo;
+			}
+
+			public function set enTiempo(value:String):void
+			{
+				_enTiempo = value;
+			}
+
+			public function get numDiasFEE():int
+			{
+				_numDiasFEE = 0;
+				if(FEE != null){ 
+					_numDiasFEE = UtilsFecha.regresaDiferenciaEntreFechasEnDias( new Date(), FEE )
+				}
+				return _numDiasFEE;
+			}
+
+			public function set numDiasFEE(value:int):void
+			{
+				_numDiasFEE = value;
+			}
+
+			public function get notasOcultas():ArrayCollection
+			{
+				return _notasOcultas;
+			}
+
+			public function set notasOcultas(value:ArrayCollection):void
+			{
+				_notasOcultas = value;
+			}
+
+			public function get notas():ArrayCollection
+			{
+				return _notas;
+			}
+
+			public function set notas(value:ArrayCollection):void
+			{
+				_notas = value;
+			}
+
+			public function get numPartidasConProforma():int
+			{
+				return _numPartidasConProforma;
+			}
+
+			public function set numPartidasConProforma(value:int):void
+			{
+				_numPartidasConProforma = value;
+			}
+
+			public function get origenProforma():String
+			{
+				return _origenProforma;
+			}
+
+			public function set origenProforma(value:String):void
+			{
+				_origenProforma = value;
+			}
+
+			public function get numPartidasCarroCO():int
+			{
+				return _numPartidasCarroCO;
+			}
+
+			public function set numPartidasCarroCO(value:int):void
+			{
+				_numPartidasCarroCO = value;
+			}
+
+			public function get numPartidasCarroCN():int
+			{
+				return _numPartidasCarroCN;
+			}
+
+			public function set numPartidasCarroCN(value:int):void
+			{
+				_numPartidasCarroCN = value;
+			}
+
+			public function get numPartidasCarroCM():int
+			{
+				return _numPartidasCarroCM;
+			}
+
+			public function set numPartidasCarroCM(value:int):void
+			{
+				_numPartidasCarroCM = value;
+			}
+
+			public function get partidasFE():Number
+			{
+				return _partidasFE;
+			}
+
+			public function set partidasFE(value:Number):void
+			{
+				_partidasFE = value;
+			}
+
+			public function get partidasRegulares():Number
+			{
+				return _partidasRegulares;
+			}
+
+			public function set partidasRegulares(value:Number):void
+			{
+				_partidasRegulares = value;
+			}
+
+			public function get partidasProgramadas():Number
+			{
+				return _partidasProgramadas;
+			}
+
+			public function set partidasProgramadas(value:Number):void
+			{
+				_partidasProgramadas = value;
+			}
+
+			public function get ultimaProforma():Boolean
+			{
+				return _ultimaProforma;
+			}
+
+			public function set ultimaProforma(value:Boolean):void
+			{
+				_ultimaProforma = value;
+			}
+
+			public function get checkParaProforma():Boolean
+			{
+				return _checkParaProforma;
+			}
+
+			public function set checkParaProforma(value:Boolean):void
+			{
+				_checkParaProforma = value;
+			}
+
+			public function get conceptoProducto():String
+			{
+				return _conceptoProducto;
+			}
+
+			public function set conceptoProducto(value:String):void
+			{
+				_conceptoProducto = value;
+			}
+
+			public function get numPartidasCarroProg():int
+			{
+				return _numPartidasCarroProg;
+			}
+
+			public function set numPartidasCarroProg(value:int):void
+			{
+				_numPartidasCarroProg = value;
+			}
+
+			public function get numPartidasCarroBOrder():int
+			{
+				return _numPartidasCarroBOrder;
+			}
+
+			public function set numPartidasCarroBOrder(value:int):void
+			{
+				_numPartidasCarroBOrder = value;
+			}
+
+			public function get numPartidasCarroStock():int
+			{
+				return _numPartidasCarroStock;
+			}
+
+			public function set numPartidasCarroStock(value:int):void
+			{
+				_numPartidasCarroStock = value;
+			}
+
+			public function get fechaFEE_Formato():String
+			{
+				return _fechaFEE_Formato;
+			}
+
+			public function set fechaFEE_Formato(value:String):void
+			{
+				_fechaFEE_Formato = value;
+			}
+
+			public function get numPartidasEnviar():int
+			{
+				return _numPartidasEnviar;
+			}
+
+			public function set numPartidasEnviar(value:int):void
+			{
+				_numPartidasEnviar = value;
+			}
+
+			public function get numPartidasProceso():int
+			{
+				return _numPartidasProceso;
+			}
+
+			public function set numPartidasProceso(value:int):void
+			{
+				_numPartidasProceso = value;
+			}
+
+			public function get numPartidasProgramdas():int
+			{
+				return _numPartidasProgramdas;
+			}
+
+			public function set numPartidasProgramdas(value:int):void
+			{
+				_numPartidasProgramdas = value;
+			}
+
+			public function get numPartidasExpress():int
+			{
+				return _numPartidasExpress;
+			}
+
+			public function set numPartidasExpress(value:int):void
+			{
+				_numPartidasExpress = value;
+			}
+
+			public function get numPartidasRegulares():int
+			{
+				return _numPartidasRegulares;
+			}
+
+			public function set numPartidasRegulares(value:int):void
+			{
+				_numPartidasRegulares = value;
+			}
+
+			public function get numProformasEnviar():int
+			{
+				return _numProformasEnviar;
+			}
+
+			public function set numProformasEnviar(value:int):void
+			{
+				_numProformasEnviar = value;
+			}
+
+			public function get numProformasProceso():int
+			{
+				return _numProformasProceso;
+			}
+
+			public function set numProformasProceso(value:int):void
+			{
+				_numProformasProceso = value;
+			}
+
+			public function get numProformasFP():int
+			{
+				return _numProformasFP;
+			}
+
+			public function set numProformasFP(value:int):void
+			{
+				_numProformasFP = value;
+			}
+
+			public function get numProformasFE():int
+			{
+				return _numProformasFE;
+			}
+
+			public function set numProformasFE(value:int):void
+			{
+				_numProformasFE = value;
+			}
+
+			public function get numProformasFR():int
+			{
+				return _numProformasFR;
+			}
+
+			public function set numProformasFR(value:int):void
+			{
+				_numProformasFR = value;
+			}
+
+			public function get numProformasTotales():int
+			{
+				return _numProformasTotales;
+			}
+
+			public function set numProformasTotales(value:int):void
+			{
+				_numProformasTotales = value;
+			}
+
+			public function get numPedidosAsociados():int
+			{
+				return _numPedidosAsociados;
+			}
+
+			public function set numPedidosAsociados(value:int):void
+			{
+				_numPedidosAsociados = value;
+			}
+
+			public function get numPartidasPorProveedor():int
+			{
+				return _numPartidasPorProveedor;
+			}
+
+			public function set numPartidasPorProveedor(value:int):void
+			{
+				_numPartidasPorProveedor = value;
+			}
+
+
+			public function get idPartidaProforma():int {
+				return _idPartidaProforma;
+			}
+			
+			public function set idPartidaProforma(value:int):void {
+				_idPartidaProforma = value;
+			}
+			
+			public function get idProforma():int {
+				return _idProforma;
+			}
+			
+			public function set idProforma(value:int):void {
+				_idProforma = value;
+			}
+			
+			public function get parciales():Boolean {
+				return _parciales;
+			}
+			
+			public function set parciales(value:Boolean):void {
+				_parciales = value;
+			}
+			
+			public function get paisProveedor():String {
+				return _paisProveedor;
+			}
+			
+			public function set paisProveedor(value:String):void {
+				_paisProveedor = value;
+			}
+			
+			public function get monedaProveedor():String {
+				return _monedaProveedor;
+			}
+			
+			public function set monedaProveedor(value:String):void {
+				_monedaProveedor = value;
+			}
+			
+			public function get minCompra():int {
+				return _minCompra;
+			}
+			
+			public function set minCompra(value:int):void {
+				_minCompra = value;
+			}
+			
+			public function get maxCompra():int {
+				return _maxCompra;
+			}
+			
+			public function set maxCompra(value:int):void {
+				_maxCompra = value;
+			}
+			
+			public function get intervaloMenor():int {
+				return _intervaloMenor;
+			}
+			
+			public function set intervaloMenor(value:int):void {
+				_intervaloMenor = value;
+			}
+			
+			public function get intervaloMayor():int {
+				return _intervaloMayor;
+			}
+			
+			public function set intervaloMayor(value:int):void {
+				_intervaloMayor = value;
+			}
+			
+			public function get folioProforma():String {
+				return _folioProforma;
+			}
+			
+			public function set folioProforma(value:String):void {
+				_folioProforma = value;
+			}
+			
+			public function get proformaAbierta():Boolean {
+				return _proformaAbierta;
+			}
+			
+			public function set proformaAbierta(value:Boolean):void {
+				_proformaAbierta = value;
+			}
+			
+			public function get costoCDesc():Number {
+				return _costoCDesc;
+			}
+			
+			public function set costoCDesc(value:Number):void {
+				_costoCDesc = value;
+			}
+			
+			
+			public function get fechaTramitacion():Date {
+				return _fechaTramitacion;
+			}
+			
+			public function set fechaTramitacion(value:Date):void {
+				_fechaTramitacion = value;
+			}
+			
+			public function get FEE():Date {
+				return _FEE;
+			}
+			
+			public function set FEE(value:Date):void {
+				_FEE = value;
+				if( value != null ){
+					fechaFEE_Formato = UtilsFecha.formatoFechaDDMMMYYYY( value ) 
+				}
+			}
+			
+			public function get destino():String {
+				return _destino;
+			}
+			
+			public function set destino(value:String):void {
+				_destino = value;
+			}
+						
+			public function get tipoCarro():String {
+				return _tipoCarro;
+			}
+			
+			public function set tipoCarro(value:String):void {
+				_tipoCarro = value;
+			}
+			
+			public function get fechaCierre():Date {
+				return _fechaCierre;
+			}
+			
+			public function set fechaCierre(value:Date):void {
+				_fechaCierre = value;
+			}
+			
+			
+		}
+}

@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:acordeon="skins.skin.acordeon.*" xmlns:otros="skins.otros.*"
+		  creationComplete="inicia('DocAEnviar')" initialize="initi()"
+		  xmlns:boton="skins.plantillaproquifa.menu.boton.*" xmlns:botonNegroCuadrado="skins.botones.botonNegroCuadrado.*" xmlns:shaders="skins.skin.shaders.*"
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoDocumentosPendientesAEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.ActividadPendiente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.managers.PopUpManager;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]
+			public var _totalCotizaciones:String;
+			private var _seleccionado:Boolean;
+			/**
+			 * Funcion para cambiar a la Opcion Seleccionada del Menu. Al dispara el evento se dirige al componente 
+			 * padre (ViewStackGeneral.mxml) a la funcion ( seleccionaHijoMenu() );
+			 */ 
+			private function inicia( _id:String ):void{
+				if(_id != "" && _seleccionado == false){
+					var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.UTILIZA_OPCION_MENU );
+					evento.idOpcionSeleccionada = _id;
+					dispatchEvent( evento );
+				}
+				if( _id == "DocAEnviar"){
+					_seleccionado = true;
+					validaTiempoClic();
+					//DocEntran
+				}
+			}
+			
+			private function cambiaVista():void{
+				if(acordeonPqNet.selectedIndex == 1){
+					entrante.selectedIndex = 0;
+					inicia('DocEntran')	
+				}
+				if(acordeonPqNet.selectedIndex == 0){
+					saliente.selectedIndex = 0;
+					inicia('DocAEnviar')
+				}
+			}
+			
+			//limitar clics Boton Documentos a enviar
+			private var timerClic:Timer = new Timer(600, 1);
+			private function validaTiempoClic():void   
+			{
+				timerClic.removeEventListener(TimerEvent.TIMER_COMPLETE, timerCompleteClic);
+				timerClic.addEventListener(TimerEvent.TIMER_COMPLETE, timerCompleteClic);   
+				timerClic.start();   
+			}   
+			private function timerCompleteClic(event:TimerEvent):void   
+			{   
+				_seleccionado = false;
+			}  
+			/*
+			* Para Actualizar total pendientes
+			*/
+			private function initi():void{
+				entrante.addEventListener("actualizaSeccion",actualizaSeccion, false, 0, true);
+				saliente.addEventListener("actualizaSeccion",actualizaSeccionSaliente, false, 0, true);
+				var bivent:EventoDocumentosPendientesAEnviar = new EventoDocumentosPendientesAEnviar(EventoDocumentosPendientesAEnviar.TOTAL_PENDIENTES_POR_ENVIAR);
+				bivent.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(bivent);
+				actualizaTimer();
+			}
+			
+			public function actualizaSeccion(event:Event):void{
+				inicia(event.currentTarget.selectedItem.valor);
+			}
+			
+			public function actualizaSeccionSaliente(event:Event):void{
+				inicia('DocAEnviar');
+			}
+			
+			//------------ Inicio. Actualiza (recarga) los datos cada 300000 milisegundos (5min.) ---------- 
+			private var timer:Timer = new Timer(1 * 60 * 1000, 1);   
+			private function actualizaTimer():void   
+			{
+				timer.removeEventListener(TimerEvent.TIMER_COMPLETE, timerCompleteHandler);
+				timer.addEventListener(TimerEvent.TIMER_COMPLETE, timerCompleteHandler);   
+				timer.start();   
+			}   
+			private function timerCompleteHandler(event:TimerEvent):void   
+			{   
+				initi();
+			} 
+			
+			[Bindable]
+			private var _arrayTipoDocumentos:ArrayCollection = new ArrayCollection([{label:"Documentos",valor:"DocEntran"},{label:"Llamadas",valor:"LlamEntran"}]);
+			[Bindable]
+			private var _arrayTipoSalientes:ArrayCollection = new ArrayCollection([{label:"Documentos a enviar",valor:"DocAEnviar",conteo:"0"}]);
+			private var totales:int = 0;
+			public function set recibeConteoPendientes($arreglo:ArrayCollection):void{
+				if($arreglo == null) return;
+				totales = 0;
+				var f:int;
+				for( f = 0; f < $arreglo.length; f++){
+					totales += ($arreglo[f] as ActividadPendiente).totalPendiente;
+				}
+				for( f = 0; f < this._arrayTipoSalientes.length; f++){
+					if( _arrayTipoSalientes[f].valor=="DocAEnviar"){
+						//if(totales != _arrayTipoSalientes[f].conteo){
+							var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(  EventoPendientesPorEnviar.COTIZACIONES_POR_ENVIAR );
+							evento.usuario = DatosGlobales.getInstance()._usuario.usuario;
+							dispatchEvent( evento );
+						//}
+						_arrayTipoSalientes[f].conteo = totales;
+					}
+				}
+				_arrayTipoSalientes.refresh();
+			}
+		]]>
+	</fx:Script>
+	
+	<s:filters>
+		<!--<shaders:sombraBevelFilter direccion="left"/>-->
+		<shaders:sombraVertical direccion="right"/>
+	</s:filters>
+	<acordeon:acordeonPqNet id="acordeonPqNet" headerHeight="40" width="100%" height="100%" selectedIndex="0" openDuration="300" borderVisible="false" change="cambiaVista()">
+		<mx:VBox width="100%" height="100%" label="RESPONSABLE INFORMACIÓN SALIENTE" >
+			<s:List width="100%" height="40" id="saliente" dataProvider="{_arrayTipoSalientes}" selectionColor="#5294df" rollOverColor="#70b2fd" borderVisible="false" contentBackgroundColor="#eaeaea" selectedIndex="0" 
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.renders.renderMenuConteo" /> <!--click="inicia('DocAEnviar')" -->
+		</mx:VBox>
+		<mx:VBox width="100%" height="100%" label="RESPONSABLE INFORMACIÓN ENTRANTE" >
+			<s:List width="100%" height="100%" id="entrante" dataProvider="{_arrayTipoDocumentos}" selectionColor="#5294df" rollOverColor="#70b2fd" borderVisible="false" contentBackgroundColor="#eaeaea"  
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.renders.renderMenuConteo" /> <!--click="inicia(event.currentTarget.selectedItem.valor)"-->
+		</mx:VBox>
+	</acordeon:acordeonPqNet>
+</s:Group>

@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:otros="skins.otros.*" xmlns:label="skins.skin.label.*" 
+		  xmlns:flecharegresa="skins.botones.flecharegresa.*"
+		  paddingLeft="25" paddingRight="25" paddingBottom="10" paddingTop="10"
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*" 
+		  xmlns:botonNegroCuadrado="skins.botones.botonNegroCuadrado.*" 
+		  xmlns:salir="skins.botones.salir.*"
+		  xmlns:inspector="mx.com.proquifa.proquifanet.InspectorPhs.vistas.vista.inspector.*" xmlns:finalizar="skins.botones.finalizar.*" 
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.asfusion.mate.events.DispatcherEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.eventos.EventoInspectorPhs;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.modelo.datosDisplayInsPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable] 	public var _tituloEstado:String = "INSPECTOR";
+			[Bindable] 	private var _iconoTitulo:Class = catalogoIconosEtiquetas.getInstance().etiquetas_inspector;
+			[Bindable]	private var _listaPartidasOrdenesCompra:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listaPartidasInspeccionUniverso:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _display:datosDisplayInsPhs = new datosDisplayInsPhs();
+			[Bindable]	private var _numTotalET:int;
+			[Bindable]	private var _numTotalFT:int;
+			[Bindable]	private var _numTotalOC:int;
+			
+			public function set recibeListaPartidaCompra($listaUniverso:ArrayCollection):void{
+				if($listaUniverso == null || $listaUniverso.length < 1) return;
+				_listaPartidasInspeccionUniverso = $listaUniverso;
+				 /* if( _display.nombreProveedor != null && UtilsGrid.queryCampoX(_listaPartidasInspeccionUniverso, "nombreProveedor", _display.nombreProveedor ).length == 0 ){
+							var e2:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.UTILIZA_OPCION_MENU);
+							e2.idOpcionSeleccionada = "OCInspeccion";
+							e2.accion = true;
+							dispatchEvent( e2 );
+				} */
+			}
+			public function set recibeListaPartidaCompraXCompra($listaUniversoXCompra:ArrayCollection):void{
+				if($listaUniversoXCompra == null ) return;
+				if( $listaUniversoXCompra.length == 0 ){// el boton finalizar se habilita cuando el servicio ya no regresa partidas con esa OC
+					propiedadesPartida.selectedChild = propiedadesPartida.navTerminarInspeccion;
+					btnFinaliza.enabled = true;
+					btnSalir.enabled = false;
+				}
+				iniciaInspeccion( UtilsGrid.queryADosCampos( $listaUniversoXCompra, "rechazoXDoc","false", "rechazoXInsp", "false"), true )
+			}
+			public function iniciaInspeccion($listaPartidas:ArrayCollection, $bool:Boolean = false ):void{
+				if( !$bool ){
+						btnFinaliza.enabled = false;
+						btnSalir.enabled = true;
+				}
+				_listaPartidasOrdenesCompra = new ArrayCollection();
+				_listaPartidasOrdenesCompra = ObjectUtil.copy($listaPartidas) as ArrayCollection;
+				var ulti:PartidaInspeccion = new PartidaInspeccion();
+				ulti.ultimo = _listaPartidasOrdenesCompra.length.toString();
+				_listaPartidasOrdenesCompra.addItem( ulti );
+				listOC_Handler();
+				var arrProveedor:ArrayCollection = UtilsGrid.queryCampoX( _listaPartidasInspeccionUniverso, "nombreProveedor", _display.nombreProveedor);
+				_display.PART_ET_INT = UtilsGrid.conteoCampoX( arrProveedor, "enTiempo", "En tiempo");
+				_display.PART_FT_INT = UtilsGrid.conteoCampoX( arrProveedor, "enTiempo", "Fuera de tiempo");
+				_display.PART_UR_INT = UtilsGrid.conteoCampoX( arrProveedor, "enTiempo", "Urgente");
+				_display.PART_ST_INT = UtilsGrid.conteoCampoX( arrProveedor, "nombreCliente", "STOCK");
+			}
+			public function setDatosDisplay($display:datosDisplayInsPhs):void{
+				_display = $display;
+			}
+			private function regresaPlanificacion():void{
+				var evvt:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.SELECCIONA_OPCION);
+				evvt.idOpcionSeleccionada = "VistaPlan";
+				evvt.nombreProveedor = _display.nombreProveedor;
+				dispatchEvent(evvt);
+			}
+			
+			private var _indiceAnteriorListOC:int = 0;
+			private function listOC_Handler():void{
+				if( _listaPartidasOrdenesCompra.length == 1 ){
+					propiedadesPartida._partida = null;
+					return;
+				}
+				if( _indiceAnteriorListOC < 0 || _indiceAnteriorListOC > _listaPartidasOrdenesCompra.length-2 ) _indiceAnteriorListOC = 0;
+				if( listOC.selectedIndex == _listaPartidasOrdenesCompra.length-1 || listOC.selectedIndex == -1){
+					listOC.selectedIndex  = _indiceAnteriorListOC;
+					//return;
+				}
+				_indiceAnteriorListOC = listOC.selectedIndex;
+				propiedadesPartida.iniciarPropiedades( listOC.selectedItem as PartidaInspeccion );
+			}
+			/// recibe cambios partida cambiada
+			public function set recibeActualizarOC( $result:String ):void{
+				if( $result == null ) return;
+				if( Boolean($result) ){
+					recargaPartidasEnOC();
+				}else{
+					alertaSingleton.show( catalogoAlertas.ERR_errorAlGuardarCambios, catalogoAlertas.TIT_ERR);
+				}
+			}
+			public function set recibePartidaAMonitoreoBool($result:String):void{
+				if( $result == null ) return;
+				if( Boolean($result) ){
+					//recargaPartidasEnOC();
+					var e2:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.UTILIZA_OPCION_MENU);
+					e2.idOpcionSeleccionada = "OCInspeccion";
+					e2.accion = true;
+					dispatchEvent( e2 );
+				}else{
+					alertaSingleton.show( catalogoAlertas.ERR_errorAlGuardarCambios, catalogoAlertas.TIT_ERR);
+				}
+			}
+			private function recargaPartidasEnOC():void{
+				var e:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.PARTIDAS_A_INSPECCION_POR_COMPRA );
+				e.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+				e.strCompra = _display.OCString.substr(3, 11);
+				dispatchEvent( e );
+			}
+			protected function btnFinaliza_clickHandler(event:MouseEvent):void
+			{
+				var e:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.CERRAR_PENDIENTE_INSPECCION);
+				e.ordenCompra = _display.OCString.substr(3, 11);
+				e.funcionUsuario = DatosGlobales.getInstance()._usuario.nombreFuncion;
+				dispatchEvent( e );
+			}
+			public function set recibeCerrarPendientesBool( $boolStr:String ):void{
+				if( $boolStr == null ) return;
+				if( Boolean($boolStr) ){
+							/* var trivent:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.PARTIDAS_A_INSPECCION);
+							trivent.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+							dispatchEvent(trivent); */
+							/*  if( UtilsGrid.queryCampoX(_listaPartidasInspeccionUniverso, "nombreProveedor", _display.nombreProveedor ).length == 0 ){
+								var e2:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.UTILIZA_OPCION_MENU);
+								e2.idOpcionSeleccionada = "OCInspeccion";
+								e2.accion = true;
+								dispatchEvent( e2 );
+							}else{
+							}  */
+							var e3:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.SELECCIONA_OPCION);
+							e3.idOpcionSeleccionada = "VistaPlan";
+							//e3.nombreProveedor = _display.nombreProveedor;
+							dispatchEvent( e3 );
+				}else{
+					alertaSingleton.show( catalogoAlertas.ERR_errorAlGuardarCambios, catalogoAlertas.TIT_ERR);
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="middle">
+		<s:Image source="{_iconoTitulo}" />
+		<label:labelTitulo id="lblTest" width="100%" fontSize="25" text="{_tituloEstado}"/>
+		<s:Label width="438" height="25" fontFamily="Bank Gothic" fontSize="25" fontStyle="normal" fontWeight="normal"
+				 text="[OC A INSPECCIÓN]" textAlign="right" color="0x777777"/>
+	</s:HGroup>
+	<otros:divisionHueca width="100%" />
+	<s:HGroup width="100%" verticalAlign="middle">
+		<label:labelTitulo width="100%" fontSize="20" text="{_display.nombreProveedor}"/>
+		<label:labelTitulo fontSize="20" text="{_display.OCInt} OC . {_display.OC_ET_INT} ET . {_display.OC_FT_INT} FT"/>
+	</s:HGroup>
+	<otros:divisionHueca width="100%" />
+	<s:HGroup width="100%" >
+		<label:labelTitulo width="100%" fontSize="20" text="{_display.OCString}"/>
+		<label:labelTitulo fontSize="20" text="{_display.PART_ET_INT} ET · {_display.PART_UR_INT} UR · {_display.PART_FT_INT} FT · {_display.PART_ST_INT} ST"/>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup width="100%" height="100%">
+				<s:List id="listOC" width="100%" height="100%" borderVisible="false"
+								mouseDown="listOC_Handler()" dataProvider="{ _listaPartidasOrdenesCompra}"
+								itemRenderer="mx.com.proquifa.proquifanet.InspectorPhs.vistas.vista.itemRenderers.PartidaRenderer"
+								selectedIndex="0" />
+				<otros:VDivisionHueca height="100%" verticalCenter="0" />
+				<inspector:PropiedadesPartida id="propiedadesPartida" width="70%" height="100%"/>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup width="100%" horizontalAlign="left" >
+		<pqNet1:botonPqNetLargo label="Salir" id="btnSalir" click="regresaPlanificacion()" />
+		<s:Spacer width="100%"/>
+		<pqNet1:botonPqNetLargo label="Finalizar" id="btnFinaliza" enabled="false" click="btnFinaliza_clickHandler(event)" />
+	</s:HGroup>
+</s:VGroup>

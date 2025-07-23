@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 xmlns:costos="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.costosnocalidad.*"
+		 creationComplete="init()" xmlns:grafica="skins.botones.grafica.*" xmlns:tabla="skins.botones.tabla.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoCostoNoCalidad;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.controls.Alert;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable]
+			/* public var periodos:ArrayCollection = new ArrayCollection([{dato:"Bimestral"},{dato:"Semestral"}]); */
+			public var periodos:ArrayCollection = new ArrayCollection([{dato:"--TODOS--"},{dato:"Trimestral"}]);
+			
+			[Bindable]
+			public var periodosSeleccionados:ArrayCollection = new ArrayCollection();
+			
+			 public var periodoBimestral:ArrayCollection = new ArrayCollection(
+				[{id:1, dato:"Ene-Feb-Mar",mesInicio:1,mesFin:3},
+				{id:2, dato:"Abr-May-Jun",mesInicio:4,mesFin:6},
+				{id:3, dato:"Jul-Ago-Sep",mesInicio:7,mesFin:9},
+				{id:4, dato:"Oct-Nov-Dic",mesInicio:10,mesFin:12}]); 
+			
+			/* public var periodoSemestral:ArrayCollection = new ArrayCollection([{id:1, dato:"Ene-Jun",mesInicio:1,mesFin:6},{id:2, dato:"Jul-Dic",mesInicio:7,mesFin:12}]); */
+			
+			public var niveles1:ArrayCollection = new ArrayCollection([{dato:"Gerente", label:"Gerente"},{dato:"Director", label:"Director"},{dato:"Operativo", label:"Operativo"},{dato:null, label:"--TODOS--"}]);
+			/* public var niveles2:ArrayCollection = new ArrayCollection([{dato:"Operativo", label:"Operativo"}]);
+			public var niveles3:ArrayCollection = new ArrayCollection([{dato:"Gerente", label:"Gerente"},{dato:"Director", label:"Director"},{dato:"Gerente", label:"--TODOS--"}]); */
+			
+			[Bindable]
+			public var nivel:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			public var colaboradores:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			public var anios:ArrayCollection = new ArrayCollection();
+			
+			public function init():void{
+				//Alert.show("hecho");
+				this.nivel = niveles1;
+				this.gridcostos.addEventListener("detalleCostos",iradetalle);
+				this.detallecostos.addEventListener("Tabla",irtabla);
+				var anioActual:Date = new Date();
+				var anioFin:int = anioActual.getFullYear();
+				for(var anio:int = 2009; anio<= anioFin; anio++){
+					this.anios.addItem(anio);
+				}
+				
+				this.cmbNivel.selectedIndex = 3;
+				cambiarUsuarios();
+			}
+			
+			public function validar():void{
+				if(this.cmbAnios.selectedIndex == -1){
+					Alert.show("Seleccione un año para realizar la consulta");
+					return;
+				}
+			}
+			
+			private function cambioPeriodo():void{
+				if(this.cmbPeriodo.selectedItem.dato == "--TODOS--"){
+					this.cmbFiltroPeriodo.selectedIndex = -1;
+					this.cmbFiltroPeriodo.enabled = false;
+					if(this.botonera.selectedIndex == 0){
+						this.nivel = this.niveles1;
+						this.cmbNivel.selectedIndex = -1;
+					} 
+					
+				}
+				if(this.cmbPeriodo.selectedItem.dato == "Trimestral"){
+					this.cmbFiltroPeriodo.selectedIndex = 0;
+					this.cmbFiltroPeriodo.enabled = true;
+					this.nivel = this.niveles1;
+					this.cmbNivel.selectedIndex = 0;
+					this.periodosSeleccionados = this.periodoBimestral;
+				}
+				/* if(this.cmbPeriodo.selectedItem.dato == "Bimestral"){
+					this.periodosSeleccionados = this.periodoBimestral;
+					this.cmbFiltroPeriodo.enabled = true;
+					if(this.botonera.selectedIndex == 0){
+						this.nivel = this.niveles2;
+						this.cmbNivel.selectedIndex = -1;
+					}
+				}
+				if(this.cmbPeriodo.selectedItem.dato == "Semestral"){
+					this.periodosSeleccionados = this.periodoSemestral;
+					this.cmbFiltroPeriodo.enabled = true;
+					if(this.botonera.selectedIndex == 0){
+						this.nivel = this.niveles3;
+						this.cmbNivel.selectedIndex = -1;
+					}
+				} */
+			}
+			
+			private function cambiarUsuarios():void{
+				var evento:EventoCostoNoCalidad = new EventoCostoNoCalidad(EventoCostoNoCalidad.TRAER_COLABORADORES);
+				if(this.cmbNivel.selectedItem == null)
+				{
+					evento.valorAdicional = "--TODOS--";
+					evento.nivel = "--TODOS--";
+				}
+				else{
+					if(this.cmbNivel.selectedItem == null || this.cmbNivel.selectedItem.label == "TODOS" && this.cmbNivel.selectedItem.dato == null){
+						evento.valorAdicional = "--TODOS--";
+					}
+					if(this.cmbNivel.selectedItem.label == "--TODOS--" && this.cmbNivel.selectedItem.dato != null){
+						evento.nivel = this.cmbNivel.selectedItem.dato.toString();
+					}
+					else{
+						evento.nivel = this.cmbNivel.selectedItem.label.toString();
+					}
+				}
+				this.dispatchEvent(evento);
+			}
+			
+			public function set recibir_Colaboradores(_colaboradores:ArrayCollection):void{
+				this.colaboradores = new ArrayCollection();
+				if(_colaboradores.length > 0){
+					this.colaboradores = _colaboradores;
+					this.cmbColaborador.selectedIndex = 0;
+				}
+				else{
+					this.cmbColaborador.selectedIndex = -1;
+					this.cmbColaborador.textInput.text = "";
+				}
+				
+			}
+			
+			public function cambiarVista(valor:String):void{
+				//Alert.show(control.height.toString());
+				if(valor == "Grafica"){
+					this.contenedor.selectedIndex = 1;
+					//this.botonera.visible = true;
+					this.control.visible = true;
+					this.control.height = 140;
+					//this.botonera.height = 21;
+					
+					//this.panelfiltro.visible = true;
+					//this.contenedorResultados.visible = true;
+					//this.panelfiltro.height = 40;
+					//this.contenedorResultados.height = 20;
+					
+					
+					
+				}
+				if(valor == "Tabla"){
+					this.contenedor.selectedIndex = 0;
+					this.control.visible = true;
+					this.control.height = 140;
+					//this.linea2.visible = true;
+					//this.linea2.height = 0.5;
+					//this.panelfiltro.visible = true;
+					//this.botonera.visible = true;
+					//this.botonera.height = 21;
+					
+					//this.contenedorResultados.visible = true;
+					//this.panelfiltro.height = 40;
+					//this.contenedorResultados.height = 20;
+				}
+				if(valor == "Detalle"){
+					this.contenedor.selectedIndex = 2;
+					this.control.visible = false;
+					this.control.height = 0;
+					//this.linea2.visible = false;
+					//this.linea2.height = 0;
+					//this.panelfiltro.visible = false;
+					//this.botonera.visible = false;
+					//this.botonera.height = 21;
+					
+					//this.contenedorResultados.visible = false;
+					//this.panelfiltro.height = 0;
+					//this.contenedorResultados.height = 0;
+					DetalleCostoNoCalidad(this.contenedor.selectedChild).cambiarVista("Tabla");
+				}
+			}
+			
+			public function consultar():void{
+				var evento:EventoCostoNoCalidad = new EventoCostoNoCalidad(EventoCostoNoCalidad.TRAER_COSTOS_NO_CALIDAD);
+				if(this.cmbAnios.selectedIndex == -1){
+					Alert.show("Seleccione un Año para Consultar");
+					return;
+				}
+				evento._anio = int(this.cmbAnios.selectedItem);
+				
+				
+				if(this.cmbPeriodo.selectedIndex == -1){
+					Alert.show("Seleccione un perido para la Consulta");
+					return;
+				}
+				
+				if(this.cmbPeriodo.selectedItem.dato.toString() != "--TODOS--"){
+					evento._periodo = this.cmbPeriodo.selectedItem.dato.toString();
+					if(this.cmbFiltroPeriodo.selectedIndex == -1){
+						Alert.show("Selecione el rango del periodo");
+						return;
+					}
+					else{
+						evento._tipoPeriodo = this.cmbFiltroPeriodo.selectedItem.id;
+					}
+				}
+				else{
+					evento._periodo = "Anual";
+				}
+				
+				if(this.cmbNivel.selectedIndex == -1){
+					Alert.show("Seleccione un nivel para la Consulta");
+					return
+				}
+				else{
+					evento._filtro = this.cmbNivel.selectedItem.dato;
+					if(this.cmbColaborador.selectedIndex == -1){
+						evento._idEmpleado = 0;
+					}
+					else{
+						evento._idEmpleado = this.cmbColaborador.selectedItem.llave.toString();
+					}
+				}
+				this.dispatchEvent(evento);
+			}
+			
+			private function irtabla(event:Event):void{
+				this.cambiarVista(event.type);
+			}
+			
+			private function iradetalle(event:Event):void{
+				var evento:EventoCostoNoCalidad = new EventoCostoNoCalidad(EventoCostoNoCalidad.DETALLE_COSTOS_NO_CALIDAD);
+				if(this.cmbAnios.selectedIndex == -1){
+					Alert.show("Seleccione un Año para Consultar");
+					return;
+				}
+				evento._anio = int(this.cmbAnios.selectedItem);
+				
+				
+				if(this.cmbPeriodo.selectedIndex == -1){
+					Alert.show("Seleccione un perido para la Consulta");
+					return;
+				}
+				
+				if(this.cmbPeriodo.selectedItem.dato.toString() != "--TODOS--"){
+					evento._periodo = this.cmbPeriodo.selectedItem.dato.toString();
+					if(this.cmbFiltroPeriodo.selectedIndex == -1){
+						Alert.show("Selecione el rango del periodo");
+						return;
+					}
+					else{
+						evento._tipoPeriodo = this.cmbFiltroPeriodo.selectedItem.id;
+					}
+				}
+				else{
+					evento._periodo = "Anual";
+				}
+				
+				if(this.cmbNivel.selectedIndex == -1){
+					Alert.show("Seleccione un nivel para la Consulta");
+					return
+				}
+				else{
+					evento._filtro = this.cmbNivel.selectedItem.dato;
+					if(this.cmbColaborador.selectedIndex == -1){
+						evento._idEmpleado = 0;
+					}
+					else{
+						evento._idEmpleado = this.cmbColaborador.selectedItem.llave.toString();
+					}
+				}
+				evento._idEmpleado = event.target.data.idEmpleado;
+				evento.nivel = event.target.data.nivelGeneral;
+				evento.nombre = event.target.data.nombre;
+				evento._porcentajeBono = event.target.data.porcentajeBono;
+				this.dispatchEvent(evento);
+				this.cambiarVista("Detalle");
+			}
+			
+			protected function botonSeleccionado(event:MouseEvent):void
+			{
+				if(!event.currentTarget.selectedItem){
+					return;
+				}
+				if(event.currentTarget.selectedItem.toString() == "Bonos")
+				{
+					this.gridcostos._bonoOperativo = true;
+					cambioPeriodo();
+				}
+				if(event.currentTarget.selectedItem.toString() == "Normal")
+				{
+					this.gridcostos._bonoOperativo = false;	
+					this.nivel = this.niveles1;
+					this.cmbNivel.selectedIndex = 3;
+					this.cambiarUsuarios();
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:layout>
+		<s:VerticalLayout gap="0" clipAndEnableScrolling="true" />
+	</s:layout>
+	<label:labelTitulo_Otros top="20" text="Costos de no calidad" width="100%"/>
+	<!--<s:Label top="20" width="100%" text="Costos de no calidad" fontWeight="bold" fontSize="40"/>-->
+	
+	
+	<!--<s:Line  top="10" bottom="10" width="100%" id="linea1" height="0.5">
+		<s:stroke>
+			<s:SolidColorStroke color="#000000" weight="2"/>
+		</s:stroke>
+	</s:Line>-->
+	<otros:division top="10" bottom="10" width="100%" id="linea1"/>
+	
+	<s:VGroup paddingBottom="10" paddingTop="10" width="100%" gap="10" id="control">
+		
+		
+		<s:ButtonBar height="21" click="botonSeleccionado(event)" creationComplete="this.botonera.selectedIndex = 0" id="botonera">
+			<s:dataProvider>
+				<s:ArrayList>
+					<fx:String>Bonos</fx:String>
+					<fx:String>Normal</fx:String>
+				</s:ArrayList>
+			</s:dataProvider>
+		</s:ButtonBar>
+		<s:HGroup width="100%" verticalAlign="middle" id="panelfiltro" >
+			<s:FormItem  label="Año:" width="220">
+				<s:ComboBox width="150" prompt="Seleccione un año" dataProvider="{this.anios}" id="cmbAnios" />
+			</s:FormItem>
+			<s:FormItem label="Periodo:" width="100%">
+				<s:layout>
+					<s:HorizontalLayout gap="10"/>
+				</s:layout>
+				<s:ComboBox width="50%" prompt="Seleccione un periodo" dataProvider="{this.periodos}" change="cambioPeriodo()" creationComplete="{cmbPeriodo.selectedIndex = 0}" id="cmbPeriodo" labelField="dato" />
+				<s:ComboBox width="50%" prompt="Seleccione un periodo" dataProvider="{this.periodosSeleccionados}" creationComplete="{cmbFiltroPeriodo.selectedIndex=-1,cmbFiltroPeriodo.enabled = false}" id="cmbFiltroPeriodo" labelField="dato"/>
+			</s:FormItem>
+			<s:FormItem label="Nivel:" width="300">
+				<s:ComboBox width="100%" prompt="Seleccione un nivel" dataProvider="{this.nivel}" id="cmbNivel" labelField="label" change="cambiarUsuarios()"/>
+			</s:FormItem>
+			<s:FormItem label="Colaborador:" width="100%">
+				<s:ComboBox width="100%" dataProvider="{this.colaboradores}" id="cmbColaborador" labelField="valor" />
+			</s:FormItem>
+			<s:Button styleName="botonNegroOld" label="VER" verticalCenter="0" id="btnVer" click="consultar()"/>
+		</s:HGroup>
+		
+		<otros:division width="100%" id="linea2"/>
+		<!--<s:Line width="100%" id="linea2" height="0.5">
+			<s:stroke>
+				<s:SolidColorStroke color="#000000" weight="2"/>
+			</s:stroke>
+		</s:Line>-->
+		
+		<s:HGroup width="100%" id="contenedorResultados">
+			<label:labelSubtitulo text="Resultados" height="100%" textAlign="center" verticalAlign="middle"/>
+			<!--<s:Label text="Resultados" height="100%" fontSize="24" textAlign="center" verticalAlign="middle" fontWeight="bold"/>-->
+			<mx:Spacer width="100%"/>
+			<grafica:botonGrafica id="btnGrafica" click="this.cambiarVista('Grafica')"/>
+			<!--<s:Button styleName="botonNegroOld" id="btnGrafica" label="T" click="this.cambiarVista('Tabla')"/>-->
+			<tabla:botonTabla id="btnTabla" click="this.cambiarVista('Tabla')"/>
+			<!--<s:Button styleName="botonNegroOld" id="btnTabla" label="G" click="this.cambiarVista('Grafica')"/>-->
+		</s:HGroup>
+	</s:VGroup>
+	<mx:ViewStack id="contenedor" width="100%" height="100%" creationPolicy="all">
+		<costos:GridCostosNoCalidad id="gridcostos"  />
+		<costos:GraficaCostosNoCalidad />
+		<costos:DetalleCostoNoCalidad id="detallecostos" />
+	</mx:ViewStack>
+</s:Group>

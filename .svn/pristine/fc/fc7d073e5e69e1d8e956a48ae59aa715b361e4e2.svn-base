@@ -1,0 +1,680 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:ns="vista.vistas.ev_AtenderPoolDeVisitas.Componentes.*"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%"
+		 resize="calc(event)"
+		 creationComplete="init(event)" xmlns:ns1="vista.ev_AtenderPoolDeVisitas.Componentes.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.vistaPrincipal.CatClientes_IR_Item_imagen;
+			import mx.effects.AnimateProperty;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.core.NavigationUnit;
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import vista.ev_AtenderPoolDeVisitas.Componentes.PopUpAgruparVisitasAtenderPool;
+			import vista.ev_AtenderPoolDeVisitas.Componentes.PopUpEVAtenderPoolVisitas;
+			import vista.evento.EventoEVAtenderPoolVisitas;
+			
+			
+			
+			
+			
+			[Bindable]private var sizeFontLittle:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]private var sizeFont:Number;
+			[Bindable] public var widthLogo:Number;
+			[Bindable] public var heightLogo:Number;
+			public var _sql:Query;
+			public var universoCompleto:ArrayCollection;
+			public var universoActual:ArrayCollection;
+			private var popUpAtenderPool:PopUpEVAtenderPoolVisitas;
+			private var popUpAgruparSolicitudes:PopUpAgruparVisitasAtenderPool;
+			
+			[Bindable] public var currentSV:SolicitudVisita;
+			[Bindable] public var totalContacto:int;
+			[Bindable] public var totalSolicitudes:int;
+			[Bindable] public var totalCRM:int;
+			
+			private var clientesRecibidos:Boolean;
+			private var listaClientes:ArrayCollection;
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontLittle = (12/2007) * (unscaledWidth);
+				sizeFontLittle = sizeFontLittle > 12 ? 12:sizeFontLittle;
+				sizeFontLittle = sizeFontLittle < 6 ? 6:sizeFontLittle;
+				
+				sizeFontProvee = (20/2007) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 20 ? 20:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 13 ? 13:sizeFontProvee;
+				
+				sizeFont = (16/2007) * (unscaledWidth);
+				sizeFont = sizeFont > 16 ? 16:sizeFont;
+				sizeFont = sizeFont < 8 ? 8:sizeFont;
+				
+				widthLogo = (15 / 2007) * (unscaledWidth);
+				widthLogo = widthLogo > 15 ? 15:widthLogo;
+				widthLogo = widthLogo < 10 ? 10:widthLogo;
+				
+				heightLogo = (15 / 1266) * (unscaledHeight);
+				heightLogo = heightLogo > 15 ? 15:heightLogo;
+				heightLogo = heightLogo < 10 ? 10:heightLogo;
+			}
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				gridVisita.dataProvider = UtilsGrid.queryCampoXLikeDosCampos(universoActual,"contactoNombre","asunto",txtBuscador.text);
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				botoneraHead.addEventListener(EventoEVAtenderPoolVisitas.CLIC_BOTONERA_HEAD,cambioBotonera);
+				addEventListener("activarBoton",activarBoton);
+			}
+			
+			private function cambioBotonera(event:EventoEVAtenderPoolVisitas):void
+			{
+				var tipoVista:String = "";
+				if(event.tipoSelect == "todos"){
+					gridVisita.dataProvider = ObjectUtil.copy(universoActual) as ArrayCollection;
+					tipoVista = "todos";
+				}else if(event.tipoSelect == "pendientes"){
+					/*gridVisita.dataProvider = UtilsGrid.queryCampoXLike(universoActual,"tipoSolicitud",'pendientes');*/
+					gridVisita.dataProvider = UtilsGrid.queryCampoXLike(universoActual,"subtipoSolicitud",'crmSinContacto');
+					tipoVista = "";
+				}else if(event.tipoSelect == "crm"){
+					/*gridVisita.dataProvider = UtilsGrid.queryCampoXLike(universoActual,"tipoSolicitud",'crm');*/
+					gridVisita.dataProvider = UtilsGrid.queryCampoXLike(universoActual,"subtipoSolicitud",'crmConContacto');
+					tipoVista = "crm";
+				}else if(event.tipoSelect == "solicitudes"){
+					/*gridVisita.dataProvider = UtilsGrid.queryCampoXLike(universoActual,"tipoSolicitud",'solicitud');*/
+					gridVisita.dataProvider = UtilsGrid.queryCampoXLike(universoActual,"subtipoSolicitud",'solicitud');
+					tipoVista = "solicitud";
+				}
+				
+				var lista:ArrayCollection = gridVisita.dataProvider as ArrayCollection;
+				for each (var solicitud:SolicitudVisita in lista) 
+				{
+					solicitud.tipoVista = tipoVista;
+				}
+				
+				calcularTotales(event.tipoSelect);
+				
+				if(gridVisita.dataProvider.length > 0){
+					
+					gridVisita.selectedIndex = 0;
+					currentSV = universoActual[0];
+					cambioIndice(new IndexChangeEvent(IndexChangeEvent.CHANGE));
+				}
+				resetBoton();
+			}
+			
+			
+			private function scrollToIndex(animationDuration:int = 100):void 
+			{
+				var index:int = listaAsuntos.selectedIndex;
+				var pt:Point = listaAsuntos.layout.getScrollPositionDeltaToElement(index);
+				var verticalScroll:int = listaAsuntos.layout.verticalScrollPosition;
+				var verticalScrollOld:int = listaAsuntos.layout.verticalScrollPosition;
+				var delta:int = -1;
+				if (pt != null )
+				{
+					while (pt)
+					{
+						listaAsuntos.validateNow();
+						if (pt.y > 0) {
+							delta = listaAsuntos.layout.getVerticalScrollPositionDelta(NavigationUnit.DOWN);
+						} else {
+							verticalScrollOld = delta;
+							delta = listaAsuntos.layout.getVerticalScrollPositionDelta(NavigationUnit.UP);
+						}
+						listaAsuntos.layout.verticalScrollPosition += delta;
+						verticalScroll += delta;
+						pt = listaAsuntos.layout.getScrollPositionDeltaToElement(index);
+						if ((delta == 0 || verticalScrollOld == delta) && pt != null ){
+							break;
+						}
+					}
+					var animation:AnimateProperty = new AnimateProperty(listaAsuntos.dataGroup);
+					animation.property = "verticalScrollPosition";
+					animation.duration = animationDuration;
+					animation.toValue = verticalScroll;
+				}
+				
+			}
+			
+			protected function seleccionado(event:MouseEvent):void
+			{
+				setTimeout(scrollToIndex,100);
+			}
+			
+			public function setUniversoClientes(universo:ArrayCollection):void
+			{
+				reset();
+				resetBoton();
+				
+				if(clientesRecibidos){
+					iniciarUniverso(universo);
+					clientesRecibidos = false;					
+				}
+				else
+					setTimeout(verificarClientes,500,universo);
+					
+			}
+			
+			public function verificarClientes(universo:ArrayCollection):void
+			{
+				if(clientesRecibidos){
+					iniciarUniverso(universo);
+					clientesRecibidos = false;
+				}
+				else
+					setTimeout(verificarClientes,500,universo);
+			}
+			
+			public function iniciarUniverso(universo:ArrayCollection):void
+			{
+				for each (var tempObj:SolicitudVisita in universo) 
+				{
+					tempObj.contactosCliente  = ObjectUtil.copy(listaClientes) as ArrayCollection;
+				}
+				
+				this.universoCompleto = ObjectUtil.copy(universo) as ArrayCollection;
+				_sql = new Query(universo,["asunto","contactoNombre","tipoSolicitud","subtipoSolicitud"],false);
+				
+				obtenerUniversoActual();
+				
+				if(universo && universo.length)
+					recibeCliente(universo[0].cliente.idCliente);
+				else
+					recibeCliente(0);
+			}
+			
+			private function obtenerUniversoActual():void
+			{
+				/*var punterosAsunto:Array;
+				punterosAsunto = _sql.getPunteros([null,"contactoNombre"],"contactoNombre");*/
+				/*punterosAsunto = _sql.getPunteros(["asunto"],"asunto");*/
+				
+				/*for each (var campoA:String in punterosAsunto) 
+				{*/
+					var arrayContacto:Array = _sql.getPunteros([null,"contactoNombre"]);
+					for each (var campoContacto:String in arrayContacto) 
+					{
+						var arrayTemp:Array = _sql.getPunteros([null,campoContacto]);
+						if(arrayTemp.length > 0){
+							var tempSV:SolicitudVisita;
+							tempSV = ObjectUtil.copy(_sql.universo.getItemAt(arrayTemp[0])) as SolicitudVisita;
+							tempSV.numDocumentos = _sql.getSumarCampo('numDocumentos',arrayTemp);
+							
+							for each (var i:int in arrayTemp) 
+							{
+								if(_sql.universo[i].tipoSolicitud == "solicitud"){
+									tempSV.numTipoSolicitud += 1;
+								}else if(_sql.universo[i].tipoSolicitud == "crm"){
+									tempSV.numTipoCRM += 1;
+								}
+							}
+							
+							universoActual.addItem(tempSV);
+						}
+					}
+				/*}*/
+				
+				if(universoActual.length > 0){
+					gridVisita.dataProvider = ObjectUtil.copy(universoActual) as ArrayCollection;
+					
+					gridVisita.selectedIndex = 0;
+					currentSV = universoActual[0];
+					
+					obtenerSolicitudesIndicadas(currentSV.contactoNombre,currentSV.asunto);
+				}
+				
+				botoneraHead.totalTodos = _sql.universo.length
+				botoneraHead.totalSolicitudes = _sql.getPunteros([null,null,null,'solicitud']).length;
+				botoneraHead.totalCRMConContacto = _sql.getPunteros([null,null,null,'crmConContacto']).length;
+				botoneraHead.totalCRMSinContacto = _sql.getPunteros([null,null,null,'crmSinContacto']).length;
+				
+				calcularTotales('todos');
+				
+			}
+			
+			private function reset():void
+			{
+				universoActual = new ArrayCollection;
+				universoCompleto = new ArrayCollection;
+				currentSV= new SolicitudVisita;
+			}
+			
+			protected function cambioIndice(event:IndexChangeEvent):void
+			{
+				currentSV = gridVisita.selectedItem;
+				
+				obtenerSolicitudesIndicadas(currentSV.contactoNombre,currentSV.asunto);
+				resetBoton();
+			}
+			
+			private function calcularTotales(parametroBotonera:String):void
+			{
+				if(parametroBotonera == 'todos'){
+					totalContacto = _sql.getPunteros([null,"contactoNombre"]).length;
+					totalSolicitudes =  _sql.getPunteros([null,null,'solicitud']).length;
+					totalCRM =  _sql.getPunteros([null,null,'crm']).length;
+				}else{
+					var lista:ArrayCollection = ObjectUtil.copy(gridVisita.dataProvider) as ArrayCollection;
+					var sqlTemp:Query = new Query(lista,["contactoNombre","tipoSolicitud"],false);
+					
+					totalContacto = sqlTemp.getPunteros(["contactoNombre"],"contactoNombre").length;
+					
+					if(parametroBotonera == 'crm' || parametroBotonera == 'pendientes'){
+						totalCRM =  _sql.getPunteros([null,null,'crm']).length;
+						totalSolicitudes = 0;
+					}else if(parametroBotonera == 'solicitudes' ){
+						totalSolicitudes = _sql.getPunteros([null,null,'solicitud']).length;
+						totalCRM = 0;
+					}
+				}
+			}
+			
+			private function obtenerSolicitudesIndicadas(campoContacto:String,campoA:String):void
+			{
+				var listaSolicitudes:ArrayCollection = new ArrayCollection;
+				var arrayTemp:Array = _sql.getPunteros([null,campoContacto]);
+				
+				if(arrayTemp.length > 0){
+					for (var j:int = 0; j < arrayTemp.length; j++) 
+					{
+						var tempSV:SolicitudVisita;
+						tempSV = ObjectUtil.copy(_sql.universo.getItemAt(arrayTemp[j])) as SolicitudVisita;
+						listaSolicitudes.addItem(tempSV);
+					}
+				}
+				
+				listaAsuntos.dataProvider = listaSolicitudes;
+				
+			}
+			
+			protected function agrupar(event:MouseEvent):void
+			{
+				var seleccionados:int = 0;
+				var listaSeleccionados:ArrayCollection = new ArrayCollection;
+				var listaCopia:ArrayCollection = ObjectUtil.copy(listaAsuntos.dataProvider) as ArrayCollection;
+				
+				for (var i:int = 0; i < listaCopia.length; i++) 
+				{
+					if(listaCopia[i].seleccionado){
+						listaSeleccionados.addItem(listaCopia[i]);
+						seleccionados += 1;
+					}
+				}
+				
+				if(seleccionados>1){
+					popUpAgruparSolicitudes
+					
+					if( popUpAgruparSolicitudes == null ){
+						popUpAgruparSolicitudes = PopUpAgruparVisitasAtenderPool(PopUpManager.createPopUp( this, PopUpAgruparVisitasAtenderPool, true ) );
+						PopUpManager.centerPopUp( popUpAgruparSolicitudes );
+						popUpAgruparSolicitudes.setSolicitudesParaAgrupar(listaSeleccionados);
+						popUpAgruparSolicitudes.addEventListener("cancelar",cerrarPopUpAgrupar);
+						popUpAgruparSolicitudes.addEventListener("confirmar",aceptarPopUpAgrupar);
+					}else{
+						PopUpManager.addPopUp( popUpAtenderPool , this, true );
+					}
+				}else{
+					if( popUpAtenderPool == null ){
+						popUpAtenderPool = PopUpEVAtenderPoolVisitas(PopUpManager.createPopUp( this, PopUpEVAtenderPoolVisitas, true ) );
+						PopUpManager.centerPopUp( popUpAtenderPool );
+						popUpAtenderPool.setCliente(currentSV.nombreCliente);
+						popUpAtenderPool.tipoVista("agrupar");
+						popUpAtenderPool.addEventListener("cancelar",cerrarPopUp);
+						popUpAtenderPool.addEventListener("confirmar",aceptarPopUp);
+					}else{
+						PopUpManager.addPopUp( popUpAtenderPool , this, true );
+					}
+				}
+				
+				
+				
+			}
+			
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpAtenderPool );
+				popUpAtenderPool = null;
+			}
+			
+			private function cerrarPopUpAgrupar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpAgruparSolicitudes );
+				popUpAgruparSolicitudes = null;
+			}
+			
+			private function aceptarPopUpAgrupar(event:Event):void
+			{
+				var titulo:String = popUpAgruparSolicitudes.getTitulo();
+				var fecha:Date = ObjectUtil.copy(popUpAgruparSolicitudes.getFechaRealizacion()) as Date
+				PopUpManager.removePopUp( popUpAgruparSolicitudes );
+				popUpAgruparSolicitudes = null;
+				
+				var primero:Boolean;
+				var listaCopia:ArrayCollection = ObjectUtil.copy(listaAsuntos.dataProvider) as ArrayCollection;
+				var seleccionados:ArrayCollection = new ArrayCollection;
+				
+				for (var i:int = 0; i < listaCopia.length; i++) 
+				{
+					if(listaCopia[i].seleccionado){
+						listaCopia[i].idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+						seleccionados.addItem(listaCopia[i]);
+						if(!primero && seleccionados.length>0){
+							seleccionados[0].asunto = titulo;
+							seleccionados[0].fechaDeseadaRealizacion = fecha;
+							primero = true;
+						}
+					}
+				}
+				
+				var evento:EventoEVAtenderPoolVisitas = new EventoEVAtenderPoolVisitas(EventoEVAtenderPoolVisitas.ENVIAR_SOLICITUD_VISITAS_POR_AGRUPAR);
+				evento.solicitudVisitas = seleccionados;
+				dispatchEvent(evento);
+				
+			}
+			
+			private function aceptarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpAtenderPool );
+				popUpAtenderPool = null;
+				
+				var listaCopia:ArrayCollection = ObjectUtil.copy(listaAsuntos.dataProvider) as ArrayCollection;
+				var seleccionados:ArrayCollection = new ArrayCollection;
+				
+				for (var i:int = 0; i < listaCopia.length; i++) 
+				{
+					if(listaCopia[i].seleccionado){
+						listaCopia[i].idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+						seleccionados.addItem(listaCopia[i]);
+					}
+				}
+				
+			      var evento:EventoEVAtenderPoolVisitas = new EventoEVAtenderPoolVisitas(EventoEVAtenderPoolVisitas.ENVIAR_SOLICITUD_VISITAS_POR_AGRUPAR);
+				evento.solicitudVisitas = seleccionados;
+				dispatchEvent(evento);
+				
+			}
+			
+			[Bindable]private var colorBoton:uint = 0xc2c3c9;
+			protected function activarBoton(event:Event):void
+			{
+				var parcial:Boolean;
+				for each (var temp:SolicitudVisita in listaAsuntos.dataProvider) 
+				{
+					if(temp.seleccionado){
+						parcial = true;
+						break
+					}
+				}
+				
+				if(parcial){
+					colorBoton = 0x008894;
+					grpBtn.addEventListener(MouseEvent.CLICK,agrupar);
+					grpBtn.buttonMode = true;
+				}else{
+					colorBoton = 0xc2c3c9;
+					grpBtn.removeEventListener(MouseEvent.CLICK,agrupar);
+					grpBtn.buttonMode = false;
+				}
+				
+			}
+			
+			public function resetBoton():void
+			{
+				colorBoton = 0xc2c3c9;
+				grpBtn.removeEventListener(MouseEvent.CLICK,agrupar);
+				grpBtn.buttonMode = false;
+			}
+			
+			
+			public function recibeCliente(idCliente:int):void{
+				var item:CatClientes_IR_Item_imagen = new CatClientes_IR_Item_imagen();
+				
+				try
+				{
+					imagenAct.source = 	imgCliente.getInstance()["cliente_"+ idCliente ];
+				}
+				catch (error:Error)
+				{
+					imagenAct.source = imgCliente.getInstance().default_Select;
+					
+				}
+			}
+			
+			public function setListaContactosClientes(lista:ArrayCollection):void
+			{
+				clientesRecibidos = true;
+				listaClientes = lista;
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" height="100%" paddingLeft="10" paddingRight="10" gap="0" paddingTop="10" paddingBottom="10">
+		
+		<s:VGroup id="grpVisitas" width="30%" height="100%" gap="0">
+			<ns1:BotoneraHeadPoolVisita height="100%" width="100%" maxHeight="50" poolVisitas="true" id="botoneraHead"/>
+			<s:Spacer height="10%" maxHeight="20" />
+			<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="LISTA DE VISITAS" width="100%" textAlign="left" color="#424242"/>
+			<s:Spacer height="100%" maxHeight="13" width="100%"/>
+			<s:TextInput id="txtBuscador" prompt="Asunto, Nombre de contacto" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" 
+						 change="txtBuscador_changingHandler(event)" fontStyle="normal"/>
+			<s:Spacer height="100%" maxHeight="20" width="100%"/>
+			<otros:division width="100%" grueso="1" visible="{gridVisita.selectedIndex == 0 ? false:true}"/>
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="gridVisita" contentBackgroundAlpha="0"
+					itemRenderer="vista.ev_AtenderPoolDeVisitas.IR.IR_OperacionEVPoolVisita" change="cambioIndice(event)"
+					/>
+			<otros:division width="100%" grueso="1"/>
+			<s:VGroup width="100%" height="55" paddingBottom="0" verticalAlign="middle" paddingLeft="10">
+				<s:HGroup width="100%" height="100%" >
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontLittle}" width="100%" height="100%" verticalAlign="middle"
+							 text="#{gridVisita.dataProvider.length}" />
+					<s:Spacer width="100%" />
+					<s:HGroup width="100%" height="100%" verticalAlign="middle">
+						<mx:Image source="{catalogoIconosBotones.getInstance().contacto_svg}" width="{widthLogo}" height="{heightLogo}"/>
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontLittle}" width="100%" color="#008895" text="{totalContacto}" fontWeight="bold"/>
+					</s:HGroup>
+					<s:Spacer width="100%" />
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+						<mx:Image source="{catalogoIconosEtiquetas.getInstance().crm_icono}" width="{widthLogo}" height="{heightLogo}"/>
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontLittle}" color="#651a7e" text="{totalCRM}" fontWeight="bold"/>
+					</s:HGroup>
+					<s:Spacer width="100%" />
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="right">
+						<mx:Image source="{catalogoIconosEtiquetas.getInstance().soluciones_icono}" width="{widthLogo}" height="{heightLogo}"/>
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontLittle}" width="100%" color="#9b105b" text="{totalSolicitudes}" fontWeight="bold"/>
+					</s:HGroup>
+				</s:HGroup>  
+				
+				
+				
+				<!--ELIMINAR-->
+				<!--<ns:BotoneraFootPoolVisita width="100%" height="100%" maxHeight="35"/>-->
+			</s:VGroup>  
+			
+		</s:VGroup>
+		
+		
+		
+		
+		
+		
+		
+		<s:Spacer width="20%" maxWidth="10" />
+		<otros:divisionDegradadoVertical height="100%" width="2" />
+		<s:Spacer width="20%" maxWidth="10" />
+		<s:VGroup width="70%" height="100%" gap="0">
+			
+			
+			
+			
+			
+			<s:VGroup width="100%" height="100%" maxHeight="260" >
+				
+				
+				
+				<s:VGroup width="100%" verticalAlign="top" >
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontProvee}" color="#3e3e3d" text="INFORMACIÓN DE VISITA" paddingTop="10" paddingBottom="10" fontWeight="bold" />
+					<s:Rect width="100%" height="1">
+						<s:fill>
+							<s:SolidColor color="#000000" />
+						</s:fill>
+					</s:Rect>
+				</s:VGroup>  
+				
+				<s:HGroup width="100%" height="100%" gap="0" paddingTop="10" paddingBottom="10" verticalAlign="middle" horizontalAlign="center" >
+					
+					<s:HGroup width="10%"  horizontalAlign="left" verticalAlign="top">
+						<s:Image id="imagenAct" visible="true" includeInLayout="true" smoothingQuality="default" smooth="true"/>
+						<s:VGroup height="100%" verticalAlign="middle" >
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontProvee}" fontWeight="bold" color="#008895" verticalAlign="middle" 
+									 text="{currentSV.nombreCliente}"  width="100%" maxDisplayedLines="2" />
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontLittle}" fontWeight="bold" color="#404040" verticalAlign="middle"
+									 text="Cliente"  width="100%" maxDisplayedLines="2" />
+						</s:VGroup>  
+						
+					</s:HGroup> 		  
+					<s:Spacer width="20" />
+					
+					<s:VGroup width="100%" height="100%" verticalAlign="middle" paddingBottom="40" paddingTop="40" gap="4" horizontalAlign="left">
+						<s:HGroup height="100%" width="100%" verticalAlign="middle">
+							<mx:Image source="{catalogoIconosBotones.getInstance().contacto_svg}" />	
+							<s:Label styleName="tab_texto_12_Helvetica"  fontSize="22" color="#008894" text="{currentSV.contacto.nombreCompleto}" textAlign="left" fontFamily="Helvetica" fontWeight="bold"/>
+						</s:HGroup>  
+						<s:HGroup height="100%" width="100%" verticalAlign="middle">
+							<mx:Image source="{catalogoIconosBotones.getInstance().mail_svg}" />	
+							<s:Label fontSize="18" color="#008894" text="Correo:" textAlign="left" fontFamily="Helvetica" />				
+							<s:Label fontSize="18" color="#424242" text="{currentSV.contacto.EMail}" textAlign="left" fontFamily="Helvetica" />				
+						</s:HGroup>  
+						<s:HGroup height="100%" width="100%" verticalAlign="middle">
+							<mx:Image source="{catalogoIconosBotones.getInstance().telefono_svg}" />	
+							<s:Label fontSize="18" color="#008894" text="Teléfono:" textAlign="left" fontFamily="Helvetica" />				
+							<s:Label fontSize="18" color="#424242" text="{currentSV.contacto.telefono==null?'ND':currentSV.contacto.telefono} · Ext {currentSV.contacto.extension1 == null?'':currentSV.contacto.extension1}" 
+									 textAlign="left" fontFamily="Helvetica" />				
+						</s:HGroup>  
+					</s:VGroup> 
+					
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%"  verticalAlign="middle" paddingTop="10" paddingBottom="10" horizontalAlign="center" visible="false" includeInLayout="false">
+					<s:VGroup width="100%"  height="100%" maxWidth="460" paddingLeft="20" verticalAlign="middle" horizontalAlign="center">
+						<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="center">
+							<mx:Image source="{catalogoIconosEtiquetas.getInstance().crm_icono}" />
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontProvee}" fontWeight="bold" color="#008895"  height="100%" verticalAlign="middle"
+									 text="{currentSV.nombreCliente}" width="100%" maxDisplayedLines="2"/>
+						</s:HGroup>  
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" width="100%"  
+								 text="Cliente" />
+					</s:VGroup>  
+					
+					
+					<s:VGroup width="100%" height="70%" gap="5" verticalAlign="middle" id="grpInfoContacto" horizontalAlign="center">
+						
+						
+						<s:HGroup width="80%" height="100%" verticalAlign="middle">
+							<mx:Image source="{catalogoIconosBotones.getInstance().contacto_svg}" width="{widthLogo}" height="{heightLogo}"/>
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontProvee}" fontWeight="bold" color="#008895" 
+									 text="{currentSV.contactoNombre}"  width="100%" maxDisplayedLines="2" />
+						</s:HGroup>  
+						
+						<s:HGroup width="80%" height="100%" verticalAlign="middle">
+							<s:HGroup width="100%" height="100%" >
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#008895" 
+										 text="E-mail:"  />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+										 text="{currentSV.contacto.EMail}"  />
+							</s:HGroup>  
+							<s:HGroup width="100%" height="100%" >
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#008895" 
+										 text="Teléfono:"  />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+										 text="{currentSV.contacto.telefono}"  />
+							</s:HGroup>  
+						</s:HGroup>  
+						
+						
+						<s:HGroup width="80%" height="100%" verticalAlign="middle">
+							<s:HGroup width="100%" height="100%" >
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#008895" 
+										 text="Puesto:"  />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+										 text="{currentSV.contacto.puesto}"  />
+							</s:HGroup>  
+							<s:HGroup width="100%" height="100%" >
+								<!--<s:Label styleName="tab_texto_14_Helvetica" fontSize="15" fontWeight="bold" color="#008895" 
+								text="Ext: 1234"  />-->
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+										 text="Ext: {currentSV.contacto.extension1==null?'ND':currentSV.contacto.extension1}"  />
+							</s:HGroup>  
+						</s:HGroup>
+						
+						
+						<s:HGroup width="80%" height="100%" verticalAlign="middle">
+							<s:HGroup width="100%" height="100%" >
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#008895" 
+										 text="Departamento:"  />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+										 text="{currentSV.contacto.departamento}"  />
+							</s:HGroup>  
+							<s:HGroup width="100%" height="100%" >
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#008895" 
+										 text="Celular:"  />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+										 text="{currentSV.contacto.celular==null?'ND':currentSV.contacto.celular}"  />
+							</s:HGroup>  
+						</s:HGroup>
+						
+					</s:VGroup>  
+					
+				</s:HGroup>  
+				<!--</s:Group>-->
+			</s:VGroup>  
+			
+			
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="listaAsuntos" contentBackgroundAlpha="0" click="seleccionado(event)"
+					itemRenderer="vista.ev_AtenderPoolDeVisitas.IR.IR_ListaSeleccionarVisitaPoolVisita"
+					/>
+			<s:Spacer height="20" />
+			<s:Group width="100%" height="100%" id="grpBtn" maxHeight="55" buttonMode="true" >
+				<s:Label fontSize="25" fontWeight="bold" color="#FFFFFF" depth="5" fontFamily="Novecento" 
+						 text="AGRUPAR" height="100%" width="100%" textAlign="center" verticalAlign="middle" />
+				<s:Rect width="100%" height="100%" depth="1">
+					<s:fill>
+						<s:SolidColor color="{colorBoton}" />
+					</s:fill>
+				</s:Rect>
+			</s:Group>  
+			
+			
+			
+			
+			
+		</s:VGroup>  
+	</s:HGroup>  
+</s:Group>

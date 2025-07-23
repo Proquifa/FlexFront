@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:medios="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisDeVentas.medios.*"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:gridConTotales="skins.skin.AdvancedDataGrid.gridConTotales.*"
+		  xmlns:graficas="skins.skin.graficas.*" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:chekbox="skins.skin.chekbox.*"
+		  
+		  paddingTop="20" 
+		  width="100%" height="100%" 
+		  horizontalAlign="center" gap="0" 
+		  
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.resumenVentasEnPeriodoMax.EventoResumenVentasEnPeriodoMax;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ResumenVentasESAC;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisDeVentas.altos.HeaderGridConTotalesClientesAltosMXML;
+			import mx.utils.ObjectUtil;
+			
+			public const CLIENTE_VISTA:String = "cliente";
+			public const ESAC_VISTA:String = "esac";
+			
+			public var currentVista:String = CLIENTE_VISTA;
+			
+			[Bindable]
+			private var vistaCliente:Boolean = true;
+			
+			
+			private var currentClientes:ArrayCollection;
+			private var altoRequerido:Number; 
+			public function set recibeAClientesDelaGraficaDeMedios($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+				{
+					return;
+				}
+				
+				currentClientes = $clientes;
+				
+				gridResumenClientesMedios.gridDataProvider = $clientes;
+				altoRequerido = (25 * $clientes.length) + 40;
+				
+				if(altoRequerido < grpContenido.height)
+				{
+					gridResumenClientesMedios.height = altoRequerido;
+				}
+				else
+				{
+					gridResumenClientesMedios.percentHeight = 100;
+				}
+			}
+			
+			protected function chkClienteEsac_changeHandler(event:Event):void
+			{
+				if(chkClienteEsac.selected)
+				{
+					vistaCliente = false;
+					currentVista = ESAC_VISTA;
+				}
+				else
+				{
+					vistaCliente = true;
+					currentVista = CLIENTE_VISTA;
+				}
+				
+				var enviarVista:EventoResumenVentasEnPeriodoMax = new EventoResumenVentasEnPeriodoMax(EventoResumenVentasEnPeriodoMax.ENVIAR_SELECCION_CHECK_FROM_CENTRO_TO_VISTA_DEFAULT_ANALISIS_VENTAS);
+				enviarVista.vistaSolicitada = currentVista;
+				dispatchEvent(enviarVista);
+				
+				grpContenido.invalidateDisplayList();
+			}
+			
+			protected function layoutmediosesac1_terminoDeAsignarTamaniosAlosComponentesLayoutMediosEsacHandler(event:Event):void
+			{
+				if(currentVista == CLIENTE_VISTA)
+				{
+					if(altoRequerido < grpContenido.height)
+					{
+						gridResumenClientesMedios.height = altoRequerido;
+					}
+					else
+					{
+						gridResumenClientesMedios.percentHeight = 100;
+					}
+					
+					gridResumenClientesMedios.validateGridsNow(); 
+				}
+				else if(currentVista == ESAC_VISTA)
+				{
+					gridResumenEsacMedios.validateGridsNow(); 
+				}
+			}
+			
+			//VISTA ESAC ===============================================================================================================================================================
+			
+			private var _listaVentasEsac:ArrayCollection;
+			private var _gridProvider:ArrayCollection;
+			private var chartProvider:ArrayCollection;
+			private var _sql:Query;
+			public function set recibeListaResumenVentasEsac($lista:ArrayCollection):void
+			{
+				if(!$lista) 
+				{
+					return;
+				}
+				
+				chartProvider = new ArrayCollection;
+				_listaVentasEsac = new ArrayCollection;
+				_gridProvider = new ArrayCollection;
+				if($lista.length > 0)
+				{
+					_listaVentasEsac = ObjectUtil.copy($lista) as ArrayCollection;
+					_gridProvider = ObjectUtil.copy($lista) as ArrayCollection;
+					
+					var totales:ResumenVentasESAC = _listaVentasEsac.removeItemAt(0) as ResumenVentasESAC;
+					var montoTotalMedios:Number = totales.tgridMMA + totales.tgridMMM + totales.tgridMMB;
+					var clientesTotalMedios:Number = totales.tgridCMA + totales.tgridCMM + totales.tgridCMB;
+					var itemRC:ResumenConsulta;
+					
+					(_gridProvider[0] as ResumenVentasESAC).tgridClientes = clientesTotalMedios;
+					(_gridProvider[0] as ResumenVentasESAC).tgridMontoAnterior = montoTotalMedios;
+					for (var i:int = 0; i < _listaVentasEsac.length; i++) 
+					{
+						var item:ResumenVentasESAC = (_listaVentasEsac[i] as ResumenVentasESAC);
+						
+						itemRC = new ResumenConsulta;
+						itemRC.etiqueta = item.esac.toUpperCase();
+						itemRC.clientes = item.clientesMA + item.clientesMM + item.clientesMB;
+						itemRC.total = item.ventaMA + item.ventaMM + item.ventaMB;
+						itemRC.totalIngresosPorcentaje = UtilsFormatosNumericos.truncarDecimalesCeil(((itemRC.total * 100) / montoTotalMedios),2);
+						chartProvider.addItem(itemRC);
+						
+						(_gridProvider[i+1] as ResumenVentasESAC).totalClientes = itemRC.clientes;
+						(_gridProvider[i+1] as ResumenVentasESAC).distribucionClientes = UtilsFormatosNumericos.truncarDecimalesCeil(((itemRC.clientes * 100)/clientesTotalMedios),2);
+						(_gridProvider[i+1] as ResumenVentasESAC).totalVentaEsac = itemRC.total;
+						(_gridProvider[i+1] as ResumenVentasESAC).participacion = itemRC.totalIngresosPorcentaje;
+						
+					}
+					
+					gridResumenEsacMedios.gridDataProvider = _gridProvider;
+					gridResumenEsacMedios.height = (25 * _gridProvider.length) + 70;
+					
+					chartEsacsMedios.dataProvider = chartEsacsMedios.aplicarFormatoClientesClaveTODOS(chartProvider,"ESAC");
+					var enviarFiltroEsacMedios:EventoResumenVentasEnPeriodoMax = new EventoResumenVentasEnPeriodoMax(EventoResumenVentasEnPeriodoMax.ENVIAR_SELECCION_CENTRO_TO_GRAFICA_VISTA_ESAC_MEDIOS);
+					enviarFiltroEsacMedios.esac = (chartProvider[0] as ResumenConsulta).etiqueta;
+					dispatchEvent(enviarFiltroEsacMedios);
+				}
+				else
+				{
+					gridResumenEsacMedios.height = (25 * _gridProvider.length) + 70;
+					gridResumenEsacMedios.gridDataProvider = new ArrayCollection;
+				}
+			}
+			
+			
+			protected function chartEsacsAltos_itemClickHandler(event:ChartItemEvent):void
+			{
+				var enviarFiltroEsacAltos:EventoResumenVentasEnPeriodoMax = new EventoResumenVentasEnPeriodoMax(EventoResumenVentasEnPeriodoMax.ENVIAR_SELECCION_CENTRO_TO_GRAFICA_VISTA_ESAC_MEDIOS);
+				enviarFiltroEsacAltos.esac = (event.hitData.item as ResumenConsulta).etiqueta;
+				dispatchEvent(enviarFiltroEsacAltos);
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<chekbox:CheckBoxPq id="chkClienteEsac" labelLeft="CLIENTE" labelRight="ESAC" change="chkClienteEsac_changeHandler(event)"/>
+	
+	<s:Spacer height="15"/>
+	
+	<s:Group id="grpContenido" width="100%" height="100%" >
+		
+		<s:layout>
+			<medios:LayoutMediosEsac terminoDeAsignarTamaniosAlosComponentesLayoutMediosEsac="layoutmediosesac1_terminoDeAsignarTamaniosAlosComponentesLayoutMediosEsacHandler(event)"/>
+		</s:layout>
+		
+		<gridConTotales:advancedDataGridConTotales id="gridResumenClientesMedios" height="100%" width="100%" footerEnabled="true" footerColumnsExplicit="true" visible="{vistaCliente}" 
+												   headerRenderer="{new ClassFactory(HeaderGridConTotalesClientesAltosMXML)}" headerHeight="25" >
+			<gridConTotales:gridColumns>
+				<mx:AdvancedDataGridColumn headerText="#" dataField="numFila" width="40"/>
+				<mx:AdvancedDataGridColumn headerText="CLIENTE" dataField="conceptoResultado"/>
+				<mx:AdvancedDataGridColumn headerText="ESAC" dataField="usuario" />
+				<mx:AdvancedDataGridColumn headerText="MONTO" dataField="totalString"/>
+				<mx:AdvancedDataGridColumn headerText="OBJETIVO %" dataField="porcentaje" />
+				<mx:AdvancedDataGridColumn headerText="OBJETIVO $" dataField="montoString" />
+			</gridConTotales:gridColumns>
+			
+			<gridConTotales:footerColumns>
+				<mx:AdvancedDataGridColumn headerText="#" width="40"/>
+				<mx:AdvancedDataGridColumn headerText="CLIENTE" />
+				<mx:AdvancedDataGridColumn headerText="ESAC" />
+				<mx:AdvancedDataGridColumn headerText="MONTO" dataField="totalMonto"/>
+				<mx:AdvancedDataGridColumn headerText="OBJETIVO %" dataField="totalObjetivoPercent" />
+				<mx:AdvancedDataGridColumn headerText="OBJETIVO $" dataField="totalObjetivoMonto" />
+			</gridConTotales:footerColumns>
+		</gridConTotales:advancedDataGridConTotales>
+		
+		
+		<s:VGroup id="grpVistaEsac" width="100%" height="100%" visible="{!vistaCliente}">
+			
+			<graficas:PieChartPqGris id="chartEsacsMedios" width="100%" height="100%" showDataTips="false" innerRadius=".5" dataProvider="{new ArrayCollection}" esConRealse="true" useCursorHand="true"  esConAutoseleccion="true"
+									 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" itemClick="chartEsacsAltos_itemClickHandler(event)">
+				<graficas:series>
+					<graficas:pieSeriesPqNet field="total" /> 
+				</graficas:series>
+			</graficas:PieChartPqGris>
+			
+			<gridConTotales:advancedDataGridConTotales id="gridResumenEsacMedios" width="100%" footerEnabled="true" footerColumnsExplicit="true">
+				<gridConTotales:gridColumns>
+					
+					<mx:AdvancedDataGridColumn headerText="#" dataField="numFila" width="40"/>
+					<mx:AdvancedDataGridColumn headerText="ESAC" dataField="esac" />
+					<mx:AdvancedDataGridColumn headerText="CLASE" dataField="funcion" />
+					
+					<mx:AdvancedDataGridColumn headerText="MA;C;$">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+										<label:Texto_12 text="{data.clientesMA}" width="20%" textAlign="center"/>
+										<label:Texto_12 text="{data.ventaMAString}" width="80%" textAlign="center"/>
+									</s:HGroup>  
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					
+					<mx:AdvancedDataGridColumn headerText="MM;C;$" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+										<label:Texto_12 text="{data.clientesMM}" width="20%" textAlign="center"/>
+										<label:Texto_12 text="{data.ventaMMString}" width="80%" textAlign="center"/>
+									</s:HGroup>  
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="MB;C;$">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+										<label:Texto_12 text="{data.clientesMB}" width="20%" textAlign="center"/>
+										<label:Texto_12 text="{data.ventaMBString}" width="80%" textAlign="center"/>
+									</s:HGroup>  
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					
+					<mx:AdvancedDataGridColumn headerText="C#" dataField="totalClientes" width="40"/>
+					<mx:AdvancedDataGridColumn headerText="DISTRIBUCIÓN" dataField="distribucionClientesString" />
+					<mx:AdvancedDataGridColumn headerText="MONTO" dataField="totalVentaEsacString" />
+					<mx:AdvancedDataGridColumn headerText="PARTICIPACIÓN" dataField="participacionString"/>
+					
+				</gridConTotales:gridColumns>
+				
+				<gridConTotales:footerColumns>
+					
+					<mx:AdvancedDataGridColumn headerText="#" width="40" />
+					<mx:AdvancedDataGridColumn headerText="ESAC"  />
+					<mx:AdvancedDataGridColumn headerText="CLASE"  />
+					
+					<mx:AdvancedDataGridColumn headerText="MA;C;$">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+										<label:Titulo_12_VerdeAzul_pTop10 paddingTop="0" text="{data.clientesMA}" width="20%" textAlign="center"/>
+										<label:Titulo_12_VerdeAzul_pTop10 paddingTop="0" text="{data.ventaMAString}" width="80%" textAlign="center"/>
+									</s:HGroup>  
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					
+					<mx:AdvancedDataGridColumn headerText="MM;C;$" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+										<label:Titulo_12_VerdeAzul_pTop10 paddingTop="0" text="{data.clientesMM}" width="20%" textAlign="center"/>
+										<label:Titulo_12_VerdeAzul_pTop10 paddingTop="0" text="{data.ventaMMString}" width="80%" textAlign="center"/>
+									</s:HGroup>  
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="MB;C;$">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+									<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+										<label:Titulo_12_VerdeAzul_pTop10 paddingTop="0" text="{data.clientesMB}" width="20%" textAlign="center"/>
+										<label:Titulo_12_VerdeAzul_pTop10 paddingTop="0" text="{data.ventaMBString}" width="80%" textAlign="center"/>
+									</s:HGroup>  
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					
+					<mx:AdvancedDataGridColumn headerText="C#" dataField="tgridClientes" width="40"/>
+					<mx:AdvancedDataGridColumn headerText="DISTRIBUCIÓN" dataField="tgridDistribucionString" />
+					<mx:AdvancedDataGridColumn headerText="MONTO" dataField="tgridMontoAnteriorString" />
+					<mx:AdvancedDataGridColumn headerText="PARTICIPACIÓN" dataField="tgridParticipacionString"/>
+				</gridConTotales:footerColumns>
+				
+			</gridConTotales:advancedDataGridConTotales>
+		</s:VGroup>  
+	</s:Group>  
+</s:VGroup>

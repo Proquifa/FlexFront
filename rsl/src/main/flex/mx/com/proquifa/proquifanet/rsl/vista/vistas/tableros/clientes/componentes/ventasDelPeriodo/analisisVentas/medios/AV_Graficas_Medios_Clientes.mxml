@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			private const CLIENTE_VISTA:String = "cliente";
+			private const ESAC_VISTA:String = "esac";
+			
+			private var _currentVista:String = CLIENTE_VISTA;
+			private var currentNivel:String = null; 
+			
+			private var updateCalculosVCliente:Boolean = false;
+			private var updateCalculosVEsac:Boolean = false;
+			
+			[Bindable]
+			private var vistaCliente:Boolean = true;
+			
+			private var _sql:Query;
+			public function set recibeListaResumenVentasTodosClientesMedios($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+				{
+					return;
+				}
+				_sql = new Query($clientes,["nivelIVista","usuarioVista","conceptoResultado","etiqueta"]);
+				
+				hacerCalculosVistaCliente();
+			}
+			
+			private function hacerCalculosVistaCliente():void
+			{
+				
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					updateCalculosVCliente = false;
+					
+					var providerChartTodosLosEsacs:ArrayCollection;
+					providerChartTodosLosEsacs = new ArrayCollection; 
+					providerChartTodosLosEsacs = generateChartReporte("nivelIVista",null,["nivelIVista",null,null]);
+					
+					var providerChartClientesAAplus:ArrayCollection = new ArrayCollection;
+					providerChartClientesAAplus = generateChartReporte("conceptoResultado",null,[null,null,"conceptoResultado"]);
+					
+					var arreglo:ArrayCollection = chartAltosClientes.aplicarFormatoClientesDistribucionXNiveles(providerChartTodosLosEsacs);
+					for (var f:int=0; f<arreglo.length; f++)
+					{
+						var item:ResumenConsulta = arreglo[f] as ResumenConsulta;
+						
+						if(item.etiqueta == "MA")
+						{
+							item.totalFolios = 3;
+							item.nombreCartera = "A";
+						}
+						else if(item.etiqueta == "MM")
+						{
+							item.totalFolios = 4;
+							item.nombreCartera = "B";
+						}
+						else if(item.etiqueta == "MB")
+						{
+							item.totalFolios = 5;
+							item.nombreCartera = "C";
+						}
+					}
+					
+					var sortField:SortField = new SortField();
+					sortField.name = "totalFolios";
+					sortField.numeric = true;
+					var sort:Sort = new Sort();
+					sort.fields = [sortField];
+					arreglo.sort = sort;
+					arreglo.refresh();
+					
+					chartAltosClientes.dataProvider = arreglo;
+					piechartTodosClientesPorClientes.dataProvider = piechartTodosClientesPorClientes.aplicarFormatoClientesDistribucionXNivelesRanking(providerChartClientesAAplus);
+				}
+				else
+				{
+					chartAltosClientes.dataProvider = new ArrayCollection();
+					piechartTodosClientesPorClientes.dataProvider = new ArrayCollection();
+				}
+			}
+			
+			private function generateChartReporte( $propiedad:String, $filtro:String, $consulta:Array ):ArrayCollection
+			{
+				var arrayProvider:ArrayCollection = new ArrayCollection();
+				if( _sql.indexObject[ $propiedad ] != null )
+				{
+					// determino si el filtro aplica por campo o por propiedad en campo
+					var posIdx:int = $consulta.indexOf( $propiedad );
+					for( var key:String in _sql.indexObject[ $propiedad ] )
+					{
+						var consultaReformulada:Array = ObjectUtil.copy( $consulta ) as Array; 
+						if( posIdx != -1 )
+							consultaReformulada[ posIdx ] = key;
+						if( $filtro != null )
+							consultaReformulada[ posIdx ] = $filtro;
+						if( posIdx != -1 && $filtro == null || key == $filtro )
+						{
+							var cachoPie:ResumenConsulta = new ResumenConsulta();
+							cachoPie.etiqueta = key;
+							var punterosFiltro:Array = _sql.getPunteros( consultaReformulada );
+							cachoPie.clientes = punterosFiltro.length; 
+							cachoPie.totalClientes = punterosFiltro.length; 
+							cachoPie.total = _sql.getSumarCampo( "total", punterosFiltro);
+							
+							cachoPie.porcentajeDistribucion = UtilsFormatosNumericos.truncarDecimalesCeil((punterosFiltro.length * 100)/_sql.universo.length,2);
+							
+							var punterosEsac:Array = _sql.getPunteros([currentNivel,null,null,"MEDIOS"]);
+							var totalXEsac:Number = _sql.getSumarCampo( "total", punterosEsac);
+							cachoPie.porcentajeDistribucion = UtilsFormatosNumericos.truncarDecimalesCeil((cachoPie.total * 100)/totalXEsac,2); 
+							
+							arrayProvider.addItem( cachoPie );
+						}
+					}
+				}
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "total";
+				dataSortField.descending = true;
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				arrayProvider.sort = numericDataSort;
+				arrayProvider.refresh();
+				for (var r:int = 1; r <= arrayProvider.length; r++)
+				{
+					(arrayProvider[r-1] as ResumenConsulta).rankingCliente = r;
+				}
+				return arrayProvider;
+			}
+			
+			protected function chartAltosClientes_itemClickHandler(event:ChartItemEvent):void
+			{
+				currentVista = ESAC_VISTA;
+				lblTitulo.text = "MEDIOS "+(event.hitData.item as ResumenConsulta).etiqueta;
+				lblTituloCliente.text = "CLIENTES "+(event.hitData.item as ResumenConsulta).etiqueta;
+				
+				var opc:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.OPCION_CHART_MEDIOS);
+				opc.seleccionChart = (event.hitData.item as ResumenConsulta).etiqueta;
+				dispatchEvent(opc);
+				//botonAltos.visible = true;
+				
+				currentNivel = (event.hitData.item as ResumenConsulta).etiqueta;
+				var providerChartClientesAAplus:ArrayCollection = new ArrayCollection;
+				providerChartClientesAAplus = generateChartReporte("conceptoResultado",null,[currentNivel,null,"conceptoResultado"]);
+				piechartTodosClientesPorClientes.dataProvider = piechartTodosClientesPorClientes.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesAAplus);
+			}
+			
+			protected function contenido_clickHandler(event:MouseEvent):void
+			{
+				currentNivel = null;
+				currentVista = CLIENTE_VISTA;
+				lblTitulo.text = "MEDIOS";
+				lblTituloCliente.text = "CLIENTES"
+				
+				var opc:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.OPCION_CHART_MEDIOS);
+				opc.seleccionChart = "TODOS";
+				dispatchEvent(opc);
+				//botonAltos.visible = false;
+				hacerCalculosVistaCliente();
+			}
+			
+			/* protected function vgroup1_mouseOverHandler(event:MouseEvent):void
+			{
+			img.source = catalogoIconosBotones.getInstance().analisis_medios_selected;
+			lblBoton.setStyle("color","0x"+catalogoColores.LABEL_VERDE_AZUL);
+			}
+			
+			protected function botonAltos_mouseOutHandler(event:MouseEvent):void
+			{
+			img.source = catalogoIconosBotones.getInstance().analisis_medios;
+			lblBoton.setStyle("color","0x"+catalogoColores.LABEL_NEGRO);
+			} */
+			
+			public function get currentVista():String
+			{
+				return _currentVista;
+			}
+			
+			public function set currentVista(value:String):void
+			{
+				_currentVista = value;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="hovered"/>
+		<s:State name="selected"/>
+	</s:states>
+	
+	
+	<s:VGroup width="100%" height="100%" horizontalAlign="center" paddingTop="20" paddingBottom="20">
+		<label:Titulo_14_pTop10 id="lblTitulo" text="MEDIOS"/>
+		<graficas:PieChartPqGris id="chartAltosClientes" width="100%" visible="true" height="100%" showDataTips="false" innerRadius=".5"  esConRealse="true" useCursorHand="true" esConAutoseleccion="false"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" itemClick="chartAltosClientes_itemClickHandler(event)" 
+								 icono="analisis_medios" clickImagen="contenido_clickHandler(event)" sinOver="true" >
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total" nameField="nombreCartera"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer height="5%" />
+		<label:Titulo_14_pTop10 id="lblTituloCliente" text="CLIENTES"/>
+		<graficas:PieChartPqGris width="100%" height="100%" id="piechartTodosClientesPorClientes" showDataTips="false" innerRadius=".5" 
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total" /> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+	</s:VGroup>
+	
+	
+	<!--<s:VGroup width="100%" height="100%" paddingTop="20" paddingRight="20" horizontalAlign="right">
+	<s:VGroup id="botonAltos"  click="contenido_clickHandler(event)" horizontalAlign="center" mouseOver="vgroup1_mouseOverHandler(event)" mouseOut="botonAltos_mouseOutHandler(event)" visible="false">
+	<s:Image id="img" source= "{catalogoIconosBotones.getInstance().analisis_medios}" />
+	<label:Titulo id="lblBoton" textAlign="center" text="TODOS MEDIOS" fontSize="9" paddingTop="0"  fontWeight="bold"/>
+	</s:VGroup>
+	</s:VGroup>-->
+</s:Group>

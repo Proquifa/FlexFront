@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas 
+		xmlns:fx="http://ns.adobe.com/mxml/2009"
+		xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		xmlns:mx="library://ns.adobe.com/flex/mx"  
+		xmlns:pqNet1="skins.botones.pqNet.*" 
+		xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+		xmlns:label="skins.skin.label.*" 
+		xmlns:consultas="skins.skin.comun.consultas.*"
+		xmlns:otros="skins.otros.*"
+		width="100%" height="100%"
+		creationComplete="completeHandler()"
+		>
+
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.asistencia.EventoConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.asistencia.Asistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.asistencia.componentesGraficas.GraficaAreaConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.asistencia.componentesGraficas.GraficaAsistenciaVsInasistenciaConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.asistencia.componentesGraficas.GraficaCategoriaConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.asistencia.componentesGraficas.GraficaChecadaConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.asistencia.componentesGraficas.GraficaDepartamentoConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.asistencia.componentesGraficas.GraficaIncidenciasConsultaAsistencia;
+			import mx.core.IVisualElement;
+			import mx.utils.ObjectUtil;
+			
+			private var isGrafica:Boolean;
+			private var _graficasIerNivel:ContenedorGraficas = new ContenedorGraficas();
+			public var graficos:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var cuentaAsistencia:int = 0;
+			[Bindable] private var _finicio:String;
+			[Bindable] private var _ffin:String;
+			[Bindable] private var _imgPiezas:Class;
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgCobros:Class;
+			
+			private var _listaAsistencia:ArrayCollection;
+			private var _listaBusquedaRapida:ArrayCollection;
+			private var _cambios:Boolean;
+			
+			protected function completeHandler():void{
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				
+				var graficas:ArrayCollection = new ArrayCollection;
+				graficas.addItem(new GraficaAsistenciaVsInasistenciaConsultaAsistencia());
+				graficas.addItem(new GraficaAreaConsultaAsistencia());
+				graficas.addItem(new GraficaChecadaConsultaAsistencia());
+				graficas.addItem(new GraficaDepartamentoConsultaAsistencia());
+				graficas.addItem(new GraficaIncidenciasConsultaAsistencia());
+				graficas.addItem(new GraficaCategoriaConsultaAsistencia());
+				_graficasIerNivel.insertarGraficas(graficas);
+				
+				agregarEspacioTrabajo(_graficasIerNivel);
+				isGrafica = false;
+				
+			}
+			
+			public function set recibirCambios($cambios:Boolean):void{
+				_cambios = $cambios;
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void{
+				if(espacio == null){
+					return;
+				}
+				this.graficos.addItem(espacio);
+				if(graficos.length == 1){
+					this.espacioGraficas.removeAllElements();
+					this.espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			[Bindable]
+			public var actualizarVistaActual:Boolean;
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible){
+					compararVistas();
+				}
+				var evt:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.SET_INDICE_GRAFICAS);
+				dispatchEvent(evt);
+				if (!isGrafica){
+					var eventos:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.GET_CAMBIOS_GRID);
+					dispatchEvent(eventos);
+					if (_cambios){
+						var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEsperar.mensaje = "iniciarEspera";
+						eventEsperar.idButtons = [];
+						eventEsperar.tipoEventos = [];
+						eventEsperar.idButtons.push("btnGraficaTabla");
+						eventEsperar.tipoEventos.push("GENERAR_GRAFICAS_ASISTENCIA");
+						dispatchEvent(eventEsperar);
+						isGrafica = true;
+						 var evento:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.GENERAR_GRAFICAS_ASISTENCIA);
+						dispatchEvent(evento);
+						
+						timer.addEventListener(TimerEvent.TIMER, onTimer);
+						timer.start();
+					}
+					
+				}
+				else{
+					isGrafica = false;
+				}
+			}
+			
+			private var timer:Timer = new Timer(5000);
+			private function onTimer(evt:TimerEvent):void {
+				var eventEsperar1:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEsperar1.idButtons = [];
+				eventEsperar1.tipoEventos = [];
+				eventEsperar1.mensaje = "terminaEspera";
+				eventEsperar1.idButtons.push("generarGraficas");
+				dispatchEvent(eventEsperar1); 
+				timer.stop();
+				
+			} 
+			
+			public function set obtenerListaAsistencias($asistencia:ArrayCollection ):void{
+				headerConsultaAsistencia.btnExportar.enabled = false;
+
+				if ($asistencia != null){
+					if ($asistencia.length > 0 ){
+						headerConsultaAsistencia.btnExportar.enabled = true;
+					}
+					cuentaAsistencia = $asistencia.length;
+					_listaAsistencia = new ArrayCollection;
+					_listaAsistencia = ObjectUtil.copy($asistencia) as ArrayCollection;
+					gridAsistencia.dataProvider = _listaAsistencia;
+				}
+			}
+			
+			private function compareFunction_HeaderFechaFacturacion(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fecha,item2.fecha); 
+			}
+			
+			private function generaArchivo():void{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Colaborador");
+				fila[2] = hoja.addItem("Fecha");
+				fila[3] = hoja.addItem("Hora");
+				fila[4] = hoja.addItem("Tipo Checada");
+				fila[5] = hoja.addItem("Área");
+				fila[6] = hoja.addItem("Departamento");
+				fila[7] = hoja.addItem("Categoría");
+				fila[8] = hoja.addItem("Incidencia");
+				
+				for(var i:int = 0; i < gridAsistencia.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = (gridAsistencia.dataProvider[i] as Asistencia).numFila;
+					fila[1] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).nombreCorto + '"';
+					fila[2] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).fechaFormato + '"';
+					fila[3] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).hora + '"';
+					fila[4] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).tipoChecada + '"';
+					fila[5] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).area + '"';
+					fila[6] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).depto + '"';
+					fila[7] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).categoria + '"';
+					fila[8] = '"' + (gridAsistencia.dataProvider[i] as Asistencia).incidencia + '"';
+					hoja.addItem('\r' + fila);
+				}
+				file.save(hoja,"ConsultaAsistencia-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			
+			private function compareFunction_HeaderHora(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.stringCompare(item1.hora,item2.hora); 
+			}
+			
+			private function compareFunction_HeaderIncidencia(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.stringCompare(item1.incidencia,item2.incidencia); 
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" paddingTop="20" paddingLeft="20" paddingRight="20"  gap="10">
+			<consultas:HeaderParaGridConsultas id="headerConsultaAsistencia" mostrarBtnExportar="true" clickExportar="generaArchivo()" width="100%"/>
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter width="100%" height="100%" id="gridAsistencia" rowHeight="45" anchoColumnas="{['45','=','=','=','=','=','=','=','=','15%']}" tipoDeConsulta="Registros"
+														 disableDragableColumns="{[0]}" disableResizableColumns="{[0]}">
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn headerText="#" dataField="numFila" fontWeight="bold" />
+					<mx:AdvancedDataGridColumn headerText="Colaborador" dataField="nombreCorto"/>
+					<mx:AdvancedDataGridColumn headerText="Fecha" dataField="fechaFormato" sortCompareFunction="{compareFunction_HeaderFechaFacturacion}" />
+					<mx:AdvancedDataGridColumn headerText="Hora" sortCompareFunction="{compareFunction_HeaderHora}" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" textAlign="center">
+									<label:Titulo_12_VerdeAzul_pTop10 text="{data.hora}" paddingTop="0" horizontalCenter="0" />
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="Tipo checada" dataField="tipoChecada" />
+					<mx:AdvancedDataGridColumn headerText="Empresa	" dataField="localidad" />
+					<mx:AdvancedDataGridColumn headerText="Área" >
+						<mx:itemRenderer>
+						<fx:Component>
+							<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" textAlign="center">
+								<fx:Script>
+									<![CDATA[
+										import skins.catalogos.catalogoIconosGrid;
+										
+									]]>
+								</fx:Script>
+								<s:Image source="{data.areaIcono}" id="imgInfo" horizontalCenter="0" toolTip="{data.area}" />
+							</s:MXAdvancedDataGridItemRenderer>
+						</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="Departamento" dataField="depto" />
+					<mx:AdvancedDataGridColumn headerText="Categoría" dataField="categoria" />
+					<mx:AdvancedDataGridColumn headerText="Incidencia" sortCompareFunction="{compareFunction_HeaderIncidencia}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<s:VGroup width="100%" verticalAlign="middle" paddingRight="10" textAlign="center" horizontalAlign="center">
+											<s:Ellipse id="canvasEllipse" width="10" height="10" >
+												<s:fill>
+													<s:SolidColor color="{data.colorIncidencia}"/>
+												</s:fill>		
+												<s:filters>
+													<s:DropShadowFilter alpha="1" angle="45" blurX="1" blurY="2"
+																		color="#909090" distance="2" hideObject="false" inner="false" knockout="false" 
+																		quality="1" strength="1"/>
+												</s:filters>
+											</s:Ellipse>
+										<label:Texto id="incidencia" textAlign="center" text="{data.incidenciaString}"/> 
+									</s:VGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>
+	</comun:espacioA>
+	<comun:espacioB>
+		<s:VGroup id="grpGraficas" width="100%" height="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+			<s:HGroup width="100%" height="100%" gap="0" >
+				<s:HGroup width="100%" height="100%" id="espacioGraficas"/>
+			</s:HGroup>
+		</s:VGroup>
+	</comun:espacioB>
+	
+</comun:ContenedorComparacionConsultas>

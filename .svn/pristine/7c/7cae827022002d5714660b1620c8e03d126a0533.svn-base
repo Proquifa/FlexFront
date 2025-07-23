@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="utf-8"?>
+<popUp:PopUpDefaultPQNet xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						 xmlns:s="library://ns.adobe.com/flex/spark" 
+						 xmlns:mx="library://ns.adobe.com/flex/mx" 
+						 xmlns:dateField="skins.skin.dateField.*" 
+						 xmlns:textinput="skins.skin.textinput.*" 
+						 xmlns:textarea="skins.skin.textarea.*"
+						 xmlns:chekbox="skins.skin.chekbox.*" 
+						 xmlns:pqNet="skins.botones.pqNet.*" 
+						 xmlns:label="skins.skin.label.*" 
+						 xmlns:otros="skins.otros.*" 
+						 xmlns:popUp="skins.popUp.*" 
+						 width="500" colorPopUp="blanco"
+						 creationComplete="group1_creationCompleteHandler(event)"
+						 >
+	
+	<fx:Declarations>
+		<s:NumberValidator id="validatorPorcentajePositivo"
+						   allowNegative="false"
+						   maxValue="100"
+						   greaterThanMaxError="El número debe ser menor ó igual a 100%."
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+		
+		<s:NumberValidator id="validatorMontoPositivoMaximo"
+						   allowNegative="false"
+						   maxValue="{montoTotal}"
+						   greaterThanMaxError="El monto debe ser menor ó igual a ${montoString}"
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.core.IVisualElement;
+			import mx.events.CalendarLayoutChangeEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ValidationResultEvent;
+			
+			import spark.components.TextInput;
+			
+			import skins.skin.textinput.textInputOpcional;
+			
+			import vista.eventos.EventoNotaCredito;
+			
+			
+			[Bindable] private var concepto:ConceptoFactura;
+			[Bindable] private var mostrarFactura:Boolean = false;
+			[Bindable] private var montoTotal:Number = 0.00;
+			[Bindable] private var montoString:String = "";
+			[Bindable] private var uuid:String = "";
+			
+			private var montoTotalFacturado:Number = 0.00;
+			private var montoTotalxFactura:Number = 0.00;
+			
+			private var currentFInicion:String;
+			private var currentFFin:String;
+			
+			private var empresaQueFactura:Empresa;
+			private var idCliente:int;
+			
+			public function creaConcepto( ):void{
+				lblTitulo.text = "Agregar Concepto";
+			}
+			public function editaConcepto( $concepto:ConceptoFactura ):void{
+				iniciaPopUp();
+				
+				idCliente = $concepto.conceptoRender.idCliente;
+				empresaQueFactura = $concepto.conceptoRender.empresaQueFactura;
+				concepto = new ConceptoFactura();
+				
+				//$concepto.conceptoFac.notas == null ? $event.conceptoFac.notas = '' : null ;
+				//txtNota.text = concepto.notas;
+				
+				concepto = $concepto;
+				var evt:EventoNotaCredito;
+				if (concepto.conceptoRender.tipo == 'Periodo' ){
+					checkTipoBusqueda.selected = false;
+					txtMontoNota.text = concepto.conceptoRender.percentNota.toString();
+					dtpFInicio.selectedDate = $concepto.conceptoRender.finicio;
+					dtpFFin.selectedDate = $concepto.conceptoRender.ffin;
+					dtpFInicio.text = UtilsFecha.formatoFechaDDMMMYYYY( $concepto.conceptoRender.finicio );
+					dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( $concepto.conceptoRender.ffin );
+					evt = new EventoNotaCredito(EventoNotaCredito.EXISTE_PERIODO_NOTA_CREDITO);
+				}
+				else{
+					checkTipoBusqueda.selected = true;
+					txtFolio.text = $concepto.conceptoRender.factura == 0 ? '' : $concepto.conceptoRender.factura.toString();
+					txtMonto.text = concepto.conceptoRender.monto.toString();
+					evt = new EventoNotaCredito(EventoNotaCredito.OBTENER_TOTAL_MONTO_FACTURA_NOTA_CREDITO);
+				}
+				checkTipoBusqueda.dispatchEvent(new Event(Event.CHANGE));
+				
+				evt.factura = $concepto.conceptoRender.factura;
+				evt.finicio =  $concepto.conceptoRender.finicio;
+				evt.ffin = $concepto.conceptoRender.ffin;
+				evt.empresaQueFactura = empresaQueFactura;
+				evt.idCliente = idCliente;
+				dispatchEvent(evt);
+				
+			}
+			
+			private function cerrar():void{
+				var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CERRAR_POPUP_CONCEPTO );
+				dispatchEvent( evt );
+			}
+			private function aceptar():void{
+				var valida:Boolean = false;
+				
+				if (checkTipoBusqueda.selected ){
+					valida = validarMontoMaximoNegativoNoVacio(txtMonto);
+				}
+				else{
+					valida = validarPorcetajeNegativoNoVacio(txtMontoNota);
+				}
+				
+				if (valida ){
+					this.concepto.cantidad = 1;
+					
+					if (checkTipoBusqueda.selected ){
+						this.concepto.valorUnitario = this.concepto.importe = parseFloat(txtMonto.text);
+						this.concepto.conceptoRender.factura = parseInt(txtFolio.text);
+						this.concepto.conceptoRender.monto = parseFloat(txtMonto.text);
+						if(this.concepto.factura)
+							this.concepto.factura.uuid = uuid;
+						this.concepto.conceptoRender.tipo = "Factura";
+					}
+					else{
+						this.concepto.valorUnitario = this.concepto.importe = (montoTotal * (parseFloat(txtMontoNota.text)/100) );
+						this.concepto.conceptoRender.finicio = dtpFInicio.selectedDate;
+						this.concepto.conceptoRender.ffin = dtpFFin.selectedDate;
+						this.concepto.conceptoRender.percentNota = parseFloat(txtMontoNota.text);
+						this.concepto.conceptoRender.tipo = "Periodo";
+					}
+					this.concepto.notas = txtNota.text;
+					
+					
+					var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.GUARDAR_POPUP_CONCEPTO );
+					evt.conceptoFac = this.concepto;
+					dispatchEvent( evt );
+				}
+			}
+			
+			[Bindable] var folioFact:String;
+			protected function folio_enterHandler(event:FlexEvent):void
+			{
+				folioFact = "";
+				if (txtFolio.text != ""){
+					folioFact = txtFolio.text;
+					var evt:EventoNotaCredito = new EventoNotaCredito(EventoNotaCredito.OBTENER_TOTAL_MONTO_FACTURA_NOTA_CREDITO);
+					evt.factura = parseInt(txtFolio.text);
+					evt.empresaQueFactura = empresaQueFactura;
+					dispatchEvent(evt);
+				}
+				
+			}
+			
+			private var servicio:Boolean = false;
+			protected function filtros_changeEvent(event:CalendarLayoutChangeEvent):void
+			{
+				servicio = false;
+				if (currentFFin != dtpFFin.text){
+					servicio = true;
+				}
+				if (currentFInicion != dtpFInicio.text){
+					servicio = true;
+				}
+				
+				//Hubo cambios en la fecha 
+				if (servicio){
+					var evt:EventoNotaCredito = new EventoNotaCredito(EventoNotaCredito.EXISTE_PERIODO_NOTA_CREDITO);
+					evt.finicio = dtpFInicio.selectedDate;
+					evt.ffin = dtpFFin.selectedDate;
+					evt.empresaQueFactura = empresaQueFactura;
+					evt.idCliente = idCliente;
+					dispatchEvent(evt);
+				}
+			}
+			
+			private function iniciaPopUp():void{
+				montoTotalFacturado = 0;
+				montoTotalxFactura = 0;
+				
+				txtMonto.text = '';
+				txtMontoNota.text = '';
+				txtFolio.text = '';
+				dtpFInicio.text  = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				dtpFInicio.selectedDate = new Date();
+				dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				dtpFFin.selectedDate = new Date();
+				
+				currentFInicion = dtpFInicio.text;
+				currentFFin = dtpFFin.text;
+				
+				checkTipoBusqueda.selected = false;
+				checkTipoBusqueda.dispatchEvent(new Event(Event.CHANGE));
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				iniciaPopUp();
+				
+			}
+			
+			protected function checkTipoBusqueda_changeHandler(event:Event):void
+			{
+				if (event.currentTarget != null && event.currentTarget is CheckBoxPq){
+					mostrarFactura = (event.currentTarget as CheckBoxPq).selected;
+					montoTotal = (event.currentTarget as CheckBoxPq).selected ? montoTotalxFactura : montoTotalFacturado;
+					montoString = UtilsFormatosNumericos.precisionADosDecimales(montoTotal);
+				}
+				
+			}
+			
+			public function set recibeExistePeriodo($existePeriodo:Boolean):void{
+				if (!$existePeriodo){
+					var evt:EventoNotaCredito = new EventoNotaCredito(EventoNotaCredito.OBTENER_TOTAL_MONTO_NOTA_CREDITO);
+					evt.finicio = dtpFInicio.selectedDate;
+					evt.ffin = dtpFFin.selectedDate;
+					evt.empresaQueFactura = empresaQueFactura;
+					evt.idCliente = idCliente;
+					evt.factura = this.concepto.conceptoRender.factura;
+					dispatchEvent(evt);
+				}
+				else{
+					montoTotal = montoTotalFacturado = 0.00;
+				}
+			}
+			
+			public function set recibeMontoTotal(factura:Factura):void{
+				if (!isNaN(factura.montoAPagar)){
+					montoTotal = montoTotalFacturado = factura.montoAPagar;
+				}
+				else{
+					montoTotal = montoTotalFacturado = 0.00;
+				}
+				if(factura.uuid != null && factura.uuid != '')
+					uuid = factura.uuid;
+			}
+			
+			public function set recibeMontoTotalxFactura(factura:Factura):void{
+				if (!isNaN(factura.montoAPagar)){
+					montoTotal = montoTotalxFactura = factura.montoAPagar;
+					montoString = UtilsFormatosNumericos.precisionADosDecimales(montoTotal);
+					if(factura.uuid != null && factura.uuid != "")
+						uuid = factura.uuid;
+					if (txtMonto.text != "" ){
+						validarMontoMaximoNegativoNoVacio(txtMonto);
+					}else if(montoTotal == 0){
+						txtMonto.text = "0";
+					}
+				}
+				else{
+					montoTotal = montoTotalxFactura = 0.00;
+				}
+			}
+			
+			
+			protected function validarPorcetajeNegativoNoVacio($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if($txtInput != null && $txtInput is TextInput)
+				{
+					var currentTxtInput:TextInput = $txtInput as TextInput;
+					validatorPorcentajePositivo.listener = currentTxtInput;
+					error = validatorPorcentajePositivo.validate(currentTxtInput.text);
+				}
+				else if($txtInput != null && $txtInput is textInputOpcional)
+				{
+					var currentTxtInputOpcional:textInputOpcional = $txtInput as textInputOpcional;
+					if(currentTxtInputOpcional.habilitaBoton)
+					{
+						validatorPorcentajePositivo.listener = currentTxtInputOpcional.texto;
+						error = validatorPorcentajePositivo.validate(currentTxtInputOpcional.texto.text);
+					}
+				}
+				
+				if(error == null || error.results == null)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function validarMontoMaximoNegativoNoVacio($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if($txtInput != null && $txtInput is TextInput)
+				{
+					var currentTxtInput:TextInput = $txtInput as TextInput;
+					validatorMontoPositivoMaximo.listener = currentTxtInput;
+					error = validatorMontoPositivoMaximo.validate(currentTxtInput.text);
+				}
+				else if($txtInput != null && $txtInput is textInputOpcional)
+				{
+					var currentTxtInputOpcional:textInputOpcional = $txtInput as textInputOpcional;
+					if(currentTxtInputOpcional.habilitaBoton)
+					{
+						validatorMontoPositivoMaximo.listener = currentTxtInputOpcional.texto;
+						error = validatorMontoPositivoMaximo.validate(currentTxtInputOpcional.texto.text);
+					}
+				}
+				
+				if(error == null || error.results == null)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<s:VGroup width="100%" height="100%" >
+		<label:labelSubtitulo id="lblTitulo" text="EDITAR" />
+		<otros:division width="100%"/>
+		
+		<s:HGroup width="100%" paddingTop="5" paddingBottom="5">
+			<chekbox:CheckBoxPq id="checkTipoBusqueda" selected="false" labelLeft="Periodo" labelRight="Factura" change="checkTipoBusqueda_changeHandler(event)"/>	
+		</s:HGroup>
+		
+		<otros:divisionHueca width="100%"/>
+		<s:VGroup id="vgPeriodo" width="100%" paddingTop="10" visible="{!mostrarFactura}" includeInLayout="{!mostrarFactura}" verticalAlign="middle" >
+			<s:HGroup width="100%" verticalAlign="middle" gap="0" >
+				<s:HGroup width="100%" verticalAlign="middle" >
+					<label:Titulo  text="Del:" paddingTop="0"/>
+					<dateField:DatePickerSpanish id="dtpFInicio"  width="130" textAlign="center" fontStyle="normal" change="filtros_changeEvent(event)"/>
+					<s:Spacer width="100%"/>
+					<label:Titulo  text="Al:" paddingTop="0"/>
+					<dateField:DatePickerSpanish id="dtpFFin" width="130" textAlign="center" fontStyle="normal" change="filtros_changeEvent(event)"/>
+				</s:HGroup>
+				<s:Spacer height="28" />
+			</s:HGroup>
+		</s:VGroup>
+		
+		<s:HGroup id="vgFactura" width="100%" paddingTop="10" verticalAlign="middle" visible="{mostrarFactura}" includeInLayout="{mostrarFactura}" >
+			<label:Titulo text="Folio: " paddingTop="0" />
+			<textinput:txtInputBlancoDefaultPQNet prompt="Folio" id="txtFolio" width="50%" enter="folio_enterHandler(event)" restrict="0-9" />
+		</s:HGroup>
+		
+		<s:VGroup id="vgMontoFacturaPeriodo" width="100%" gap="10">
+			
+			<s:HGroup width="100%" >
+				<s:HGroup width="50%" >
+					<label:Titulo text="Monto Facturado:" width="100%" visible="{!mostrarFactura}" includeInLayout="{!mostrarFactura}"/>
+					<label:Titulo text="Monto Factura: " width="100%" visible="{mostrarFactura}" includeInLayout="{mostrarFactura}"/>
+				</s:HGroup>
+				<s:HGroup width="50%" >
+					<label:Titulo text="% Nota:" width="100%" id="lblNota" visible="{!mostrarFactura}" includeInLayout="{!mostrarFactura}" />
+					<label:Titulo text="Monto:" width="100%" id="lblMonto" visible="{mostrarFactura}" includeInLayout="{mostrarFactura}" />
+				</s:HGroup>
+			</s:HGroup>
+			
+			<s:HGroup width="100%" verticalAlign="middle">
+				<label:Texto text="$ {UtilsFormatosNumericos.precisionADosDecimales(montoTotal)} DLS" width="50%" />
+				<s:HGroup width="50%" verticalAlign="middle">
+					
+					<s:HGroup width="100%" verticalAlign="middle" visible="{!mostrarFactura}" includeInLayout="{!mostrarFactura}">
+						<textinput:txtInputBlancoDefaultPQNet id="txtMontoNota" focusOut="validarPorcetajeNegativoNoVacio(txtMontoNota)" restrict="0-9." />
+						<label:Texto text="%"  />
+					</s:HGroup>
+					
+					<s:HGroup width="100%" verticalAlign="middle" visible="{mostrarFactura}" includeInLayout="{mostrarFactura}">
+						<label:Texto text="$" />
+						<textinput:txtInputBlancoDefaultPQNet id="txtMonto" focusOut="validarMontoMaximoNegativoNoVacio(txtMonto)" restrict="0-9." />
+						<label:Texto text="DLS"  />
+					</s:HGroup>
+				</s:HGroup>
+				
+			</s:HGroup>
+			
+			<s:VGroup width="100%" verticalAlign="middle" paddingBottom="10" paddingTop="5" gap="10">
+				<otros:divisionHueca width="100%" />
+				<s:VGroup width="100%" gap="10" >
+					<label:Titulo text="Nota:" width="100%" paddingTop="0"/>
+					<textarea:txtAreaBlancoDefaultPQNet width="100%" height="100%" id="txtNota" text="{concepto.notas}" />
+				</s:VGroup>
+			</s:VGroup>
+			
+		</s:VGroup>
+		
+		<otros:division width="100%"/>
+		
+		<s:HGroup width="100%" paddingTop="10" >
+			<pqNet:botonPqNetLargo label="Cancelar" click="cerrar()"/>
+			<s:Spacer width="100%"/>
+			<pqNet:botonPqNetLargo label="Aceptar" click="aceptar()"/>
+		</s:HGroup>
+		
+	</s:VGroup>	
+	
+	<!--<s:Scroller/>-->
+</popUp:PopUpDefaultPQNet>

@@ -1,0 +1,778 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:mapas="mx.com.proquifa.proquifanet.rsl.vista.mapas.catalogos.agenteAduanal.*"
+		 xmlns:botonesToggle="skins.botonesToggle.*"
+		 xmlns:catalogos="skins.skin.comun.catalogos.*"
+		 width="100%" height="100%"
+		 creationComplete="ini(event)"
+		 >
+	<!--creationComplete="inicia()" -->
+	
+	<fx:Declarations>
+		<mapas:MapaCatAgenteAduanalGral/>
+		<mapas:MapaCatAgenteAduanalContactos dispatcher="{this}"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.agenteAduanal.EventoCatAgenteAduanalGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.GroupMenu;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.ContenedorMenuCatalogodAgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.ContenedorMenuCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.MenuLikeCaraLibro;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.MenuLikeCaraLibroMin;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.comun.menuCatalogos.itemMenuCatalogosClass;
+			import mx.core.IVisualElement;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoColores;
+			
+			
+			private var _habilitados:ArrayCollection;
+			private var _deshabilitados:ArrayCollection;
+			private var itemsEnPantalla:int = 7;
+			private var _universoAgentes:ArrayCollection;
+			private var _currentItem:AgenteAduanal;
+			private var _idAgente:int = 0;
+			private var _arregloSinImagenes:ArrayCollection;
+			private var _componenteZonaTrabajo:CatAgenteZonaTrabajo = null;
+			
+			private var seConstruyoDeshabilitados:Boolean = false;
+			private var cambioNumItems:Boolean = false;
+			private var findOneImagen:Boolean = false;
+			private var pasoAgenteAduanal:Boolean;
+			private var arrayKeyConImagenes:Object;
+			
+			private var menu:MenuLikeCaraLibro;
+			private var menuMin:MenuLikeCaraLibroMin;
+			
+			[Bindable] private var _botoneraAgenteHabilitadoDeshabili:ArrayCollection = new ArrayCollection( [  { valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+				{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }] );
+			
+			/**
+			 * al crearse el componente se solicitan todos los proveedores
+			 */ 
+			public function iniciarVistaCatalogoAgente():void
+			{
+				botoneraBarraAgenteHabiliDeshabili.selectedIndex = 0;
+				_habilitados = null;
+				_deshabilitados = null;
+				itemsEnPantalla = 7;
+				_universoAgentes = null;
+				_currentItem = null;
+				_idAgente = 0;
+				_arregloSinImagenes = null;
+				seConstruyoDeshabilitados = false;
+				cambioNumItems  = false;
+				findOneImagen = false;
+				pasoAgenteAduanal = false;
+				arrayKeyConImagenes = null;
+				
+				addEventListener( ResizeEvent.RESIZE, recreaVista,false,0,true);
+				addEventListener( EventoCatAgenteAduanalGeneral.CAMBIA_VISTA_MANU_AGENTE_A , cambiaVista,false,0,true );
+				var $evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.OBTENER_AGENTES_ADUANALES);
+				dispatchEvent($evt);
+				
+			}
+			
+			/**
+			 * al recibirse los proveedores, se solicitan las imagenes
+			 */ 
+			public function set recibeAgentes($datos:ArrayCollection):void
+			{
+				
+				if( $datos == null || $datos.length == 0 )
+				{
+					return;
+				}
+				
+				busquedaDeshabilitados.text = '';
+				busquedaDeshabilitados.prompt = 'Deshabilitados';
+				busquedaHabilitados.text = ''
+				busquedaHabilitados.prompt = 'Habilitados';
+				botoneraBarraAgenteHabiliDeshabili.selectedIndex = 0;
+				
+				grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = false;
+				grpHabilitados.visible = grpHabilitados.includeInLayout = true;
+				_universoAgentes = new ArrayCollection();
+				_habilitados = new ArrayCollection();
+				_deshabilitados = new ArrayCollection();
+				_universoAgentes = ObjectUtil.copy( $datos ) as ArrayCollection;
+				
+				//Optimización para recorrido en busca de las imágenes de cada proveedor
+				arrayKeyConImagenes = new Object;
+				var _arrTempSinImagenes:Array = ObjectUtil.copy( $datos.source ) as Array;
+				var temp:Array = _arrTempSinImagenes.filter(quitarAgentesSinImagen);
+				_arrTempSinImagenes = null;
+				_arregloSinImagenes = new ArrayCollection(temp);
+				
+				solicitaImagenes();
+				if (pasoAgenteAduanal)
+				{
+					divideTipoAgente(); 
+					pasoAgenteAduanal = false;
+				}
+			}
+			
+			private function divideTipoAgente():void
+			{
+				
+				pasoAgenteAduanal = false;
+				
+				var _hab:ArrayCollection = new ArrayCollection();
+				var _des:ArrayCollection = new ArrayCollection();
+				
+				for( var i:int = 0; i < _universoAgentes.length ; i++ )
+				{
+					if( (_universoAgentes[i] as AgenteAduanal).habilitado == false )
+					{
+						_des.addItem( _universoAgentes[i] );
+					}
+					else
+					{
+						_hab.addItem( _universoAgentes[i] );
+					}
+				}
+				
+				_deshabilitados = UtilsGrid.queryQuitarRepetidos( ObjectUtil.copy(_des) as ArrayCollection,"nombreComercial");
+				_habilitados = UtilsGrid.queryQuitarRepetidos( ObjectUtil.copy(_hab) as ArrayCollection,"nombreComercial");
+				
+				generaRenglones( _habilitados, 'habilitados', 7 );
+				generaRenglones( _deshabilitados, 'deshabilitados', 7 );
+			}
+			
+			
+			///////////////////////////////////////////////////////////  		MODIFICACIONES PARA LA IMAGEN       ///////////////////////////////////////////////////////////
+			
+			/**
+			 *permitira iniciar y/o continuar la solicitud de imagenes
+			 */ 
+			
+			private function solicitaImagenes():void
+			{
+				for( var i:int = 0 ; i < _arregloSinImagenes.length; i++ )
+				{
+					_currentItem = ObjectUtil.copy( _arregloSinImagenes[ i ] ) as AgenteAduanal;
+					if( _currentItem.imagen != null && _currentItem.imagen != '' )
+					{ //se evalua si al proveedor se le a insertado un aimegn o no para evitar la solictud y disminuir el tiempo el proceso
+						findOneImagen = true;
+						var variables:URLLoader = new URLLoader();
+						var request:URLRequest = new URLRequest();
+						variables.dataFormat = URLLoaderDataFormat.BINARY;
+						
+						request = new URLRequest( "http://" + Destinos.ipUsandose+'/logoAgentes/' + _currentItem.idAgenteAduanal +'.' + _currentItem.imagen );// ip RYNDEN HACIA PROQUIFA
+						
+						request.idleTimeout = 1*1000;
+						
+						variables.addEventListener(Event.COMPLETE, completeHandler);
+						variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandlerError);
+						try{
+							variables.load(request);
+						} 
+						catch (error:Error){
+							trace( "Unable to load URL: " + error );
+						}
+						_arregloSinImagenes.length > 0 ? _arregloSinImagenes.removeItemAt( i ) : null;
+						i = _arregloSinImagenes.length;
+					}
+				}
+				if (!findOneImagen)
+				{
+					divideTipoAgente();
+					findOneImagen = false;
+				}
+			}
+			/**
+			 * recibe sel request la imagen, se valida si existe la 
+			 */ 
+			private function completeHandlerError(event:Event):void
+			{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				bytes = null;
+				
+				remueveDatos();
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try
+				{
+					bytes = loader.data;
+				}
+				catch (error:*)
+				{
+					bytes = null;
+				}
+				
+				if(arrayKeyConImagenes.hasOwnProperty(_currentItem.idAgenteAduanal))
+				{
+					var posicionAgente:uint = arrayKeyConImagenes[_currentItem.idAgenteAduanal] as Number;
+					(_universoAgentes[posicionAgente] as AgenteAduanal).bytes = bytes;
+				}
+				
+				remueveDatos();
+			}
+			
+			private function quitarAgentesSinImagen($item:AgenteAduanal, $id:uint,$array:Array):Boolean
+			{
+				if($item.imagen == null || StringUtil.trim($item.imagen).length <= 0)
+				{
+					return false;
+				}
+				else
+				{
+					if(arrayKeyConImagenes.hasOwnProperty($id))
+					{
+						return true;
+					}
+					else
+					{
+						arrayKeyConImagenes[$item.idAgenteAduanal] = $id;
+						return true;
+					}
+				}
+			}
+			
+			
+			private function remueveDatos():void
+			{
+				if( _arregloSinImagenes.length > 0 )
+				{  //si aun existen datos se continuan solicitando las imagenes
+					solicitaImagenes();
+				}
+				else
+				{	//si ya no existen mas datos se continua generarndo la vista
+					divideTipoAgente();
+				}
+			}
+			
+			
+			///////////////////////////////////////////////////////////  		MODIFICACIONES PARA LA IMAGEN       ///////////////////////////////////////////////////////////
+			
+			
+			
+			private function generaRenglones( $listas:ArrayCollection, $tipo:String, $elementosPorRenglon:int = 7 ):void
+			{
+				var contador:int = 0;
+				var arregloTemp:ArrayCollection = new ArrayCollection();
+				var $lista:ArrayCollection = new ArrayCollection();
+				
+				$lista = ObjectUtil.copy( $listas ) as ArrayCollection;
+				for( var i:int = 0; i <= $lista.length; i++  )
+				{
+					var renglon:ArrayCollection = new ArrayCollection;;
+					for( var c: int = 0; c < $elementosPorRenglon ; c++ )
+					{
+						if( $lista.length > 0 )
+						{
+							contador++;
+							renglon.addItem( $lista[0] );
+							$lista.length > 0 ? $lista.removeItemAt(0) : null;
+						}
+					}
+					arregloTemp.addItem( renglon );
+				}
+				if( $tipo == 'habilitados' )
+				{
+					lstHabilitados.dataProvider = new ArrayCollection();
+					lstHabilitados.dataProvider = ObjectUtil.copy( arregloTemp ) as ArrayCollection;
+					contador == 1 ? lblHabilitados.text = '1 Agente' : lblHabilitados.text = contador + ' Agentes';
+				}
+				else if( $tipo == 'deshabilitados' )
+				{
+					lstDeshabilitados.dataProvider = new ArrayCollection();
+					lstDeshabilitados.dataProvider = ObjectUtil.copy( arregloTemp ) as ArrayCollection;
+					contador == 1 ? lblDesHabilitados.text = '1 Agente' : lblDesHabilitados.text = contador + ' Agentes';
+				}
+			}
+			/**
+			 * esta funcion permite reHacer la vista segun el tama√±o de la ventana 
+			 */ 
+			private function recreaVista( $evt:Event ):void
+			{
+				cambioNumItems = false;
+				if( this.width < 1200 )
+				{
+					if(itemsEnPantalla != 5 )
+					{
+						seConstruyoDeshabilitados = false; 
+						cambioNumItems = true;
+					}
+					itemsEnPantalla = 5 ;
+				}
+				else if( this.width > 1200 && this.width < 1500 )
+				{ 
+					if(itemsEnPantalla != 6 )
+					{
+						seConstruyoDeshabilitados = false;
+						cambioNumItems = true;
+					}
+					itemsEnPantalla = 6 ;
+				}
+				else if( this.width > 1500 )
+				{ 
+					if(itemsEnPantalla != 7 )
+					{
+						seConstruyoDeshabilitados = false;
+						cambioNumItems = true;
+					}
+					itemsEnPantalla = 7; 
+				}
+				
+				if( grpHabilitados.visible && cambioNumItems  )
+				{
+					if( this.busquedaHabilitados.text  != "")
+					{
+						filtroPorTexto( 'habilitados' );
+					}
+					else
+					{
+						if(_habilitados != null)
+							generaRenglones( _habilitados, 'habilitados', itemsEnPantalla );
+					}
+				}
+				else if( grpHabilitados.visible && cambioNumItems )
+				{
+					if( this.busquedaDeshabilitados.text  != "")
+					{
+						filtroPorTexto( 'desHabilitados' );
+					}
+					else
+					{
+						if(_deshabilitados != null)
+							generaRenglones( _deshabilitados, 'deshabilitados', itemsEnPantalla );
+					}
+				}
+			}
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private function filtroPorTexto($vieneDe:String):void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				
+				if( $vieneDe == 'habilitados' )
+				{
+					listaAFiltrar = ObjectUtil.copy( _habilitados ) as ArrayCollection;
+					if( this.busquedaHabilitados.text  != ""){
+						_listaVisual = UtilsGrid.queryCampoXLike( listaAFiltrar, 'nombreComercial', this.busquedaHabilitados.text );
+					}
+					else
+					{
+						_listaVisual = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection; 
+					}
+					generaRenglones( _listaVisual, 'habilitados', itemsEnPantalla );
+				}
+				else
+				{
+					listaAFiltrar = ObjectUtil.copy( _deshabilitados ) as ArrayCollection;
+					if( this.busquedaDeshabilitados.text  != "")
+					{
+						_listaVisual = UtilsGrid.queryCampoXLike( listaAFiltrar, 'nombreComercial', this.busquedaDeshabilitados.text );
+					}
+					else
+					{
+						_listaVisual = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection; 
+					}
+					generaRenglones( _listaVisual, 'deshabilitados', itemsEnPantalla );
+				}
+			}
+			/**
+			 * agregamos o reutilizamos la seccion de trabajo
+			 */ 
+			private function cambiaVista( $evt:EventoCatAgenteAduanalGeneral ):void
+			{
+				this.grpAgentes.visible = this.grpAgentes.includeInLayout = false;
+				this.zonaTrabajo.visible = this.zonaTrabajo.includeInLayout = false; 
+				
+				if( _componenteZonaTrabajo == null )
+				{
+					_componenteZonaTrabajo = new CatAgenteZonaTrabajo();
+					this.zonaTrabajo.addElement( _componenteZonaTrabajo );
+					if(!menu) 
+					{
+						menu = new MenuLikeCaraLibro;
+						menu.percentWidth = menu.percentHeight = 100;
+						menu.dataProvider = menuItems;
+						//menu.addEventListener( EventoCatProGeneral.CAMBIAR_VISTA_NIVEL_MENU_CAT_PROVEEDORES, cambiarVistaANivelMenu,false,0,true);
+						agregarMenuCatalogo(menu); 
+						
+					} 
+				}
+				
+				if( $evt.vieneDe == 'agenteSeleccionado' )
+				{
+					var evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.ENVIA_AGENTE_ADUANAL );
+					evt.agenteSeleccionado = $evt.agenteSeleccionado;
+					evt.vieneDe = '';
+					dispatchEvent( evt ); 
+					
+					zonaTrabajo.visible = this.zonaTrabajo.includeInLayout = true; 
+					_componenteZonaTrabajo.recibeAgente( $evt.agenteSeleccionado );
+				}
+				else
+				{
+					grpAgentes.visible = grpAgentes.includeInLayout = true;
+				}
+			}
+			
+			
+			protected function botoneraBarra_changingHandler(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBarColores).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					if( botoneraBarraAgenteHabiliDeshabili.selectedItem != undefined )
+					{
+						grpHabilitados.visible = grpHabilitados.includeInLayout = false;
+						grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = false;	
+						var $dato:String = '';
+						botoneraBarraAgenteHabiliDeshabili.selectedItem.valor == 'Habilitados' ? $dato = 'habilitados' : $dato = 'deshabilitados' ;
+						if( $dato == 'deshabilitados' )
+						{
+							grpDeshabilitados.visible = grpDeshabilitados.includeInLayout = true;
+							if( !seConstruyoDeshabilitados )
+							{
+								seConstruyoDeshabilitados = true;
+								generaRenglones( _deshabilitados, 'deshabilitados', itemsEnPantalla );
+							}
+						}
+						else
+						{
+							grpHabilitados.visible = grpHabilitados.includeInLayout = true;
+							if( !seConstruyoDeshabilitados )
+							{
+								seConstruyoDeshabilitados = true;
+								generaRenglones( _habilitados, 'habilitados', itemsEnPantalla );
+							}
+						}
+					}
+				}
+			}
+			
+			protected function agregarNuevoAgente(event:MouseEvent):void
+			{
+				var evt:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral( EventoCatAgenteAduanalGeneral.CAMBIA_VISTA_MANU_AGENTE_A );
+				evt.agenteSeleccionado = new AgenteAduanal();
+				evt.vieneDe = 'agenteSeleccionado';
+				dispatchEvent( evt );				
+			}
+			
+			public function set actualizaAgenteDeGenerales( $evt:EventoCatAgenteAduanalGeneral ):void
+			{
+				if($evt == null)
+					return;
+				
+				if( !isNaN( $evt.idAgente ) && $evt.idAgente != 0 )
+				{
+					_idAgente = $evt.idAgente;
+				}
+			}
+			/********************************************************MENU***************************************************************/
+			private var valorExp:IVisualElement;
+			private var _titulo:String;
+			[Bindable] private var menuItems:Array;
+			private static const MENU_MAXIMIZADO:String ="menuMaximizado";
+			private static const MENU_MINIMIZADO:String ="menuMinimizado";
+			private var stateMenu:String;
+			private var _opcionSelected:String;
+			[Bindable] private var _agenteAduanalSeleccionado:AgenteAduanal;
+			public function get titulo():String
+			{
+				return _titulo;
+			}
+			
+			public function set titulo(value:String):void
+			{
+				_titulo = value;
+			}
+			protected function ini(event:FlexEvent):void
+			{
+				this.addEventListener( EventoCatAgenteAduanalGeneral.ENVIAR_NUMERO_CONTACTOS, enviaContactos,false,0,true)
+				menuItems = new Array;
+				var item:itemMenuCatalogosClass;
+				
+				item = new itemMenuCatalogosClass;
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Generales";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "empresa";
+				item.imageMax = "etiquetas_empresa";
+				item.titulo = "Empresa";
+				item.evento = "generales";
+				item.selected = true;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "contactos";
+				item.imageMax = "etiquetas_contacto";
+				item.titulo = "Contactos";
+				item.evento = "contactos";
+				item.selected = false;
+				item.esConindicador1 = true;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "internet";
+				item.imageMax = "etiquetas_internet";
+				item.titulo = "Internet";
+				item.evento = "internet";
+				item.selected = false;
+				item.esConindicador1 = false;
+				menuItems.push(item.clone());	
+				
+				//   +++++ SECCION  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "Operativos";
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "desaduanaje";
+				item.imageMax = "etiquetas_desaduanaje";
+				item.titulo = "Desaduanaje";
+				item.evento = "desaduanaje";
+				item.selected = false;
+				item.esConindicador1 = false;
+				menuItems.push(item.clone());
+				
+				item.tipoItem = "button";
+				item.image = "marcasA";
+				item.imageMax = "etiquetas_marca_agente";
+				item.titulo = "Marcas";
+				item.evento = "marca";
+				item.selected = false;
+				menuItems.push(item.clone());
+				
+				//   +++++ ESPACIO FINAL  ++++++ 
+				item.tipoItem = "seccion";
+				item.titulo = "";
+				menuItems.push(item.clone());
+			}
+			
+			private var grpMenu:GroupMenu;
+			public var contenedorMenu:ContenedorMenuCatalogodAgenteAduanal;
+			public function agregarMenuCatalogo($value:IVisualElement):void
+			{
+				if($value)
+				{
+					if(contenedorMenu)
+						_componenteZonaTrabajo.contenedorMenu.removeElementAt(2);
+					
+					valorExp = $value;
+					contenedorMenu = new ContenedorMenuCatalogodAgenteAduanal();
+					contenedorMenu.percentHeight = contenedorMenu.percentWidth = 100;
+					contenedorMenu.visible = contenedorMenu.includeInLayout = true;
+					contenedorMenu.itemVisual = $value;
+					contenedorMenu.tituloMenu = "AGENTES ADUANALES";
+					/*contenedorMenu.size = 300;
+					contenedorMenu.lbl_titulo.autoSize = true;
+					contenedorMenu.lblNombre.autoSize = true;
+					contenedorMenu.lblRS.autoSize = true;*/
+					/*zonaTrabajo. addElementAt(contenedorMenu,2);*/
+					_componenteZonaTrabajo.contenedorMenu.addElement(contenedorMenu);
+				}
+			}
+			
+			public function agregarMenuCatalogoMin($value:IVisualElement):void
+			{
+				if($value)
+				{
+					if(contenedorMenu)
+					{
+						_componenteZonaTrabajo.contenedorMenu.removeElementAt(2);
+						contenedorMenu = new ContenedorMenuCatalogodAgenteAduanal();
+						contenedorMenu.percentHeight = contenedorMenu.percentWidth = 100;
+						contenedorMenu.visible = contenedorMenu.includeInLayout = true;
+						contenedorMenu.itemVisualMinimizado = $value;
+						contenedorMenu.tituloMenu = "AGENTES ADUANALES";
+						_componenteZonaTrabajo.contenedorMenu.addElement(contenedorMenu);
+					}
+				}
+			}
+			
+			public function minimizarMenu():void
+			{
+				cambiarBotonesMinimizado();
+				contenedorMenu.minimizarMenu();
+				contenedorMenu.recibeAgenteAduanalSeleccionado = _agenteAduanalSeleccionado;
+				/*contenedorMenu.lbl_titulo.refresh();
+				contenedorMenu.lblNombre.refresh();
+				contenedorMenu.lblRS.refresh();*/
+			}
+			public function maximizarMenu():void
+			{
+				cambiarBotonesMaximizado();
+				contenedorMenu.maximizarMenu();
+				contenedorMenu.recibeAgenteAduanalSeleccionado = _agenteAduanalSeleccionado;
+				
+/*				contenedorMenu.percentWidth = 100;
+				contenedorMenu.lbl_titulo.percentWidth = 100;
+				contenedorMenu.menuExtendido1.percentWidth = 100;
+				contenedorMenu.menuExtendido2.percentWidth = 100;
+				contenedorMenu.lbl_titulo.refresh();
+				contenedorMenu.lblNombre.refresh();
+				contenedorMenu.lblRS.refresh();
+*/			}
+			
+			private function cambiarBotonesMinimizado():void
+			{
+				stateMenu = MENU_MINIMIZADO;
+				menuMin = new MenuLikeCaraLibroMin;
+				menuMin.percentWidth = menuMin.percentHeight = 100;
+				menuMin.percentWidth = menuMin.percentWidth = 100;
+				/*seleccionarBoton( opcionSelected);*/
+				seleccionarBoton(opcionSelected);
+				agregarMenuCatalogoMin(menuMin);  
+			}
+			
+			private function cambiarBotonesMaximizado():void
+			{
+				stateMenu = MENU_MAXIMIZADO;
+				menu = new MenuLikeCaraLibro;
+				menu.percentWidth = menu.percentHeight = 100;
+				/*seleccionarBoton( opcionSelected);*/
+				seleccionarBoton(opcionSelected);
+				/*contenedorMenu.recibeProveedorSeleccionado = respProvedor;*/
+				agregarMenuCatalogo(menu);
+			}
+			private function seleccionarBoton( $boton:String = "generales"):void
+			{
+				if(menuItems.length > 0)
+				{
+					for(var n:int = 0; n < menuItems.length; n++)
+					{
+						var current:itemMenuCatalogosClass = menuItems[n];
+						
+						if(current.tipoItem == "button" && current.evento == $boton)
+						{
+							current.selected = true;
+						}
+						else
+						{
+							if(current.tipoItem == "button")
+								current.selected = false;
+						}
+					}
+					
+					if(stateMenu == MENU_MINIMIZADO)
+						menuMin.dataProvider = menuItems;
+					else
+						menu.dataProvider = menuItems;
+				}
+			}
+			public function enviarAgenteSeleccionado(agente:AgenteAduanal):void{
+				_agenteAduanalSeleccionado = agente;
+				contenedorMenu.recibeAgenteAduanalSeleccionado = agente;
+			}
+			private function enviaContactos($evt:EventoCatAgenteAduanalGeneral):void
+			{
+				setNumeroContactos($evt.numeroContactos);
+			}
+			private function setNumeroContactos($numero:int):void
+			{
+				for(var i:int = 0; i < menuItems.length; i++)
+				{
+					var current:itemMenuCatalogosClass = menuItems[i];
+					
+					if(current.tipoItem == "button" && current.esConindicador1)
+					{
+						current.indicador1Count = $numero;
+					}
+				}
+				
+				seleccionarBoton(opcionSelected);
+			}
+
+			public function get opcionSelected():String
+			{
+				return _opcionSelected;
+			}
+
+			public function set opcionSelected(value:String):void
+			{
+				_opcionSelected = value;
+			}
+			public function set recibeAgenteSeleccionado($agente:AgenteAduanal):void{
+				if( $agente == null ){
+					return;
+				}
+				if($agente.idAgenteAduanal > 0)
+					bloquearMenu(false);
+				else
+					bloquearMenu(true);
+				
+				opcionSelected = "generales";
+				seleccionarBoton(opcionSelected);
+			}
+			public function bloquearMenu($valor:Boolean):void
+			{
+				for(var i:int = 0; i < menuItems.length; i++)
+				{
+					var current:itemMenuCatalogosClass = menuItems[i];
+					
+					if(current.tipoItem == "button")
+					{
+						current.disable = $valor;
+						current.indicador1Count = 0;
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpAgentes" horizontalAlign="center" gap="10">
+		
+		<catalogos:TituloParaVistaDefaultEnCatalogos id="btnRegresar" labelIzquierdo="AGENTES ADUANALES" labelDerecho="[CATÁLOGOS]"/>
+		
+		<botonesToggle:ButtonBarColores width="350" height="30" id="botoneraBarraAgenteHabiliDeshabili" changing="botoneraBarra_changingHandler(event)" dataProvider="{_botoneraAgenteHabilitadoDeshabili}" selectedIndex="0" requireSelection="true"/>
+		<otros:divisionGruesa width="100%"/>
+		<s:Group  width="100%" height="100%">
+			<s:VGroup id="grpHabilitados" width="100%" height="100%" horizontalAlign="center" gap="10">
+				<s:TextInput fontStyle="normal" id="busquedaHabilitados" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Agente Aduanal" text="" change="filtroPorTexto('habilitados')" enter="filtroPorTexto('habilitados')" />
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstHabilitados" 
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.agenteAduanal.itemRenderer.vistaPrincipal.CatAgente_IR_RenglonAgente"/>
+				<s:VGroup width="100%" horizontalAlign="center" gap="10">
+					<label:TituloGris id="lblHabilitados" paddingTop="0"/>
+					<label:TituloGris text="TOTAL" paddingTop="0"/>
+				</s:VGroup>
+			</s:VGroup>
+			<s:VGroup id="grpDeshabilitados" width="100%" height="100%" horizontalAlign="center" visible="false" includeInLayout="false" gap="10">
+				<s:TextInput fontStyle="normal" id="busquedaDeshabilitados" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Agente Aduanal" change="filtroPorTexto('desHabilitados')" enter="filtroPorTexto('desHabilitados')" />
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstDeshabilitados"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.agenteAduanal.itemRenderer.vistaPrincipal.CatAgente_IR_RenglonAgente"/>
+				<s:VGroup width="100%" horizontalAlign="center" gap="10">
+					<label:TituloGris id="lblDesHabilitados" paddingTop="0"/>
+					<label:TituloGris text="TOTAL" paddingTop="0"/>
+				</s:VGroup>
+			</s:VGroup>
+		</s:Group>
+		<otros:divisionHueca width="100%" />
+		<pqNet:botonPqNetLargo icono="agregar" label="Agregar" click="agregarNuevoAgente(event)"/>
+	</contenedores:VGroupConPaddingStandardPqNet>
+	<s:HGroup  width="100%" height="100%" id="zonaTrabajo"/>
+</s:Group>

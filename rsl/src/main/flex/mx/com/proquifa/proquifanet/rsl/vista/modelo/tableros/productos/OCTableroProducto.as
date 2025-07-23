@@ -1,0 +1,441 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.productos
+{
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.tableros.producto.OCTableroProducto")]
+	
+	[Bindable]
+	public class OCTableroProducto
+	{
+		private var _numFila:int;
+		private var _cantidad:Number;
+		private var _descripcion:String;
+		private var _enTiempo:Number;
+		private var _estado:String;
+		private var _facturaP:String;
+		private var _feaPharma:Date;
+		private var _feaProquifa:Date;
+		private var _fraMEX:Date;
+		private var _fraUSA:Date;
+		private var _idPCompra:Number;
+		private var _mes:int;
+		private var _ordenDeCompra:String;
+		private var _trespuesta:String;
+		private var _fecha:Date;
+		private var _fechaOC:Date;
+		private var _mesFechaOC:Number;
+		private var _anioFechaOC:Number;
+		
+		///// OC en Transito /////
+		private var _cliente:String;
+		private var _pedidoInterno:String;
+		///// OC Rechazada /////
+		private var _tipoRechazo:String;
+		///// OC Confirmadas y Canceladas /////
+		private var _moneda:String;
+		private var _monto:Number;
+		private var _montoDolares:Number;
+		private var _tipoDeCambio:Number;
+		private var _empresa:String;
+		private var _montoAnterior:Number;
+		private var _comprador:String;
+		private var _tipoProveedor:String;
+		private var _objetivoCrecimiento:Number;
+		private var _objetivoCrecimientoFundamental:Number;		
+		private var _feaPharmaString:String
+		private var _feaProquifaString:String;
+		private var _fraMEXString:String;
+		private var _fraUSAString:String;
+		private var _costoUnitario:Number;
+		
+		public function OCTableroProducto()
+		{
+			_feaPharmaString = "ND";
+			_feaProquifaString = "ND";
+			_fraMEXString = "ND";
+			_fraUSAString = "ND";
+			_facturaP = 'ND';
+		}
+
+		public function get anioFechaOC():Number
+		{
+			return _anioFechaOC;
+		}
+
+		public function set anioFechaOC(value:Number):void
+		{
+			_anioFechaOC = value;
+		}
+
+		public function get mesFechaOC():Number
+		{
+			return _mesFechaOC;
+		}
+
+		public function set mesFechaOC(value:Number):void
+		{
+			_mesFechaOC = value;
+		}
+
+		public function get fechaOC():Date
+		{
+			return _fechaOC;
+		}
+
+		public function set fechaOC(value:Date):void
+		{
+			_fechaOC = value;
+			
+			if(value != null){
+				mesFechaOC = value.getMonth();
+				anioFechaOC = value.getFullYear();
+			}
+		}
+
+		public function get fecha():Date
+		{
+			return _fecha;
+		}
+
+		public function set fecha(value:Date):void
+		{
+			_fecha = value;
+		}
+
+		public function get costoUnitario():Number
+		{
+			return _costoUnitario;
+		}
+
+		public function set costoUnitario(value:Number):void
+		{
+			_costoUnitario = value;
+		}
+
+		public function get numFila():int
+		{
+			return _numFila;
+		}
+		
+		public function set numFila(value:int):void
+		{
+			_numFila = value;
+		}
+		
+		public function get cantidad():Number
+		{
+			return _cantidad;
+		}
+
+		public function set cantidad(value:Number):void
+		{
+			_cantidad = value;
+		}
+
+		public function get descripcion():String
+		{
+			return _descripcion;
+		}
+
+		public function set descripcion(value:String):void
+		{
+			_descripcion = value;
+		}
+
+		public function get estado():String
+		{
+			return _estado;
+		}
+
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+
+		public function get enTiempo():Number
+		{					
+			return _enTiempo;
+		}
+
+		public function set enTiempo(value:Number):void
+		{
+			_enTiempo = value;
+			if(value == 1) _trespuesta = 'T'; else if(value == 0) _trespuesta = 'R';	
+		}
+
+		public function get facturaP():String
+		{
+			return _facturaP;
+		}
+
+		public function set facturaP(value:String):void
+		{			
+			if(value == null){
+				_facturaP = 'ND';
+			}else{
+				_facturaP = value;	
+			}
+		}
+
+		public function get feaPharma():Date
+		{
+			return _feaPharma;
+		}
+		
+		public function set feaPharma(value:Date):void
+		{
+			_feaPharma = value;
+			if(value == null)
+				feaPharmaString = "ND";
+			else
+				feaPharmaString = UtilsFecha.formatoFechaDDMMMYYYY(value);
+		}
+		
+		public function get feaProquifa():Date
+		{
+			return _feaProquifa;
+		}
+		
+		public function set feaProquifa(value:Date):void
+		{
+			_feaProquifa = value;
+			if(value == null)
+				feaProquifaString =  "ND";
+			else
+				feaProquifaString =  UtilsFecha.formatoFechaDDMMMYYYY(value);
+		}
+		
+		public function get fraMEX():Date
+		{
+			return _fraMEX;
+		}
+		
+		public function set fraMEX(value:Date):void
+		{
+			_fraMEX = value;
+			fraMEXString = UtilsFecha.formatoFechaDDMMMYYYY(value);
+		}
+		
+		public function get fraUSA():Date
+		{
+			return _fraUSA;
+		}
+		
+		public function set fraUSA(value:Date):void
+		{
+			_fraUSA = value;
+			fraUSAString = UtilsFecha.formatoFechaDDMMMYYYY(value);
+		}
+		
+		public function get idPCompra():Number
+		{
+			return _idPCompra;
+		}
+
+		public function set idPCompra(value:Number):void
+		{
+			_idPCompra = value;
+		}
+
+		public function get mes():int
+		{
+			return _mes;
+		}
+
+		public function set mes(value:int):void
+		{
+			_mes = value;
+		}
+
+		public function get ordenDeCompra():String
+		{
+			return _ordenDeCompra;
+		}
+
+		public function set ordenDeCompra(value:String):void
+		{
+			_ordenDeCompra = value;
+		}
+		
+		public function get trespuesta():String
+		{
+			return _trespuesta;
+		}
+		
+		public function set trespuesta(value:String):void
+		{
+			_trespuesta = value;
+		}		
+
+		public function get cliente():String
+		{
+			return _cliente;
+		}
+
+		public function set cliente(value:String):void
+		{
+			_cliente = value;
+		}
+
+		public function get pedidoInterno():String
+		{
+			return _pedidoInterno;
+		}
+
+		public function set pedidoInterno(value:String):void
+		{
+			_pedidoInterno = value;
+		}
+
+		public function get tipoRechazo():String
+		{
+			return _tipoRechazo;
+		}
+
+		public function set tipoRechazo(value:String):void
+		{
+			_tipoRechazo = value;
+		}
+
+		public function get moneda():String
+		{
+			return _moneda;
+		}
+
+		public function set moneda(value:String):void
+		{
+			_moneda = value;
+		}
+
+		public function get monto():Number
+		{
+			return _monto;
+		}
+
+		public function set monto(value:Number):void
+		{
+			_monto = value;
+		}
+
+		public function get montoDolares():Number
+		{
+			return _montoDolares;
+		}
+
+		public function set montoDolares(value:Number):void
+		{
+			_montoDolares = value;
+		}
+
+		public function get tipoDeCambio():Number
+		{
+			return _tipoDeCambio;
+		}
+
+		public function set tipoDeCambio(value:Number):void
+		{
+			_tipoDeCambio = value;
+		}
+
+		public function get empresa():String
+		{
+			return _empresa;
+		}
+
+		public function set empresa(value:String):void
+		{
+			_empresa = value;
+		}
+
+		public function get montoAnterior():Number
+		{
+			return _montoAnterior;
+		}
+
+		public function set montoAnterior(value:Number):void
+		{
+			_montoAnterior = value;
+		}
+
+		public function get comprador():String
+		{
+			return _comprador;
+		}
+
+		public function set comprador(value:String):void
+		{
+			_comprador = value;
+		}
+
+		public function get tipoProveedor():String
+		{
+			return _tipoProveedor;
+		}
+
+		public function set tipoProveedor(value:String):void
+		{
+			_tipoProveedor = value;
+		}
+
+		public function get objetivoCrecimiento():Number
+		{
+			return _objetivoCrecimiento;
+		}
+
+		public function set objetivoCrecimiento(value:Number):void
+		{
+			_objetivoCrecimiento = value;
+		}
+
+		public function get objetivoCrecimientoFundamental():Number
+		{
+			return _objetivoCrecimientoFundamental;
+		}
+
+		public function set objetivoCrecimientoFundamental(value:Number):void
+		{
+			_objetivoCrecimientoFundamental = value;
+		}		
+
+		public function get feaPharmaString():String
+		{
+			return _feaPharmaString;
+		}
+
+		public function set feaPharmaString(value:String):void
+		{
+			_feaPharmaString = value;
+		}
+
+		public function get feaProquifaString():String
+		{
+			return _feaProquifaString;
+		}
+
+		public function set feaProquifaString(value:String):void
+		{
+			_feaProquifaString = value;
+		}
+
+		public function get fraMEXString():String
+		{
+			return _fraMEXString;
+		}
+
+		public function set fraMEXString(value:String):void
+		{
+			_fraMEXString = value;
+		}
+
+		public function get fraUSAString():String
+		{
+			return _fraUSAString;
+		}
+
+		public function set fraUSAString(value:String):void
+		{
+			_fraUSAString = value;
+		}
+		
+	}
+}

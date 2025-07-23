@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"  
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoNiCobrada:ArrayCollection = new ArrayCollection();
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				/**
+				 * Se realiza una copia de la info y se recibe en un Array simple, para poder aplicar funciones específicas de los mismos
+				 **/
+				var arrayTemp:Array = new Array();
+				_infoNiCobrada = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				arrayTemp = (ObjectUtil.copy($infoGrafica)as ArrayCollection).source;
+				
+				
+				/**
+				 * Eliminar los cobros en estado Abierto, Cancelar y Refacturación
+				 * */
+				keys = new Object();
+				var arraySinCobrarCancelarRefacturacion: Array = new Array();
+				arraySinCobrarCancelarRefacturacion = arrayTemp.filter(quitarPorCobrarCancelarRefacturacion);
+				arraySinCobrarCancelarRefacturacion.sortOn("nivelIngreso");
+				
+				//Liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Nivel de Ingreso
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalNI:Array = new Array();
+				arrayTotalNI = arraySinCobrarCancelarRefacturacion.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Nivel de Ingreso
+				 * */
+				
+				FormarLosNI(arrayTotalNI,arraySinCobrarCancelarRefacturacion,"NIVEL_INGRESO_COBRADO",_infoNiCobrada);
+				
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoNiCobrada,null,"totalCobros");
+				
+				//Para liberar Memoria
+				arrayTotalNI = new Array();
+				arraySinCobrarCancelarRefacturacion = new Array();
+			}
+			
+			private function FormarLosNI(TotalNIs:Array,NIsInfo:Array,etiqueta:String,infoNIs:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCobros:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientes:Object;
+				
+				var currentPartidaCobros:Cobros; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalNIs.length; i++){
+					j=0;
+					keysClientes = new Object();
+					totalCobros =0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCobros = NIsInfo[j] as Cobros;
+					while( (TotalNIs[i] as Cobros).nivelIngreso == currentPartidaCobros.nivelIngreso){
+						totalPartidas += currentPartidaCobros.partidas;
+						totalPiezas += currentPartidaCobros.piezas;
+						totalMonto += currentPartidaCobros.montoDolares;
+						
+						totalCobros++;
+						
+						if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+							keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+							totalClientes++;
+						}
+						
+						NIsInfo.shift();
+						if(NIsInfo.length >0)
+							currentPartidaCobros = NIsInfo[j] as Cobros;
+						else
+							currentPartidaCobros =new Cobros();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalNIs[i] as Cobros).nivelIngreso.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalCobros = totalCobros;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoNIs.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function quitarPorCobrarCancelarRefacturacion(item:Cobros, id:uint, array:Array):Boolean
+			{
+				if(item.estado =='Abierto' || item.estado == 'Por Cancelar' || item.estado == 'A refacturación' || item.estado == 'Cancelada'){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			public function quitaDuplicados(item:Cobros, id:uint, _array:Array):Boolean{
+				if (keys.hasOwnProperty(item.nivelIngreso)) {
+					return false;
+				} else {
+					keys[item.nivelIngreso] = item.nivelIngreso;
+					return true;
+				}
+			}
+ 		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" gap="0">
+		<s:Spacer width="100%" height="30%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> <!--piezasTotal-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" verticalAlign="middle" height="8%">	
+			<componentes:tituloChartTablero width="100%" text="NI COBRADO" textAlign="center" />
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

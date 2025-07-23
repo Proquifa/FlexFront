@@ -1,0 +1,529 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:consolidado="mx.com.proquifa.vista.vistas.gestorCompras.componentes.ordenDespacho.consolidado.*"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:busqueda="mx.com.proquifa.vista.vistas.skin.busqueda.*" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" 
+		  creationComplete="inicio(event)" 
+		  >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ListaArribo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			public var _data:ArrayCollection = new ArrayCollection;
+			private var arraySeteado:ArrayCollection = new ArrayCollection;
+			private var removerSeteados:Boolean;
+			private var _totales:Object = new Object;
+			public static var limites:Object = new Object;
+			private var popUpLimite:PopUpLimiteConsolidado = null;
+			private var _condicionValidacion:Boolean;
+			
+			private var razonDeterminada:Boolean;
+			
+			public function resetAll():void
+			{
+				lstArriboProveedores.dataProvider = new ArrayCollection();
+				/*gpListasArriboProvee.gridListaArribosProvee.dataProvider = new ArrayCollection();*/ 
+				gpListasArriboProvee.gridPartidas.dataProvider = new ArrayCollection(); 
+				///////////
+				gpListasArriboProvee.gridPartidas.dataProvider = new ArrayCollection(); 
+				gpLimitesConsolidacion.dataProvider = new ArrayCollection();
+				gpLimitesConsolidacion.listPanelOrdenDespacho.dataProvider = new ArrayCollection();
+				valor = new ArrayCollection();
+				this.data = new ArrayCollection();
+				
+			}
+			
+			protected function inicio(event:FlexEvent):void
+			{
+				gpListasArriboProvee.addEventListener(EventoGestorCompras.ELIMINAR_PARTIDAS_PANEL_OC, eliminarOrdenCompra);
+				
+				gpLimitesConsolidacion.listPanelOrdenDespacho.addEventListener(EventoGestorCompras.ELIMINAR_PARTIDAS_PANEL_OC, eliminarOrdenCompra);
+				
+				addEventListener(EventoGestorCompras.ENVIAR_INFORMACION_AJUSTES,enviarInfoLimites);
+			}
+			
+			
+			protected function enviarInfoLimites(evt:EventoGestorCompras):void
+			{
+				var limites:Object = new Object;
+				limites.limiteMax = evt.montoMax;
+				limites.limiteMin = evt.montoMin;
+				gpLimitesConsolidacion.limites = limites;
+			}
+			
+			public function get data():ArrayCollection
+			{
+				return _data;
+			}
+			
+			public static var _sql:Query;
+			public var universo:ArrayCollection;
+			public function set data(value:ArrayCollection):void
+			{
+				universo = ObjectUtil.copy(value ) as ArrayCollection
+				
+				if(removerSeteados)
+				{
+					removerSeteados = false;
+					removerCargados(arraySeteado);
+				}
+				
+				_data = ObjectUtil.copy(obtenerTotalesLista()) as ArrayCollection;
+				lstArriboProveedores.dataProvider = data;
+				lblTotalPro.text = data.length.toString();
+				lblTotalPro.text += data.length == 1 ? ' Proveedor' : ' Proveedores';
+				lstArriboProveedores.selectedIndex = 0;
+				infoGridListaArribo(lstArriboProveedores.selectedItem);
+			}
+			
+			private function obtenerTotalesLista():ArrayCollection
+			{
+				var _numFila:int = 0;
+				var _arregloInfo:ArrayCollection = new ArrayCollection();
+				_arregloInfo = new ArrayCollection();
+				var _proveedores:Array = new Array();
+				_sql = new Query(universo,["nombreProveedor","idProveedor","idListaArribo","idOrdenDespacho"],true);
+				
+				_proveedores = _sql.getPunteros(["nombreProveedor"]);
+				_totales = new Object();
+				_totales.totalProveedores = "";
+				_totales.totalListasArribo = 0;
+				_totales.totalPiezas = 0;
+				_totales.totalMonto = 0;
+				_totales.et = 0;
+				_totales.ft = 0;
+				_totales.urgente = 0;
+				
+				if(_proveedores.length > 0)
+				{
+					for(var i:int = 0; i < _proveedores.length; i++)
+					{
+						var resumen:ResumenConsulta = new ResumenConsulta();
+						var proveedor:String = _proveedores[i];
+						var tmp:ListaArribo = new ListaArribo();
+						
+						var _punteros:Array = _sql.getPunteros([proveedor]);
+						var totalPiezas:Number = _sql.getSumarCampo("totalPiezas",_punteros);
+						var totalMonto:Number = _sql.getSumarCampo("totalMonto",_punteros);
+						var _et:Number = 0;
+						var _ft:Number = 0;
+						var _urgente:Number = 0;
+						var _nFila:int = 0;
+						
+						for (var n:int = 0; n < _punteros.length; n++) 
+						{
+							if (_sql.universo.getItemAt(_punteros[n]).totalDiasMinEntrega > 2 )
+							{
+								_sql.universo.getItemAt(_punteros[n]).tiempo = 1;
+								_et += 1;
+							}
+							else if (_sql.universo.getItemAt(_punteros[n]).totalDiasMinEntrega < 0 )
+							{
+								_sql.universo.getItemAt(_punteros[n]).tiempo = 2;
+								_ft += 1;
+							}
+							else
+							{
+								_sql.universo.getItemAt(_punteros[n]).tiempo = 3;
+								_urgente += 1;
+							}
+							_sql.universo.getItemAt(_punteros[n]).numFila = ++_nFila;
+						}
+						
+						_totales.totalMonto += totalMonto;
+						_totales.totalPiezas += totalPiezas;
+						_totales.totalListasArribo += _punteros.length;
+						_totales.et += _et;
+						_totales.ft += _ft;
+						_totales.urgente += _urgente;
+						
+						resumen.etiqueta = tmp.nombreProveedor = proveedor.toUpperCase();
+						resumen.total = tmp.totalMonto = totalMonto;
+						resumen.piezasTotal = tmp.totalPiezas = totalPiezas;
+						resumen.totalCompras = tmp.totalListasArribo = _punteros.length;
+						resumen.clientes_proveedores = 1;
+						tmp.idProveedor = _sql.universo.getItemAt(_proveedores[i]).idProveedor;
+						tmp.folio = _sql.universo.getItemAt(_proveedores[i]).folio;
+						tmp.fechaString = _sql.universo.getItemAt(_proveedores[i]).fechaString;
+						tmp.tiempo = _sql.universo.getItemAt(_proveedores[i]).tiempo;
+						tmp.et = _et;
+						tmp.ft = _ft;
+						tmp.urgente = _urgente;
+						tmp.numFila = ++_numFila;
+						if (i == (_proveedores.length-1))
+						{
+							tmp.ultimo = true; //Es el ultimo reutilizando variables
+						}
+						
+						_arregloInfo.addItem(tmp);
+						
+					}
+					_totales.totalProveedores = _arregloInfo.length;
+				}
+				return _arregloInfo;
+			}
+			
+			public function infoGridListaArribo($proveedor:ListaArribo):void
+			{
+				if($proveedor)
+				{
+					var dataGrid:ArrayCollection = new ArrayCollection;
+					var listasArribo:Array = _sql.getPunteros([$proveedor.nombreProveedor.toLowerCase()]);
+					for (var i:int = 0; i < listasArribo.length; i++) 
+					{
+						var tmp:ListaArribo = _sql.universo.getItemAt(listasArribo[i]) as ListaArribo;
+						dataGrid.addItem(tmp);
+					}
+					gpListasArriboProvee.lblProveedor.text = $proveedor.nombreProveedor;
+					/*gpListasArriboProvee.gridListaArribosProvee.dataProvider = ordenarLista(dataGrid);*/
+					gpListasArriboProvee.gridPartidas.dataProvider = ordenarLista(dataGrid);
+					///////////
+					gpListasArriboProvee.gridPartidas.dataProvider = ordenarLista(dataGrid);
+					gpListasArriboProvee.buscador = dataGrid;
+					
+					_totales = new Object;
+					_totales.totalMonto = $proveedor.totalMonto;
+					_totales.totalListasArribo = $proveedor.totalListasArribo;
+					_totales.totalPiezas = $proveedor.totalPiezas;
+					gpListasArriboProvee.partidasTotalesOC = _totales;
+				}
+				
+			}
+			
+			private function ordenarLista($arreglo:ArrayCollection):ArrayCollection
+			{
+				var ordenar:SortField = new SortField();
+				ordenar.name = "totalDiasMinEntrega";
+				ordenar.numeric = true;
+				var tipo:Sort = new Sort();
+				tipo.fields = [ordenar];
+				$arreglo.sort = tipo;
+				$arreglo.refresh();
+				
+				for (var g:int = 0; g < $arreglo.length; g++) 
+				{
+					($arreglo[g] as  ListaArribo).numFila = g+1;
+				}
+				
+				return $arreglo;
+			}
+			
+			[Bindable] private var font18:int = 18;
+			[Bindable] private var busquedaHeight:int;
+			[Bindable] private var buscadorWidth:int;
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				font18 = (18/1975)*($width);
+				font18 = font18 > 18 ? 18:font18;
+				
+				busquedaHeight = (30/1159) * ($height);
+				buscadorWidth = (350/1975) * ($width);
+				
+			}
+			
+			
+			public static var seleccion:int;
+			protected function lstArriboProveedores_changingHandler(event:IndexChangeEvent):void
+			{
+				infoGridListaArribo(lstArriboProveedores.selectedItem);
+				seleccion = lstArriboProveedores.selectedIndex;				
+			}
+			
+			[Bindable] private var valor:ArrayCollection = new ArrayCollection;
+			protected function gpListasArriboProvee_agregarOrdenesCompraHandler(event:EventoGestorCompras):void
+			{
+				valor.addItem(event.current as ListaArribo);
+				var num:int = 1;
+				for (var i:int = 0; i < valor.length; i++) 
+				{
+					valor[i].filaNum = num++;
+					
+				}
+				gpLimitesConsolidacion.dataProvider = valor;
+				//gpLimitesConsolidacion.listPanelOrdenDespacho.dataProvider = valor;
+				
+				razonDeterminada = false;
+			}
+			
+			protected function eliminarOrdenCompra(evt:EventoGestorCompras):void
+			{
+				if(evt.listaArribo.eliminar == false)
+				{
+					var eliminar:Array = _sql.getPunteros([null,null,evt.listaArribo.idListaArribo],"idListaArribo");
+					
+					_sql.universo.removeItemAt(eliminar[0]);
+					universo = _sql.universo;
+					data = universo;
+					if(seleccion>=0)
+					{
+						lstArriboProveedores.selectedIndex = seleccion;
+						lstArriboProveedores.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+					}
+					
+				}
+				if(evt.listaArribo.eliminar == true)
+				{
+					evt.listaArribo.eliminar = false;
+					_sql.universo.addItem(evt.listaArribo);
+					universo = _sql.universo;
+					data = universo;
+					lstArriboProveedores.selectedIndex = seleccion;
+					lstArriboProveedores.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+					//trace(valor.removeItem(evt.listaArribo));
+					for (var i:int = 0; i < valor.length; i++) 
+					{
+						if((valor[i] as ListaArribo).idListaArribo == evt.listaArribo.idListaArribo)
+							valor.removeItemAt(i);
+					}
+					
+					gpLimitesConsolidacion.dataProvider = valor;
+					
+					if(valor.length == 0)
+						EventoGestorCompras.completadoConsolidado = false;
+				}
+				razonDeterminada = false;
+			}
+			
+			
+			protected function buscadorProveedor(event:TextOperationEvent):void
+			{
+				lstArriboProveedores.dataProvider = UtilsGrid.queryCampoXLike(data,"nombreProveedor",txtBuscadorPro.text);
+			}
+			
+			public function get listaArribo():ArrayCollection
+			{
+				return gpLimitesConsolidacion.listasArribo;
+			}
+			
+			public function get listaArriboResumen():ArrayCollection
+			{
+				return gpLimitesConsolidacion.listasArriboResumen;
+			}
+			
+			public function validar():Boolean
+			{
+				if(gpLimitesConsolidacion.listasArribo.length == 0)
+				{
+					EventoGestorCompras.completadoConsolidado = false;
+					return false;
+				}
+				else
+				{
+					EventoGestorCompras.completadoConsolidado = true;
+					_condicionValidacion = false;
+					return true;
+				}
+			}
+			
+			public function set recibeListaOrdenesConsolidados($ordenes:ArrayCollection):void
+			{
+				if($ordenes == null || $ordenes.length == 0)
+					return;
+				
+				this.data = $ordenes;
+				
+			}
+			
+			public function setOrdenDespacho($orden:OrdenDespacho):void
+			{
+				arraySeteado = $orden.listasArribo;
+				removerSeteados = true;
+			}
+			
+			private function removerCargados($array:ArrayCollection):void
+			{
+				gpLimitesConsolidacion.listPanelOrdenDespacho.dataProvider = new ArrayCollection();
+				var borrar:Array = new Array();
+				for (var t:int = 0; t < $array.length; t++) 
+				{
+					var curr:ListaArribo = $array[t] as ListaArribo;
+					
+					if (curr.totalDiasMinEntrega > 2 )
+						curr.tiempo = 1;
+					else if (curr.totalDiasMinEntrega < 0 )
+						curr.tiempo = 2;
+					else
+						curr.tiempo = 3;
+					
+					for (var k:int = 0; k < universo.length; k++) 
+					{
+						if((universo[k] as ListaArribo).idListaArribo == curr.idListaArribo)
+						{
+							valor.addItem(curr);
+							gpLimitesConsolidacion.dataProvider = valor;
+							borrar.push(k);
+						}
+					}
+					
+				}
+				
+				var num:int = 1;
+				for (var i:int = 0; i < valor.length; i++) 
+				{
+					valor[i].filaNum = num++;
+					
+				}
+				//gpLimitesConsolidacion.listPanelOrdenDespacho.dataProvider = valor;
+				
+				for (var y:int = borrar.length; y > 0; y--) 
+				{
+					universo.removeItemAt(borrar[y-1] as int);
+				}
+				var fin:ArrayCollection = ObjectUtil.copy(universo) as ArrayCollection;
+				this.data = new ArrayCollection();
+				this.data = fin;
+			}
+			
+			
+			private function continuar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpLimite );
+				popUpLimite = null;
+				
+				EventoGestorCompras.completadoConsolidado = true;
+				_condicionValidacion = true;
+				dispatchEvent(new Event("clicMenuProgresoGestor",true));
+				razonDeterminada = true;
+			}
+			private function cancelar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpLimite );
+				popUpLimite = null;
+				
+				EventoGestorCompras.completadoConsolidado = false;
+				_condicionValidacion = false;
+			}
+			public function validarLimites():void
+			{
+				if(gpLimitesConsolidacion.listasArribo.length == 0)
+				{
+					alertaSingleton.show("Se debe agregar al menos una lista de arribo.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return ;
+				}
+				
+				if(!_condicionValidacion){
+					if((gpLimitesConsolidacion.totales.totalMonto > gpLimitesConsolidacion.limites.limiteMax) && (!razonDeterminada)){
+						if( popUpLimite == null ){
+							popUpLimite = PopUpLimiteConsolidado(PopUpManager.createPopUp( this, PopUpLimiteConsolidado, true ) );
+							PopUpManager.centerPopUp( popUpLimite );
+							popUpLimite.setLimiteTipo("maximo");
+							popUpLimite.addEventListener("continuarPopUp",continuar);
+							popUpLimite.addEventListener("cancelar",cancelar);
+						}else{
+							PopUpManager.addPopUp( popUpLimite , this, true );
+						}
+						_condicionValidacion = false;
+					}
+					else if((gpLimitesConsolidacion.totales.totalMonto < gpLimitesConsolidacion.limites.limiteMin) && (!razonDeterminada)){
+						if( popUpLimite == null ){
+							popUpLimite = PopUpLimiteConsolidado(PopUpManager.createPopUp( this, PopUpLimiteConsolidado, true ) );
+							PopUpManager.centerPopUp( popUpLimite );
+							popUpLimite.setLimiteTipo("minimo");
+							popUpLimite.addEventListener("continuarPopUp",continuar);
+							popUpLimite.addEventListener("cancelar",cancelar);
+						}else{
+							PopUpManager.addPopUp( popUpLimite , this, true );
+						}
+						_condicionValidacion = false;
+					}
+					else{
+						_condicionValidacion = true;
+					}
+				}
+				
+			}
+			
+			public function get condicionValidacion():Boolean
+			{
+				return _condicionValidacion;
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	
+	
+	<s:HGroup width="100%" height="100%">
+		
+		<!--maxWidth="390"-->
+		<s:VGroup id="vgpListaArriboProveedores" width="19.7%" height="100%" paddingRight="10" paddingTop="30">
+			<s:HGroup width="100%" horizontalAlign="center" >
+				<busqueda:BusquedaGestorCompras width="{buscadorWidth}" height="{busquedaHeight}" id="txtBuscadorPro" prompt="Proveedor" fontStyle="normal" icono="buscador2" change="buscadorProveedor(event)"/>
+			</s:HGroup>
+			
+			<!--maxWidth="380"-->
+			<s:VGroup width="100%" height="100%" gap="0" paddingBottom="20" paddingTop="20" >
+				<otros:LineaDivision id="linea" width="100%" height="1" color="#ebebeb" bottom="0" />
+				<s:List width="100%" height="100%"  borderVisible="false" horizontalScrollPolicy="off"
+						selectedIndex="0" id="lstArriboProveedores"  contentBackgroundAlpha="0"
+						itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.ListaProveedores_IR"
+						changing="lstArriboProveedores_changingHandler(event)"
+						/>
+				<s:VGroup width="100%" horizontalAlign="center">
+					<!--maxWidth="350"-->
+					<otros:LineaDivision width="100%"  height="1"  maxWidth="380" color="#424242"  />
+				</s:VGroup>
+				<label:Texto_14_Helvetica width="100%" id="lblTotalPro" text="Proveedores" textAlign="center" fontSize="{font18}" paddingTop="10" paddingBottom="10" color="#424242"/>
+			</s:VGroup>
+			
+		</s:VGroup>
+		<s:HGroup height="100%" verticalAlign="middle">
+			<otros:divisionDegradadoVertical height="85%" />
+		</s:HGroup>
+		
+		
+		<s:HGroup width="60%" height="100%" paddingTop="30">
+			<consolidado:Grid_ListasArribo_Proveedores id="gpListasArriboProvee" width="100%" height="100%" agregarOrdenesCompra="gpListasArriboProvee_agregarOrdenesCompraHandler(event)"/>
+		</s:HGroup>
+		
+		<s:HGroup height="100%" verticalAlign="middle">
+			<otros:divisionDegradadoVertical height="85%" />
+		</s:HGroup>
+		
+		<consolidado:LimitesConsolidacion id="gpLimitesConsolidacion" width="20.3%" height="100%" paddingTop="33" paddingRight="-20" />
+		
+	</s:HGroup>
+	
+	<s:VGroup id="footer" width="100%" gap="20" paddingRight="-20" paddingLeft="-22">
+		<otros:division width="100%" />
+		<s:HGroup width="100%" horizontalAlign="center" >
+			<label:Texto_14_Helvetica text="VAC: Valor Comercial" />
+			<s:Spacer width="6%" />
+			<label:Texto_14_Helvetica text="FTE: Flete" />
+			<s:Spacer width="6%" />
+			<label:Texto_14_Helvetica text="VAD: Valor Aduanal" />
+			<s:Spacer width="6%" />
+			<label:Texto_14_Helvetica text="IMP: Impuestos" />
+			<s:Spacer width="6%" />
+			<label:Texto_14_Helvetica text="VEI: Valor Estimado de Importación" />
+		</s:HGroup>  
+	</s:VGroup>  
+	
+</s:VGroup>

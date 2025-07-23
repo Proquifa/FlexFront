@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:ns="vista.vistas.ev_AgendarVisita.Componentes.*"
+		 creationComplete="init(event)"
+		 resize="calc(event)" xmlns:ns1="vista.vistas.ev_AgendarVisita.*" 
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Sprint;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.TextOperationEvent;
+			
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			import vista.evento.EventoEVAgendarVisita;
+			import vista.vistas.ev_AgendarVisita.Componentes.PopupAgregarVistaAAgendar;
+			
+			[Bindable]private var sizeFontLittle:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]private var sizeFontBoton:Number;
+			[Bindable]private var visitas:int;
+			private var universo:ArrayCollection;
+			[Bindable] public var sprint:Sprint;
+			public var universoVisitasAsignadas:ArrayCollection = new ArrayCollection;
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				gridVisita.dataProvider = UtilsGrid.queryCampoXLikeDosCampos(ObjectUtil.copy(universo) as ArrayCollection,"nombreCliente","ruta",txtBuscador.text);
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener(EventoEVAgendarVisita.ABRIR_POPUP_PARAMETROS_VISITA,abrirPopUpParametros);
+				botonera.addEventListener(EventoEVAgendarVisita.CLIC_BOTONERA_TIPO_AGENDA,cambiarVista);
+				addEventListener(EventoEVAgendarVisita.MANDA_ITEM_SELECCIONADO,abrirPopUpParametros);
+			}
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontLittle = (12/2005) * (unscaledWidth);
+				sizeFontLittle = sizeFontLittle > 12 ? 12:sizeFontLittle;
+				sizeFontLittle = sizeFontLittle < 7 ? 7:sizeFontLittle;
+				
+				sizeFontProvee = (20/2005) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 20 ? 20:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 10 ? 10:sizeFontProvee;
+				
+				sizeFontBoton = (22/2005) * (unscaledWidth);
+				sizeFontBoton = sizeFontBoton > 22 ? 22:sizeFontBoton;
+				sizeFontBoton = sizeFontBoton < 15 ? 15:sizeFontBoton;
+				
+				
+			}
+			public function setUniverso(data:ArrayCollection):void
+			{
+				reset();
+				if(data.length > 0){
+					var listaAgendado:ArrayCollection = new ArrayCollection;
+					var listaSinAgendar:ArrayCollection = new ArrayCollection;
+					for each (var temp:VisitaCliente in data) 
+					{
+						if(temp.horaVisitaFin && temp.horaVisitaInicio)
+							listaAgendado.addItem(ObjectUtil.copy(temp) as VisitaCliente);
+						else
+							listaSinAgendar.addItem(ObjectUtil.copy(temp) as VisitaCliente);
+					}
+					
+					universoVisitasAsignadas = ObjectUtil.copy(listaAgendado) as ArrayCollection;
+				
+					universo = ObjectUtil.copy(listaSinAgendar) as ArrayCollection;
+					gridVisita.dataProvider = listaSinAgendar;
+					sprint = data[0].sprint;
+					vistaAgenda.setSprint(sprint);
+					asignarFechaDia( sprint.fechaInicio );
+					
+					for each (var visita:VisitaCliente in listaAgendado) 
+					{
+						vistaAgenda.acomodarVisita(visita);
+					}
+					
+				}else{
+					gridVisita.dataProvider = new ArrayCollection;
+				}
+			}
+			
+			private function reset():void
+			{
+				vistaAgenda.cambiarVista = 0;
+				botonera.selectIndex = 0;
+				universoVisitasAsignadas = new ArrayCollection;
+			}
+			private function asignarFechaDia(fecha:Date):void
+			{
+				txtDia.text = "DÍA #"+fecha.getDate();
+				txtFechaCompleta.text = "( "+ fecha.getDate()+" / "+ UtilsFecha.regresaNombreMesPrimeraMayuscula(fecha.getMonth()) +
+					" / "+fecha.getFullYear()+")";
+				txtFecha.text = UtilsFecha.regresaNombreMesPrimeraMayuscula(fecha.getMonth())+" "+fecha.getFullYear();
+			}
+			private function asignarSemana(fechaInicio:Date,fechaFin:Date):void
+			{
+				txtDia.text = "SEMANA #"+sprint.numeroSprint;
+				txtFechaCompleta.text = "( "+ fechaInicio.getDate()+" - "+fechaFin.getDate()+" / "+ UtilsFecha.regresaNombreMesPrimeraMayuscula(fechaFin.getMonth()) +
+					" / "+fechaFin.getFullYear()+")";
+				txtFecha.text = UtilsFecha.regresaNombreMesPrimeraMayuscula(fechaFin.getMonth())+" "+fechaFin.getFullYear();
+			}
+			
+		
+			
+			private var popUpInformacion:PopupAgregarVistaAAgendar;
+			
+			private function abrirPopUpParametros(event:EventoEVAgendarVisita):void
+			{
+				if( popUpInformacion == null ){
+					popUpInformacion = PopupAgregarVistaAAgendar(PopUpManager.createPopUp( this, PopupAgregarVistaAAgendar, true ) );
+					PopUpManager.centerPopUp( popUpInformacion );
+					
+					popUpInformacion.setVisitaCliente(event.visita);
+					
+					popUpInformacion.addEventListener("cerrarPopUp",cerrarLightBox);
+					popUpInformacion.addEventListener("aceptarPopUp",aceptarPopUp);
+					popUpInformacion.addEventListener("aceptarPopUpModificar",modificarVisita);
+					
+				}else{
+					PopUpManager.addPopUp( popUpInformacion , this, true );
+				}
+			}
+			private function cerrarLightBox(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpInformacion );
+				popUpInformacion = null;
+			}
+			private function cambiarVista(event:EventoEVAgendarVisita):void
+			{
+				if(event.tipoSelect == "dia"){
+					vistaAgenda.cambiarVista = 0;
+					asignarFechaDia(sprint.fechaInicio);					
+				}
+				else if(event.tipoSelect == "semana"){
+					vistaAgenda.cambiarVista = 1;
+					asignarSemana(sprint.fechaInicio,sprint.fechaFin);					
+				}
+				else if(event.tipoSelect == "sprint")
+					vistaAgenda.cambiarVista = 2;
+			}
+			
+			
+			
+			//ASGINAR VISITA 
+			private function aceptarPopUp(event:Event):void	
+			{
+				var visitaTemp:VisitaCliente;
+				var visitaTempAnt:VisitaCliente;
+				var horarioDisponibleV:Boolean;
+				visitaTempAnt = popUpInformacion.visitaAnterior;
+				visitaTemp = popUpInformacion.visitaActual;
+				
+				
+				if(gridVisita.selectedItem){
+					
+					/*var visita:VisitaCliente = ObjectUtil.copy(gridVisita.selectedItem) as VisitaCliente;*/
+					var visita:VisitaCliente = visitaTemp;
+					
+					horarioDisponibleV = vistaAgenda.verificarHorarioDisponible(ObjectUtil.copy(visita) as VisitaCliente);
+					
+				    if(horarioDisponibleV){
+						gridVisita.dataProvider.removeItemAt(gridVisita.selectedIndex);
+						universoVisitasAsignadas.addItem(visita);
+						vistaAgenda.acomodarVisita(ObjectUtil.copy(visita) as VisitaCliente);
+						
+						PopUpManager.removePopUp( popUpInformacion );
+						popUpInformacion = null;
+					}
+					else{
+						alertaSingleton.show("Horario no disponible");
+					}
+					
+				}else{
+					if(popUpInformacion.NoAgendar.selected){
+						
+						vistaAgenda.limpiarvisitaDeHorarioAnterior(visitaTempAnt);
+						for(var j:int = 0; j < universoVisitasAsignadas.length;j++ ){
+							
+							if(universoVisitasAsignadas[j].idVisitaCliente == visitaTempAnt.idVisitaCliente ){
+								universoVisitasAsignadas.removeItemAt(j);
+								break;
+							}
+							
+						}
+						visitaTempAnt.fechaVisita = null;
+						visitaTempAnt.fechaVFinHora = 0;
+						visitaTempAnt.fechaVFinMinuto = 0;
+						visitaTempAnt.fechaVInicioHora = 0;
+						visitaTempAnt.fechaVInicioMinuto = 0;
+						gridVisita.dataProvider.addItem(visitaTempAnt);
+						vistaAgenda.asignarTotales();
+						
+						var eventoREAG:EventoEVAgendarVisita = new EventoEVAgendarVisita(EventoEVAgendarVisita.REAGENDAR_VISITA);
+						eventoREAG.idVisita = visitaTempAnt.idVisitaCliente;
+						dispatchEvent(eventoREAG);
+						
+						
+					}
+				      
+					
+						PopUpManager.removePopUp( popUpInformacion );
+						popUpInformacion = null;
+						
+						
+					
+				}
+				
+				
+			}
+			
+			private function modificarVisita(event:Event):void	
+			{
+				var visitaTempA:VisitaCliente;
+				var visitaTempAnt:VisitaCliente;
+				var horarioDisponibleV:Boolean;
+				visitaTempA = popUpInformacion.visitaActual;
+				visitaTempAnt = popUpInformacion.visitaAnterior;
+				
+				vistaAgenda.limpiarvisitaDeHorarioAnterior(visitaTempAnt);
+				
+				horarioDisponibleV = vistaAgenda.verificarHorarioDisponible(ObjectUtil.copy(visitaTempA) as VisitaCliente);
+				
+				if(horarioDisponibleV){
+					
+					/*vistaAgenda.limpiarvisitaDeHorarioAnterior(visitaTempAnt);*/
+					
+					for(var j:int = 0; j < universoVisitasAsignadas.length;j++ ){
+						
+						if(universoVisitasAsignadas[j].idVisitaCliente == visitaTempA.idVisitaCliente ){
+							universoVisitasAsignadas.removeItemAt(j);
+							break;
+						}
+						
+					}
+					universoVisitasAsignadas.addItem(visitaTempA);
+					
+					vistaAgenda.acomodarVisita(ObjectUtil.copy(visitaTempA) as VisitaCliente);
+					
+					
+					PopUpManager.removePopUp( popUpInformacion );
+					popUpInformacion = null;
+				}
+				else{
+					alertaSingleton.show("Horario no disponible");
+					vistaAgenda.acomodarVisita(ObjectUtil.copy(visitaTempAnt) as VisitaCliente);
+				}
+			}
+			
+			
+			private function eliminarDeUniverso(id:Number):void
+			{
+				for each (var vc:VisitaCliente in universo) 
+				{
+					if(vc.idVisitaCliente == id){
+						universo.removeItem(vc);
+						break;
+					}
+				}
+				
+			}
+			
+			protected function guardarVisitasAgendar(event:MouseEvent):void
+			{
+				if(universoVisitasAsignadas.length > 0){
+					var evento:EventoEVAgendarVisita = new EventoEVAgendarVisita(EventoEVAgendarVisita.GUARDAR_VISITAS_PARA_AGENDAR);
+					evento.usuario = DatosGlobales.getInstance()._usuario.clave;
+					for each (var item:VisitaCliente in universoVisitasAsignadas) 
+					{
+						item.horaVisitaInicio = new Date(null,null,null,item.fechaVInicioHora,item.fechaVInicioMinuto);
+						item.horaVisitaFin = new Date(null,null,null,item.fechaVFinHora,item.fechaVFinMinuto);
+					}
+					
+					evento.visitasCliente = universoVisitasAsignadas
+					dispatchEvent(evento);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" gap="0" paddingTop="0" paddingBottom="0">
+		<!--<s:HGroup width="100%" height="100%" gap="0" paddingRight="20" paddingLeft="6">-->
+		<s:VGroup width="25%" height="100%" gap="0" paddingTop="20">
+			<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="CLIENTES" width="100%" textAlign="left" color="#424242" id="lblTitulo"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer1"/>
+			<s:TextInput id="txtBuscador" prompt="Cliente, Ubicación" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" 
+						 change="txtBuscador_changingHandler(event)" fontStyle="normal"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer2"/>
+			<otros:division width="100%" grueso="1" visible="{gridVisita.selectedIndex == 0 ? false:true}" id="division"/>
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="gridVisita" contentBackgroundAlpha="0" itemRenderer="vista.vistas.ev_AgendarVisita.IR.IR_VisitasAsignarOperacion"
+					/>
+			<otros:division width="100%" grueso="1"/>
+			<s:VGroup width="100%" height="55" verticalAlign="middle" paddingLeft="20" paddingRight="20">
+				<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontLittle+3}" color="#424242" height="100%" verticalAlign="middle"
+						 text="{'#'+gridVisita.dataProvider.length+' Visita'+(gridVisita.dataProvider.length==1?'':'s')} " 
+						 />
+			</s:VGroup>
+		</s:VGroup>
+		<s:Spacer width="20" />
+		<otros:divisionDegradadoVertical height="100%" width="2" />
+		<s:Spacer width="20" />
+		
+		<s:VGroup width="100%" height="100%" gap="0" paddingBottom="20">
+			<s:HGroup width="100%" height="{sizeFontProvee + 40}" verticalAlign="middle" gap="0">
+				<s:Label  height="100%" textAlign="center" verticalAlign="middle" color="#404040" 
+						  fontFamily="Novecento" fontSize="{sizeFontBoton}" fontWeight="bold" id="txtDia"/>
+				<s:Spacer width="10" />
+				<s:Label  height="100%" textAlign="center" verticalAlign="middle" color="#5f5f5f" 
+						  fontFamily="Helvetica" fontSize="{sizeFontLittle}" paddingTop="5" id="txtFechaCompleta"/>
+				<s:Spacer width="100%" />
+				<s:Label  height="100%" textAlign="center" verticalAlign="middle" color="#404040" 
+						  fontFamily="Novecento" fontSize="{sizeFontBoton}" fontWeight="bold" id="txtFecha"/>
+			</s:HGroup>
+			<ns:BotoneraOrdernarSprint width="100%" height="30%" maxHeight="45" id="botonera"/>
+			<ns1:VistaOperacionGridsAgendas height="100%" width="100%" id="vistaAgenda" />
+			<s:VGroup width="100%" height="100%" maxHeight="40" buttonMode="true" click="guardarVisitasAgendar(event)" >
+				<s:Group width="100%" height="100%" >
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="#008894" />
+						</s:fill>
+					</s:Rect>
+					<s:Label text="GUARDAR" width="100%" height="100%" textAlign="center" verticalAlign="middle" color="0xFFFFFF" 
+							 fontFamily="Novecento" fontSize="{sizeFontBoton}" fontWeight="bold"/>
+				</s:Group>  
+			</s:VGroup>
+		</s:VGroup>
+	</s:HGroup>
+</s:Group>

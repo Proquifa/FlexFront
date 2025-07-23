@@ -1,0 +1,123 @@
+package mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.comerciales.oferta
+{
+	import flash.events.Event;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.CostoFactor;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.TiempoEntrega;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Modificacion;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+	
+	public class EventoCatClientes_Oferta extends Event
+	{
+		
+		public var nivel:String;
+		public var busqueda:String;
+		public var idProveedor:Number; 		
+		public var idCliente:Number; 
+		public var nivelIngreso:String;
+		public var provSeleccionado:Proveedor;
+		public var solicitarRestablecer:Boolean;
+		public var solicitarRestablecerTemp:Boolean;
+		
+		
+		public var idLugarAgenteAduanal:Number; 		
+		public var idAgenteAduanal:Number; 		
+		public var idConceptos:Number; 		
+		public var configuracionPrecioProducto:ConfiguracionPrecioProducto;
+		public var configuracionPrecio:ConfiguracionPrecio;
+		public var idConfiguracion:Number;
+		public var costoFactor:CostoFactor;
+		public var listaConfiguracion:ArrayCollection;
+		public var idConfigFamilia:Number;
+		public var modificaPrecio:Boolean;
+		public var monto:String;
+		//public var evtMouse:MouseEvent;
+		public var idConfigPrecioLista:Number;
+		public var idCategoriaPrecioLista:Number;
+		public var idCurrentSolicitud:Number;	
+		
+		public var industria:String;
+		public var familiaTipo:String;
+		public var familiaSubTipo:String;
+		public var familiaControl:String;
+		public var montoMinOCMV:Number;
+		public var valorEnAduana:Number;
+		public var flete:Number;
+		public var descuento:Number;
+		public var idClienteConfig:Number;
+		public var factorCliente:Number;
+		public var factorCostoFijo:Number;
+		public var idProducto:Number;	
+		public var IdConfiguracionPProducto:Number;
+		public var laFamiliaTieneProductos:Boolean;
+		public var laFamiliaTieneClasificaciones:Boolean;
+		public var dateFUA:Date;
+		public var idClasificacion:Number;	
+		public var tiempoEntrega:TiempoEntrega;
+		public var listaTiempoEntregas:ArrayCollection;
+		public var parametrosOferta:ParametrosOfertaCliente;
+		public var checkCostoFijo:Boolean;
+		public var checkFactorUtilidad:Boolean;
+		public var precioListaAnterior:Boolean;
+		
+		//VARIABLES VISTA PARA MODIFICACION
+		public var modif:Modificacion;
+		public var idEmpleado:Number;
+		public var metodo:String;
+		public var servicio:String;
+		public var ventana:String;
+		
+		public static var keyTemp:Boolean = false;
+		public static var isTemporal:Boolean = false;
+		public static var timeTemporal:int;
+		
+		
+		//CONSTANTES PARA EL SERVICIO
+		public static const OBTENER_PROVEEDORES:String = "obtenerProveedoresEventoCatClientes_Oferta";
+		public static const OBTENER_INFORMACION_OFERTA:String = "obtenerInformacionOfertaEventoCatClientes_Oferta";
+		public static const OBTENER_INFORMACION_OFERTA_PRODUCTOS_EXPORTAR:String = "obtenerInformacionOfertaProdcutosExportarEventoCatClientes_Oferta";
+		public static const OBTENER_CONFIGURACION_FAMILIA:String = "obtenerConfiguracionFamiliaEventoCatClientes_Oferta";
+		public static const OBTENER_CONFIGURACION_PRECIO_LISTA_CONF_COSTO:String = "obtenerConfiguracionPrecioListaConfiguracionCostoEventoCatClientes_Oferta";
+		public static const OBTENER_CONFIGURACION_PRECIO_LISTA_CONF_FAMILIA:String = "obtenerConfiguracionPrecioListaConfiguracionFamiliaEventoCatClientes_Oferta";
+		public static const GUARDAR_FACTOR_CLIENTE_SERVICIO:String = "guardarFactorClienteServicioEventoCatClientes_Oferta";
+		public static const OBTENER_INFORMACION_DE_LA_FORMULA_PRECIO:String = "obtenerInformacionDeLaFormulaPrecioEventoCatClientes_Oferta";
+		public static const OBTENER_TODAS_FAMILIAS_PROVEEDOR_CLIENTE:String = "obtenerTodasfamiliasProveedorClienteEventoCatClientes_Oferta";
+		public static const OBTENER_CONFIGURACION_CLASIFICACION:String = "obtenerConfiguracionClasificacionEventoCatClientes_Oferta";
+		public static const OBTENER_LOS_COSTOS_RELACIONADOS_CON_LA_CLASIFICACION_CLIENTE:String = "obtenerLosCostosRelacionadosConClasificacionClienteEventoCatClientes_Oferta";
+		public static const OBTENER_VALORES_FORMULA_CLASIFICACION_CLIENTE:String = "obtenerValoresFormulaClasificacionClasificacionClienteEventoCatClientes_Oferta";
+		public static const INSERTAR_LA_MODIFICACION_DATOS_OFERTA:String = "insertarLaModificacionDatosOfertaEventoCatClientes_General";
+		public static const RESTABLECER_TODAS_CONFIGURACIONES_POR_NIVEL:String = "restablecerTodasLasConfiguracionesPorNivelEventoCatClientes_Oferta";
+		
+		// SERIVICIOS QUE SON DE PROVEEDOR
+		public static const OBTENER_CONFIGURACIONES_PRECIO_PRODUCTO_CLIENTE:String = "obtenerConfiguracionPrecioProductoClienteEventoCatClientes_Oferta";
+		public static const OBTENER_CONFIGURACIONES_CLASIFICACION_CLIENTE:String = "obtenerConfiguracionClasificacionClienteEventoCatClientes_Oferta";
+		public static const OBTENER_CONFIGURACIONES_PRECIO_COSTO_CLIENTE:String = "obtenerConfiguracionPrecioCostoClienteEventoCatClientes_Oferta";
+		public static const SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES_CLIENTE:String ="solicitarActualizacionDeLasConfiguracionesClienteEventoCatClientes_Oferta";
+		public static const ENVIAR_CONFIGURACION_SELECCIONADA_CLIENTES:String ="enviarConfiguracionSeleccionadaClientesEventoCatClientes_Oferta";
+		
+		
+		//CONSTANTES PARA USO DE VISTA
+		public static const RECORRE_TITULO_SELECCIONADO:String = "recorreTituloSelecccionadoEventoCatClientes_Oferta";
+		public static const ENVIAR_ID_PROVEEDOR_SELECCIONADO:String = "enviarIdProveedorSeleccionadoEventoCatClientes_Oferta";
+		public static const ENVIAR_FECHA_OFERTA_SELECCIONADO:String = "enviarFechaOfertaSeleccionadoEventoCatClientes_Oferta";
+		public static const CAMBIA_NIVEL_EN_VISTA_OFERTA:String = "cambiaNivelenVistaOfertaEventoCatClientes_Oferta";
+		public static const ABRIR_POPUP_ACTUALIZAR_MONTO_MINIMO_COMPRA:String = "abrirPopupActualizarMontoMinimoCompraEventoCatClientes_Oferta";
+		public static const GUARDA_FACTOR_CLIENTE_VISTA:String = "guardaFactorClienteVistaEventoCatClientes_Oferta";
+		public static const EXPORTAR_PRODUCTOS_CON_PRECIO:String = "exportarProductosConPrecioEventoCatClientes_Oferta";
+		
+		
+		
+		
+		public function EventoCatClientes_Oferta(type:String, bubbles:Boolean=true, cancelable:Boolean=false)
+		{
+			super(type,bubbles,cancelable)
+		}
+		public override function clone():Event{
+			return new EventoCatClientes_Oferta(type,bubbles,cancelable);
+		}
+	}
+}

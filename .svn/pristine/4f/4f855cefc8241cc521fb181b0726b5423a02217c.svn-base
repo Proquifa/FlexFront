@@ -1,0 +1,761 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:vistas="mx.com.proquifa.vista.vistas.monitorearOcNoArribada.vistas.*" 
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%" 
+		 resize="calc(event)"		
+		 creationComplete="init(event)" xmlns:vistas1="mx.com.proquifa.vista.vistas.monitorearOcNoArribada.vistas.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.MonitorearOcNoArribada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.MonitorearOCNoArribada.EventoMonitorearOcNoArribada;
+			import mx.com.proquifa.vista.eventos.tramitarCompra.EventoTramitarComprarMateriales;
+			import mx.com.proquifa.vista.vistas.monitorearOcNoArribada.componentes.PopUpRegistrarMonitoreo;
+			import mx.com.proquifa.vista.vistas.monitorearOcNoArribada.componentes.popUpHistorialOc;
+			import mx.com.proquifa.vista.vistas.registrarConfirmacion.componentes.PopUpRegistrarConfirmacion;
+			import mx.com.proquifa.vista.vistas.registrarConfirmacion.componentes.PopUpSinImpacto;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosBotones;
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFontP:Number;
+			[Bindable] public var tipoSelect:String = "todos";
+			[Bindable] public var tipoSelectTiempo:String = "todos";
+			[Bindable] public var ocString:String = "";
+			[Bindable] public var idProveedor:Number;
+			public var dAyer:Number = 0;
+			public var dHoy:Number = 0;
+			public var dMañana:Number = 0;
+			public var dPasado:Number = 0;
+			public var dFuturo:Number = 0;
+			public var dAntier:Number = 0;
+			public var dPasadoM:Number = 0;
+			public var dTodos: Number = 0;
+			public var TNoArribadas:Number = 0;
+			public var TArribadas:Number = 0;
+			public var TCanceladas: Number = 0;
+			public var valorRegistrada:int;
+			public var familiaActual:String;
+			public var temporal:String;
+			/*public var recargar:Boolean;*/
+			
+			//////////UNIVERSO DE PARTIDAS 
+			[Bindable] public var universo:ArrayCollection;
+			
+			//////////UNIVERSO DE PARTIDAS FILTRADA POR TIPO (PARCIALES O NO REGISTRADOS) 
+			[Bindable] public var universoActual:ArrayCollection;
+			
+			//////////LISTA A MOSTRAR
+			[Bindable] public var listaFiltrada:ArrayCollection;
+			
+			//////////LISTA PARA BUSQUEDA
+			[Bindable] public var lista:ArrayCollection;
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFont = (15 / 2005) * (unscaledWidth);
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 12 ? 12:sizeFont;
+				
+				sizeFontP = (12 / 2005) * (unscaledWidth);
+				sizeFontP = sizeFontP > 12 ? 12:sizeFontP;
+				sizeFontP = sizeFontP < 10 ? 10:sizeFontP;
+			}
+			public function set recibirPartidasRC(value:ArrayCollection):void
+			{
+				/*vistaLista.dataProvider = value;*/
+			}
+			public function set recibirFamiliasPorPartida($familias:ArrayCollection):void
+			{
+				if(!$familias || $familias.length == 0){
+					vistaLista.cmpCoverflow.recibeFamilias(new ArrayCollection());
+					return;
+				}
+				/*if(recargar)*/
+				familiaActual = "";
+				vistaLista.cmpCoverflow.recibeFamilias($familias);
+			}
+			public function set recibirUniversoPartidas(value:ArrayCollection):void
+			{
+				universo = value;
+				if(universo.length == 0){
+					dispatchEvent(new Event("listaVacia"));
+				}
+			}
+			public function set recibirPartidasPorFamilia(value:ArrayCollection):void
+			{
+				universoActual = value;
+			}
+			
+			private function agruparPorTipo(value:ArrayCollection,esRegistrada:int):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				if(tipoSelect != "todos"){
+					var sqlTipo:Query = new Query(lista,["gestionarBool"],true);
+					var punteros:Array;
+					var partidas:ArrayCollection = new ArrayCollection();
+					punteros = sqlTipo.getPunteros([esRegistrada]);
+					for (var k:int = 0; k < punteros.length; k++) 
+					{
+						var partidaTemp:MonitorearOcNoArribada;
+						partidaTemp = ObjectUtil.copy(sqlTipo.universo.getItemAt(punteros[k])) as MonitorearOcNoArribada;
+						partidas.addItem(partidaTemp);
+					}
+					return partidas;
+				}else
+					return lista;
+			}
+			private function agruparPorTiempo(value:ArrayCollection,tiempo:String):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlTipo:Query = new Query(lista,["tipoDia"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlTipo.getPunteros([tiempo]);
+				for (var k:int = 0; k < punteros.length; k++) 
+				{
+					var partidaTemp:MonitorearOcNoArribada;
+					partidaTemp = ObjectUtil.copy(sqlTipo.universo.getItemAt(punteros[k])) as MonitorearOcNoArribada;
+					partidas.addItem(partidaTemp);
+				}
+				return partidas;
+			}
+			private function agruparPorFamilia(value:ArrayCollection,familia:String):ArrayCollection
+			{
+				if(familia == 'publicaciones--'){
+					familia = "publicaciones-null-null"
+				}
+				
+				if(familia == 'labware--'){
+					familia = "labware-null-null"
+				}
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlPartida:Query = new Query(lista,["familia"],true);
+				var partidas:ArrayCollection = new ArrayCollection();
+				var punteros:Array;
+				punteros = sqlPartida.getPunteros([familia]);
+				
+				for (var j:int = 0; j < punteros.length; j++) 
+				{
+					var partidaTemp:MonitorearOcNoArribada;
+					partidaTemp = ObjectUtil.copy(sqlPartida.universo.getItemAt(punteros[j])) as MonitorearOcNoArribada;
+					partidaTemp.tipoPendiente = "normal";
+					partidaTemp.cantidadCompra = partidaTemp.totalPiezas;
+					partidaTemp.numFila = 0;
+					partidas.addItem(partidaTemp);
+				}
+				
+				return partidas;
+				
+				
+			}
+			
+			private var mapa:Object = new Object;
+			private function agruparPorOC(value:ArrayCollection):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlPartida:Query = new Query(lista,["compra","tipoDia"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlPartida.getPunteros(["compra"]);
+				
+				dAyer = 0;
+				dHoy = 0;
+				dMañana = 0;
+				dAntier = 0;
+				dPasadoM = 0;
+				dPasado = 0;				
+				dFuturo = 0;
+				dTodos = 0;
+				
+				
+				for (var i:int = 0; i < punteros.length; i++) 
+				{
+				
+					
+					TCanceladas = 0;
+					TNoArribadas = 0;
+					TArribadas = 0;
+					
+					var punterosOC:Array;
+					punterosOC = sqlPartida.getPunteros([punteros[i]]);
+					var partidaTemp:MonitorearOcNoArribada;
+					var antigua:int;
+					var indice:int;
+					
+					mapa = new Object();
+					for (var j:int = 0; j < punterosOC.length; j++) 
+					{
+						var temp:MonitorearOcNoArribada = ObjectUtil.copy(sqlPartida.universo.getItemAt(punterosOC[j])) as MonitorearOcNoArribada;
+						var diferencia:int;
+						
+						
+						if(temp.diasFiltro == "AYER")
+							dAyer = dAyer+1;
+						if(temp.diasFiltro == "DIA0")
+							dHoy= dHoy+1;
+						if(temp.diasFiltro == "DIA1")
+							dMañana = dMañana+1;
+						if(temp.diasFiltro == "ANTIER")
+							dAntier = dAntier+1;
+						if(temp.diasFiltro == "DIA2")
+							dPasadoM = dPasadoM+1;
+						if(temp.diasFiltro == "PASADO")
+							dPasado = dPasado+1;
+						if(temp.diasFiltro == "FUTURO")
+							dFuturo = dFuturo + 1;
+						
+						dTodos = dTodos + 1;
+						
+						if(temp.tipoArribo == "No Arribada")
+							TNoArribadas = TNoArribadas +1;
+						if(temp.tipoArribo == "Arribada")
+							TArribadas = TArribadas +1;
+						if(temp.tipoArribo == "Cancelada")
+							TCanceladas = TCanceladas +1;	
+						
+						
+						if (mapa.hasOwnProperty(temp.compra))
+						{
+							mapa[temp.compra].AYER += dAyer;
+							mapa[temp.compra].DIA0 += dHoy;
+							mapa[temp.compra].DIA1 += dMañana;
+							mapa[temp.compra].ANTIER += dAntier;
+							mapa[temp.compra].DIA2 += dPasadoM;
+							mapa[temp.compra].FUTURO += dFuturo;
+							mapa[temp.compra].PASADO += dPasado;
+							
+						}
+						else
+						{
+							mapa[temp.compra] = new Object();
+							mapa[temp.compra].AYER = dAyer;
+							mapa[temp.compra].DIA0 = dHoy;
+							mapa[temp.compra].DIA1 = dMañana;
+							mapa[temp.compra].ANTIER = dAntier;
+							mapa[temp.compra].DIA2 = dPasadoM;
+							mapa[temp.compra].FUTURO = dFuturo;
+							mapa[temp.compra].PASADO = dPasado;
+						}
+						
+						
+						if(temp.fechaEstimadaEntrega){
+							diferencia = UtilsFecha.regresaDiferenciaEntreFechasEnDias(new Date,temp.fechaEstimadaEntrega);
+							if(j == 0){
+								antigua = diferencia
+								indice = punterosOC[0];  
+							}
+							if(diferencia < antigua){
+								indice = punterosOC[j];
+								antigua = diferencia;
+							}
+						}
+					}
+					var fecha:Date=new Date();
+					var dia:Number = fecha.getDay();
+					trace(dia);
+					
+					partidaTemp = ObjectUtil.copy(sqlPartida.universo.getItemAt(indice)) as MonitorearOcNoArribada;
+					partidaTemp.montoTotal = sqlPartida.getSumarCampo('montoTotal',punterosOC);
+					partidaTemp.totalPiezas = sqlPartida.getSumarCampo('totalPiezas',punterosOC);
+					partidaTemp.totalProductos = sqlPartida.getPunteros([punteros[i]],"idProducto").length;
+					partidaTemp.totalPartidas = punterosOC.length;
+					partidaTemp.totalNoArribadas = TNoArribadas;
+					partidaTemp.totalCanceladas = TCanceladas;
+					partidaTemp.totalArriabadas = TArribadas;
+					
+					partidaTemp.piezasRegular = sqlPartida.getSumarCampo('piezasRegular',punterosOC);
+					partidaTemp.piezasProgramado = sqlPartida.getSumarCampo('piezasProgramado',punterosOC);
+					partidaTemp.piezasExpress = sqlPartida.getSumarCampo('piezasExpress',punterosOC);
+					partidaTemp.piezasEntregaUnica = partidaTemp.piezasRegular + partidaTemp.piezasExpress;
+					partidaTemp.piezasFleteNormal = partidaTemp.piezasRegular + partidaTemp.piezasProgramado;
+					partidas.addItem(partidaTemp);
+					
+					vistaLista.botonDias(dia);
+				}
+				return partidas;
+			}
+			
+			private function obtenerPartidasPorOC(value:ArrayCollection,oc:String):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlPartida:Query = new Query(lista,["compra"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlPartida.getPunteros([oc]);
+				
+				for (var i:int = 0; i < punteros.length; i++) 
+				{
+					var temp:MonitorearOcNoArribada = ObjectUtil.copy(sqlPartida.universo.getItemAt(punteros[i])) as MonitorearOcNoArribada;
+					temp.tipoPendiente = "normal";
+					temp.cantidadCompra = temp.totalPiezas;
+					temp.numFila = 0;
+					temp.indiceTabla = i+ 1 ;
+					partidas.addItem(temp);
+				}
+				return partidas;
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				vistaLista.grpBotoneraFoot.addEventListener(EventoMonitorearOcNoArribada.CLIC_BOTONERA_FOOT,verificarBotoneraFoot);
+				
+				/////////////////  CAMBIO DE NIVEL EN COVERFLOW
+				vistaLista.cmpCoverflow.addEventListener(EventoTramitarComprarMateriales.CAMBIA_NIVEL_VISTA_COVERFLOW,cambiarNivel);
+				////////////////   CAMBIO DE INDICE EN LA LISTA
+				vistaLista.lstOrdenesCompra.addEventListener(IndexChangeEvent.CHANGE,cambioIndice);
+				
+				vistaGrid.gridPartidas.addEventListener("todosDisponiblesPopUp",abrirPopUp);
+				vistaGrid.addEventListener("registrarConfirmacionPopUp",abrirPopUpAceptar);
+				
+				addEventListener("activarExito",abrirPopUpExito);
+				vistaLista.addEventListener("seleccionarPrimero",seleccionarPrimero); 
+				
+				vistaGrid.gridPartidas.addEventListener("terminarEspera",terminarEspera);
+				
+				vistaLista.grpBotoneraFoot.addEventListener(EventoMonitorearOcNoArribada.MOSTRAR_TODAS_ORDENES_COMPRA,ordenarPorDia);
+				
+				vistaLista.botondias.addEventListener("ordenarDias", verificarBotoneraFoot);
+				vistaGrid.gridPartidas.addEventListener("todosCambioPopUp",abrirPopUpCambio);
+				vistaLista.addEventListener(EventoMonitorearOcNoArribada.BUSCA_TEXTO, verificarBotoneraFoot);
+				
+				addEventListener("tipoDePop",tipoDePop);
+				
+				
+				
+			}
+			
+			public function tipoDePop(event:EventoMonitorearOcNoArribada):void{
+				temporal= "parcial"
+			}
+			
+			private function ordenarPorDia(value:ArrayCollection):ArrayCollection
+			{
+				
+				var tipo:String = vistaLista.botondias.clicDia;
+				
+				
+				var lista:ArrayCollection = new ArrayCollection();
+				var listaFiltrado:ArrayCollection = new ArrayCollection();
+				lista = ObjectUtil.copy(value) as ArrayCollection;
+				
+				if(!tipo || tipo == "TODOS")    
+				{
+					listaFiltrado = lista; 
+				}
+					
+				else if(tipo != "TODOS")
+				{
+					
+					for (var i:int = 0; i < lista.length; i++) 
+					{
+						if ( mapa.hasOwnProperty((lista[i] as MonitorearOcNoArribada).compra))
+						{
+							if (mapa[(lista[i] as MonitorearOcNoArribada).compra][tipo] > 0 )
+							{
+								listaFiltrado.addItem(lista[i] ) 
+							}
+						}
+						
+						
+					}	
+					
+				}
+				
+				return listaFiltrado;
+				
+			}
+			
+			
+			
+			private function verificarBotoneraFoot(event:EventoMonitorearOcNoArribada):void
+			{
+				if(inEspera)
+					
+					iniciaEspera(true);
+				listaFiltrada = UtilsGrid.queryCampoXLike(universoActual,"compra", vistaLista.txtBuscador.text);
+				tipoSelect = vistaLista.grpBotoneraFoot.tipoSelect;
+				
+				if(tipoSelect == 'noRegistradas')
+					valorRegistrada = 0;
+				else if(tipoSelect == 'parciales')
+					valorRegistrada = 1;
+				
+				if(tipoSelectTiempo == "todos" ){
+					listaFiltrada = agruparPorTipo(listaFiltrada,valorRegistrada);
+				}else{
+					var listaTemp:ArrayCollection;
+					listaTemp = agruparPorTipo(listaFiltrada,valorRegistrada);
+					listaFiltrada = agruparPorTiempo(listaTemp,tipoSelectTiempo);
+				}
+				listaFiltrada = ordenarPorDia(listaFiltrada); 
+				vistaLista.dataProvider = agruparPorOC(listaFiltrada);
+			}
+			
+			private function verificarBotoneraHead(event:EventoMonitorearOcNoArribada):void
+			{
+				if(inEspera)
+					iniciaEspera(true);
+				
+				tipoSelectTiempo = event.tipoSelect;
+				if(tipoSelectTiempo == "todos"){
+					listaFiltrada = agruparPorTipo(universoActual,valorRegistrada);
+				}else{
+					var listaTemp:ArrayCollection;
+					listaTemp = agruparPorTipo(universoActual,valorRegistrada);
+					listaFiltrada = agruparPorTiempo(listaTemp,tipoSelectTiempo);
+				}
+				vistaLista.dataProvider = agruparPorOC(listaFiltrada);
+			}
+			
+			private function cambiarNivel(evt:EventoTramitarComprarMateriales):void
+			{
+				if(inEspera)
+					iniciaEspera(true);
+				var familiaSelect:String = evt.familiaSelect.toLowerCase();
+				
+				if(familiaActual != familiaSelect){
+					
+					universoActual = agruparPorFamilia(universo,familiaSelect);
+					
+					var listaTemp:ArrayCollection;
+					listaTemp = agruparPorTipo(universoActual,valorRegistrada);
+					if(tipoSelectTiempo == "todos" ){
+						listaFiltrada = listaTemp
+					}
+					else{
+						listaFiltrada = agruparPorTiempo(listaTemp,tipoSelectTiempo);
+					}
+					
+					vistaLista.dataProvider = agruparPorOC(listaFiltrada);
+					
+					familiaActual = familiaSelect;
+					
+					vistaLista.limpiaTexto();
+				}
+			}
+			private function cambioIndice(event:IndexChangeEvent):void
+			{
+				var tempPartida:MonitorearOcNoArribada;
+				tempPartida = ObjectUtil.copy(vistaLista.lstOrdenesCompra.dataProvider[event.newIndex]) as MonitorearOcNoArribada;
+				vistaGrid.currentContacto = tempPartida.contacto;
+				vistaGrid.llenarInfo(tempPartida.medioPago,tempPartida.condicionesPago,tempPartida.confirma,tempPartida.referencia);
+				
+				vistaGrid.ocString = tempPartida.compra;
+				ocString = tempPartida.compra;
+				vistaGrid.indice = ""+(event.newIndex+1);
+				
+				if(tempPartida.diferenciaDias == 1)
+					vistaGrid.dia = "1 DÍA";
+				else if(tempPartida.diferenciaDias == 2)
+					vistaGrid.dia = "2 DÍAS";
+				else if(tempPartida.diferenciaDias == 3)
+					vistaGrid.dia = "3 DÍAS";
+				else if(tempPartida.diferenciaDias > 3)
+					vistaGrid.dia = "3+ DÍAS";
+				else
+					vistaGrid.dia = "ND";
+				
+				
+				vistaGrid.setDatos(obtenerPartidasPorOC(universo,tempPartida.compra));
+			}
+			
+			//////////////////////// POPUP SELECCIONAR TODO ////////////////////////
+			private var popUpImpacto:PopUpSinImpacto;
+			
+			protected function abrirPopUp(event:Event):void
+			{
+				if( popUpImpacto == null ){
+					popUpImpacto = PopUpSinImpacto(PopUpManager.createPopUp( this, PopUpSinImpacto, true ) );
+					PopUpManager.centerPopUp( popUpImpacto );
+					popUpImpacto.ordenDespacho = ocString;
+					if(vistaGrid.gridPartidas.lstOrdenesCompra.dataProvider.length > 0)
+						popUpImpacto.setPrefijo(vistaGrid.gridPartidas.lstOrdenesCompra.dataProvider[0].entregarEn)
+					popUpImpacto.addEventListener("cancelarPopUP",cerrarPopUp);
+					popUpImpacto.addEventListener("aceptarPopUP",aceptarPopUp);
+				}else{
+					PopUpManager.addPopUp( popUpImpacto , this, true );
+				}
+			}
+			
+			protected function abrirPopUpCambio(event:Event):void
+			{
+				if( popUpImpacto == null ){
+					popUpImpacto = PopUpSinImpacto(PopUpManager.createPopUp( this, PopUpSinImpacto, true ) );
+					PopUpManager.centerPopUp( popUpImpacto );
+					popUpImpacto.setTipoPopUp("impacto");
+					popUpImpacto.ordenDespacho = ocString;
+					if(vistaGrid.gridPartidas.lstOrdenesCompra.dataProvider.length > 0)
+						popUpImpacto.setPrefijo(vistaGrid.gridPartidas.lstOrdenesCompra.dataProvider[0].entregarEn)
+					popUpImpacto.addEventListener("cancelarPopUP",cerrarPopUp);
+					popUpImpacto.addEventListener("aceptarPopUPCambio",aceptarPopUpCambio);
+				}else{
+					PopUpManager.addPopUp( popUpImpacto , this, true );
+				}
+			}
+			
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpImpacto );
+				popUpImpacto = null;
+				/*vistaGrid.gridPartidas.seleccionarTodo(false);*/
+				/*dispatchEvent( new Event("recargarPendientes",true));*/
+			}
+			
+			private function aceptarPopUp(event:Event):void
+			{
+				var dateRMT:Date;
+				dateRMT = popUpImpacto.dateRmt.selectedDate;
+				PopUpManager.removePopUp( popUpImpacto );
+				popUpImpacto = null;
+				vistaGrid.gridPartidas.seleccionarTodo(true,dateRMT,"disponible");
+				/*dispatchEvent( new Event("recargarPendientes",true));*/
+			}
+			
+			private function aceptarPopUpCambio(event:Event):void
+			{
+				var dateRMT:Date;
+				dateRMT = popUpImpacto.dateCambio.selectedDate;
+				var dateNuevaFEE:Date = popUpImpacto.dateNuevaFee.selectedDate;
+				var justificacion:String= popUpImpacto.txtNotasCambio.text;
+				var motivo:String= popUpImpacto.motivo
+				var archivo:ByteArray = popUpImpacto.archivo;
+				var nombreArchivo:String = popUpImpacto.nombreArchivo;
+				var rutaArchivo:String = popUpImpacto.rutaArchivo;
+				/*var nombreArchivo:String = popUpImpacto.
+				var rutaArchivo:String = popUpImpacto*/
+				PopUpManager.removePopUp( popUpImpacto );
+				popUpImpacto = null;
+				vistaGrid.gridPartidas.seleccionarTodo(true,dateRMT,"cambio",dateNuevaFEE,justificacion,motivo,archivo,nombreArchivo,rutaArchivo);
+				/*dispatchEvent( new Event("recargarPendientes",true));*/
+			}
+			//////////////////////// POPUP EXITO Y REGISTRAR ////////////////////////
+			private var popUpExito:PopUpRegistrarMonitoreo;
+			protected function abrirPopUpAceptar(event:Event):void
+			{
+				crearPopUpExito(true);
+			}
+			protected function abrirPopUpExito(event:Event):void
+			{
+				crearPopUpExito(false);
+			}
+			private function cerrarPopUpRegistrar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpExito );
+				popUpExito = null;
+				/*dispatchEvent( new Event("recargarPendientes",true));*/
+			}
+			
+			private function aceptarPopUpRegistrar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpExito );
+				popUpExito = null;
+				
+				registrarObtenerPartidas();
+			}
+			
+			private function crearPopUpExito(value:Boolean):void
+			{
+				if( popUpExito == null ){
+					popUpExito = PopUpRegistrarMonitoreo(PopUpManager.createPopUp( this, PopUpRegistrarMonitoreo, true ) );
+					PopUpManager.centerPopUp( popUpExito );
+					popUpExito.ordenDespacho = ocString;
+					popUpExito.tipoExito(value);
+					popUpExito.addEventListener("cancelarPopUP",cerrarPopUpRegistrar);
+					popUpExito.addEventListener("aceptarPopUP",aceptarPopUpRegistrar);
+					/*popUpExito.addEventListener("registrarExito",registrarObtenerPartidas);*/
+				}else{
+					PopUpManager.addPopUp( popUpExito , this, true );
+				}
+			}
+			
+			private function registrarObtenerPartidas():void
+			{
+				/*recargar = true;*/
+				vistaGrid.registrarConfirmacion();
+			}
+			
+			public function set recibirRespuestaRegistrar(value:int):void
+			{
+				if(value == 1){
+					dispatchEvent( new Event("activarExito",true));
+					dispatchEvent( new Event("recargarPendientes",true));	
+					
+					var eveMoOc:EventoMonitorearOcNoArribada = new EventoMonitorearOcNoArribada(EventoMonitorearOcNoArribada.OBTENER_INFO_COMPRA_AGRUPADA);
+					eveMoOc.empleado = DatosGlobales.getInstance()._usuario;
+					dispatchEvent(eveMoOc);
+					
+					var eveMoOc:EventoMonitorearOcNoArribada = new EventoMonitorearOcNoArribada(EventoMonitorearOcNoArribada.OBTENER_PARTIDAS_POR_PROVEEDOR);
+					eveMoOc.idProveedor = idProveedor;
+					eveMoOc.empleado = DatosGlobales.getInstance()._usuario;
+					dispatchEvent(eveMoOc);
+				}else if(value == -1){
+					alertaSingleton.show("No se puedo registrar el Monitoreo");
+				}/*else {
+				alertaSingleton.show("Bloqueo de confirmación");
+				}*/
+			}
+			
+			
+			private function seleccionarPrimero(event:Event):void
+			{
+				var tempPartida:MonitorearOcNoArribada;
+				tempPartida = ObjectUtil.copy(vistaLista.lstOrdenesCompra.dataProvider[0]) as MonitorearOcNoArribada;
+				vistaGrid.currentContacto = tempPartida.contacto;
+				vistaGrid.llenarInfo(tempPartida.medioPago,tempPartida.condicionesPago,tempPartida.confirma,tempPartida.referencia);
+				vistaGrid.mediopago = tempPartida.condicionesPago;
+				vistaGrid.ocString = tempPartida.compra;
+				ocString = tempPartida.compra;
+				vistaGrid.indice = ""+(0+1);
+				
+				if(tempPartida.diferenciaDias == 1)
+					vistaGrid.dia = "1 DÍA";
+				else if(tempPartida.diferenciaDias == 2)
+					vistaGrid.dia = "2 DÍAS";
+				else if(tempPartida.diferenciaDias == 3)
+					vistaGrid.dia = "3 DÍAS";
+				else if(tempPartida.diferenciaDias > 3)
+					vistaGrid.dia = "3+ DÍAS";
+				else
+					vistaGrid.dia = "ND";
+				
+				
+				vistaGrid.setDatos(obtenerPartidasPorOC(universo,tempPartida.compra));
+			}
+			
+			private var inEspera:Boolean = false;
+			public function iniciaEspera(iniciar:Boolean):void
+			{
+				if(iniciar)
+				{
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+					inEspera = true;
+				}
+				else
+				{
+					inEspera = false;
+					alertaSingleton.remove(true);
+				}
+			}
+			private function terminarEspera(event:Event):void
+			{
+				iniciaEspera(false);
+			}
+			
+			private var popUpHistorial:popUpHistorialOc;
+			public function set recibirHistorial (listaHistorial:ArrayCollection): void
+			{
+				if(listaHistorial != null)
+				{
+					var lista:String = "lstOrdenesCompra";
+					var listaSeleccionada:EventoMonitorearOcNoArribada = listaHistorial.removeItemAt(0) as EventoMonitorearOcNoArribada;
+					
+					if (listaSeleccionada.tipoSelect != "No Arribada" )
+					{
+						lista = "lstOrdenesCompra2";
+					}
+					if( popUpHistorial == null ){
+						popUpHistorial = popUpHistorialOc(PopUpManager.createPopUp( this, popUpHistorialOc, true ) );
+						PopUpManager.centerPopUp( popUpHistorial );
+						popUpHistorial.lstHistorial.dataProvider = listaHistorial;
+						popUpHistorial.recibirInfo = (vistaGrid.gridPartidas[lista].selectedItem as MonitorearOcNoArribada ).codigo + ' ' + vistaGrid.gridPartidas[lista].selectedItem.concepto + ' ' + vistaGrid.gridPartidas[lista].selectedItem.unidad;
+						popUpHistorial.addEventListener("cerrarPopUp",cerrarPopUpHistorial);
+						/*popUpExito.addEventListener("registrarExito",registrarObtenerPartidas);*/
+					}else{
+						PopUpManager.addPopUp( popUpHistorial , this, true );
+					}
+				}
+			}
+			
+			
+			private function cerrarPopUpHistorial(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpHistorial );
+				popUpHistorial = null;
+				/*dispatchEvent( new Event("recargarPendientes",true));*/
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" gap="0">
+		<s:HGroup width="100%" height="100%" gap="0" paddingLeft="6" paddingTop="20" paddingRight="20" paddingBottom="20">
+			<vistas1:VistaRegistrar_OperacionMonitorearOC width="32%" height="100%" id="vistaLista"/>
+			<s:Spacer width="18" maxHeight="20"/>
+			<otros:divisionDegradadoVertical height="100%" width="2" />
+			<s:Spacer width="20" maxHeight="20"/>
+			<vistas1:VistaRegistrar_OperacionGrip_MonitorearOC width="68%" height="100%" id="vistaGrid"/>
+		</s:HGroup>  
+		
+		
+		<s:VGroup width="100%" height="15%" maxHeight="50" verticalAlign="middle" horizontalAlign="center" id="footer">
+			<s:HGroup paddingLeft="-14" width="100%" >
+				<otros:division width="100%" grueso="1" color="#404040"/>
+			</s:HGroup>
+			<s:HGroup width="60%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().programado_azul}" />
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Entrega Programada"/>
+				</s:HGroup>  
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image source="{catalogoIconosBotones.getInstance().unico_azul}" />
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Entrega Unica"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().flete_express_azul}" />
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Flete Express"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().flete_normal_azul}"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Flete Normal"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="CU" color="#0b8894"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" text="Costo"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="CT" color="#0b8894"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" text="Costo Total"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().icono_arribadas}"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Arribada"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().icono_canceladas}"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Cancelada"/>
+				</s:HGroup>
+				
+				<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().icono_noarribadas}"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="No Arribada"/>
+				</s:HGroup>
+				
+				
+			</s:HGroup> 
+		</s:VGroup>  
+	</s:VGroup>  
+</s:Group>

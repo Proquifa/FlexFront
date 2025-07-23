@@ -1,0 +1,1145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 skinClass="skins.titleWindow.skinTitleWindowBlanca"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  creationComplete="{fxResize.play() }"
+		 xmlns:otros="skins.otros.*" xmlns:label="skins.skin.label.*" xmlns:pqNet="skins.botones.pqNet.*"
+		 width="0" height="0" xmlns:botoneraBandera="skins.botoneras.botoneraBandera.*"
+		 xmlns:radio="mx.com.proquifa.proquifanet.InspectorPhs.vistas.vista.itemRenderers.*"
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+		 xmlns:BarCode="BarCode.*"
+		 >
+	<fx:Declarations>
+		<s:Resize id="fxResize"  target="{this}" duration="150" effectEnd="{stkTodo.visible = stkTodo.includeInLayout = true; stkTodo.selectedIndex = 0; }" />
+		<s:Resize id="fxCierraPop" target="{this}" widthTo="0" heightTo="0" duration="150" effectEnd="cierraPopUp()"/>
+		<s:RadioButtonGroup id="radGrp" itemClick="setUbicacionPiezas()" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.eventos.EventoInspectorPhs;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.modelo.FotoArchivo;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.modelo.datosDisplayInsPhs;
+			import mx.com.proquifa.proquifanet.InspectorPhs.vistas.vista.itemRenderers.EtiquetaRenderer;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.Pieza;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Etiqueta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.Archivo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.IUIComponent;
+			import mx.events.ItemClickEvent;
+			import mx.events.ResizeEvent;
+			import mx.formatters.DateFormatter;
+			import mx.managers.PopUpManager;
+			import mx.printing.FlexPrintJob;
+			import mx.printing.FlexPrintJobScaleType;
+			import mx.utils.ObjectUtil;
+			
+			import org.osmf.utils.OSMFStrings;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import spark.components.Button;
+			import spark.components.ButtonBarButton;
+			
+			private const circuVerde:Class = catalogoIconosGrid.getInstance().render_circuloVerde;
+			private const circuNaranja:Class = catalogoIconosGrid.getInstance().render_circuloNaranja;
+			private const circuRojo:Class = catalogoIconosGrid.getInstance().render_circuloRojo;
+			
+			[Bindable]	private var _listaPiezasUniverso:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listaPiezasTrabajo:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _piezaSeleccionada:Pieza = new Pieza();
+			[Bindable]	private var _arrTresBotones:ArrayCollection = new ArrayCollection([
+				{label:"Pendiente",bandera:false},
+				{icono:"check", bandera:false},
+				{icono:"tache", bandera:false}
+			]);
+			[Bindable]	private var _arrTipoDocumento:ArrayCollection = new ArrayCollection([
+				FotoArchivo.CERTIFICADO, FotoArchivo.HOJA_SEGURIDAD]);
+			[Bindable]	private var _arrTab:ArrayCollection = new ArrayCollection(["1","2","3","4","5","6"]);
+			[Bindable]	private var _edicionBool:Boolean=false;
+			
+			private const icoAgrega:Class = catalogoIconosGrid.getInstance().render_mas;
+			private const icoBasura:Class = catalogoIconosGrid.getInstance().render_botebasuraazul;
+			private const icoVer:Class = catalogoIconosGrid.getInstance().render_ojoazul;
+			
+			/* listOC */
+			private var oldIndexList:int=0;
+			private function listOC_Handler():void{
+				if( listOC.selectedIndex == ( _listaPiezasTrabajo.length-1) || listOC.selectedIndex == -1 ){
+					listOC.selectedIndex = oldIndexList;
+					return;
+				}
+				oldIndexList = listOC.selectedIndex;
+				_piezaSeleccionada = _listaPiezasTrabajo[listOC.selectedIndex]; //($event.currentTarget.selectedItem as Pieza); listOC.selectedItem as Pieza; //
+				_piezaSeleccionada.lblTipoDoc = _partida.tipoDocumento;
+				if( _partida.tipoDocumento == "No especificado" ){
+						if( buscaArchivo( FotoArchivo.CERTIFICADO, _piezaSeleccionada.listArchivos ) != null ){
+							_piezaSeleccionada.lblTipoDoc = FotoArchivo.CERTIFICADO;
+						}else if( buscaArchivo( FotoArchivo.HOJA_SEGURIDAD, _piezaSeleccionada.listArchivos ) != null ){
+							_piezaSeleccionada.lblTipoDoc = FotoArchivo.HOJA_SEGURIDAD;
+						}
+				}
+			}
+			/* buttonBar */
+			private var indiceAnterior:int = 0;
+			private function buttonBarClick():void{
+				if( btnBarra.selectedIndex == -1) btnBarra.selectedIndex = indiceAnterior;
+				indiceAnterior = btnBarra.selectedIndex;
+				_listaPiezasTrabajo = new ArrayCollection();
+				if( (UtilsGrid.queryCampoX(_listaPiezasUniverso, "edoPieza", "Pendiente" ) as ArrayCollection).length == 0 ){
+						ButtonBarButton(btnBarra.dataGroup.getElementAt(0)).visible = false;
+						ButtonBarButton(btnBarra.dataGroup.getElementAt(0)).includeInLayout = false;
+						if( btnBarra.selectedIndex == 0 ) btnBarra.selectedIndex = 1;
+						btnEtiquetar.visible = btnEtiquetar.includeInLayout = true;
+				}else{
+						ButtonBarButton(btnBarra.dataGroup.getElementAt(0)).visible = true;
+						ButtonBarButton(btnBarra.dataGroup.getElementAt(0)).includeInLayout = true;
+						btnEtiquetar.visible = btnEtiquetar.includeInLayout = false;
+				}
+				if( btnBarra.selectedIndex == 0 ) _listaPiezasTrabajo = UtilsGrid.queryCampoX(_listaPiezasUniverso, "edoPieza", "Pendiente" );
+				if( btnBarra.selectedIndex == 1 )	_listaPiezasTrabajo = UtilsGrid.queryCampoX(_listaPiezasUniverso, "edoPieza", "Despachable" );
+				if( btnBarra.selectedIndex == 2 )	_listaPiezasTrabajo = UtilsGrid.queryCampoX(_listaPiezasUniverso, "edoPieza", "No Despachable" );
+				var total:Pieza = new Pieza();
+				total.ultimo = _listaPiezasTrabajo.length.toString();
+				_listaPiezasTrabajo.addItem( total );
+				btnDespachable.visible = btnDespachable.includeInLayout = false;
+				btnNoDespachable.visible = btnNoDespachable.includeInLayout = false;
+				if( _listaPiezasTrabajo.length > 1 ){
+					listOC.selectedIndex = oldIndexList;
+					listOC_Handler();
+					btnEditar.enabled = true;
+				}else{
+					btnEditar.enabled = false;
+					_piezaSeleccionada = null;
+				}
+				btnReporteRechazo.visible = btnReporteRechazo.includeInLayout = false;
+				 if( _piezaSeleccionada != null && btnBarra.selectedIndex == 0 ){
+					if(  _piezaSeleccionada.tipoRechazo == "" ){
+						btnDespachable.visible = btnDespachable.includeInLayout = true;
+						btnNoDespachable.visible = btnNoDespachable.includeInLayout = false;
+					}else{
+						btnDespachable.visible = btnDespachable.includeInLayout = false;
+						btnNoDespachable.visible = btnNoDespachable.includeInLayout = true;
+					}
+				}
+				 _edicionBool = false;
+			}
+			[Bindable]	private var _partida:PartidaInspeccion = new PartidaInspeccion();
+			//////////////////////////////////////////////////////////////////////////////////////////////PIEZAS NUEVAS////////////////////////////////////////////////////////////////////////////////////////////////////
+			public function iniciarPiezas($listaPiezas:ArrayCollection, $partida:PartidaInspeccion, $piezasNuevas:Boolean ):void{
+				fxResize.heightTo = stage.height/1.7;
+				fxResize.widthTo = stage.width - stage.width/4;
+				addEventListener(ResizeEvent.RESIZE, centraEstePop );
+				stage.addEventListener( ResizeEvent.RESIZE, ajustaCentraPop );
+				_piezasNuevasBool = $piezasNuevas;
+				_listaEtiquetas = new ArrayCollection();
+				// Congelación
+				// Refrigeración
+				// Ambiente
+				// NA
+				_partida = $partida;
+				_inspector = $partida.inspector;
+				_manejoEtiquetas = $partida.manejo == "NA"? "Pendiente" : $partida.manejo;
+				_accionGuardarActualizar = $partida.insertoPiezas ? "Actualizar": "Guardar";
+				_listaPiezasUniverso = new ArrayCollection();
+				if( _piezasNuevasBool ) _listaPiezasUniverso = $listaPiezas;
+				buttonBarClick();
+				focusManager.setFocus( btnSalir );
+				btnDocumentoAgrega.visible = btnDocumentoAgrega.includeInLayout = false;
+				evaluaTipoPartida();
+			}
+			private var _accionGuardarActualizar:String;
+			private var _piezasNuevasBool:Boolean;
+			private var _inspector:String;
+			private function evaluaTipoPartida():void{
+						grpCatalogo.visible = grpCatalogo.includeInLayout = divCatalogo.visible = divCatalogo.includeInLayout = true;
+						grpDescripcion.visible = grpDescripcion.includeInLayout = divDescripcion.visible = divDescripcion.includeInLayout = true;
+						grpPresentacion.visible = grpPresentacion.includeInLayout = divPresentacion.visible = divPresentacion.includeInLayout = true;
+						grpEdicion.visible = grpEdicion.includeInLayout = divEdicion.visible = divEdicion.includeInLayout = true;
+						grpIdioma.visible = grpIdioma.includeInLayout = divIdioma.visible = divIdioma.includeInLayout = true;
+						grpFisicamente.visible = grpFisicamente.includeInLayout = divFisicamente.visible = divFisicamente.includeInLayout = true;
+						grpCaducidad.visible = grpCaducidad.includeInLayout = divCaducidad.visible = divCaducidad.includeInLayout = true;
+						grpLote.visible = grpLote.includeInLayout = divLote.visible = divLote.includeInLayout = true;
+						grpDocumento.visible = grpDocumento.includeInLayout = divDocumento.visible = divDocumento.includeInLayout = true;
+						if( _partida.tipo == "Estándares" || _partida.tipo == "Biológicos" || _partida.tipo == "Reactivos" || _partida.tipo == "Estandares" || _partida.tipo == "Biologicos" ){
+							grpIdioma.visible = grpIdioma.includeInLayout = divIdioma.visible = divIdioma.includeInLayout = false;
+							grpEdicion.visible = grpEdicion.includeInLayout = divEdicion.visible = divEdicion.includeInLayout = false;
+						}
+						if( _partida.tipo == "Publicaciones" ){
+							grpPresentacion.visible = grpPresentacion.includeInLayout = divPresentacion.visible = divPresentacion.includeInLayout = false;
+							grpCaducidad.visible = grpCaducidad.includeInLayout = divCaducidad.visible = divCaducidad.includeInLayout = false;
+							grpLote.visible = grpLote.includeInLayout = divLote.visible = divLote.includeInLayout = false;
+						}
+						if( _partida.tipo == "Labware" ){
+							grpIdioma.visible = grpIdioma.includeInLayout = divIdioma.visible = divIdioma.includeInLayout = false;
+							grpEdicion.visible = grpEdicion.includeInLayout = divEdicion.visible = divEdicion.includeInLayout = false;
+							grpDocumento.visible = grpDocumento.includeInLayout = divDocumento.visible = divDocumento.includeInLayout = false;
+							grpCaducidad.visible = grpCaducidad.includeInLayout = divCaducidad.visible = divCaducidad.includeInLayout = false;
+							grpLote.visible = grpLote.includeInLayout = divLote.visible = divLote.includeInLayout = false;
+						}
+			}
+			//////////////////////////////////////////////////////////////////////////////////////////////PIEZAS ANTERIORES////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			public function set recibeListaPiezas($lista:ArrayCollection):void{
+				 var e:Etiqueta = new Etiqueta();
+				e.folioArchivo = "test1";
+				e.barcode = "FD-123456-999";
+				_listaEtiquetas.addItem( e ); 
+				if( $lista == null  || $lista.length == 0 || _piezasNuevasBool ) return;
+				_listaPiezasUniverso = new ArrayCollection();
+				_listaPiezasUniverso = $lista;
+				for(var y:int=0; y < _listaPiezasUniverso.length; y++){
+					(_listaPiezasUniverso[y] as Pieza).lblPresentacion = _partida.presentacion;
+					(_listaPiezasUniverso[y] as Pieza).lblCaducidad = _partida.caducidad;
+					(_listaPiezasUniverso[y] as Pieza).lblCatalogo = _partida.codigo;
+					(_listaPiezasUniverso[y] as Pieza).lblLote = _partida.lote;
+					(_listaPiezasUniverso[y] as Pieza).lblConcepto = _partida.descripcionProducto;
+					(_listaPiezasUniverso[y] as Pieza).tipoPartida = _partida.tipo;
+					(_listaPiezasUniverso[y] as Pieza).lblIdioma = _partida.idioma;
+					(_listaPiezasUniverso[y] as Pieza).lblEdicion = _partida.edicion;
+				}
+				buttonBarClick();
+			}
+			//////////////////////////////////////////////////////////////////////////////////////////////EDICION PIEZAS////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			protected function finalizaCambios_clickHandler(event:MouseEvent):void
+			{
+					_piezaSeleccionada.revisoCaducidad = chkCaducidad.selected;
+					_piezaSeleccionada.revisoCatalogo = chkCatalogo.selected;
+					_piezaSeleccionada.revisoDescripcion = chkDescripcion.selected;
+					_piezaSeleccionada.revisoPresentacion = chkPrensentacion.selected;
+					_piezaSeleccionada.revisoEdicion = chkEdicion.selected;
+					_piezaSeleccionada.revisoIdioma = chkIdioma.selected;
+					_piezaSeleccionada.revisoDocumentacion = chkDocumento.selected;
+					_piezaSeleccionada.revisoFisicamenteC = chkFisicamenteC.selected;
+					_piezaSeleccionada.revisoLote = chkLote.selected;
+					_piezaSeleccionada.piezaNueva = false;
+					_piezaSeleccionada.verificoPieza = true;
+					for(var b:int=0; b < _archivosRechazo.length; b++){
+						if( (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.CERTIFICADO
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.HOJA_SEGURIDAD
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.ARRIBA
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.ABAJO
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.FRENTE
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.ETIQUETA_LOTE
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.ETIQUETA_CADUCIDAD
+								&& (_archivosRechazo[b] as Archivo).descripcion != FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION
+								){
+								_archivosRechazo.removeItemAt( b );
+						}
+					}
+					_piezaSeleccionada.listArchivos = new ArrayCollection();
+					_piezaSeleccionada.listArchivos = _archivosRechazo;
+					if( event.currentTarget.id == "btnDespachable" ){
+						_piezaSeleccionada.verificoPieza = false;
+					}
+					if( event.currentTarget.id == "btnNoDespachable" ){
+						_piezaSeleccionada.verificoPieza = false;
+					}
+					/* if( event.currentTarget.id == "btnFinalizar" ){
+						
+					} */
+					for(var h:int=0; h< _listaPiezasUniverso.length; h++){
+						if( (_listaPiezasUniverso[h] as Pieza).idPieza == _piezaSeleccionada.idPieza ){
+							_listaPiezasUniverso.removeItemAt(h);
+							_listaPiezasUniverso.addItemAt( _piezaSeleccionada, h);
+						}
+					}
+					_edicionBool = false;
+					edicionMode();
+					buttonBarClick();
+					if( btnBarra.selectedIndex == 2 ) btnReporteRechazo.visible = btnReporteRechazo.includeInLayout = false;
+					//_arrVisibles[6] = false;
+					//evaluaDoc();
+					btnDocumentoAgrega.visible = btnDocumentoAgrega.includeInLayout = false;
+					btnDocumentoVer.visible = btnDocumentoVer.includeInLayout = false;
+					btnDocumentoX.visible = btnDocumentoX.includeInLayout = false;
+					//evaluarComboTipoDoc();
+					grpCmbTipoDocumento.visible = grpCmbTipoDocumento.includeInLayout = false;
+					lblTipoDocumento.visible = lblTipoDocumento.includeInLayout = true;
+			}
+			protected function editaCambios_clickHandler(event:MouseEvent):void
+			{
+				_edicionBool = true;
+				edicionMode();
+				btnDespachable.visible = false;
+				btnNoDespachable.visible = false;
+				if( btnBarra.selectedIndex == 2 ) btnReporteRechazo.visible = btnReporteRechazo.includeInLayout = true;
+				_archivosRechazo = new ArrayCollection();
+				if( _piezaSeleccionada != null ) _archivosRechazo = ObjectUtil.copy( _piezaSeleccionada.listArchivos ) as ArrayCollection;
+				/* para cuando hay 1 pieza*/
+				btnDocumentoAgrega.visible = btnDocumentoAgrega.includeInLayout = false;
+				btnDocumentoVer.visible = btnDocumentoVer.includeInLayout = false;
+				btnDocumentoX.visible = btnDocumentoX.includeInLayout = false;
+				if( _listaPiezasUniverso.length > 1 ) evaluaDoc();
+			}
+			private function evaluaDoc():void{
+					var filee:Archivo = buscaArchivo( botonXArchivo( "btnDocumento" ) );
+					if( filee == null ){
+						_arrVisibles[6] = false;
+					}else{
+						_arrVisibles[6] = true;
+					}
+					if( _listaPiezasUniverso.length == 1 ){// cuando hay solo una pieza no tiene caso cambiar el documento
+							btnDocumentoAgrega.visible = btnDocumentoAgrega.includeInLayout = false;
+							btnDocumentoVer.visible = btnDocumentoVer.includeInLayout = false;
+							btnDocumentoX.visible = btnDocumentoX.includeInLayout = false;
+					}
+			}
+			private function edicionMode():void{
+				if( _edicionBool ){ // se esta editando piezas
+					btnBarra.enabled = !_edicionBool;
+					btnSalir.enabled = !_edicionBool;
+					btnEtiquetar.enabled = !_edicionBool;
+					listOC.enabled = !_edicionBool;
+				}else{
+					btnBarra.enabled = !_edicionBool;
+					btnSalir.enabled = !_edicionBool;
+					btnEtiquetar.enabled = !_edicionBool;
+					listOC.enabled = !_edicionBool;
+				}
+			}
+			[Bindable]	private var _ubicacionEstante:String;
+			[Bindable]	private var _etiquetaNumAceptadas:int = -1;
+			[Bindable]	private var _etiquetaNumRechazoXInps:int = -1;
+			[Bindable]	private var _etiquetaNumRechazoXDoc:int = -1;
+			[Bindable]	private var _etiquetaNumRechazoAmbos:int = -1;
+			[Bindable]	private var _manejoEtiquetas:String;
+			//////////////////////////////////////////////////////////////////////////////////////////////ETIQUETAR////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			private function compruebaArchivo( $:String, $arr:ArrayCollection ):Boolean{
+				var boolReturn:Boolean = false;
+				for( var g:int=0; g < $arr.length; g++ ){
+					if( ($arr[g] as Archivo).descripcion == $ ) boolReturn = true;
+				}
+				return boolReturn;
+			}
+			protected function iniciaVistaEtiqueta():void{
+				var typePartida:String = _partida.tipo;
+				for( var f:int=0; f < _listaPiezasUniverso.length; f++ ){
+					var piezeTemp:Pieza = _listaPiezasUniverso[f] as Pieza;
+					if( piezeTemp.edoPieza == "No Despachable" ){
+						var numFilesRequeridos:int=0;
+						var arrFilexRequeridos:ArrayCollection = new ArrayCollection();
+						piezeTemp.reporteRechazoCompleto = true;
+						if( typePartida == "Estándares" || typePartida == "Biológicos" || typePartida == "Reactivos" || typePartida == "Estandares" || typePartida == "Biologicos"){// se requieren 6 archivos
+							if( !piezeTemp.revisoCatalogo || !piezeTemp.revisoDescripcion || !piezeTemp.revisoPresentacion ){
+								if( !compruebaArchivo( FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION, piezeTemp.listArchivos ) ) piezeTemp.reporteRechazoCompleto = false;
+							}
+							if( !piezeTemp.revisoFisicamenteC ){
+								if( !compruebaArchivo( FotoArchivo.ARRIBA, piezeTemp.listArchivos )
+									|| !compruebaArchivo( FotoArchivo.ABAJO, piezeTemp.listArchivos )
+									|| !compruebaArchivo( FotoArchivo.FRENTE, piezeTemp.listArchivos )
+								) piezeTemp.reporteRechazoCompleto = false;
+							}
+							if( !piezeTemp.revisoCaducidad ){
+								if( !compruebaArchivo(FotoArchivo.ETIQUETA_CADUCIDAD, piezeTemp.listArchivos) ) piezeTemp.reporteRechazoCompleto = false;
+							}
+							if( !piezeTemp.revisoLote ){
+								if( !compruebaArchivo(FotoArchivo.ETIQUETA_LOTE, piezeTemp.listArchivos)) piezeTemp.reporteRechazoCompleto = false;
+							}
+						    if( !piezeTemp.revisoDocumentacion ){
+								 if( piezeTemp.comentarioRechazo == null || piezeTemp.comentarioRechazo.length < 4 ) piezeTemp.reporteRechazoCompleto = false;
+								/* if( _listaPiezasUniverso.length>1 ){// FIXME
+										if( !compruebaArchivo(FotoArchivo.CERTIFICADO, piezeTemp.listArchivos) && !compruebaArchivo(FotoArchivo.HOJA_SEGURIDAD, piezeTemp.listArchivos) ) piezeTemp.reporteRechazoCompleto = false;
+								 */
+							}
+						}
+						if( typePartida == "Publicaciones" ){// requiere 4
+							if( !piezeTemp.revisoCatalogo || !piezeTemp.revisoDescripcion || !piezeTemp.revisoEdicion || !piezeTemp.revisoIdioma ){
+								if( !compruebaArchivo( FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION, piezeTemp.listArchivos ) ) piezeTemp.reporteRechazoCompleto = false;
+							}
+							if( !piezeTemp.revisoFisicamenteC ){
+								if( !compruebaArchivo( FotoArchivo.ARRIBA, piezeTemp.listArchivos )
+									|| !compruebaArchivo( FotoArchivo.ABAJO, piezeTemp.listArchivos )
+									|| !compruebaArchivo( FotoArchivo.FRENTE, piezeTemp.listArchivos )
+								) piezeTemp.reporteRechazoCompleto = false;
+							}
+						}
+						if( typePartida == "Labware" ){// requiere 4
+							if( !piezeTemp.revisoCatalogo || !piezeTemp.revisoDescripcion || !piezeTemp.revisoPresentacion ){
+								if( !compruebaArchivo( FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION, piezeTemp.listArchivos ) ) piezeTemp.reporteRechazoCompleto = false;
+							}
+							if( !piezeTemp.revisoFisicamenteC ){
+								if( !compruebaArchivo( FotoArchivo.ARRIBA, piezeTemp.listArchivos )
+									|| !compruebaArchivo( FotoArchivo.ABAJO, piezeTemp.listArchivos )
+									|| !compruebaArchivo( FotoArchivo.FRENTE, piezeTemp.listArchivos )
+								) piezeTemp.reporteRechazoCompleto = false;
+							}
+						}
+					}
+				}
+				//alertaSingleton.show( piezeTemp.listArchivos.length.toString() + " - " + numFilesRequeridos.toString() );
+				//if( UtilsGrid.queryCampoX(_listaPiezasUniverso, "reporteRechazoCompleto", "false").length > 0 ) return;
+				/* evaluar estado reporte rechazo */
+				var arrFiltroDespachable:ArrayCollection = UtilsGrid.queryCampoX( _listaPiezasUniverso, "edoPieza", "No Despachable");
+				var arrCompletos:ArrayCollection = UtilsGrid.queryCampoX( arrFiltroDespachable, "reporteRechazoCompleto", "false");
+				if( arrCompletos.length > 0 ){
+					var strPiezas:String = "";
+					for( var h:int=0; h < arrCompletos.length; h++){
+						strPiezas += (arrCompletos[h] as Pieza).idPieza.toString()+" ";
+					}
+					var plural:String = arrCompletos.length == 1 ? '':'s';
+					alertaSingleton.show("El reporte de rechazo de la"+plural+" siguiente"+plural+" pieza"+plural+" no esta completo:\n"+strPiezas);
+					return;
+				}
+				_ubicacionEstante = "Pendiente";
+				if( radGrp.selection != null ) radGrp.selection.selected = false;
+				tabEstante.selectedIndex = 0;
+				stkTodo.selectedChild = navEtiquetar;
+				_etiquetaNumAceptadas = UtilsGrid.conteoCampoX( _listaPiezasUniverso, "edoPieza", "Despachable");
+				var arrRechazosConteo:ArrayCollection = UtilsGrid.queryCampoX( _listaPiezasUniverso, "edoPieza", "No Despachable");
+				_etiquetaNumRechazoAmbos = UtilsGrid.conteoCampoX( arrRechazosConteo, "tipoRechazo", "Ambos");
+				_etiquetaNumRechazoXDoc = UtilsGrid.conteoCampoX( arrRechazosConteo, "tipoRechazo", "Documentación");
+				_etiquetaNumRechazoXInps = UtilsGrid.conteoCampoX( arrRechazosConteo, "tipoRechazo", "Inspección");
+				
+				//Cuarentena
+				//Refrigerador
+				//Anaquel
+				//Congelador
+				/* para validar la ubicacion segun el manejo */
+				_partida.anaquelLetra = null;
+				_partida.anaquelNumero = 0;
+				btnPrint.visible = btnPrint.includeInLayout = false;
+				btnRePrint.visible = btnRePrint.includeInLayout = false;
+				btnFinalizarEtiqueta.visible = btnFinalizarEtiqueta.includeInLayout = false;
+				btnSalirEtiquetas.visible = btnSalirEtiquetas.includeInLayout = true;
+				grpSeleccionaUbicacion.visible = false;
+				if( _partida.manejo == "Congelación" || _partida.manejo == "Congelacion" ){
+						btnPrint.visible = btnPrint.includeInLayout = true;
+						_ubicacionEstante = "";
+						_partida.ubicacion = "Congelador";
+				}else if( _partida.manejo == "Refrigeración" || _partida.manejo == "Refrigeracion" ){
+						btnPrint.visible = btnPrint.includeInLayout = true;
+						_ubicacionEstante = "";
+						_partida.ubicacion = "Refrigerador";
+				}else if( _partida.manejo == "Ambiente" ){
+						_partida.ubicacion = "Anaquel";
+						grpSeleccionaUbicacion.visible = true;
+						radGrp.enabled = true;
+				}else if( _partida.manejo == "NA" || _partida.manejo == "-NA-" || _partida.manejo == "--NA--" ){
+						_partida.ubicacion = "Anaquel";
+						grpSeleccionaUbicacion.visible = true;
+						radGrp.enabled = true;
+				}
+				if( _etiquetaNumAceptadas == 0 ){
+					_partida.ubicacion = "Cuarentena";
+					_ubicacionEstante = "";
+					grpSeleccionaUbicacion.visible = false;
+					btnPrint.visible = btnPrint.includeInLayout = true;
+				}
+				if( _listaPiezasUniverso.length == 0 ){
+					btnPrint.visible = btnPrint.includeInLayout = false;
+					btnRePrint.visible = btnRePrint.includeInLayout = false;
+					btnFinalizarEtiqueta.visible = btnFinalizarEtiqueta.includeInLayout = false;
+				}
+			}
+			protected function setUbicacionPiezas():void{
+				if( radGrp.selection != null ){
+					_ubicacionEstante = tabEstante.selectedItem + radGrp.selection.label;
+					_partida.anaquelLetra = null;
+					_partida.anaquelNumero = 0;
+					if( _partida.ubicacion == "Anaquel" ){
+						radGrp.enabled = true;
+						tabEstante.enabled = true;
+						_partida.anaquelLetra = radGrp.selection.label;
+						_partida.anaquelNumero = tabEstante.selectedItem;
+						btnPrint.visible = btnPrint.includeInLayout = !btnRePrint.visible;
+					}
+				}
+			}
+			protected function imprimirEtiquetas($:MouseEvent):void{
+				if( $.currentTarget.id == "btnSalirEtiquetas" ){
+							 stkTodo.selectedChild = navEdicionPieza;
+				}else{
+						if( $.currentTarget.id == "btnPrint" ){
+								var e:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.GUARDAR_PIEZAS);
+								e.listaPiezas = _listaPiezasUniverso;
+								e.accionPiezas = _accionGuardarActualizar; // Actualizar, Guardar
+								e.inspector = _inspector;
+								dispatchEvent( e );
+								/* var e2:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.FINALIZA_INSPECCION_PHARMA );
+								e2.partidaSeleccionada = _partida;
+								e2.partidaSeleccionada.estadoRechazo = UtilsGrid.queryCampoX( _listaPiezasUniverso, "edoPieza", "Despachable" ).length == 0 ? 'No Despachable' : 'Despachable'; // 'Despachable' | 'No Despachable'
+								dispatchEvent( e2 ); */
+								btnPrint.visible = btnPrint.includeInLayout = false;
+								btnRePrint.visible = btnRePrint.includeInLayout = true;
+								btnFinalizarEtiqueta.visible = btnFinalizarEtiqueta.includeInLayout = true;
+								btnFinalizarEtiqueta.enabled = false;
+								btnSalirEtiquetas.visible = btnSalirEtiquetas.includeInLayout = false;
+								_mandarInspeccionBool = true;
+						}
+						if( $.currentTarget.id == "btnRePrint" ){
+								imprimeEtiquetas();
+						}
+						if( $.currentTarget.id == "btnFinalizarEtiqueta" ){
+							var e3:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.PARTIDAS_A_INSPECCION_POR_COMPRA );
+							e3.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+							e3.strCompra = _partida.compra;
+							dispatchEvent( e3 );
+							var e4:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.RESET_ETIQUETAS );
+							dispatchEvent( e4 );
+							fxCierraPop.play();
+							stkTodo.visible = false;
+						}
+				}
+			}
+			private var _mandarInspeccionBool:Boolean = false;
+			
+			public function set recibeActualizarOC( $result:String ):void{
+				if( $result == null ) return;
+				if( Boolean($result) && _mandarInspeccionBool ){
+					var e2:EventoInspectorPhs = new EventoInspectorPhs( EventoInspectorPhs.FINALIZA_INSPECCION_PHARMA );
+					e2.partidaSeleccionada = _partida;
+					e2.partidaSeleccionada.estadoRechazo = UtilsGrid.queryCampoX( _listaPiezasUniverso, "edoPieza", "Despachable" ).length == 0 ? 'No Despachable' : 'Despachable'; // 'Despachable' | 'No Despachable'
+					if( e2.partidaSeleccionada.estadoRechazo == "Despachable" ){
+							e2.partidaSeleccionada.cantidadCompra = UtilsGrid.queryCampoX( _listaPiezasUniverso, "edoPieza", "Despachable" ).length;
+					}
+					dispatchEvent( e2 );
+					_mandarInspeccionBool = false;
+				}
+			}
+			[Bindable]	private var _listaEtiquetas:ArrayCollection = new ArrayCollection();
+			private var _yaImprimioBool:Boolean = true;
+			
+			public function set recibeEtiquetas( $listaEtiquetas:ArrayCollection ):void{
+				if( $listaEtiquetas == null || $listaEtiquetas.length == 0 ) return;
+				_listaEtiquetas = $listaEtiquetas;
+				radGrp.enabled = false;
+				tabEstante.enabled = false;
+				if( _yaImprimioBool ){
+					_yaImprimioBool = false;
+					imprimeEtiquetas();
+				}
+			}
+			private function imprimeEtiquetas():void{
+				///var boolReturn:Boolean = false;
+				if( _listaEtiquetas.length > 0 ){
+						grpEtiquetasParaImprimir.removeAllElements();
+						for( var v:int = 0; v < _listaEtiquetas.length; v++ ){
+							var et:EtiquetaRenderer = new EtiquetaRenderer();
+							grpEtiquetasParaImprimir.addElement( et );
+							et.code = (_listaEtiquetas[v] as Etiqueta).barcode;
+							et.cliente = _partida.nombreCliente;
+							et.estatus = (_listaEtiquetas[v] as Etiqueta).estatus;
+							et.manejo = _partida.manejo;
+							et.inspecciono = DatosGlobales.getInstance()._usuario.nombre;
+							var strUbicacion:String = _partida.ubicacion == "Anaquel" ? _partida.ubicacion+" "+_partida.anaquelLetra+"-"+_partida.anaquelNumero: _partida.ubicacion;
+							if( (_listaEtiquetas[v] as Etiqueta).estatus == "No Despachable" ) strUbicacion = "Cuarentena"; 
+							et.ubicacion = strUbicacion;
+							var dateFormat:DateFormatter = new DateFormatter();
+							dateFormat.formatString = "DD-MMM-YYYY HH:NN"; // fecha 28-Mar-2012 14:55
+							et.inspeccionado = dateFormat.format( new Date() );
+							et.visible = false;
+						}
+						//_imprenta = new PrintJob();
+						//if( imprenta.start2(null, false) ){
+						//var imprenta:PrintJob = DatosGlobales.getInstance()._impresion;
+						/* if( DatosGlobales.getInstance()._impresion.start() ){
+								for( var h:int = 0; h < grpEtiquetasParaImprimir.numElements; h++ ){
+									DatosGlobales.getInstance()._impresion.addPage( Sprite(grpEtiquetasParaImprimir.getElementAt(h)) );
+								}
+								DatosGlobales.getInstance()._impresion.send();
+								//imprenta.terminate();
+								//boolReturn = true;
+								btnFinalizarEtiqueta.enabled = true;
+						}else{
+							DatosGlobales.getInstance()._impresion.terminate();
+						} */
+						//_imprenta = null;
+						setTimeout( imprimeConRetraso, 500);
+				}else{
+					alertaSingleton.show("No hay etiquetas por imprimir.");
+				}
+				//return boolReturn;
+			}
+			private function imprimeConRetraso():void{
+					var impresion:PrintJob = new PrintJob();
+					if( impresion.start() ){
+						for( var h:int = 0; h < grpEtiquetasParaImprimir.numElements; h++ ){
+							impresion.addPage( Sprite(grpEtiquetasParaImprimir.getElementAt(h)) );
+						}
+						impresion.send();
+						btnFinalizarEtiqueta.enabled = true;
+					}
+			}
+			//private var _imprenta:PrintJob = new PrintJob();
+			//////////////////////////////////////////////////////////////////////////////////////////////REPORTE RECHAZO////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			private function iniciarRechazo():void{
+				txtReporteRechazo.text = _piezaSeleccionada.comentarioRechazo;
+				_arrVisibles = ObjectUtil.copy( _piezaSeleccionada.archivosRechazoVisibles) as ArrayCollection;
+				_arrVisibles[0] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.ARRIBA).length != 0 ;
+				_arrVisibles[1] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.ABAJO).length != 0 ;
+				_arrVisibles[2] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.FRENTE).length != 0 ;
+				_arrVisibles[3] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.ETIQUETA_LOTE).length != 0 ;
+				_arrVisibles[4] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.ETIQUETA_CADUCIDAD).length != 0 ;
+				_arrVisibles[5] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION).length != 0 ;
+				_arrVisibles[6] = UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.CERTIFICADO).length != 0 || UtilsGrid.queryCampoX( _archivosRechazo, "descripcion", FotoArchivo.HOJA_SEGURIDAD).length != 0;
+				_piezaSeleccionada.revisoCatalogo = chkCatalogo.selected;
+				_piezaSeleccionada.revisoPresentacion = chkPrensentacion.selected;
+				_piezaSeleccionada.revisoEdicion = chkEdicion.selected;
+				_piezaSeleccionada.revisoIdioma = chkIdioma.selected;
+				_piezaSeleccionada.revisoCaducidad = chkCaducidad.selected;
+				_piezaSeleccionada.revisoDescripcion = chkDescripcion.selected;
+				_piezaSeleccionada.revisoDocumentacion = chkDocumento.selected;
+				_piezaSeleccionada.revisoFisicamenteC = chkFisicamenteC.selected;
+				_piezaSeleccionada.revisoLote = chkLote.selected;
+				stkTodo.selectedChild = navRechazo;
+				var arrMostrarEstos:ArrayCollection = new ArrayCollection([true,true,true,true,true,true]);
+				arrMostrarEstos[0] = divFArriba.visible = grpFArriba.visible = divFArriba.includeInLayout = grpFArriba.includeInLayout = !_piezaSeleccionada.revisoFisicamenteC;
+				arrMostrarEstos[1] = divFAbajo.visible = grpFAbajo.visible = divFAbajo.includeInLayout = grpFAbajo.includeInLayout = !_piezaSeleccionada.revisoFisicamenteC;
+				arrMostrarEstos[2] = divFFrente.visible = grpFFrente.visible = divFFrente.includeInLayout = grpFFrente.includeInLayout = !_piezaSeleccionada.revisoFisicamenteC;
+				arrMostrarEstos[3] = divFLote.visible = grpFLote.visible = divFLote.includeInLayout = grpFLote.includeInLayout = !_piezaSeleccionada.revisoLote;
+				arrMostrarEstos[4] = divFCadu.visible = grpFCadu.visible = divFCadu.includeInLayout = grpFCadu.includeInLayout = !_piezaSeleccionada.revisoCaducidad;
+				/* para publicaciones */
+				if( _partida.tipo == "Publicaciones" ){
+						arrMostrarEstos[5] = grpFCataConcePre.visible = grpFCataConcePre.includeInLayout = 
+						( _piezaSeleccionada.revisoEdicion && _piezaSeleccionada.revisoDescripcion && _piezaSeleccionada.revisoCatalogo && _piezaSeleccionada.revisoIdioma ? false: true );
+				}else{
+						arrMostrarEstos[5] = grpFCataConcePre.visible = grpFCataConcePre.includeInLayout = ( _piezaSeleccionada.revisoPresentacion && _piezaSeleccionada.revisoDescripcion && _piezaSeleccionada.revisoCatalogo ? false: true );
+				}
+				var cuenta:int = 1;
+				for(var z:int=0; z < arrMostrarEstos.length; z++){
+							if( (arrMostrarEstos[z] as Boolean) ){
+								_arrNum[z] = cuenta;
+								cuenta++;
+							}
+				}
+			}
+			private function validarReporteRechazo($:MouseEvent):void{
+				var mostrarBotonBool:Boolean = true;
+				if( _piezaSeleccionada.edoPieza == "No Despachable"){
+							if( _partida.tipo == "Estándares" || _partida.tipo == "Biológicos" || _partida.tipo == "Reactivos" ||  _partida.tipo == "Estandares" || _partida.tipo == "Biologicos" ){
+								if( chkCatalogo.selected
+								&& chkDescripcion.selected
+								&& chkPrensentacion.selected
+								&& chkFisicamenteC.selected
+								&& chkCaducidad.selected
+								&& chkLote.selected
+								&& chkDocumento.selected) mostrarBotonBool = false;
+							}
+							if( _partida.tipo == "Publicaciones" ){
+								if( chkCatalogo.selected
+								&& chkEdicion.selected
+								&& chkFisicamenteC.selected
+								&& chkIdioma.selected
+								&& chkDocumento.selected ) mostrarBotonBool = false;
+							}
+							if( _partida.tipo == "Labware" ){
+								if( chkCatalogo.selected
+								&& chkDescripcion.selected
+								&& chkFisicamenteC.selected
+								&& chkPrensentacion.selected ) mostrarBotonBool = false;
+							}
+							btnReporteRechazo.visible = mostrarBotonBool;
+				}
+			}
+			//		BROWSE SYSTEM
+			[Bindable]	private var _rutaArchivo:String;
+			[Bindable]	private var file:File = new File();
+			private var _pdfByteArray:ByteArray = null;
+			
+			public function browseFileSystem( ):void {
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				var docFilter:FileFilter = new FileFilter("Documents", "*.pdf");
+				var imagesFilter:FileFilter = new FileFilter("Images", "*.jpg;*.gif;*.png;*.jpeg");
+				//var myFile:File = new File();
+				//myFile.browseForOpen("Open", [imagesFilter, docFilter]);
+				//if( elArchivo.descripcion != "Certificado" && elArchivo.descripcion != "Hoja de seguridad"){
+				if( elArchivo.descripcion == FotoArchivo.ARRIBA 
+					|| elArchivo.descripcion == FotoArchivo.ABAJO
+					|| elArchivo.descripcion == FotoArchivo.FRENTE 
+					|| elArchivo.descripcion == FotoArchivo.ETIQUETA_CADUCIDAD
+					|| elArchivo.descripcion == FotoArchivo.ETIQUETA_LOTE
+					|| elArchivo.descripcion == FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION
+				){
+						file.browse([imagesFilter]);
+				}else{
+						file.browse([docFilter]);
+				}
+			}
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				elArchivo.cadenaDeBytes = file.data;
+				elArchivo.rutaLocal = file.nativePath;
+				elArchivo.folio = file.name;
+				_arrVisibles[ descripcionXindice( elArchivo.descripcion ) ] = true ;
+				//elArchivo.descripcion = file.name; 
+			}
+			private function buscaArchivo($tr:String, $arr:ArrayCollection = null ):Archivo{
+				var objReturn:Archivo = null;
+				if( $arr == null ){
+							for( var k:int=0; k < _archivosRechazo.length; k++){
+								if( (_archivosRechazo[k] as Archivo).descripcion == $tr ){
+									objReturn = new Archivo();
+									objReturn = _archivosRechazo[k];
+								}
+							}
+				}else{
+							for( var v:int=0; v < $arr.length; v++){
+								if( ($arr[v] as Archivo).descripcion == $tr ){
+									objReturn = new Archivo();
+									objReturn = $arr[v];
+								}
+							}
+				}
+				return objReturn;
+			}
+			private function botonXArchivo(idBtn:String ):String{
+				var strReturn:String = "No especificado";
+				if( idBtn.indexOf("FArriba") != -1 ) strReturn = FotoArchivo.ARRIBA;
+				if( idBtn.indexOf("FAbajo") != -1 ) strReturn = FotoArchivo.ABAJO;
+				if( idBtn.indexOf("FFrente") != -1 ) strReturn = FotoArchivo.FRENTE;
+				if( idBtn.indexOf("FLote") != -1 ) strReturn = FotoArchivo.ETIQUETA_LOTE;
+				if( idBtn.indexOf("FCadu") != -1 ) strReturn = FotoArchivo.ETIQUETA_CADUCIDAD;
+				if( idBtn.indexOf("FCataConcePre") != -1 ) strReturn = FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION;
+				//if( idBtn.indexOf("Documento") != -1 && _partida.tipoDocumento == FotoArchivo.CERTIFICADO ) strReturn = FotoArchivo.CERTIFICADO;
+				//if( idBtn.indexOf("Documento") != -1 && _partida.tipoDocumento == FotoArchivo.HOJA_SEGURIDAD ) strReturn = FotoArchivo.HOJA_SEGURIDAD;
+				if( idBtn.indexOf("Documento") != -1 && buscaArchivo( FotoArchivo.CERTIFICADO) != null ) strReturn = FotoArchivo.CERTIFICADO;
+				if( idBtn.indexOf("Documento") != -1 && buscaArchivo( FotoArchivo.HOJA_SEGURIDAD) != null ) strReturn = FotoArchivo.HOJA_SEGURIDAD; 
+				return strReturn;
+			}
+			private function descripcionXindice( $descripcion:String ):int{
+				var intReturn:int = -1;
+				if( $descripcion != null){
+					if( $descripcion == FotoArchivo.ARRIBA ) intReturn = 0;
+					if( $descripcion == FotoArchivo.ABAJO ) intReturn = 1;
+					if( $descripcion == FotoArchivo.FRENTE ) intReturn = 2;
+					if( $descripcion == FotoArchivo.ETIQUETA_LOTE ) intReturn = 3;
+					if( $descripcion == FotoArchivo.ETIQUETA_CADUCIDAD ) intReturn = 4;
+					if( $descripcion == FotoArchivo.ETIQUETA_CATALOGO_COCEPTO_PRESENTACION ) intReturn = 5;
+					if( $descripcion == FotoArchivo.CERTIFICADO || $descripcion == FotoArchivo.HOJA_SEGURIDAD ) intReturn = 6;
+				}
+				return intReturn;
+			}
+			[Bindable]	private var _archivosRechazo:ArrayCollection = new ArrayCollection();
+			private var elArchivo:Archivo = new Archivo();
+			[Bindable]	private var _arrVisibles:ArrayCollection = new ArrayCollection( [ false, false, false, false, false, false, false ] );
+			[Bindable]	private var _arrNum:ArrayCollection = new ArrayCollection([1,2,3,4,5,6]);
+			
+			private function manejaArchivo($:MouseEvent):void{
+				elArchivo = buscaArchivo( botonXArchivo($.currentTarget.id ) );
+						 if( ($.currentTarget.id as String).indexOf("Agrega") != -1 ){
+							 	 evaluarComboTipoDoc();
+								 if(elArchivo == null ){
+									 elArchivo = new Archivo();
+									 elArchivo.descripcion = botonXArchivo($.currentTarget.id ) == "No especificado" ? cmbDocumento.selectedItem: botonXArchivo($.currentTarget.id );
+									 _archivosRechazo.addItem( elArchivo );
+								 }
+								 browseFileSystem();
+						 }
+						if( ($.currentTarget.id as String).indexOf("Ver") != -1 ){
+							if(  elArchivo != null ) mostrarDocumento( elArchivo.rutaLocal == null ? elArchivo.rutaServer: elArchivo.rutaLocal );
+						}
+						if( ($.currentTarget.id as String).indexOf("X") != -1 ){
+							var index:int = _archivosRechazo.getItemIndex( elArchivo );
+							if( index > -1){
+								_arrVisibles[ descripcionXindice( botonXArchivo($.currentTarget.id) ) ] = false;
+								_archivosRechazo.removeItemAt( index );
+							}
+						}
+			}
+			private function evaluarComboTipoDoc():void{
+				if( _partida.tipoDocumento != "No especificado" ) return;
+				var theCertificado:Archivo = buscaArchivo( FotoArchivo.CERTIFICADO );
+				var theHoja:Archivo = buscaArchivo( FotoArchivo.HOJA_SEGURIDAD );
+				if( theCertificado == null && theHoja == null ){
+					grpCmbTipoDocumento.visible = grpCmbTipoDocumento.includeInLayout = true;
+					lblTipoDocumento.visible = lblTipoDocumento.includeInLayout = false;
+					if( lblTipoDocumento.text != "No especificado" ) cmbDocumento.selectedItem = lblTipoDocumento.text;
+				}else{
+					grpCmbTipoDocumento.visible = grpCmbTipoDocumento.includeInLayout = false;
+					lblTipoDocumento.visible = lblTipoDocumento.includeInLayout = true;
+				}
+			}
+			private function mostrarDocumento(ruta:String):void{
+				var request:URLRequest = new URLRequest( ruta.indexOf('http') == -1 ? "file://"+ encodeURI(ruta) : ruta); 
+				navigateToURL(request);
+			}
+			//////////////////////////////////////////////////////////////////////////////////////////////SALIR Y GUARDAR PIEZAS////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			protected function salirClickHandler():void{
+				var evt:EventoInspectorPhs = new EventoInspectorPhs(EventoInspectorPhs.GUARDAR_PIEZAS);
+				if( _piezasNuevasBool ){
+					for(var m:int=0; m < _listaPiezasUniverso.length; m++){
+						(_listaPiezasUniverso[m] as Pieza).idPieza = null;
+					}
+				}
+				evt.listaPiezas = _listaPiezasUniverso;
+				evt.accionPiezas = _accionGuardarActualizar; // Actualizar, Guardar
+				evt.inspector = _inspector;
+				dispatchEvent( evt );
+				fxCierraPop.play();
+				stkTodo.visible = false;
+			}
+			private function guardarRechazo($guardar:Boolean):void{
+				if( $guardar ){
+					_piezaSeleccionada.comentarioRechazo = txtReporteRechazo.text;
+					_piezaSeleccionada.listArchivos = new ArrayCollection();
+					_piezaSeleccionada.listArchivos = _archivosRechazo;
+					_piezaSeleccionada.archivosRechazoVisibles = _arrVisibles;
+					evaluaDoc();
+				}else{
+					_arrVisibles = _piezaSeleccionada.archivosRechazoVisibles;
+					if( _listaPiezasUniverso.length == 1 ){
+						btnDocumentoAgrega.visible = btnDocumentoAgrega.includeInLayout = false;
+					}
+				}
+				stkTodo.selectedChild = navEdicionPieza;
+			}
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			private function cirState( $elBool:Boolean, $edoPieza:String ):Class{
+				var classReturn:Class;
+				if( $edoPieza == "Pendiente") classReturn = circuNaranja;
+				else classReturn = $elBool ? circuVerde: circuRojo;
+				return classReturn;
+			}
+			private function cierraPopUp():void{
+				stage.removeEventListener( ResizeEvent.RESIZE, ajustaCentraPop );
+				PopUpManager.removePopUp( this );
+			}
+			private function centraEstePop(event:ResizeEvent):void{
+				PopUpManager.centerPopUp( this );
+			}
+			private function ajustaCentraPop($:Event):void{
+				height = ($.currentTarget as Stage).stageHeight/1.7;
+				width = ($.currentTarget as Stage).stageWidth - ($.currentTarget as Stage).stageWidth/4;
+			}
+			protected function cmbDocumento_clickHandler():void
+			{
+				var fileEnProceso:Archivo = buscaArchivo( FotoArchivo.CERTIFICADO) || buscaArchivo( FotoArchivo.HOJA_SEGURIDAD ); //buscaArchivo("No especificado", _piezaSeleccionada.listArchivos );
+				if(  fileEnProceso != null ){
+					fileEnProceso.descripcion = lblTipoDocumento.text = cmbDocumento.selectedItem;
+					lblTipoDocumento.includeInLayout = lblTipoDocumento.visible = false;
+				}
+			}
+		]]>
+	</fx:Script>
+	<!--<s:Button click="imprimeEtiquetas()" />-->
+	<s:VGroup id="grpEtiquetasParaImprimir" width="100%" height="100%" />
+	<!--<radio:EtiquetaRenderer id="etiquetaRender" />-->
+	<mx:ViewStack id="stkTodo" width="100%" height="100%" visible="false" includeInLayout="false" creationPolicy="all">
+	<!--<mx:ViewStack id="stkTodo" width="100%" height="100%" visible="false" includeInLayout="false" creationPolicy="all">-->
+		<s:NavigatorContent id="navEdicionPieza">
+					<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" paddingBottom="20" paddingTop="-15" >
+							<s:HGroup width="100%" verticalAlign="middle">
+										<!--<s:Image source="{tituloIco}" />-->
+										<label:labelTitulo text="PIEZAS" width="100%"/>
+										<pqNet:botonPqNetLargo id="btnEtiquetar" label="Etiquetar" visible="false" click="iniciaVistaEtiqueta()" gradientePqnet="true" colorBase="0x{catalogoColores.BTN_VERDE_AZUL}"/>
+										<pqNet:botonPqNetLargo id="btnSalir" icono="tache" width="34" click="salirClickHandler()" gradientePqnet="true" colorBase="0x{catalogoColores.LABEL_ROJO}"/>
+							</s:HGroup>
+							<otros:divisionGruesa />
+						
+							<s:HGroup width="100%" height="100%" >
+									<s:VGroup width="50%" height="100%" paddingBottom="0">
+												<s:ButtonBar id="btnBarra" width="100%" height="30" selectedIndex="0" 
+																 dataProvider="{_arrTresBotones}" click="buttonBarClick()"
+																 skinClass="skins.botoneras.botoneraBandera.skinBotoneraBandera" 
+																 />
+												<s:List id="listOC" width="100%" height="100%" borderVisible="false"
+																mouseDown="listOC_Handler()" dataProvider="{_listaPiezasTrabajo}"
+																itemRenderer="mx.com.proquifa.proquifanet.InspectorPhs.vistas.vista.itemRenderers.ListPiezasRenderer"
+																selectedIndex="0" />
+									</s:VGroup>
+									<otros:VDivisionHueca />
+									<s:VGroup width="100%" height="100%" horizontalAlign="center" paddingLeft="15">
+													<s:HGroup width="100%" verticalAlign="middle" paddingTop="10" paddingBottom="10">
+															<label:labelSubtitulo text="{_piezaSeleccionada.idPieza}ª Pieza" width="100%" />
+															<pqNet:botonPqNetLargo id="btnEditar" label="Editar" click="editaCambios_clickHandler(event)"
+																				   includeInLayout="{ !_edicionBool }" visible="{ !_edicionBool }" />
+															<pqNet:botonPqNetLargo id="btnFinalizar" label="Finalizar" click="finalizaCambios_clickHandler(event)"
+																				   includeInLayout="{ _edicionBool }" visible="{ _edicionBool }" />
+													</s:HGroup>
+													<otros:divisionHueca />
+													<s:Scroller width="100%" height="100%">
+														<s:VGroup id="grpDisplay" width="100%" height="100%" horizontalAlign="center" paddingBottom="10"  >
+																	<s:HGroup id="grpCatalogo" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Catálogo:" fontWeight="bold" />
+																			<s:Label fontSize="15" width="100%" text="{_piezaSeleccionada.lblCatalogo}"/>
+																			<s:Image source="{ cirState( _piezaSeleccionada.revisoCatalogo, _piezaSeleccionada.edoPieza ) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																			<s:CheckBox id="chkCatalogo" selected="{_piezaSeleccionada.revisoCatalogo}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divCatalogo" />
+																	<s:HGroup id="grpDescripcion" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Concepto:" fontWeight="bold"/>
+																			<s:Label fontSize="15" width="100%" text="{_piezaSeleccionada.lblConcepto}" />
+																			<s:Image source="{ cirState( _piezaSeleccionada.revisoDescripcion, _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																			<s:CheckBox id="chkDescripcion" selected="{_piezaSeleccionada.revisoDescripcion}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divDescripcion" />
+																	<s:HGroup id="grpPresentacion" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Presentación:" fontWeight="bold"/>
+																			<s:Label fontSize="15" width="100%" text="{_piezaSeleccionada.lblPresentacion}"/>
+																			<s:Image source="{  cirState( _piezaSeleccionada.revisoPresentacion,  _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																			<s:CheckBox id="chkPrensentacion" selected="{_piezaSeleccionada.revisoPresentacion}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divPresentacion" />
+
+															
+																	<s:HGroup id="grpEdicion" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																		<s:Label fontSize="15" text="Edición:" fontWeight="bold"/>
+																		<s:Label fontSize="15" width="100%" text="{_piezaSeleccionada.lblEdicion}"/>
+																		<s:Image source="{  cirState( _piezaSeleccionada.revisoEdicion,  _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																		<s:CheckBox id="chkEdicion" selected="{_piezaSeleccionada.revisoEdicion}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divEdicion" />
+																	<s:HGroup id="grpIdioma" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																		<s:Label fontSize="15" text="Idioma:" fontWeight="bold"/>
+																		<s:Label fontSize="15" width="100%" text="{ _piezaSeleccionada.lblIdioma == null ? 'No especificado': _piezaSeleccionada.lblIdioma}"/>
+																		<s:Image source="{  cirState( _piezaSeleccionada.revisoIdioma,  _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																		<s:CheckBox id="chkIdioma" selected="{_piezaSeleccionada.revisoIdioma}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divIdioma" />
+															
+															
+																	<s:HGroup id="grpFisicamente" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Físicamente conforme:" fontWeight="bold"/>
+																			<s:Label fontSize="15" width="100%" text="Etiqueta legible, sellado, no roto y con contenido"/>
+																			<s:Image source="{ cirState( _piezaSeleccionada.revisoFisicamenteC, _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																			<s:CheckBox id="chkFisicamenteC" selected="{_piezaSeleccionada.revisoFisicamenteC}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divFisicamente" />
+																	<s:HGroup id="grpCaducidad" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Caducidad:" fontWeight="bold"/>
+																			<s:Label fontSize="15" width="100%" text="{_piezaSeleccionada.lblCaducidad}"/>
+																			<s:Image source="{ cirState( _piezaSeleccionada.revisoCaducidad, _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																			<s:CheckBox id="chkCaducidad" selected="{_piezaSeleccionada.revisoCaducidad}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divCaducidad" />
+																	<s:HGroup id="grpLote" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Lote:" fontWeight="bold"/>
+																			<s:Label fontSize="15" width="100%" text="{_piezaSeleccionada.lblLote}"/>
+																			<s:Image source="{ cirState( _piezaSeleccionada.revisoLote, _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}"/>
+																			<s:CheckBox id="chkLote" selected="{_piezaSeleccionada.revisoLote}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divLote" />
+																	<s:HGroup id="grpDocumento" width="100%" height="100%" verticalAlign="middle" paddingRight="5" paddingLeft="10">
+																			<s:Label fontSize="15" text="Documento:" fontWeight="bold"/>
+																			<s:Label id="lblTipoDocumento" fontSize="15" width="100%" text="{ _piezaSeleccionada.lblTipoDoc }"/>
+																		<s:HGroup width="100%" id="grpCmbTipoDocumento" visible="false" >
+																				<s:ComboBox id="cmbDocumento" dataProvider="{ _arrTipoDocumento}" selectedIndex="0" width="200" mouseDown="cmbDocumento_clickHandler()" change="cmbDocumento_clickHandler()" />
+																		</s:HGroup>  
+																				<s:Image id="btnDocumentoVer" source="{icoVer}" click="manejaArchivo(event)"  visible="{ _arrVisibles.getItemAt(6) }" includeInLayout="{ _arrVisibles.getItemAt(6) }" />
+																				<s:Image id="btnDocumentoX" source="{icoBasura}" click="manejaArchivo(event)"  visible="{ _arrVisibles.getItemAt(6) }" includeInLayout="{ _arrVisibles.getItemAt(6) }" />
+																				<s:Image id="btnDocumentoAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(6) }" includeInLayout="{ !_arrVisibles.getItemAt(6) }" />
+																			<!--<pqNet:botonPqNetLargo gradientePqnet="true" icono="amparo" label="Amparar" colorBase="0x{catalogoColores.LABEL_VERDE}" botonRedondo="true"
+																								   includeInLayout="{_edicionBool}" visible="{_edicionBool}"
+																								   />-->
+																			<s:Image source="{ cirState( _piezaSeleccionada.revisoDocumentacion, _piezaSeleccionada.edoPieza) }" includeInLayout="{!_edicionBool}" visible="{!_edicionBool}" />
+																			<s:CheckBox id="chkDocumento" selected="{_piezaSeleccionada.revisoDocumentacion}" includeInLayout="{_edicionBool}" visible="{_edicionBool}" click="validarReporteRechazo(event)"/>
+																	</s:HGroup>
+																	<otros:divisionHueca id="divDocumento" />
+																	<pqNet:botonPqNetLargo id="btnDespachable" width="260" label="Despachable" colorBase="0x{catalogoColores.LABEL_VERDE}" gradientePqnet="true" botonRedondo="true" horizontalCenter="0"
+																						   includeInLayout="false" visible="false" click="finalizaCambios_clickHandler(event)"/>
+																	<pqNet:botonPqNetLargo id="btnNoDespachable" width="260" label="No despachable" colorBase="0x{catalogoColores.LABEL_ROJO}" gradientePqnet="true" botonRedondo="true" horizontalCenter="0"
+																						   includeInLayout="false" visible="false" click="finalizaCambios_clickHandler(event)"/>
+																	<pqNet:botonPqNetLargo id="btnReporteRechazo" width="260" label="REPORTE DE RECHAZO" colorBase="0x{catalogoColores.LABEL_ROJO}" botonRedondo="true" horizontalCenter="0"
+																						   includeInLayout="false" visible="false" click="iniciarRechazo()"/>
+															</s:VGroup>
+													</s:Scroller>
+									</s:VGroup>
+							</s:HGroup>
+					</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="navEtiquetar">
+			<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" paddingTop="5" >
+				<s:HGroup width="100%" verticalAlign="middle">
+					<label:labelTitulo text="ETIQUETAR" width="100%" />
+				</s:HGroup>
+				<otros:divisionGruesa />
+				<s:HGroup width="100%" height="100%" >
+					
+					<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="0" paddingLeft="15" paddingRight="35">
+						<s:VGroup width="100%" height="40%" >
+									<s:Label fontSize="14" fontWeight="bold" text="DESPACHABLE" color="0x{catalogoColores.LABEL_CASI_NEGRO}" paddingTop="25" paddingBottom="5"/>
+									<otros:divisionHueca />
+									<s:Group width="100%" height="100%" >
+										<s:VGroup height="100%" verticalAlign="middle" left="0" top="0">
+												<s:Label text="{_etiquetaNumAceptadas} Pieza{_etiquetaNumAceptadas == 1? '':'s'}" fontSize="12" />
+												<s:Label text="ACEPTADAS" fontSize="12" color="0x{catalogoColores.LABEL_GRIS}"/>
+												<s:Label text="{_manejoEtiquetas}" fontSize="12" color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+										</s:VGroup>
+										<s:Label text="{_ubicacionEstante}" fontSize="14" verticalCenter="0" right="5"/>
+									</s:Group>
+									<otros:divisionHueca />
+						</s:VGroup>  
+						<s:VGroup width="100%" height="100%" visible="{_etiquetaNumRechazoAmbos == 0 &amp;&amp; _etiquetaNumRechazoXDoc == 0 &amp;&amp; _etiquetaNumRechazoXInps == 0 ? false:true}">
+									<s:Label fontSize="14" fontWeight="bold" text="NO DESPACHABLE" color="0x{catalogoColores.LABEL_CASI_NEGRO}" paddingTop="25" paddingBottom="5"
+											 />
+									<otros:divisionHueca visible="{_etiquetaNumRechazoXInps != 0}" includeInLayout="{_etiquetaNumRechazoXInps != 0}" />
+									<s:Group width="100%" height="100%" visible="{_etiquetaNumRechazoXInps != 0}" includeInLayout="{_etiquetaNumRechazoXInps != 0}">
+										<s:VGroup height="100%" verticalAlign="middle" left="0" top="0">
+												<s:Label text="{_etiquetaNumRechazoXInps} Pieza{_etiquetaNumRechazoXInps == 1? '':'s'}" fontSize="12" />
+												<s:Label text="RECHAZADAS · Inspección" fontSize="12" color="0x{catalogoColores.LABEL_GRIS}"/>
+												<s:Label text="{_manejoEtiquetas}" fontSize="12" color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+										</s:VGroup>
+										<s:Label text="C" fontSize="14" fontWeight="bold" verticalCenter="0" right="5" color="0x{catalogoColores.LABEL_ROJO}"/>
+									</s:Group>
+									<otros:divisionHueca visible="{_etiquetaNumRechazoXDoc != 0}" includeInLayout="{_etiquetaNumRechazoXDoc != 0}"/>
+									<s:Group width="100%" height="100%" visible="{_etiquetaNumRechazoXDoc != 0}" includeInLayout="{_etiquetaNumRechazoXDoc != 0}">
+										<s:VGroup height="100%" verticalAlign="middle" left="0" top="0">
+													<s:Label text="{_etiquetaNumRechazoXDoc} Pieza{_etiquetaNumRechazoXDoc == 1? '':'s'}" fontSize="12" />
+													<s:Label text="RECHAZADAS · Documentación" fontSize="12" color="0x{catalogoColores.LABEL_GRIS}"/>
+													<s:Label text="{_manejoEtiquetas}" fontSize="12" color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+										</s:VGroup>
+										<s:Label text="C" fontSize="14" fontWeight="bold" verticalCenter="0" right="5" color="0x{catalogoColores.LABEL_ROJO}"/>
+									</s:Group>
+									<otros:divisionHueca visible="{_etiquetaNumRechazoAmbos != 0}" includeInLayout="{_etiquetaNumRechazoAmbos != 0}"/>
+									<s:Group width="100%" height="100%" visible="{_etiquetaNumRechazoAmbos != 0}" includeInLayout="{_etiquetaNumRechazoAmbos != 0}">
+										<s:VGroup height="100%" verticalAlign="middle" left="0" top="0">
+													<s:Label text="{_etiquetaNumRechazoAmbos} Pieza{_etiquetaNumRechazoAmbos == 1? '':'s'}" fontSize="12" />
+													<s:Label text="RECHAZADAS · Ambos" fontSize="12" color="0x{catalogoColores.LABEL_GRIS}"/>
+													<s:Label text="{_manejoEtiquetas}" fontSize="12" color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+										</s:VGroup>
+										<s:Label text="C" fontSize="14" fontWeight="bold" verticalCenter="0" right="5" color="0x{catalogoColores.LABEL_ROJO}"/>
+									</s:Group>
+						</s:VGroup>  
+					</s:VGroup>
+					
+					<otros:VDivisionHueca />
+					
+					<s:Scroller id="grpSeleccionaUbicacion" width="100%" height="100%">
+						<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="0" paddingLeft="15" paddingRight="5">
+							<s:HGroup width="100%" height="40" gap="0" verticalAlign="bottom">
+									<s:Label width="100%" text="Ubicación" fontSize="12" fontWeight="bold" paddingBottom="5"/>
+									<!--<s:TabBar id="tabEstante" dataProvider="{_arrTab}" />-->
+									<s:TabBar id="tabEstante" height="25" dataProvider="{_arrTab}" click="setUbicacionPiezas()"/>
+							</s:HGroup>
+							<otros:divisionHueca />
+							<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+								<radio:radioEstante id="radA" label="A" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radB" label="B" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radC" label="C" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radD" label="D" width="100%" height="100%" group="{radGrp}" />
+							</s:HGroup>
+							<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+								<radio:radioEstante id="radE" label="E" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radF" label="F" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radG" label="G" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radH" label="H" width="100%" height="100%" group="{radGrp}" />
+							</s:HGroup>
+							<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+								<radio:radioEstante id="radI" label="I" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radJ" label="J" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radK" label="K" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radL" label="L" width="100%" height="100%" group="{radGrp}" />
+							</s:HGroup>
+							<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+								<radio:radioEstante id="radM" label="M" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radN" label="N" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radO" label="O" width="100%" height="100%" group="{radGrp}" />
+								<radio:radioEstante id="radP" label="P" width="100%" height="100%" group="{radGrp}" />
+							</s:HGroup>
+							
+						</s:VGroup>
+					</s:Scroller>
+				</s:HGroup>
+				<otros:divisionGruesa />
+				<s:HGroup width="100%"  paddingTop="5" paddingBottom="15">
+					<pqNet:botonPqNetLargo id="btnSalirEtiquetas" label="Salir" click="imprimirEtiquetas(event)" />
+					<s:Spacer width="100%"/>
+					<pqNet:botonPqNetLargo id="btnPrint" label="Imprimir" click="imprimirEtiquetas(event)" gradientePqnet="true" colorBase="0x{catalogoColores.BTN_VERDE_AZUL}"
+										   visible="false" includeInLayout="false"/>
+					<pqNet:botonPqNetLargo id="btnRePrint" label="Re-Imprimir" click="imprimirEtiquetas(event)" gradientePqnet="true" colorBase="0x{catalogoColores.BTN_VERDE_AZUL}"
+										   visible="false" includeInLayout="false"/>
+					<pqNet:botonPqNetLargo id="btnFinalizarEtiqueta" label="Finalizar" click="imprimirEtiquetas(event)" enabled="false"
+										   visible="false" includeInLayout="false"/>
+				</s:HGroup>  
+			</s:VGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="navRechazo">
+						<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" paddingTop="-15" >
+								<s:HGroup width="100%" verticalAlign="middle">
+									<label:labelTitulo text="REPORTE DE RECHAZOS" width="100%" color="0x{catalogoColores.LABEL_ROJO}"/>
+								</s:HGroup>
+								<otros:divisionGruesa color="0x{catalogoColores.LABEL_ROJO}" />
+							<s:HGroup width="100%" height="100%">
+								<s:VGroup width="100%" height="100%" 
+										  paddingLeft="15" paddingRight="15" paddingTop="15" paddingBottom="15" >
+									<s:TextArea id="txtReporteRechazo" width="100%" height="100%" 
+												prompt="ESCRIBE AQUI TU REPORTE SOBRE EL RECHAZO" 
+												skinClass="skins.skin.textarea.TextAreaPunteadoSkin"/>
+								</s:VGroup>
+									<otros:VDivisionHueca />
+									<s:Scroller width="100%" height="100%">
+										<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="0" paddingLeft="15" paddingRight="5">
+											<s:Label fontSize="15" fontWeight="bold" text="FOTOS" color="0x{catalogoColores.LABEL_GRIS}" paddingTop="15" paddingBottom="15"/>
+											<otros:divisionHueca />
+											<s:HGroup width="100%" height="100%" verticalAlign="middle" id="grpFArriba">
+													<s:Label width="100%" text="{_arrNum.getItemAt(0)}a . Arriba" fontSize="12"/>
+													<s:Image id="btnFArribaVer" source="{icoVer}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(0) }" includeInLayout="{ _arrVisibles.getItemAt(0) }" />
+													<s:Image id="btnFArribaX" source="{icoBasura}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(0) }" includeInLayout="{ _arrVisibles.getItemAt(0) }" />
+													<s:Image id="btnFArribaAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(0) }" includeInLayout="{ !_arrVisibles.getItemAt(0) }" />
+											</s:HGroup>
+											<otros:divisionHueca id="divFArriba" />
+											<s:HGroup width="100%" height="100%" verticalAlign="middle" id="grpFAbajo" >
+												<s:Label width="100%" text="{_arrNum.getItemAt(1)}a . Abajo" fontSize="12"/>
+												<s:Image id="btnFAbajoVer" source="{icoVer}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(1) }" includeInLayout="{ _arrVisibles.getItemAt(1) }" />
+												<s:Image id="btnFAbajoX" source="{icoBasura}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(1) }" includeInLayout="{ _arrVisibles.getItemAt(1) }" />
+												<s:Image id="btnFAbajoAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(1) }" includeInLayout="{ !_arrVisibles.getItemAt(1) }"/>
+											</s:HGroup>
+											<otros:divisionHueca id="divFAbajo"/>
+											<s:HGroup width="100%" height="100%" verticalAlign="middle" id="grpFFrente" >
+												<s:Label width="100%" text="{_arrNum.getItemAt(2)}a . Frente" fontSize="12"/>
+												<s:Image id="btnFFrenteVer" source="{icoVer}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(2) }" includeInLayout="{ _arrVisibles.getItemAt(2) }"/>
+												<s:Image id="btnFFrenteX" source="{icoBasura}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(2) }" includeInLayout="{ _arrVisibles.getItemAt(2) }" />
+												<s:Image id="btnFFrenteAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(2) }" includeInLayout="{ !_arrVisibles.getItemAt(2) }"/>
+											</s:HGroup>
+											<otros:divisionHueca id="divFFrente" />
+											<s:HGroup width="100%" height="100%" verticalAlign="middle" id="grpFLote" >
+												<s:Label width="100%" text="{_arrNum.getItemAt(3)}a . Etiqueta con LOTE" fontSize="12"/>
+												<s:Image id="btnFLoteVer" source="{icoVer}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(3) }" includeInLayout="{ _arrVisibles.getItemAt(3) }" />
+												<s:Image id="btnFLoteX" source="{icoBasura}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(3) }" includeInLayout="{ _arrVisibles.getItemAt(3) }" />
+												<s:Image id="btnFLoteAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(3) }" includeInLayout="{ !_arrVisibles.getItemAt(3) }" />
+											</s:HGroup>
+											<otros:divisionHueca id="divFLote" />
+											<s:HGroup width="100%" height="100%" verticalAlign="middle" id="grpFCadu">
+												<s:Label width="100%" text="{_arrNum.getItemAt(4)}a . Etiqueta con CADUCIDAD" fontSize="12"/>
+												<s:Image id="btnFCaduVer" source="{icoVer}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(4) }" includeInLayout="{ _arrVisibles.getItemAt(4) }" />
+												<s:Image id="btnFCaduX" source="{icoBasura}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(4) }" includeInLayout="{ _arrVisibles.getItemAt(4) }" />
+												<s:Image id="btnFCaduAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(4) }" includeInLayout="{ !_arrVisibles.getItemAt(4) }" />
+											</s:HGroup>
+											<otros:divisionHueca id="divFCadu" />
+											<s:HGroup width="100%" height="100%" verticalAlign="middle" id="grpFCataConcePre">
+												<s:Label width="100%" text="{_arrNum.getItemAt(5)}a . Etiqueta con CATÁLOGO, CONCEPTO{ _partida.tipo == 'Publicaciones' ? ', EDICIÓN O IDIOMA':' O PRESENTACIÓN.' } " fontSize="12"/>
+												<s:Image id="btnFCataConcePreVer" source="{icoVer}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(5) }" includeInLayout="{ _arrVisibles.getItemAt(5) }" />
+												<s:Image id="btnFCataConcePreX" source="{icoBasura}" click="manejaArchivo(event)" visible="{ _arrVisibles.getItemAt(5) }" includeInLayout="{ _arrVisibles.getItemAt(5) }" />
+												<s:Image id="btnFCataConcePreAgrega" source="{icoAgrega}" click="manejaArchivo(event)" visible="{ !_arrVisibles.getItemAt(5) }" includeInLayout="{ !_arrVisibles.getItemAt(5) }" />
+											</s:HGroup>
+										</s:VGroup>
+									</s:Scroller>
+							</s:HGroup>
+							<otros:divisionGruesa color="0x{catalogoColores.LABEL_ROJO}" />
+						<s:HGroup width="100%"  paddingTop="5" paddingBottom="15">
+									<pqNet:botonPqNetLargo label="Salir" click="guardarRechazo(false)" />
+									<s:Spacer width="100%"/>
+									<pqNet:botonPqNetLargo id="btnGuardarRechazo" label="Guardar" click="guardarRechazo(true)" visible="true" includeInLayout="true" />
+						</s:HGroup>  
+					</s:VGroup>
+		</s:NavigatorContent>
+	<!--</mx:ViewStack>-->
+	</mx:ViewStack>
+</s:TitleWindow>

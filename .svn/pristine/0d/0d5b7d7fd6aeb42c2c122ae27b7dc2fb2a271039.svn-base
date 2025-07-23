@@ -1,0 +1,519 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				autoDrawBackground="false" width="100%"
+				xmlns:otros="skins.otros.*" 
+				xmlns:label="skins.skin.label.*" 
+				xmlns:textinput="skins.skin.textinput.*" 
+				xmlns:spacers="skins.skin.spacers.*" 
+				xmlns:chekbox="skins.skin.chekbox.*"
+				xmlns:pqNet="skins.botones.pqNet.*"
+				currentStateChanging="itemrenderer1_currentStateChangingHandler(event)"
+				creationComplete="itemrenderer1_creationCompleteHandler(event)"
+				xmlns:lay="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.empresasGeneral.*" xmlns:combobox="skins.skin.combobox.*"
+				>
+	
+	
+	<fx:Declarations>
+		<s:Parallel id="mostrarModificar" effectEnd="mostrarModificar_effectEndHandler(event)">
+			<s:Resize heightFrom="0" heightTo="340" duration="267"/>
+			<s:Fade startDelay="50" duration="100" alphaFrom="0.1" alphaTo="1"/>
+		</s:Parallel>
+		<s:Parallel id="ocultarModificar" effectStart="ocultarModificar_effectStartHandler(event)" effectEnd="ocultarModificar_effectEndHandler(event)">
+			<s:Resize  heightFrom="340" heightTo="0" duration="200"/>
+			<s:Fade startDelay="0" duration="200" alphaFrom="1" alphaTo="0"/>
+		</s:Parallel>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientesContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.ClienteCuadroContacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.ClientePanelContactosAnimado;
+			import mx.events.EffectEvent;
+			import mx.events.FlexEvent;
+			import mx.events.StateChangeEvent;
+			import mx.geom.TransformOffsets;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.skin.contenedores.CatalogoProveedores.ContenedorEditarContactoSkin;
+			
+			import spark.components.Group;
+			import spark.components.VGroup;
+			
+			private var currentAncho:Number;
+			private var isShowHabilitados:Boolean = true;
+			[Bindable]	private var _listaSemestre:ArrayCollection = new ArrayCollection([{valor:"Enero - Junio",llave:1},{valor:"Julio - Diciembre",llave:2}]);
+			
+			private var _listaDificultad:ArrayCollection = new ArrayCollection([
+				{valor:"-- NINGUNO --",llave:0,numero:0},
+				{valor:"COMPLICADO",llave:1,numero:5},
+				{valor:"MUY DIFÍCIL",llave:2,numero:4},
+				{valor:"DIFÍCIL",llave:3,numero:3},
+				{valor:"FÁCIL",llave:4,numero:2},
+				{valor:"MUY FÁCIL",llave:5,numero:1}]);
+			
+			private var _listaMantenimiento:ArrayCollection = new ArrayCollection([
+				{valor:"-- NINGUNO --",llave:0,numero:0},
+				{valor:"MUY ALTO",llave:1,numero:5},
+				{valor:"ALTO",llave:2,numero:4},
+				{valor:"MEDIO",llave:3,numero:3},
+				{valor:"BAJO",llave:4,numero:2},
+				{valor:"MUY BAJO",llave:5,numero:1}]);
+			
+			override public function set data(value:Object):void{
+				grpTodo.removeAllElements();
+				isShowHabilitados = (this.owner.parent as ClientePanelContactosAnimado).isCurrentHabilitados;
+				
+				for (var i:int = 0; i < value.length; i++) 
+				{
+					grpTodo.addElement(crearCubo(value[i],i));
+				}
+				
+			}
+			
+			private var myXForm:TransformOffsets;
+			private function crearCubo($item:*,$id:int):Group
+			{
+				var content:ClienteCuadroContacto = new ClienteCuadroContacto;
+				content.id = "button_"+$id;
+				myXForm = new TransformOffsets;
+				content.postLayoutTransformOffsets = myXForm;
+				content.isHabilitado = isShowHabilitados;
+				
+				
+				if(($item as Object).hasOwnProperty("CuboAgregar")){
+					
+					content.tipoDeCubo = "agregar";
+				}else{
+					content.tipoDeCubo = "contacto";
+					
+					if($item.titulo != null && StringUtil.trim($item.titulo).length > 0 && $item.titulo != "ND")
+						content.nombreContacto = $item.titulo + " " + $item.nombre;
+					else
+						content.nombreContacto = $item.nombre;
+					
+					content.item = $item;
+					content.area = $item.departamento;
+					content.puesto = $item.puesto;
+					content.pqConnect = $item.usuarioPConnect;
+					
+					
+					content.email =$item.EMail; 
+					content.contatenarTel1($item.telefono,$item.extension1);
+					content.contatenarTel2($item.telefonoN,$item.extension2);
+					
+				}
+				
+				content.addEventListener("DisparandoEventoCustomCuboCatClientesContacto",escuchaEventClickButtonContacto,false,0,true); 
+				
+				return content;
+			}
+			
+			[Bindable]
+			private var paddingLeft:Number
+			private var lastIdButtonSelected:String;
+			private var lastButtomSelected:Object;
+			private function escuchaEventClickButtonContacto(eve:Event):void
+			{
+				
+				if(!mostrarModificar.isPlaying && !ocultarModificar.isPlaying)
+				{
+					
+					if(grpTodosModificar.width > 780)
+					{
+						grpModificar.width = 780;
+						
+						if(eve.currentTarget.hasOwnProperty("puntoMedio")){
+							
+							var temp:Number =(eve.currentTarget as ClienteCuadroContacto).puntoMedio - (grpModificar.width / 2); 
+							var temp2:Number =(eve.currentTarget as ClienteCuadroContacto).puntoMedio + (grpModificar.width / 2); 
+							
+							if(temp <= 0){
+								paddingLeft = 0;
+								(grpModificar.skin as ContenedorEditarContactoSkin).xIndicador = (eve.currentTarget as ClienteCuadroContacto).puntoMedio;
+							}else if(temp2 > grpTodosModificar.width){
+								paddingLeft = (grpTodosModificar.width - grpModificar.width)-10;
+								(grpModificar.skin as ContenedorEditarContactoSkin).xIndicador = (eve.currentTarget as ClienteCuadroContacto).puntoMedio - paddingLeft;
+							}else{
+								paddingLeft = temp;
+								(grpModificar.skin as ContenedorEditarContactoSkin).xIndicador = (eve.currentTarget as ClienteCuadroContacto).puntoMedio - paddingLeft;
+							}
+							
+						}
+					}
+					else
+					{
+						paddingLeft = 0;
+						grpModificar.width = grpTodosModificar.width-10;
+						if(eve.currentTarget.hasOwnProperty("puntoMedio")){
+							(grpModificar.skin as ContenedorEditarContactoSkin).xIndicador = (eve.currentTarget as ClienteCuadroContacto).puntoMedio;
+						}
+					}
+					
+					if(grpTodosModificar.visible)
+					{
+						
+						if(lastIdButtonSelected != eve.currentTarget.id)
+						{				
+							lastIdButtonSelected = eve.currentTarget.id;
+							
+							(lastButtomSelected as ClienteCuadroContacto).setCurrentState("normal");
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleX = 1.0;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleY = 1.0;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.x = 0;
+							
+							lastButtomSelected = eve.currentTarget;
+							
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleX = (lastButtomSelected as Group).postLayoutTransformOffsets.scaleX + 0.04;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleY = (lastButtomSelected as Group).postLayoutTransformOffsets.scaleY + 0.04;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.x = (lastButtomSelected as Group).postLayoutTransformOffsets.x - 4.7;
+							
+							
+							if((eve.currentTarget as ClienteCuadroContacto).tipoDeCubo == "contacto"){
+								btnModificar.visible = btnModificar.includeInLayout = true;
+								btnAgregar.visible = btnAgregar.includeInLayout = false;
+								_contacto = eve.currentTarget.item as Contacto;
+							}else{
+								
+								btnAgregar.visible = btnAgregar.includeInLayout = true;
+								btnModificar.visible = btnModificar.includeInLayout = false;
+								_contacto = new Contacto;
+							}
+							
+						}
+						else
+						{
+							
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleX = 1.0;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleY = 1.0;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.x = 0;
+							
+							lastIdButtonSelected = null;
+							
+							if(!mostrarModificar.isPlaying && !ocultarModificar.isPlaying){
+								grpTodosModificar.visible = false;
+							}
+							
+						}
+					}
+					else
+					{
+						
+						if(lastIdButtonSelected != eve.currentTarget.id){
+							
+							lastIdButtonSelected = eve.currentTarget.id;
+							lastButtomSelected = eve.currentTarget;
+							
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleX = (lastButtomSelected as Group).postLayoutTransformOffsets.scaleX + 0.04;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.scaleY = (lastButtomSelected as Group).postLayoutTransformOffsets.scaleY + 0.04;
+							(lastButtomSelected as Group).postLayoutTransformOffsets.x = (lastButtomSelected as Group).postLayoutTransformOffsets.x - 4.7;
+							
+							if((eve.currentTarget as ClienteCuadroContacto).tipoDeCubo == "contacto"){
+								btnModificar.visible = btnModificar.includeInLayout = true;
+								btnAgregar.visible = btnAgregar.includeInLayout = false;
+								
+								if(isShowHabilitados)
+								{
+									lblHabilitar.visible = false;
+									checkBoxHabitar.includeInLayout = checkBoxHabitar.visible = false;
+								}
+								else
+								{
+									lblHabilitar.visible = true;
+									checkBoxHabitar.includeInLayout = checkBoxHabitar.visible = true;
+								}
+								
+								_contacto = eve.currentTarget.item as Contacto;
+							}else{
+								lblHabilitar.visible = false;
+								checkBoxHabitar.includeInLayout = checkBoxHabitar.visible = false;
+								
+								btnAgregar.visible = btnAgregar.includeInLayout = true;
+								btnModificar.visible = btnModificar.includeInLayout = false;
+								_contacto = new Contacto;
+							}
+							
+							grpTodosModificar.percentWidth = 100;
+							grpTodosModificar.visible = true;
+						}
+					}
+				}
+			}
+			
+			protected function itemrenderer1_currentStateChangingHandler(event:StateChangeEvent):void
+			{
+				if(event.newState == "normal" && grpTodosModificar.visible){
+					grpTodosModificar.visible = false;
+					
+					(lastButtomSelected as ClienteCuadroContacto).setCurrentState("normal");
+					(lastButtomSelected as Group).postLayoutTransformOffsets.scaleX = 1.0;
+					(lastButtomSelected as Group).postLayoutTransformOffsets.scaleY = 1.0;
+					(lastButtomSelected as Group).postLayoutTransformOffsets.x = 0;
+					
+					lastIdButtonSelected = null;
+				}
+			}
+			
+			protected function imgCerrar_clickHandler(event:MouseEvent):void
+			{
+				grpTodosModificar.visible = false;
+				
+				(lastButtomSelected as ClienteCuadroContacto).setCurrentState("normal");
+				(lastButtomSelected as Group).postLayoutTransformOffsets.scaleX = 1.0;
+				(lastButtomSelected as Group).postLayoutTransformOffsets.scaleY = 1.0;
+				(lastButtomSelected as Group).postLayoutTransformOffsets.x = 0;
+				
+				lastIdButtonSelected = null;
+			}
+			
+			protected function mostrarModificar_effectEndHandler(event:EffectEvent):void
+			{
+				grpContenidoModificar.percentWidth = 100;
+				grpTodosModificar.percentWidth  = 100;
+				grpContenidoModificar.visible = true;
+			}
+			
+			//OCULTAR GRP MODIFICAR
+			
+			protected function ocultarModificar_effectStartHandler(event:EffectEvent):void
+			{
+				grpContenidoModificar.visible = false;
+			}
+			
+			protected function ocultarModificar_effectEndHandler(event:EffectEvent):void
+			{
+				grpContenidoModificar.percentWidth = 100;
+				grpTodosModificar.height = 0;
+				grpTodosModificar.percentWidth = 100;
+			}
+			
+			[Bindable]
+			private var _contacto:Contacto; 
+			protected function btnModificar_clickHandler(event:MouseEvent):void
+			{
+				//dispatchEvent(new Event("probandoQueSuba",true,false));
+				var modificar:EventoCatClientesContactos = new EventoCatClientesContactos(EventoCatClientesContactos.MODIFICAR_CONTACTO_VISTA_CLIENTE);
+				modificar.contacto = _contacto;
+				modificar.contacto.tipo = "Clientes";
+				
+				modificar.contacto.departamento = txtDepto.text.toUpperCase();
+				modificar.contacto.EMail = txtEmail.text;
+				modificar.contacto.fax = txtFax.text.toUpperCase();
+				modificar.contacto.titulo = txtTitulo.text.toUpperCase();
+				modificar.contacto.nombre = txtNombre.text.toUpperCase();
+				modificar.contacto.puesto = txtPuesto.text.toUpperCase();
+				modificar.contacto.telefono = txtTel.text.toUpperCase();
+				modificar.contacto.telefonoN = txtTel2.text.toUpperCase();
+				modificar.contacto.dificultad = cmbDificultad.selectedItem.numero;
+				modificar.contacto.mantenimiento = cmbMantenimiento.selectedItem.numero;
+				modificar.contacto.extension1 = txtExt1.text.toUpperCase();
+				modificar.contacto.extension2 = txtExt2.text.toUpperCase();
+				modificar.contacto.habilitado = checkBoxHabitar.selected;
+				
+				dispatchEvent(modificar);
+			}
+			
+			protected function btnAgregar_clickHandler(event:MouseEvent):void
+			{
+				var evtAgrega:EventoCatClientesContactos = new EventoCatClientesContactos(EventoCatClientesContactos.AGREGAR_CONTACTO_VISTA_CLIENTE);
+				
+				evtAgrega.contacto = new Contacto();
+				evtAgrega.contacto.habilitado = true;
+				evtAgrega.contacto.tipo = 'Clientes';
+				evtAgrega.contacto.idContacto = 0;
+				evtAgrega.contacto.idEmpresa = 0;
+				
+				if( txtNombre.text == '' ){
+					alertaSingleton.show( 'Debe establecer el nombre del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				}
+				if( txtTitulo.text == ''){
+					alertaSingleton.show( 'Debe establecer el título del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				}
+				if( txtPuesto.text == ''){
+					alertaSingleton.show( 'Debe establecer el puesto del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				}
+				if( txtDepto.text == ''){
+					alertaSingleton.show( 'Debe establecer el departamento del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				}
+				if( txtTel.text == ''){
+					alertaSingleton.show( 'Debe establecer el t1 del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				}
+				if( txtEmail.text == ''){
+					alertaSingleton.show( 'Debe establecer el e-Mail del contacto.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+					return;
+				} 
+				
+				evtAgrega.contacto.nombre = txtNombre.text.toUpperCase();
+				evtAgrega.contacto.titulo = txtTitulo.text.toUpperCase();
+				evtAgrega.contacto.departamento = txtDepto.text.toUpperCase();
+				evtAgrega.contacto.dificultad = cmbDificultad.selectedItem.numero;
+				evtAgrega.contacto.mantenimiento = cmbMantenimiento.selectedItem.numero;
+				evtAgrega.contacto.EMail = txtEmail.text;
+				evtAgrega.contacto.fax = txtFax.text.toUpperCase();
+				evtAgrega.contacto.puesto = txtPuesto.text.toUpperCase();
+				evtAgrega.contacto.telefono = txtTel.text.toUpperCase();
+				evtAgrega.contacto.telefonoN = txtTel2.text.toUpperCase();
+				evtAgrega.contacto.extension1 = txtExt1.text.toUpperCase();
+				evtAgrega.contacto.extension2 = txtExt2.text.toUpperCase();
+				dispatchEvent(evtAgrega);
+			}
+			
+			protected function interacionConLosTextImputs_focusOutHandler(event:FocusEvent):void
+			{
+				
+				if(event.currentTarget != null){
+					
+					event.stopImmediatePropagation();
+					event.preventDefault();
+					
+					switch(event.currentTarget.id)
+					{
+						case "txtNombre":{txtTitulo.setFocus();break;}
+						case "txtTitulo":{txtPuesto.setFocus();break;}
+						case "txtPuesto":{txtDepto.setFocus();break;}
+						case "txtDepto":{cmbDificultad.setFocus();break;}
+						case "cmbDificultad":{cmbMantenimiento.setFocus();break;}
+						case "cmbMantenimiento":{txtTel.setFocus();break;}
+						case "txtTel":{txtExt1.setFocus();break;}
+						case "txtExt1":{txtTel2.setFocus();break;}
+						case "txtTel2":{txtExt2.setFocus();break;}
+						case "txtExt2":{txtFax.setFocus();break;}
+						case "txtFax":{txtEmail.setFocus();break;}
+						case "txtEmail":{btnModificar.setFocus();break;}
+						case "btnModificar":{txtNombre.setFocus();break;}
+					}
+				}
+			}
+			
+			protected function itemrenderer1_creationCompleteHandler(event:FlexEvent):void
+			{
+				cmbDificultad.dataProvider = _listaDificultad;
+				cmbMantenimiento.dataProvider = _listaMantenimiento;
+				cmbDificultad.selectedIndex = 0;
+				cmbMantenimiento.selectedIndex = 0;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="selected"/>
+	</s:states>
+	
+	<s:layout>
+		<s:VerticalLayout />
+	</s:layout>
+	
+	<s:Group id="grpTodo" width="100%" height="255">
+		<s:layout>
+			<lay:LayoutFilaBottonPanelContactos/>
+		</s:layout>
+	</s:Group>
+	
+	<s:HGroup width="100%" id="grpTodosModificar" height="0" visible="false" showEffect="{mostrarModificar}" hideEffect="{ocultarModificar}">
+		<s:Spacer width="{paddingLeft}"/>
+		<s:SkinnableContainer  id="grpModificar" height="100%" width="780" 
+							   skinClass="skins.skin.contenedores.CatalogoProveedores.ContenedorEditarContactoSkin"> <!--HEIGHT 0, visible false-->
+			
+			<s:Group id="grpContenidoModificar" width="100%" height="340" visible="false"> <!--FIX VISIBLE FALSE-->
+				<s:HGroup width="100%" height="100%" paddingTop="15" gap="3">
+					<spacers:spacerVerticalPqNet/>
+					<s:VGroup width="100%" paddingTop="15">
+						<s:HGroup  width="100%" verticalAlign="middle">
+							<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_proveedoresContacto }"/>
+							<label:TextoBankGothic_18_Blanco text="Contacto"/>
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<s:VGroup height="100%" horizontalAlign="right" gap="27" paddingTop="8">
+								<label:TextoBankGothic_16_Blanco text="Nombre: "/>
+								<label:TextoBankGothic_16_Blanco text="Título: "/>
+								<label:TextoBankGothic_16_Blanco text="Puesto: "/>
+								<label:TextoBankGothic_16_Blanco text="Departamento: "/>
+								<label:TextoBankGothic_16_Blanco text="Dificultad: "/>
+								<label:TextoBankGothic_16_Blanco text="Mantenimiento: "/>
+							</s:VGroup>
+							<s:VGroup width="100%" gap="10">
+								<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{ _contacto.nombre }" id="txtNombre" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+								<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{ _contacto.titulo }" id="txtTitulo" maxChars="5" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+								<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{ _contacto.puesto }" id="txtPuesto" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+								<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{ _contacto.departamento }" id="txtDepto" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+								<combobox:comboNegroDefaultPQNet width="100%"  id="cmbDificultad" selectedIndex="{cmbDificultad.seleccionarValor(_contacto.dificultad,'numero')}" fontStyle="normal"
+																 keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase" restrict="0-5" maxChars="1"/>
+								<combobox:comboNegroDefaultPQNet width="100%" id="cmbMantenimiento"  selectedIndex="{cmbMantenimiento.seleccionarValor(_contacto.mantenimiento,'numero')}" fontStyle="normal"
+																 keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)"/>
+							</s:VGroup>
+						</s:HGroup>
+					</s:VGroup>  
+					<spacers:spacerVerticalPqNet/>
+					<s:VGroup height="100%" paddingTop="10" paddingBottom="15">
+						<otros:vDivisionGruesa height="100%" color="#151515"/>
+					</s:VGroup>  
+					<spacers:spacerVerticalPqNet/>
+					<s:Group width="100%" height="100%" >
+						<s:VGroup width="100%" paddingTop="15">
+							<s:HGroup  width="100%" verticalAlign="middle">
+								<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_telefonoblanco }"/>
+								<label:TextoBankGothic_18_Blanco text="Teléfonos y Fax"/>
+							</s:HGroup>
+							<s:HGroup width="100%" >
+								<s:VGroup height="100%" horizontalAlign="right" gap="27" paddingTop="8">
+									<label:TextoBankGothic_16_Blanco text="T1:"/>
+									<label:TextoBankGothic_16_Blanco text="T2:"/>
+									<label:TextoBankGothic_16_Blanco text="Fax:"/>
+									<label:TextoBankGothic_16_Blanco text="e-Mail:"/>
+									<label:TextoBankGothic_16_Blanco text="Habilitar: " id="lblHabilitar"/>
+								</s:VGroup>
+								<s:VGroup width="100%" gap="10">
+									<s:HGroup width="100%">
+										<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{_contacto.telefono}" id="txtTel" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+										<label:TextoBankGothic_16_Blanco text="Ext1:" paddingTop="8"/>
+										<textinput:txtInputNegroDefaultPQNet width="40" fontStyle="normal" text="{_contacto.extension1}" id="txtExt1" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+									</s:HGroup>
+									<s:HGroup width="100%">
+										<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{_contacto.telefonoN}" id="txtTel2" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+										<label:TextoBankGothic_16_Blanco text="Ext2:" paddingTop="8"/>
+										<textinput:txtInputNegroDefaultPQNet width="40" fontStyle="normal" text="{_contacto.extension2}" id="txtExt2" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+									</s:HGroup>
+									<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{_contacto.fax}" id="txtFax" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)" typographicCase="uppercase"/>
+									<textinput:txtInputNegroDefaultPQNet width="100%" fontStyle="normal" text="{ _contacto.EMail }" id="txtEmail"/>
+									<chekbox:checkBoxCuadroBlanco id="checkBoxHabitar" selected="{_contacto.habilitado}"/>
+								</s:VGroup>
+							</s:HGroup>
+							<s:VGroup width="100%" horizontalAlign="right" paddingTop="9">
+								<pqNet:botonPqNetLargo id="btnModificar" label="Modificar" click="btnModificar_clickHandler(event)" chromeColor="0x{ catalogoColores.LABEL_AZUL_TENUE}"/>
+								<pqNet:botonPqNetLargo id="btnAgregar" label="Agregar" click="btnAgregar_clickHandler(event)" chromeColor="0x{ catalogoColores.LABEL_AZUL_TENUE}"/>
+							</s:VGroup>
+						</s:VGroup>
+						<s:Image id="imgOcultarModificar" right="0" top="12" source="{catalogoIconosBotoneras.getInstance().botoncerrar}"/>
+						<!--Area de selección para el botón, fue implementado así por que la imagen por si misma no recibía bien el click en toda su area, aunque se le indicaba al group que 
+						activara los eventos en áreas transparentes, /mouseEnableWhereIsTransparent/-->
+						<s:Graphic buttonMode="true" right="0" top="12" mouseEnabledWhereTransparent="false" toolTip="Cerrar" useHandCursor="true" click="imgCerrar_clickHandler(event)">
+							<s:Rect id="hit1" width="14" height="14" x="0" y="0">
+								<s:fill>
+									<s:SolidColor color="red" alpha="0"/>
+								</s:fill>
+							</s:Rect>
+						</s:Graphic>
+					</s:Group>  
+					<spacers:spacerVerticalPqNet/>
+				</s:HGroup>
+			</s:Group>
+		</s:SkinnableContainer>
+	</s:HGroup>
+</s:ItemRenderer>

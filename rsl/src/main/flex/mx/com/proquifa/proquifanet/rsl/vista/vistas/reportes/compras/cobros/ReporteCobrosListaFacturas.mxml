@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:panelDosRteConcepto="skins.skin.comun.reportes.panelDosRteConcepto.*"
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 xmlns:otros="skins.otros.*"
+		 contentBackgroundColor="#eaeaea"
+		 paddingRight="10" paddingLeft="10" 
+		 width="100%" height="100%" 
+		 gap="0" 
+		 >
+	
+	<!---->
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.cobros.EventoReporteCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var _cliente:String;
+			private var pedidos:ArrayCollection = new ArrayCollection;
+			
+			public function set obtenerFacturasCliente($facturas:ArrayCollection):void{
+				if($facturas == null) {
+					_cliente = "";
+					lstFactura.dataProvider = new ArrayCollection;
+					var evento:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.LIMPIAR_LISTA_CPEDIDOS_COBROS );
+					evento.clasificacion = "listaFacturas";
+					dispatchEvent(evento);
+					return;
+				}
+				
+				pedidos = new ArrayCollection();
+				var arrTemp:ArrayCollection = new ArrayCollection;
+				var orderArray:ArrayCollection = new ArrayCollection; 
+				var ultimoItem:Cobros = new Cobros();
+				ultimoItem.montoDolares = 0;
+				pedidos = ObjectUtil.copy($facturas) as ArrayCollection;
+				$facturas.removeItemAt($facturas.length-1);
+				var _sql:Query;
+				
+				_sql = new Query( $facturas, ["nombreCliente","cpedido","factura","piezas"]);
+				var cpedido:Array = _sql.getPunteros([null, "cpedido", null, null ]);
+				
+				for (var i:int = 0; i < cpedido.length;i++){
+					var punterosXCPedidos:Array = _sql.getPunteros([null ,cpedido[i], null, null]);
+					if (punterosXCPedidos.length>0 && (_sql.universo.getItemAt( punterosXCPedidos[0] ) as Cobros).estado != "ultimo"){
+						var TempFactura:Array = _sql.getPunteros([ null,cpedido[i], null, null],'factura');
+						var cobros:Cobros = new Cobros();
+						cobros =(_sql.universo.getItemAt( punterosXCPedidos[0] ) as Cobros);
+						cobros.montoDolares = _sql.getSumarCampo( "montoDolares", punterosXCPedidos);
+						cobros.piezas =  _sql.getSumarCampo( "piezas", punterosXCPedidos);
+						arrTemp.addItem(cobros);
+						ultimoItem.montoDolares += cobros.montoDolares;
+						ultimoItem.piezas += cobros.piezas;
+					} 
+					
+				}
+				
+				ultimoItem.partidas = arrTemp.length;
+				ultimoItem.estado = 'ultimo';
+				ultimoItem.numFila = arrTemp.length + 1;
+				
+				arrTemp = sortArray(arrTemp,"fechaEsperadaPago");
+				for (var j:int = 0; j < arrTemp.length;){
+					(arrTemp[j] as Cobros).numFila = ++j;
+				}
+				
+				arrTemp = sortArray(arrTemp,"numFila");
+				arrTemp.addItemAt(ultimoItem,arrTemp.length);
+				
+				lstFactura.dataProvider = arrTemp;
+				lstFactura.selectedIndex = 0;
+				lstFactura.selectedItem.nombreCliente == '0' ? _cliente = '' : _cliente = lstFactura.selectedItem.nombreCliente; 
+				
+				//verFactura()
+				lstFactura.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			}
+			
+			private function sortArray(array:ArrayCollection, name:String):ArrayCollection{
+				
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = name;
+				dataSortField.descending = false;
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				array.sort = numericDataSort;
+				array.refresh();
+				return array;
+			}
+			
+			private function verFactura($event:IndexChangeEvent):void{
+				
+				var event:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.OBTENER_PEDIDOS_SIG_VISTA);
+				var pedidosRelacionados:ArrayCollection = new ArrayCollection();
+				if (lstFactura.selectedItem != null){
+					if ( ( lstFactura.dataProvider.length > 1 && lstFactura.selectedItem.estado != 'ultimo' ) || 
+						(lstFactura.dataProvider.length == 1 && lstFactura.selectedItem.estado == 'ultimo') ){
+						for (var i:int = 0; i < pedidos.length; i++ ){
+							if ( (pedidos[i] as Cobros).estado != "ultimo" && lstFactura.selectedItem != null && lstFactura.selectedItem.cpedido == (pedidos[i] as Cobros).cpedido){
+								pedidosRelacionados.addItem(pedidos[i]);
+							}
+						}
+						event.lista = ObjectUtil.copy(pedidosRelacionados) as ArrayCollection;
+						event.cobro = new Cobros();
+						event.cobro.cpedido = lstFactura.selectedItem.cpedido;
+						
+						event.factura = "";
+						event.cpedido = lstFactura.selectedItem.cpedido;
+						dispatchEvent(event);
+					}
+					else{
+						$event.preventDefault();
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<panelDosRteConcepto:HeaderPanelDos label="{this._cliente}"/>
+	
+	<otros:division width="100%" />
+	<s:List id="lstFactura" height="100%" width="100%" borderVisible="false"
+			changing="verFactura(event)" horizontalScrollPolicy="off" contentBackgroundAlpha="0"
+			itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.compras.cobros.itemRenderer.IRendererRepCobrosFacturas" 
+			/>
+	
+</s:VGroup>

@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" paddingBottom="20" paddingTop="20" paddingLeft="30" paddingRight="30"
+		  xmlns:s="library://ns.adobe.com/flex/spark"  
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*" xmlns:otros="skins.otros.*" xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:linkButton="skins.skin.linkButton.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.clearTimeout;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.managers.CursorManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable] private var univerComplementos:ArrayCollection;
+			[Bindable] private var listaGrid:ArrayCollection;
+			
+			///////////////////Guardar Archivos PDF y MXL
+			public function set recibirComplementos( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				
+				univerComplementos = ObjectUtil.copy($datos) as ArrayCollection;
+				var cont:int = 0;
+				for each (var obj:Object in univerComplementos) 
+				{
+					obj.numFila = ++cont;
+					obj.formatoFecha = obj.fecha ? UtilsFecha.formatoFechaDDMMMYYYY( obj.fecha ) : "Pendiente";
+					obj.formatoImporte = obj.monto ? UtilsFormatosNumericos.precisionADosDecimalesConComas(obj.monto ) : "$0.00";
+				}
+				
+				listaGrid = ObjectUtil.copy($datos) as ArrayCollection;
+			}
+			
+			private function compareFunction_Facturas(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.factura,item2.factura); 
+			}
+
+			private function compareFunction_RFC(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.rfc,item2.rfc); 
+			}
+
+			private function compareFunction_Cliente(item1:Object,item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.cliente,item2.cliente); 
+			}
+
+			private function compareFunction_HeaderFecha(item1:Object,item2:Object):int
+			{				
+				return ObjectUtil.dateCompare(item1.fecha,item2.fecha); 
+			}
+			
+			
+			private var time:uint;
+			protected function filtrarComplementos(event:TextOperationEvent):void {
+				clearTimeout(time);
+				time = setTimeout(filtrar, 400);
+			}
+			
+			
+			private var timeCursor:uint;
+			protected function filtrar():void
+			{
+				clearTimeout(timeCursor);
+				CursorManager.setBusyCursor();
+				var arrayTemp:ArrayCollection = new ArrayCollection;
+				
+				if (this.txtBusqueda.text != null && this.txtBusqueda.text != "" ){
+					var textoBusqueda:String = txtBusqueda.text.toLowerCase();
+					for (var i:int = 0; i < univerComplementos.length; i++) 
+					{
+						if (univerComplementos[i].factura.toString().indexOf(textoBusqueda) != -1 ) {
+							arrayTemp.addItem(univerComplementos[i]);
+						}
+						else if (univerComplementos[i].cliente.toLowerCase().indexOf(textoBusqueda) != -1 ) {
+							arrayTemp.addItem(univerComplementos[i]);
+						}
+						else if (univerComplementos[i].rfc.toLowerCase().indexOf(textoBusqueda) != -1 ) {
+							arrayTemp.addItem(univerComplementos[i]);
+						}
+					}
+				} else {
+					arrayTemp = ObjectUtil.copy(univerComplementos) as ArrayCollection;
+				}
+				
+				listaGrid = new ArrayCollection;
+				listaGrid = ObjectUtil.copy(arrayTemp) as ArrayCollection;
+
+				timeCursor = setTimeout( setGrid, 400);
+			}
+			
+			private function setGrid():void {
+				CursorManager.removeBusyCursor();
+			}
+			
+		]]>
+	</fx:Script>
+	<s:Spacer height="10"/>
+	<s:Label text="FACTURACIÓN" width="100%" fontSize="20" fontWeight="bold" />
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="15"/>
+	<s:HGroup width="100%" height="100%">
+		<s:HGroup width="100%" height="100%" visible="false" includeInLayout="false">
+			<s:VGroup width="20%" height="100%" gap="0">
+				
+				<s:List width="100%" height="100%" id="lstEmpresas" itemRenderer="vista.vistas.vistaFacturacion.facturacionIR.FacturacionListaFPorIR" borderVisible="false"
+						horizontalScrollPolicy="off"/>
+			</s:VGroup>
+			<s:Spacer width="10"/>
+			<otros:VDivisionClaro height="100%"/>
+			<s:Spacer width="10"/>
+		</s:HGroup>
+		<s:VGroup width="100%" height="100%" >
+			<s:Spacer height="5"/>
+			<s:TextInput id="txtBusqueda" width="500" maxWidth="500" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtrarComplementos(event)" prompt="Factura, RFC, Cliente" />
+			<s:Spacer height="5"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Spacer height="15"/>
+			
+			<pqNet1:advancedGridPqNet width="100%" height="100%" textAlign="center" variableRowHeight="true" dataProvider="{listaGrid}" 
+									  porcentajesColumnasPq="{ [5,8,13,25,11,11,11,6,6 ] }"  rowHeight="60" id="gridFacturas" >
+				<pqNet1:columns>
+					<mx:AdvancedDataGridColumn headerText="#" sortable="false" resizable="false"  dataField="numFila" />
+					<mx:AdvancedDataGridColumn headerText="Folio" resizable="false" dataField="factura" sortable="true" sortCompareFunction="{compareFunction_Facturas}" />
+					<mx:AdvancedDataGridColumn headerText="RFC" resizable="false" dataField="rfc" sortable="true" sortCompareFunction="{compareFunction_RFC}" />
+					<mx:AdvancedDataGridColumn headerText="Cliente" resizable="false" dataField="cliente" sortable="true" sortCompareFunction="{compareFunction_Cliente}" />
+					<mx:AdvancedDataGridColumn headerText="Fecha" resizable="false" dataField="formatoFecha" sortable="true" sortCompareFunction="{compareFunction_HeaderFecha}" />
+					<mx:AdvancedDataGridColumn headerText="Monto" resizable="false" dataField="formatoImporte"/>
+					<mx:AdvancedDataGridColumn headerText="Estado" resizable="false" dataField="estado" />
+					<mx:AdvancedDataGridColumn headerText="PDF" resizable="false" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoAlertas;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import skins.catalogos.catalogoAlertas;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import skins.catalogos.catalogoAlertas;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+											
+											private	var file:File = new File();
+											
+											private function muestraPDF():void{
+												var fpor:String = data.fpor == 'Proquifa Servicios' ? 'ProquifaServicios' :  data.fpor;
+												var _request:URLRequest = new URLRequest();
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												_request.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + data.factura + '.pdf'; 
+												navigateToURL( _request );
+											}
+											
+											
+											protected function descargar(event:MouseEvent):void
+											{
+												file = new File();
+												file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+												var fpor:String = data.fpor == 'Proquifa Servicios' ? 'ProquifaServicios' :  data.fpor;
+												var request:URLRequest = new URLRequest();
+												var variables:URLLoader = new URLLoader();
+												variables.dataFormat = URLLoaderDataFormat.BINARY;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												request = new URLRequest(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + data.factura + '.pdf');
+												variables.addEventListener(Event.COMPLETE, completeHandler);
+												variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+												try{
+													variables.load(request);
+												} 
+												catch (error:Error){
+													trace("Unable to load URL: " + error);
+												}
+											}
+											private function avisaGuardadoArchivos(event:Event):void{
+												file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+												alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+											}
+											private function completeHandler(event:Event):void{
+												var folio:Number = data.factura;
+												var loader:URLLoader = URLLoader(event.target);
+												var bytes:ByteArray = new ByteArray();
+												try{
+													bytes = (event.target as URLLoader).data;
+												}
+												catch (error:*){
+													alertaSingleton.show("No se encontro archivo");
+												}
+												file.save( bytes,"Folio"+ folio + ".pdf");	
+											}
+											
+											protected function scrollId_mouseWheelHandler(event:MouseEvent):void
+											{
+												
+												if(event.delta == -1)
+												{
+													event.localY = event.localY - 5;
+												}
+												
+											}
+											
+										]]>
+									</fx:Script>
+									<s:HGroup width="100%" horizontalAlign="center">
+										<linkButton:LinkButtonPQNet label="Ver" id="lnk" click="descargar(event)" />
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="XML" resizable="false">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoAlertas;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import skins.catalogos.catalogoAlertas;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+											
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import skins.catalogos.catalogoAlertas;
+											private	var file:File = new File();
+											
+											private function muestraXML():void{
+												var fpor:String = data.fpor == 'Proquifa Servicios' ? 'ProquifaServicios' :  data.fpor;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												var _request:URLRequest = new URLRequest();	
+												_request.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + data.factura + '.xml'; 
+												navigateToURL( _request );
+											}
+											
+											protected function descargarXml(event:MouseEvent):void
+											{
+												file = new File();
+												file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+												var fpor:String = data.fpor == 'Proquifa Servicios' ? 'ProquifaServicios' :  data.fpor;
+												
+												var request:URLRequest = new URLRequest();
+												var variables:URLLoader = new URLLoader();
+												variables.dataFormat = URLLoaderDataFormat.BINARY;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												request = new URLRequest(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + data.factura + '.xml');
+												variables.addEventListener(Event.COMPLETE, completeHandler);
+												variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+												try{
+													variables.load(request);
+												} 
+												catch (error:Error){
+													trace("Unable to load URL: " + error);
+												}
+											}
+											private function avisaGuardadoArchivos(event:Event):void{
+												file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+												alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+											}
+											private function completeHandler(event:Event):void{
+												var folio:Number = data.factura;
+												var loader:URLLoader = URLLoader(event.target);
+												var bytes:ByteArray = new ByteArray();
+												try{
+													bytes = (event.target as URLLoader).data;
+												}
+												catch (error:*){
+													alertaSingleton.show("No se encontro archivo");
+												}
+												file.save( bytes,"Folio"+folio + ".xml");	
+											}
+											
+											protected function scrollId_mouseWheelHandler(event:MouseEvent):void
+											{
+												
+												if(event.delta == -1)
+												{
+													event.localY = event.localY - 5;
+												}
+												
+											}
+										]]>
+									</fx:Script>
+									<s:HGroup width="100%" horizontalAlign="center">
+										<linkButton:LinkButtonPQNet label="Ver" id="lnk" click="descargarXml(event)" />
+										
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</pqNet1:columns>
+			</pqNet1:advancedGridPqNet>
+			
+			
+			<s:Spacer height="10"/>
+			<otros:divisionGruesa width="100%" />
+			<s:Spacer height="10"/>
+		</s:VGroup>
+	</s:HGroup>
+</s:VGroup>

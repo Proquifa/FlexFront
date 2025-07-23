@@ -1,0 +1,548 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.comun
+{
+	import mx.collections.ArrayCollection;
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.compras.Compra")]
+	[Bindable]
+	public dynamic class Compra
+	{
+		private var _proveedor:int;
+		private var _montoTotal:Number;
+		private var _montoTotalDolares:Number;
+		private var _tipoCambio:Number;
+		private var _totalPiezas:int;
+		private var _numeroDeFila:Number;
+		private var _totalPiezasMexico:int;
+		private var _totalCanceladas:int;
+		private var _totalRecibidas:int;
+		private var _totalRecibidasPHS:int;
+		private var _idPCompra:Number;
+		private var _totalPartidas:int;
+		
+		private var _fechaConfirmacion:Date;
+		private var _fecha:Date;    				//fecha de colocaci—n
+		
+		private var _clave:String;
+		private var _estado:String;
+		private var _primerAlmacen:String;
+		private var _tiempoRespuesta:String;
+		private var _empresa:String; 
+		private var _moneda:String;
+		private var _nombreProveedor:String;
+		private var _colocarDesde:String;
+		private var _comprador:String;
+		
+		private var _almacenUE:String;
+		private var _almacenUSA:String;
+		private var _almacenMatriz:String;
+		private var _fabrica:String;
+		private var _abierto_cerrado:String;
+		private var _inTime:String;
+		private var _montoTotalDolares_partidas:Number;
+		private var _totalPiezas_partidas:int;
+		
+		private var _envio:Boolean;
+		private var _iva:Number;
+		private var _medioPago:String;
+		private var _tipoPendiente:String;
+		private var _folioRMT:String;
+		private var _responsable:String;
+		private var _ultimo:Boolean;
+		
+		private var _paisProveedor:String;
+		private var _idEmpresa:String;
+		
+		//VISTA
+		private var _totalOC:int;
+		private var _numFila:int;
+		private var _sortChar:String;
+		private var _publicacion:Boolean;
+		
+		public var propiedades:ArrayCollection = new ArrayCollection([
+			{propiedad:"montoTotal",formato:"moneda",tipo:"Number",newpropiedad:"montoTotalFormato"},
+			{propiedad:"montoTotalDolares",formato:"moneda",tipo:"Number",newpropiedad:"montoTotalDolaresFormato"}
+		]);
+		
+		
+		public function Compra()
+		{			
+		}
+		
+		public function get publicacion():Boolean
+		{
+			return _publicacion;
+		}
+
+		public function set publicacion(value:Boolean):void
+		{
+			_publicacion = value;
+		}
+
+		public function get idPCompra():Number
+		{
+			return _idPCompra;
+		}
+		
+		public function set idPCompra(value:Number):void
+		{
+			_idPCompra = value;
+		}
+		
+		public function get totalRecibidasPHS():int
+		{
+			return _totalRecibidasPHS;
+		}
+		
+		public function set totalRecibidasPHS(value:int):void
+		{
+			_totalRecibidasPHS = value;
+		}
+		
+		public function get totalRecibidas():int
+		{
+			return _totalRecibidas;
+		}
+		
+		public function set totalRecibidas(value:int):void
+		{
+			_totalRecibidas = value;
+		}
+		
+		public function get totalCanceladas():int
+		{
+			return _totalCanceladas;
+		}
+		
+		public function set totalCanceladas(value:int):void
+		{
+			_totalCanceladas = value;
+		}
+		
+		public function get totalPiezasMexico():int
+		{
+			return _totalPiezasMexico;
+		}
+		
+		public function set totalPiezasMexico(value:int):void
+		{
+			_totalPiezasMexico = value;
+		}
+		
+		public function get comprador():String
+		{
+			return _comprador;
+		}
+		
+		public function set comprador(value:String):void
+		{
+			_comprador = value;
+		}
+		
+		public function get colocarDesde():String
+		{
+			return _colocarDesde;
+		}
+		
+		public function set colocarDesde(value:String):void
+		{
+			if(value == ""){
+				_colocarDesde = "ND";
+			}else{
+				_colocarDesde = value;	
+			}
+		}
+		
+		public function get nombreProveedor():String
+		{
+			return _nombreProveedor;
+		}
+		
+		public function set nombreProveedor(value:String):void
+		{
+			if(value == null){
+				value = "ND";
+				_nombreProveedor = value;
+			}else{
+				_nombreProveedor = value;
+			}
+			
+			var array:Array = value.split(" ");
+			for (var i:int = 0; i < array.length; i++) 
+			{
+				if (String(Number(array[i].charAt(0))) != String(array[i].charAt(0)) && array[i].charAt(0) != "")
+				{
+					_sortChar = array[i].charAt(0);
+					break;
+				}
+			}
+			
+		}
+		
+		public function get moneda():String
+		{
+			return _moneda;
+		}
+		
+		public function set moneda(value:String):void
+		{
+			_moneda = value;
+		}
+		
+		public function get empresa():String
+		{
+			return _empresa;
+		}
+		
+		public function set empresa(value:String):void
+		{
+			_empresa = value;
+		}
+		
+		public function get tiempoRespuesta():String
+		{
+			return _tiempoRespuesta;
+		}
+		
+		public function set tiempoRespuesta(value:String):void
+		{
+			_tiempoRespuesta = value;
+		}
+		
+		public function get primerAlmacen():String
+		{
+			return _primerAlmacen;
+		}
+		
+		public function set primerAlmacen(value:String):void
+		{
+			_primerAlmacen = value;
+		}
+		
+		public function get estado():String
+		{
+			return _estado;
+		}
+		
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+		
+		public function get clave():String
+		{
+			return _clave;
+		}
+		
+		public function set clave(value:String):void
+		{
+			_clave = value;
+		}
+		
+		public function get fecha():Date
+		{
+			return _fecha;
+		}
+		
+		public function set fecha(value:Date):void
+		{
+			_fecha = value;
+		}
+		
+		public function get fechaConfirmacion():Date
+		{
+			return _fechaConfirmacion;
+		}
+		
+		public function set fechaConfirmacion(value:Date):void
+		{
+			_fechaConfirmacion = value;
+		}
+		
+		public function get almacenMatriz():String
+		{
+			return _almacenMatriz;
+		}
+		
+		public function set almacenMatriz(value:String):void
+		{
+			if(value == "false"){
+				_almacenMatriz = "NO";
+			}
+			if(value == "true"){
+				_almacenMatriz = "SI";
+			}
+		}
+		
+		public function get almacenUSA():String
+		{
+			return _almacenUSA;
+		}
+		
+		public function set almacenUSA(value:String):void
+		{
+			if(value == "false"){
+				_almacenUSA = "NO";
+			}
+			if(value == "true"){
+				_almacenUSA = "SI";
+			}
+		}
+		
+		public function get almacenUE():String
+		{
+			return _almacenUE;
+		}
+		
+		public function set almacenUE(value:String):void
+		{
+			if(value == "false"){
+				_almacenUE = "NO";
+			}
+			if(value == "true"){
+				_almacenUE = "SI";
+			}
+		}
+		
+		public function get numeroDeFila():Number
+		{
+			return _numeroDeFila;
+		}
+		
+		public function set numeroDeFila(value:Number):void
+		{
+			_numeroDeFila = value;
+		}
+		
+		public function get totalPiezas():int
+		{
+			return _totalPiezas;
+		}
+		
+		public function set totalPiezas(value:int):void
+		{
+			_totalPiezas = value;
+		}
+		
+		public function get tipoCambio():Number
+		{
+			return _tipoCambio;
+		}
+		
+		public function set tipoCambio(value:Number):void
+		{
+			_tipoCambio = value;
+		}
+		
+		public function get montoTotalDolares():Number
+		{
+			return _montoTotalDolares;
+		}
+		
+		public function set montoTotalDolares(value:Number):void
+		{
+			_montoTotalDolares = value;
+		}
+		
+		public function get montoTotal():Number
+		{
+			return _montoTotal;
+		}
+		
+		public function set montoTotal(value:Number):void
+		{
+			_montoTotal = value;
+		}
+		
+		public function get proveedor():int
+		{
+			return _proveedor;
+		}
+		
+		public function set proveedor(value:int):void
+		{
+			_proveedor = value;
+		}
+		
+		public function get totalPartidas():int
+		{
+			return _totalPartidas;
+		}
+		
+		public function set totalPartidas(value:int):void
+		{
+			_totalPartidas = value;
+		}
+		
+		public function get fabrica():String
+		{
+			return _fabrica;
+		}
+		
+		public function set fabrica(value:String):void
+		{
+			_fabrica = value;
+		}
+		
+		public function get abierto_cerrado():String
+		{
+			return _abierto_cerrado;
+		}
+		
+		public function set abierto_cerrado(value:String):void
+		{
+			_abierto_cerrado = value;
+		}
+		
+		public function get inTime():String
+		{
+			return _inTime;
+		}
+		
+		public function set inTime(value:String):void
+		{
+			_inTime = value;
+		}
+		
+		public function get montoTotalDolares_partidas():Number
+		{
+			return _montoTotalDolares_partidas;
+		}
+		
+		public function set montoTotalDolares_partidas(value:Number):void
+		{
+			_montoTotalDolares_partidas = value;
+		}
+		
+		public function get totalPiezas_partidas():int
+		{
+			return _totalPiezas_partidas;
+		}
+		
+		public function set totalPiezas_partidas(value:int):void
+		{
+			_totalPiezas_partidas = value;
+		}
+
+		public function get envio():Boolean
+		{
+			return _envio;
+		}
+
+		public function set envio(value:Boolean):void
+		{
+			_envio = value;
+		}
+
+		public function get iva():Number
+		{
+			return _iva;
+		}
+
+		public function set iva(value:Number):void
+		{
+			_iva = value;
+		}
+
+		public function get medioPago():String
+		{
+			return _medioPago;
+		}
+
+		public function set medioPago(value:String):void
+		{
+			_medioPago = value;
+		}
+
+		public function get tipoPendiente():String
+		{
+			return _tipoPendiente;
+		}
+
+		public function set tipoPendiente(value:String):void
+		{
+			_tipoPendiente = value;
+		}
+
+		public function get folioRMT():String
+		{
+			return _folioRMT;
+		}
+
+		public function set folioRMT(value:String):void
+		{
+			_folioRMT = value;
+		}
+
+		public function get responsable():String
+		{
+			return _responsable;
+		}
+
+		public function set responsable(value:String):void
+		{
+			_responsable = value;
+		}
+
+		public function get totalOC():int
+		{
+			return _totalOC;
+		}
+
+		public function set totalOC(value:int):void
+		{
+			_totalOC = value;
+		}
+
+		public function get numFila():int
+		{
+			return _numFila;
+		}
+
+		public function set numFila(value:int):void
+		{
+			_numFila = value;
+		}
+
+		public function get ultimo():Boolean
+		{
+			return _ultimo;
+		}
+
+		public function set ultimo(value:Boolean):void
+		{
+			_ultimo = value;
+		}
+
+		public function get paisProveedor():String
+		{
+			return _paisProveedor;
+		}
+
+		public function set paisProveedor(value:String):void
+		{
+			_paisProveedor = value;
+		}
+
+		public function get idEmpresa():String
+		{
+			return _idEmpresa;
+		}
+
+		public function set idEmpresa(value:String):void
+		{
+			_idEmpresa = value;
+		}
+
+		public function get sortChar():String
+		{
+			return _sortChar;
+		}
+
+		public function set sortChar(value:String):void
+		{
+			_sortChar = value;
+		}
+
+		
+	}
+}

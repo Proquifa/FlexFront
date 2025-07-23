@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*"
+		  xmlns:grafica="skins.botones.grafica.*" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" xmlns:label="skins.skin.label.*"
+		  width="100%" height="100%"
+		  creationComplete="init()" xmlns:detalle="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.visitaVentas.detalle.*" 
+		  >
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.visitaVentas.VisitasVsVentasToolTip;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			private var yallegaronLasVisitas:Boolean = false;
+			private var visitas:ArrayCollection;
+			private var _event:EventoTableroClientes;
+			private var totalLegend:Number = 0;
+			private const _tamanioMinimo:int = 170;
+			private var llegoPrimero:String = "";
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			[Bindable] public var tamRealFontNombreUsuario:Number;
+			[Bindable] public var Padding:Number;
+			[Bindable] public var unscaledWidthAnt:Number;
+			
+			private function init():void
+			{
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				trace(unscaledWidth);
+				if(unscaledWidth != unscaledWidthAnt){					
+					
+					tamRealFontNombreUsuario = (unscaledWidth / 2005) * 13;
+					tamRealFontNombreUsuario = tamRealFontNombreUsuario < 11 ? 11: tamRealFontNombreUsuario;
+					
+					if(tamRealFontNombreUsuario>13)
+						tamRealFontNombreUsuario = 13;
+					
+					
+					Padding = (unscaledWidth / 2005) * 50;
+					Padding = Padding < 0 ? 0 : Padding;				
+					if(unscaledWidth<815)
+						Padding=10;
+					if(unscaledWidth>2005)
+						Padding=50;
+					
+				}
+				
+				unscaledWidthAnt = unscaledWidth;
+				
+			}
+			
+			[Bindable] var noClientes:int;
+			[Bindable] var noContactos:int;
+			[Bindable] var noVendedores:int;
+			[Bindable] var noTipos:Number;
+			[Bindable] var noTotalVisitas:int;
+			[Bindable] var noTiposLabel:String;
+			[Bindable] var noClientesLabel:String;
+			[Bindable] var noContactosLabel:String;
+			[Bindable] var noVendedoresLabel:String;
+			[Bindable] private var totNombres:Object;
+			[Bindable] private var totContactos:Object;
+			[Bindable] private var totUsuarios:Object;
+			[Bindable] private var totTipos:Object;
+			
+			public function set recibeResumenVisitasTipo($lista:ArrayCollection):void {
+				
+				noClientes = 0;
+				noContactos = 0;
+				noVendedores = 0;
+				noTipos = 0;
+				noTotalVisitas = 0;
+				noClientesLabel = "";
+				noContactosLabel = "";
+				noVendedoresLabel = "";
+				noTiposLabel = "";
+				
+				totNombres = new Object;
+				totContactos = new Object;
+				totUsuarios = new Object;
+				totTipos = new Object;
+				totNombres.totales = 0;
+				totContactos.totales = 0;
+				totUsuarios.totales = 0;
+				totTipos.totales = 0;
+				
+				if($lista == null || $lista.length == 0){
+					$lista = new ArrayCollection;
+				}
+				
+				lstVisitasTipo.dataProvider = $lista;		
+				
+				for(var i:int = 0; i < lstVisitasTipo.dataProvider.length; i++){
+					if(!totNombres.hasOwnProperty(lstVisitasTipo.dataProvider.getItemAt(i).vtNombre.toLowerCase())){
+						totNombres[lstVisitasTipo.dataProvider.getItemAt(i).vtNombre.toLowerCase()] = 0;
+						totNombres.totales += 1;
+					}
+					if(!totContactos.hasOwnProperty(lstVisitasTipo.dataProvider.getItemAt(i).vtContacto.toLowerCase())){
+						totContactos[lstVisitasTipo.dataProvider.getItemAt(i).vtContacto.toLowerCase()] = 0;
+						totContactos.totales += 1;
+					}
+					if(!totUsuarios.hasOwnProperty(lstVisitasTipo.dataProvider.getItemAt(i).vtUsuario.toLowerCase())){
+						totUsuarios[lstVisitasTipo.dataProvider.getItemAt(i).vtUsuario.toLowerCase()] = 0;
+						totUsuarios.totales += 1;
+					}
+					if(!totTipos.hasOwnProperty(lstVisitasTipo.dataProvider.getItemAt(i).vtTipoVisita.toLowerCase())){
+						totTipos[lstVisitasTipo.dataProvider.getItemAt(i).vtTipoVisita.toLowerCase()] = 0;
+						totTipos.totales += 1;
+					}
+				}
+				
+				noClientes = totNombres.totales;
+				noClientesLabel = noClientes == 1 ? 'Cliente' : 'Clientes';
+				
+				noContactos = totContactos.totales;
+				noContactosLabel = noContactos == 1 ? 'Contacto' : 'Contactos';
+				
+				noVendedores = totUsuarios.totales;
+				noVendedoresLabel = noVendedores == 1 ? 'Vendedor' : 'Vendedores';
+				
+				noTipos = totTipos.totales;
+				noTiposLabel = noTipos == 1 ? 'Tipo' : 'Tipos';
+				
+			}
+			
+			private function traeDatos():void
+			{
+				if(_event != null){
+					var eventCAP:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.OBTENER_RESUMEN_VISITAS_TIPO);
+					eventCAP.parametros = new ParametrosBusquedaCliente;
+					eventCAP.parametros = _event.parametros;
+					dispatchEvent(eventCAP);
+				}
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+			}
+			
+			public function set recibeVisitas($lista:ArrayCollection):void {
+				if($lista == null || $lista.length == 0)
+					$lista = new ArrayCollection;
+				
+				visitas = ObjectUtil.copy($lista) as ArrayCollection;
+				yallegaronLasVisitas = true;
+				llegoPrimero = "visita";
+			}
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				if (llegoPrimero == "" ) {
+					visitas = new ArrayCollection;
+					yallegaronLasVisitas = false;
+				}
+				
+				iniciarGrafica();
+				
+				if(stackGeneral.selectedIndex == 0)
+					traeDatos();
+			}
+			
+			private function iniciarGrafica():void {
+				if (yallegaronLasVisitas ) {
+					yallegaronLasVisitas = false;
+					llegoPrimero = "";
+					myChart.dataProvider = llenaGrafica();
+				} else
+					setTimeout(iniciarGrafica, 300);
+			}
+			
+			private function llenaGrafica():ArrayCollection {
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int = 0;
+				totalLegend = 0;
+				
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.noVisitasACRM = 0;
+					objeto.noVisitasASolicitud = 0;
+					objeto.noVisitasAMixta = 0;
+					objeto.noVisitasANP = 0;
+					
+					objeto.noVisitasBCRM = 0;
+					objeto.noVisitasBSolicitud = 0;
+					objeto.noVisitasBMixta = 0;
+					objeto.noVisitasBNP = 0;
+					
+					for( m = 0; m < visitas.length;m++ )
+					{
+						resumen = visitas[m] as ResumenConsulta;
+						if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "CRM" ) {
+							objeto.noVisitasACRM = resumen.totalVisitas;
+						} else if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "PROGRAMADA" ) {
+							objeto.noVisitasASolicitud = resumen.totalVisitas;
+						} else if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "MIXTA" ) {
+							objeto.noVisitasAMixta = resumen.totalVisitas;
+						} else if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "NO PROGRAMADA" ) {
+							objeto.noVisitasANP = resumen.totalVisitas;
+						} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "CRM" ) {
+							objeto.noVisitasBCRM = resumen.totalVisitas;
+						} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "PROGRAMADA" ) {
+							objeto.noVisitasBSolicitud = resumen.totalVisitas;
+						} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "MIXTA" ) {
+							objeto.noVisitasBMixta = resumen.totalVisitas;
+						} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "NO PROGRAMADA" ) {
+							objeto.noVisitasBNP = resumen.totalVisitas;
+						}
+					}
+					objeto.noVisitasACRMLabel = "CRM";
+					objeto.noVisitasASolicitudLabel = "PROGRAMADAS";
+					objeto.noVisitasAMixtaLabel = "MIXTAS";
+					objeto.noVisitasANPLabel = "NP";
+					
+					objeto.noVisitasBCRMLabel = "CRM";
+					objeto.noVisitasBSolicitudLabel = "PROGRAMADAS";
+					objeto.noVisitasBMixtaLabel = "MIXTAS";
+					objeto.noVisitasBNPLabel = "NP";
+					arrReturn.addItem( objeto );
+					
+				} else
+				{
+					while( cuenta < 13)
+					{
+						if(cuenta >= _event.parametros.rangoMinMes && cuenta <= _event.parametros.rangoMaxMes)
+						{
+							objeto = new Object();
+							objeto.numeroMes = cuenta;
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.noVisitasACRM = 0;
+							objeto.noVisitasASolicitud = 0;
+							objeto.noVisitasAMixta = 0;
+							objeto.noVisitasANP = 0;
+							
+							objeto.noVisitasBCRM = 0;
+							objeto.noVisitasBSolicitud = 0;
+							objeto.noVisitasBMixta = 0;
+							objeto.noVisitasBNP = 0;
+							
+							for( m = 0; m < visitas.length;m++ )
+							{
+								resumen = visitas[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{
+									if(resumen.realizada && resumen.tipo){
+										if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "CRM" ) {
+											objeto.noVisitasACRM = resumen.totalVisitas;
+										} else if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "PROGRAMADA" ) {
+											objeto.noVisitasASolicitud = resumen.totalVisitas;
+										} else if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "MIXTA" ) {
+											objeto.noVisitasAMixta = resumen.totalVisitas;
+										} else if (resumen.realizada && resumen.tipo.toLocaleUpperCase() == "NO PROGRAMADA" ) {
+											objeto.noVisitasANP = resumen.totalVisitas;
+										} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "CRM" ) {
+											objeto.noVisitasBCRM = resumen.totalVisitas;
+										} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "PROGRAMADA" ) {
+											objeto.noVisitasBSolicitud = resumen.totalVisitas;
+										} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "MIXTA" ) {
+											objeto.noVisitasBMixta = resumen.totalVisitas;
+										} else if (!resumen.realizada && resumen.tipo.toLocaleUpperCase() == "NO PROGRAMADA" ) {
+											objeto.noVisitasBNP = resumen.totalVisitas;
+										}
+									}else{
+										objeto.noVisitasBSolicitud = resumen.totalVisitas;
+									}
+								}
+							}
+							
+							objeto.noVisitasACRMLabel = "CRM";
+							objeto.noVisitasASolicitudLabel = "PROGRAMADAS";
+							objeto.noVisitasAMixtaLabel = "MIXTAS";
+							objeto.noVisitasANPLabel = "NP";
+							
+							objeto.noVisitasBCRMLabel = "CRM";
+							objeto.noVisitasBSolicitudLabel = "PROGRAMADAS";
+							objeto.noVisitasBMixtaLabel = "MIXTAS";
+							objeto.noVisitasBNPLabel = "NP";
+							
+							arrReturn.addItem( objeto );
+						}
+						cuenta++;
+					}
+				}
+				
+				return arrReturn;
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+				
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '' + $valor;
+				return strRegreso;
+			}
+			
+			public function seleccionaTabla():void
+			{			
+				stackGeneral.selectedChild = vistaTabla;
+			}
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<componentes:TituloChartMaxTablero width="100%" text="VISITAS" />
+	
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all">
+		
+		
+		
+		
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" >
+				
+				<s:VGroup id="vistaSinDetalles" width="100%" height="100%" paddingBottom="0" gap="0">
+					<s:VGroup width="100%" height="100%" paddingBottom="0" horizontalAlign="center">
+						
+						<otros:divisionGruesa width="100%"/>
+						<s:HGroup width="100%" height="100%">
+							
+							<s:VGroup width="100%" height="100%">
+								<s:Spacer height="15"/>
+								<s:HGroup width="100%" height="30" textAlign="left">
+									<s:Spacer width="{Padding}"/>
+									<s:Label paddingLeft="0" text="#" width="5%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold" textAlign="center"/>
+									<s:Label text="Fecha Visita" width="7.5%" styleName="titulo_negro_18" textAlign="center" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Fecha Check In" width="7.5%" textAlign="center" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Nombre Del Cliente" textAlign="center" width="20%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Contacto" textAlign="center" width="15%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="Asunto" textAlign="center" width="15%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold" />	
+									<s:Label text="Vendedor" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold" />	
+									<s:Label text="Tipo" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold" />	
+									<s:Label text="Estado" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold" />	
+								</s:HGroup>
+								<otros:division width="100%" color="#cbcbcb"/>
+								<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+										id="lstVisitasTipo" contentBackgroundAlpha="0" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.render.IR_ListaVisitasTipo" contentBackgroundColor="#ffffff"/>
+								<otros:division width="100%" color="#cbcbcb"/>
+								
+								<s:HGroup width="100%" height="60" verticalAlign="middle">
+									<s:Spacer width="{Padding}"/>
+									<s:Label paddingLeft="{Padding/4}" text="{lstVisitasTipo.dataProvider.length} {lstVisitasTipo.dataProvider.length == 1 ? 'Visita' : 'Visitas'}" width="5%" minWidth="110" styleName="titulo_negro_18" textAlign="left" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Spacer width="7.5%"/>
+									<s:Spacer width="7.5%"/>
+									<s:Label text="{noClientes} {noClientesLabel}" width="20%" textAlign="center" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="{noContactos} {noContactosLabel}" textAlign="center" width="15%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Spacer width="15%"/>
+									<s:Label text="{noVendedores} {noVendedoresLabel}" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Label text="{noTipos} {noTiposLabel}" textAlign="center" width="10%" styleName="titulo_negro_18" fontSize="{tamRealFontNombreUsuario}" fontWeight="bold"/>
+									<s:Spacer width="10%"/>
+								</s:HGroup>
+								<otros:division width="100%"/>
+							</s:VGroup>
+							
+							
+						</s:HGroup>
+					</s:VGroup>
+					
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+						<s:Spacer width="100%" />
+					</s:HGroup>
+				</s:VGroup>
+				<s:VGroup id="vistaConDetalles" width="100%" height="100%" visible="false" includeInLayout="false">
+					<detalle:VistaOperacionReportarVisita id="vistaOperacion"/>
+				</s:VGroup>
+			</s:VGroup>
+		</s:NavigatorContent>
+		
+		
+		
+		
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%" >
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<mx:ColumnChart width="100%" height="100%" id="myChart"
+									showDataTips="true" dataTipMode="single"  
+									paddingRight="{ width > _tamanioMinimo ? 40 : 5}"
+									paddingLeft="{ width > _tamanioMinimo ? 20 : 5}"
+									showDataTipTargets="false"
+									dataTipRenderer="{VisitasVsVentasToolTip}"
+									mouseSensitivity="5" seriesFilters="[]"
+									>
+						<mx:series>
+							<mx:ColumnSet type="stacked" showErrorTip="false">
+								<mx:ColumnSeries id="serieACRM"
+												 yField="noVisitasACRM" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarMoradoRender"
+												 />
+								<mx:ColumnSeries id="serieASolicitud"
+												 yField="noVisitasASolicitud" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarVerdeRender"
+												 />
+								<mx:ColumnSeries id="serieANP"
+												 yField="noVisitasANP" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRojoRender"
+												 />
+								<mx:ColumnSeries id="serieAMixta"
+												 yField="noVisitasAMixta" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarNaranjaRender"
+												 />
+							</mx:ColumnSet>
+							<mx:ColumnSet type="stacked" showErrorTip="false">
+								<mx:ColumnSeries id="serieBCRM"
+												 yField="noVisitasBCRM" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarMoradoRender"
+												 />
+								<mx:ColumnSeries id="serieBSolicitud"
+												 yField="noVisitasBSolicitud" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarVerdeRender"
+												 />
+								<mx:ColumnSeries id="serieBNP"
+												 yField="noVisitasBNP" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRojoRender"
+												 />
+								<mx:ColumnSeries id="serieBMixta"
+												 yField="noVisitasBMixta" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarNaranjaRender"
+												 />
+							</mx:ColumnSet>
+						</mx:series>
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="vMes" categoryField="mes" />
+						</mx:horizontalAxis>
+						
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{vMes}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}"
+											 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+						</mx:horizontalAxisRenderers>
+						
+						<mx:verticalAxis>
+							<mx:LinearAxis id="vCantidad" baseAtZero="true" labelFunction="formateoEje"/> 
+						</mx:verticalAxis>
+						
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{vCantidad}" showLine="false" showLabels="{ width > _tamanioMinimo ? true : false}" tickPlacement="none" styleName="axisVerticalLabels" />
+						</mx:verticalAxisRenderers>
+						
+						<mx:backgroundElements>
+							<mx:GridLines visible="{ width > _tamanioMinimo ? true: false}">
+								<mx:horizontalStroke>
+									<s:SolidColorStroke weight="0.5" color="0xeeeeee" />
+								</mx:horizontalStroke>
+							</mx:GridLines>
+						</mx:backgroundElements>
+					</mx:ColumnChart>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()"/>
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

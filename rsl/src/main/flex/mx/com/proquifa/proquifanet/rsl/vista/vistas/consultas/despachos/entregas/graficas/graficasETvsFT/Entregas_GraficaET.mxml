@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:graficas="skins.skin.graficas.*" 
+		 width="100%" height="100%" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			public function set recibeDatapProvider( $datos:ArrayCollection ):void
+			{
+				var universo:ArrayCollection = new ArrayCollection();
+				universo = ObjectUtil.copy( $datos ) as ArrayCollection;				
+				var universoParaClientes:ArrayCollection = new ArrayCollection();
+				var arregloResumenConsulta:ArrayCollection = new ArrayCollection();
+				var resumenConsulta:ResumenConsulta = new ResumenConsulta();
+				var seAgrego:Boolean;
+				
+				//se agrupa todo el universo por cliente
+				for( var m:int = 0; m < universo.length; m++ )
+				{
+					if(universoParaClientes.length == 0 )
+					{ 
+						universoParaClientes.addItem( universo[m] );
+					}
+					else
+					{
+						seAgrego = false;
+						for( var x:int = 0; x < universoParaClientes.length; x++ )
+						{
+							if (( universoParaClientes[x] as Factura ).rutaRelacionada.tiempoRealizacion == 'FT')
+							{
+								if( ( universoParaClientes[x] as Factura ).nombre_Cliente == ( universo[m] as Factura ).nombre_Cliente )
+								{
+									seAgrego = true;
+									x = universoParaClientes.length;
+								}
+							}
+						}
+						if( !seAgrego )
+						{
+							universoParaClientes.addItem( universo[m] );
+						}
+					}
+				}
+				//se generan los datos para la myChart
+				
+				for( var i:int = 0; i < $datos.length; i++)
+				{
+					var currentItem:Factura = $datos[i] as Factura;
+					if (currentItem.rutaRelacionada.tiempoRealizacion == 'ET')
+					{
+						( $datos[i] as Factura).numFila = i+1;
+						resumenConsulta = new ResumenConsulta();
+						resumenConsulta.etiqueta = currentItem.rutaRelacionada.tiempoRealizacion;
+						resumenConsulta.total = currentItem.montoFacturaDLS;
+						resumenConsulta.totalEntregas = 1;
+						resumenConsulta.partidas = currentItem.rutaRelacionada.numeroPartidasRuta;
+						resumenConsulta.piezasTotal = currentItem.numeroPiezasPedidoRelacionado;
+						if( arregloResumenConsulta.length == 0 )
+						{
+							arregloResumenConsulta.addItem( resumenConsulta );
+						}
+						else
+						{
+							seAgrego = false;
+							for( var n:int = 0; n < arregloResumenConsulta.length; n++ )
+							{
+								if( (arregloResumenConsulta[n] as ResumenConsulta).etiqueta ==  currentItem.rutaRelacionada.tiempoRealizacion )
+								{
+									(arregloResumenConsulta[n] as ResumenConsulta).total = (arregloResumenConsulta[n] as ResumenConsulta).total + resumenConsulta.total;
+									//solo se suman las cantidades necesarias//(arregloResumenConsulta[n] as ResumenConsulta).clientes = (arregloResumenConsulta[n] as ResumenConsulta).clientes + resumenConsulta.clientes;
+									(arregloResumenConsulta[n] as ResumenConsulta).totalEntregas = (arregloResumenConsulta[n] as ResumenConsulta).totalEntregas + resumenConsulta.totalEntregas;
+									(arregloResumenConsulta[n] as ResumenConsulta).partidas = (arregloResumenConsulta[n] as ResumenConsulta).partidas + resumenConsulta.partidas;
+									(arregloResumenConsulta[n] as ResumenConsulta).piezasTotal = (arregloResumenConsulta[n] as ResumenConsulta).piezasTotal + resumenConsulta.piezasTotal;
+									seAgrego = true;
+									n = arregloResumenConsulta.length;
+								}
+							}
+							if( !seAgrego )
+							{
+								arregloResumenConsulta.addItem( resumenConsulta );
+							}
+						}
+					}
+					
+				}
+				//se recorre el arreglo filtrado para la myChart y se agrega el total de cientes
+				for( var r:int = 0; r < arregloResumenConsulta.length; r++ )
+				{
+					for( var rr:int = 0; rr < universoParaClientes.length; rr++ )
+					{
+						if( (arregloResumenConsulta[r] as ResumenConsulta ).etiqueta == ( universoParaClientes[rr] as Factura).rutaRelacionada.tiempoRealizacion )
+						{
+							(arregloResumenConsulta[r] as ResumenConsulta ).clientes = (arregloResumenConsulta[r] as ResumenConsulta ).clientes + 1;
+						}
+					}
+				}
+				grafica.dataProvider = grafica.aplicarFormatoConsultaEntregas( arregloResumenConsulta,'ET VS FT' );
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="grafica" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesVS field="total"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="ET" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>
+

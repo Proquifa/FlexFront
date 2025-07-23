@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:graficas2="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.graficaPie.*" 
+		  xmlns:graficas="vista.vistas.vistaFacturar.graficas.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" 
+		  paddingTop="30" paddingLeft="25"
+		  paddingRight="25" paddingBottom="20"
+		  creationComplete="init()" 
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import vista.eventos.EventoNotaCredito;
+			
+			
+			private var clickeado:String = "";
+			[Bindable] private var _listaBotones:ArrayCollection;
+			[Bindable] private var _datosGrafica:ArrayCollection = new ArrayCollection([
+				{estado:"En Tiempo", Monto: 2 , EtiquetaMonto: ""},
+				{estado:"Fuera de Tiempo", Monto: 4, EtiquetaMonto: "" }				        
+			]);
+			
+			[Bindable] private var _datosGraficaEmpresa:ArrayCollection;
+			[Bindable] private var _datosGraficaMontos:ArrayCollection;
+			[Bindable] private var _datosGraficaCancelados:ArrayCollection;
+			
+			private function init():void{
+				_datosGraficaEmpresa = new ArrayCollection();
+				_datosGraficaCancelados = new ArrayCollection();
+				_datosGraficaMontos = new ArrayCollection();
+				
+				addEventListener(EventoNotaCredito.SELECCIONA_BOTON, escuchar);
+				var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CONSULTA_FOLIOS );
+				dispatchEvent( evt );
+				var numeroMes:int = (new Date).getMonth()
+				this.lblMes.text = UtilsFecha.regresaNombreMes( numeroMes );
+			}
+			
+			public function set obtenFolios( $datos:ArrayCollection ):void{
+				if( $datos == null ){ 
+					return; 
+				}
+				this.lstFolios.dataProvider = new ArrayCollection();
+				var _listaEmpresasFacturacionHabilitadas:ArrayCollection = new ArrayCollection();
+				for( var i:int = 0; i < $datos.length ; i++){
+					( $datos[i] as Empresa).numFila = i + 1;
+					if( ($datos[i] as Empresa).facturacionHabilitada ){
+						_listaEmpresasFacturacionHabilitadas.addItem( $datos[i] );
+					}
+				}
+				this.lstFolios.dataProvider =  ObjectUtil.copy( _listaEmpresasFacturacionHabilitadas ) as ArrayCollection;
+				_listaBotones = new ArrayCollection();
+				_listaBotones =  ObjectUtil.copy( $datos ) as ArrayCollection;
+				generaEmpresas();
+				_datosGraficaEmpresa = new ArrayCollection();
+				_datosGraficaCancelados = new ArrayCollection();
+				_datosGraficaMontos = new ArrayCollection();
+				for( var gi:int = 0; gi < _listaEmpresasFacturacionHabilitadas.length; gi++ ){
+					var itemResumenConsulta:ResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).alias;
+					itemResumenConsulta.totalFolios = ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).foliosUsadosMes;
+					_datosGraficaEmpresa.addItem( itemResumenConsulta );
+					if( !isNaN(  ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).totMontoMes ) ){
+						itemResumenConsulta = new ResumenConsulta();
+						itemResumenConsulta.etiqueta = ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).alias;
+						itemResumenConsulta.total =  (_listaEmpresasFacturacionHabilitadas[gi] as Empresa).totMontoMes;
+						_datosGraficaMontos.addItem( itemResumenConsulta );
+					}
+					if( !isNaN( ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).totCanceladasMes) ){
+						itemResumenConsulta = new ResumenConsulta();
+						itemResumenConsulta.etiqueta = ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).alias;
+						itemResumenConsulta.totalCancelaciones = ( _listaEmpresasFacturacionHabilitadas[gi] as Empresa).totCanceladasMes;
+						_datosGraficaCancelados.addItem( itemResumenConsulta );
+					}
+				}  
+			}
+			
+			protected function escuchar( $evt:EventoNotaCredito ):void{
+				for(var i:int = 0; i < _listaBotones.length; i++ ){
+					_listaBotones[i].presionado = false;
+					if( $evt.idBtonSeleccionado ==  (_listaBotones[i] as Empresa).numFila ){
+						(_listaBotones[i] as Empresa).presionado = true;
+						var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CAMBIA_INDEX_FACTURISTA );
+						evt.indexSeleccionado = 1;
+						evt.empresaQueFactura = _listaBotones[i];
+						dispatchEvent( evt );
+						var $evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CONSULTA_CONCEPTOS_FACTURA );
+						$evt.indexSeleccionado = (_listaBotones[i] as Empresa).idEmpresa;
+						dispatchEvent( $evt );
+					}  
+				}  
+				generaEmpresas();
+			}
+			
+			private function generaEmpresas():void{
+				contenedorRFCsEmpresa.removeAllElements();
+				var $contador:int = 0; 
+				var $arregloTemp:ArrayCollection = new ArrayCollection();
+				for( var i:int = 0; i < _listaBotones.length; i++ ){
+					$arregloTemp.addItem(  _listaBotones[i] );
+					$contador++;
+					//evalua si la longitud es de dos
+					if( $arregloTemp.length == 2 ){
+						//agrega componente
+						var a:ComponenteEmpresaNotaCredito = new ComponenteEmpresaNotaCredito();
+						this.contenedorRFCsEmpresa.addElement( a );
+						a.creaComponente($arregloTemp);
+						a.id = 'id'+ i.toString();
+						$arregloTemp = new ArrayCollection();
+						$contador = 0;
+						
+					}else if(i == _listaBotones.length - 1) {
+						var b:Number = _listaBotones.length/2;
+						var c:int = _listaBotones.length/2;
+						if( ( b -c ) > 0 ){
+							var d:ComponenteEmpresaNotaCredito = new ComponenteEmpresaNotaCredito();
+							this.contenedorRFCsEmpresa.addElement( d );
+							d.creaComponente($arregloTemp);
+						}	
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<label:labelSubtitulo text="ELABORAR NOTA DE CRÉDITO"/>
+	<s:Spacer height="15"/>
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="15"/>
+	<s:VGroup width="100%" height="100%">
+		<s:HGroup width="100%" height="50%" paddingRight="15" >
+			<s:Scroller  width="50%" height="100%">
+				<s:VGroup width="100%" height="100%" id="contenedorRFCsEmpresa"/>     
+			</s:Scroller>
+			<s:Spacer width="15" />
+			<s:VGroup width="50%" height="100%" gap="0">
+				<s:Label fontSize="18" color="white" backgroundColor="0x{catalogoColores.LABEL_CASI_NEGRO}" text="Folios" width="100%" height="55" verticalAlign="middle" paddingLeft="10" id="lblFolios" />
+				<s:List id="lstFolios" width="100%" height="100%" itemRenderer="vista.vistas.vistaFacturar.itemrenderer.FacturistaNotaCreditoIRListaPrincipal" borderVisible="false" horizontalScrollPolicy="off" />
+			</s:VGroup>
+		</s:HGroup>
+		<s:Spacer height="15"/>
+		<otros:divisionGruesa width="100%" />
+		<s:Spacer height="15"/>
+		<s:Label  fontSize="15" fontWeight="bold" textAlign="center" width="100%" text="MES" id="lblMes" paddingLeft="5" />
+		<s:HGroup width="100%" height="50%" >
+			<graficas:GraficasNotaDeCreditoMonto width="100%" height="100%" recibirDataProvider="{ _datosGraficaMontos }" titulo="Monto"/>
+			<graficas:GraficaNotaDeCreditoFolios width="100%" height="100%" recibirDataProvider="{ _datosGraficaEmpresa }" titulo="Folios Utilizados"/>
+			<graficas:GraficaNotaDeCreditoCanceladas width="100%" height="100%" recibirDataProvider="{ _datosGraficaCancelados }" titulo="Cancelaciones"/>
+		</s:HGroup>
+	</s:VGroup>
+</s:VGroup>

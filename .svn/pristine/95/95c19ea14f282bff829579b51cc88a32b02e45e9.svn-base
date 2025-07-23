@@ -1,0 +1,367 @@
+package skins.skin.AdvancedDataGrid
+{
+	import flash.events.Event;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+	import mx.events.ListEvent;
+	import mx.events.ResizeEvent;
+	
+	import spark.components.VGroup;
+	
+	[Event(name="itemClickADG", type="mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid")]
+	
+	public class PQNetAdvanceDataGridFooter extends VGroup
+	{
+		public var dataGrid:PQNetWhitCSS;
+		private var _footer:FooterDeAdvancedDataGridPQNet;
+		private var _tipoStiloGrd:String;
+		private var _mostrarFooter:Boolean=true;
+		private var _styleCabeceraGrid:String;
+		
+		public function PQNetAdvanceDataGridFooter()
+		{
+			//TODO: implement function
+			super(); 
+			dataGrid = new PQNetWhitCSS;
+			dataGrid.percentWidth = 100;
+			dataGrid.addEventListener(ListEvent.ITEM_CLICK,escucharClick,false,0,true);
+			dataGrid.addEventListener("SeHaLeidoLaAlturaParaFooterDelGridAdvancedDataGridPQNet",oirPaddingTopParaFooter,false,0,true);
+			dataGrid.addEventListener("SeLLegoALFinalDelScrollAdvancedDataGridPQNet",oirFinalScroll,false,0,true);
+			dataGrid.addEventListener("NoEsELFinalDelScrollAdvancedDataGridPQNet",oirFinalScroll,false,0,true);
+			//this.addEventListener(ResizeEvent.RESIZE,escucharCuandoCreceODecreceElDataGrid,false,0,true);
+			/*dataGrid.sortExpertMode=true;*/			
+			footer = new FooterDeAdvancedDataGridPQNet;
+			footer.includeInLayout = footer.visible = false;
+			super.gap = 0;
+			this.horizontalAlign = "center";
+			addElement(dataGrid);
+			addElement(footer);
+			backGroundColor = 0xFFFFFF;
+		}
+		[Inspectable (category="EstiloHead", enumeration="headChico")  ]
+		public function get styleCabeceraGrid():String
+		{
+			return _styleCabeceraGrid;
+		}
+
+		public function set styleCabeceraGrid(value:String):void
+		{
+			_styleCabeceraGrid = value;
+			dataGrid.styleCabeceraGrid = _styleCabeceraGrid;
+		}
+
+		public function get mostrarFooter():Boolean
+		{
+			return _mostrarFooter;
+		}
+
+		public function set mostrarFooter(value:Boolean):void
+		{
+			_mostrarFooter = value;
+			if(value){
+				dataGrid.removeEventListener("SeHaLeidoLaAlturaParaFooterDelGridAdvancedDataGridPQNet",oirPaddingTopParaFooter,false);
+				dataGrid.addEventListener("SeHaLeidoLaAlturaParaFooterDelGridAdvancedDataGridPQNet",oirPaddingTopParaFooter,false,0,true);
+			}
+			else
+				dataGrid.removeEventListener("SeHaLeidoLaAlturaParaFooterDelGridAdvancedDataGridPQNet",oirPaddingTopParaFooter,false);
+		}
+
+		public function get tipoStiloGrd():String
+		{
+			return _tipoStiloGrd;
+		}
+
+		public function set tipoStiloGrd(value:String):void
+		{
+			_tipoStiloGrd = value;
+			dataGrid.tipoStiloGrd=_tipoStiloGrd;
+		}
+
+		private function escucharClick(e:ListEvent):void{
+			
+			var ev:EventoDataGrid = new EventoDataGrid("itemClickADG",false,false);
+			ev.itemClick = e;
+			dispatchEvent(ev);
+			e.stopPropagation();
+		}
+		
+		//private function escucharCuandoCreceODecreceElDataGrid(e:Event):void
+		//{
+			//dataGrid.percentHeight = 100;
+			//dataGrid.height= NaN;
+		//}
+		private function oirPaddingTopParaFooter(ev:Event):void
+		{
+			footer.paddingTop = dataGrid.paddinTopFooter;
+			footer.lblNumFilas.setStyle("fontFamily",dataGrid.fontFamily);
+			footer.lblNumFilas.setStyle("fontSize",dataGrid.fontSize);
+			footer.lblNumFilas.setStyle("fontStyle",dataGrid.styleFont);
+			if(footer.lblDetalle)
+			{
+				footer.lblDetalle.setStyle("fontFamily",dataGrid.fontFamily);
+				footer.lblDetalle.setStyle("fontSize",dataGrid.fontSize);
+				footer.lblDetalle.setStyle("fontStyle",dataGrid.styleFont);
+			}
+			footer.lblTotal.setStyle("fontStyle",dataGrid.styleFont);
+			footer.lblTotal.setStyle("fontStyle",dataGrid.styleFont);
+			footer.lblTotal.setStyle("fontStyle",dataGrid.styleFont);
+		}
+		
+		private function oirFinalScroll(ev:Event):void
+		{
+			if(mostrarFooter && ev.type == "SeLLegoALFinalDelScrollAdvancedDataGridPQNet"){				
+				footer.visible = footer.includeInLayout = true;
+				
+			}else if(ev.type == "NoEsELFinalDelScrollAdvancedDataGridPQNet"){
+				footer.visible = footer.includeInLayout = false;
+			}
+		}
+		
+		public function set anchoColumnas(value:Array):void{
+			dataGrid.anchoColumnas = value;
+		}
+		public function get anchoColumnas():Array{
+			return dataGrid.anchoColumnas;
+		}
+		
+		public function get disableSortableColumns():Array
+		{
+			return dataGrid.disableSortableColumns;
+		}
+		/**
+		 * <p>Recibe un Array de indices para las columnas en las cuales se desactivara la capacidad de ordenar sus filas</p>
+		 * La primer columna tiene el indice cero.
+		 * */
+		public function set disableSortableColumns(value:Array):void
+		{
+			dataGrid.disableSortableColumns = value;
+		}
+		
+		public function get disableDragableColumns():Array
+		{
+			return dataGrid.disableDragableColumns;
+		}
+		
+		/**
+		 * <p>Recibe un Array de indices para las columnas en las cuales se desactivara la capacidad de dar click y arrastrarla</p>
+		 * La primer columna tiene el indice cero.
+		 * */
+		public function set disableDragableColumns(value:Array):void
+		{
+			dataGrid.disableDragableColumns = value;
+		}
+		
+		public function get disableResizableColumns():Array
+		{
+			return dataGrid.disableResizableColumns;
+		}
+		/**
+		 * <p>Recibe un Array de indices para las columnas en las cuales se desactivara la capacidad de ser redimensionadas</p>
+		 * La primer columna tiene el indice cero.
+		 * */
+		public function set disableResizableColumns(value:Array):void
+		{
+			dataGrid.disableResizableColumns = value;
+		}
+		
+		public function set enableHeaderWordWrap(value:Array):void
+		{
+			dataGrid.enableHeaderWordWrap = value;
+		}
+		
+		/**
+		 * <p>Recibe un Array de indices para las columnas en las cuales se activará el ajuste de línea en el Header</p>
+		 * La primer columna tiene el indice cero.
+		 * */
+		public function get enableHeaderWordWrap():Array
+		{
+			return dataGrid.enableHeaderWordWrap;	
+		}
+		
+		public function get dataProvider():Object
+		{
+			return dataGrid.dataProvider;
+			
+		}
+		
+		private var rowsPorVista:int;
+		public function set dataProvider(value:Object):void
+		{
+			footer.visible = footer.includeInLayout = false;
+			dataGrid.percentHeight = 100;
+			dataGrid.dataProvider = value;
+			
+			footer.totalFilas = (value as ArrayCollection).length;
+			
+			if(_showSumaDeLaColumna > 0)
+			{
+				if(value != null && value.length > 0)
+				{
+					if(dataGrid.sumasEnLasColumnas && dataGrid.sumasEnLasColumnas.hasOwnProperty(_showSumaDeLaColumna))
+					{
+						footer.lblDetalle.text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(dataGrid.sumasEnLasColumnas[_showSumaDeLaColumna]) +" DLS";
+					}
+				}
+				else
+				{
+						footer.lblDetalle.text = "$ 0 DLS";
+				}
+			}
+			if(_showSumaDelAtributo != null)
+			{
+				if(value != null && value.length > 0)
+				{
+					if(dataGrid.sumasDeLosAtributos && dataGrid.sumasDeLosAtributos.hasOwnProperty(_showSumaDelAtributo))
+					{
+						footer.lblDetalle.text = "$" + UtilsFormatosNumericos.precisionADosDecimalesConComas(dataGrid.sumasDeLosAtributos[_showSumaDelAtributo]) +" DLS";
+					}
+				}
+				else
+				{
+					footer.lblDetalle.text = "$ 0 DLS";
+				}
+			}
+			if (mostrarFooter)
+				configurarFooter();
+		}
+		
+		private var calculateWithCurrentHeight:Number;
+		override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+		{
+			super.updateDisplayList(unscaledWidth,unscaledHeight);
+			
+			rowsPorVista = (unscaledHeight - dataGrid.headerHeight) / dataGrid.rowHeight;
+			dataGrid.rowsPorVistaWhenFooterIsVisible = (unscaledHeight - (dataGrid.headerHeight + footer.measuredHeight))/dataGrid.rowHeight;
+			
+			if(calculateWithCurrentHeight != unscaledHeight)
+			{
+				calculateWithCurrentHeight = unscaledHeight;
+				if (mostrarFooter)
+					configurarFooter();
+			}
+			dataGrid.invalidateDisplayList();
+		}
+		
+		private function configurarFooter():void
+		{
+			dataGrid.isShowEverFooter = false;
+			dataGrid.showFooter = false;
+			
+			if(dataGrid.dataProvider == null || (dataGrid.dataProvider).length == 0)
+			{
+				footer.visible = footer.includeInLayout = true;
+				dataGrid.height = dataGrid.headerHeight + 10;
+			}
+			else if(rowsPorVista > footer.totalFilas )
+			{
+				footer.visible = footer.includeInLayout = true;
+				dataGrid.height = ((dataGrid.rowHeight * footer.totalFilas)+ dataGrid.headerHeight)+10;
+			}
+			else if(rowsPorVista == footer.totalFilas )
+			{
+				dataGrid.showFooter = true;
+				footer.visible = footer.includeInLayout = true;
+				dataGrid.isShowEverFooter = true;
+			}
+			else
+			{
+				footer.visible = footer.includeInLayout = false;
+			}
+		}	
+		
+		public function get columns():Array
+		{
+			return dataGrid.columns;
+		}
+		
+		public function set columns(value:Array):void
+		{
+			dataGrid.columns = value;
+		}
+		
+		public function get tipoDeConsulta():String
+		{
+			return footer.tipoDeConsulta;
+		}
+		public function set tipoDeConsulta(value:String):void
+		{
+			footer.tipoDeConsulta = value;
+		}
+		
+		public function get footer():FooterDeAdvancedDataGridPQNet
+		{
+			return _footer;
+		}
+		
+		public function set footer(value:FooterDeAdvancedDataGridPQNet):void
+		{
+			_footer = value;
+		}
+		
+		/**
+		 * <p>Recibe un Array de indices para las columnas en las se necesita realizar la suma de sus filas</p>
+		 * La primer columna tiene el indice cero.
+		 * */
+		private var _sumableColumns:Array;
+		public function set sumableColumns(value:Array):void
+		{
+			_sumableColumns = value;
+			dataGrid.sumableColumns = _sumableColumns;
+		}
+		public function get sumableComums():Array
+		{
+			return _sumableColumns; 
+		}
+		
+		private var _showSumaDeLaColumna:Number = -1;
+		public function get showSumaDeLaColumna():Number
+		{
+			return _showSumaDeLaColumna;
+		}
+		
+		public function set showSumaDeLaColumna(value:Number):void
+		{
+			_showSumaDeLaColumna = value;
+		}
+		
+		
+		/**
+		 * <p>Recibe un Array de atributos en los cuales se necesita dar un total por la suma de ellos, representados en el grid</p>
+		 * */
+		private var _sumableAtributos:Array;
+		public function set sumableAtributos(value:Array):void
+		{
+			_sumableAtributos = value;
+			dataGrid.sumableAtributos = _sumableAtributos;
+		}
+		public function get sumableAtributos():Array
+		{
+			return _sumableAtributos;
+		}
+		
+		private var _showSumaDelAtributo:String;
+		public function get showSumaDelAtributo():String
+		{
+			return _showSumaDelAtributo;
+		}
+		
+		public function set showSumaDelAtributo(value:String):void
+		{
+			_showSumaDelAtributo = value;
+		}
+		
+		private var _backGroundColor:uint;
+		public function get backGroundColor():uint
+		{
+			return _backGroundColor;
+		}
+
+		public function set backGroundColor(value:uint):void
+		{
+			_backGroundColor = value;
+			dataGrid.backGroundColor = value;
+		}
+	}
+}

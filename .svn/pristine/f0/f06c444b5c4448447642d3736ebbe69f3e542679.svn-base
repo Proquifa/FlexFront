@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%"  
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoTipoProducto:ArrayCollection;
+			private var totalCotizacion:Object;
+			private var total:int = 0;
+			
+			public function set obtenerInfoGrafico($infoGrafica:ArrayCollection):void
+			{
+				if($infoGrafica == null) return;
+				totalCotizacion = new Object;
+				total = 0;
+				calcularTotales($infoGrafica);
+				
+				_infoTipoProducto = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				arrayTemp.sortOn("tipo");
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Tipo
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalTipos:Array = new Array();
+				arrayTotalTipos = arrayTemp.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Esac
+				 * */
+				
+				FormarLosTipos(arrayTotalTipos,arrayTemp,"TIPOS",_infoTipoProducto);
+				
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoTipoProducto,null,"cotizacionesTotal",true,total);
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				arrayTotalTipos = new Array();
+			}
+			
+			private function calcularTotales(listaCotiza:ArrayCollection):void{
+				for each (var partida:PartidaCotizacion in listaCotiza) 
+				{
+					if(!totalCotizacion.hasOwnProperty(partida.cotizacion)){
+						totalCotizacion[partida.cotizacion]=1;
+						total++;
+					}
+				}
+				
+			}
+			
+			private function FormarLosTipos(TotalTipos:Array,tiposInfo:Array,etiqueta:String,infoTipos:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCotizaciones:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysMarca:Object;
+				
+				var currentPartidaCoti:PartidaCotizacion; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalTipos.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalCotizaciones =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCoti = tiposInfo[j] as PartidaCotizacion;
+					while( (TotalTipos[i] as PartidaCotizacion).tipo == currentPartidaCoti.tipo){
+						totalPartidas += currentPartidaCoti.partida;
+						totalPiezas += currentPartidaCoti.cantidad;
+						totalMonto += currentPartidaCoti.precio;
+						
+						if(!keys.hasOwnProperty(currentPartidaCoti.cotizacion)){
+							keys[currentPartidaCoti.cotizacion]= currentPartidaCoti.cotizacion;
+							totalCotizaciones++;
+						}
+						
+						if(!keysMarca.hasOwnProperty(currentPartidaCoti.cliente)){
+							keysMarca[currentPartidaCoti.cliente] = currentPartidaCoti.cliente;
+							totalClientes++;
+						}
+						
+						tiposInfo.shift();
+						if(tiposInfo.length >0)
+							currentPartidaCoti = tiposInfo[j] as PartidaCotizacion;
+						else
+							currentPartidaCoti =new PartidaCotizacion();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalTipos[i] as PartidaCotizacion).tipo.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.cotizacionesTotal = totalCotizaciones;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoTipos.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			
+			private function quitaDuplicados(item:PartidaCotizacion, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.tipo)){
+					return false;
+				}else{
+					keys[item.tipo] = item.tipo;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" gap="0">
+		<s:Spacer width="100%" height="30%"/>
+				<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+							 dataProvider="{null}"
+							 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+							 showDataTips="false"  innerRadius=".5">   
+					<graficas:series>
+						<graficas:pieSeriesPqNet field="piezasTotal"/> <!--piezasTotal-->
+					</graficas:series>
+				</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+			<s:VGroup width="100%" verticalAlign="middle" height="8%">	
+					<componentes:tituloChartTablero width="100%" text="TIPO" textAlign="center" />
+			</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" layout="vertical" width="976" height="535"
+				paddingBottom="10" paddingLeft="20" paddingRight="20" paddingTop="15" x="75  " y="140"
+				showCloseButton="true" close="cierraReferencias()" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark" >
+	<mx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAdministrador;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.controls.Alert;
+			import mx.controls.List;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			private var referencia:Referencia = null;
+			[Bindable]
+			private var file:File = null;
+			[Bindable]
+			public var vieneD:String;		
+			public var listaReferencias:ArrayCollection = new ArrayCollection();	
+			private var pdfByteArray:ByteArray = null;
+			
+			
+			public var Origen:String = "";
+			public var referenciasEliminadas:ArrayCollection = new ArrayCollection();
+			
+			public function iniciaReferencias():void{
+				if( this.listaReferencias == null){						
+				}else{
+					this.dtgReferencias.dataProvider = this.listaReferencias;
+					this.referenciasEliminadas = new ArrayCollection();
+				}
+				/*if( vieneD == "url" ){
+				(this.dtgReferencias.columns[4] as DataGridColumn).visible = false;
+				this.btnAdjunto.enabled = false;
+				this.btnGuardar.visible = false;
+				}*/
+			}
+			
+			private function cierraReferencias():void{			
+				this.dtgReferencias.dataProvider = null;
+				this.listaReferencias = null;
+				this.referencia = null;	
+				var evt:EventoIncidente = new EventoIncidente( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE );
+				dispatchEvent( evt );
+				var evt2:EventoAdministrador = new EventoAdministrador( EventoAdministrador.CIERRA_POP_UP_REFERENCIASAVP );		
+				dispatchEvent( evt2 );	
+			}
+			
+			/**
+			 * En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			 * nativePath o ruta (donde se podra obtener el nombre sel archivo)  y el ByteArray)
+			 */ 
+			private function buscarArchivo():void{
+				file = new File();
+				referencia = new Referencia();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				file.browse();
+			}
+			
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				creaReferencia();
+			}
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 */ 
+			
+			/**
+			 * Metodo para crear una referencia
+			 */ 
+			private function creaReferencia():void{
+				if(this.listaReferencias == null ){
+					this.listaReferencias = new ArrayCollection();
+				}
+				for(var i:int = 0; i < this.listaReferencias.source.length; i++ ){
+					if( this.file.name == (this.listaReferencias.getItemAt( i ) as Referencia).nombreArchivo  ){
+						Alert.show("Este documento ya fue agregado","¡Atención!");
+						return;
+					}
+				}
+				
+				this.referencia = new Referencia;
+				referencia.numFila = ( this.listaReferencias.length ) + 1;
+				referencia.nombreArchivo = this.file.name;
+				referencia.bytes = this.file.data;
+				if(vieneD == "analisisIncidente"){ //viene del Componente Analisisincidente rsl Incidentes
+					                    	referencia.origen = "Gestion";                       
+				                   	  }else{
+					                    	referencia.origen = this.Origen;
+				                   	  }
+				referencia.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado; 
+				referencia.nombreResponsable = DatosGlobales.getInstance()._usuario.usuario;            
+				referencia.idReferencia = 0;
+				//referencia.origen = "Registro";
+				referencia.urlArchivo = file.nativePath;
+				referencia.extensionArchivo = file.extension;
+				if( file.extension.toLowerCase() == "pdf" ){
+					//referencia.tipo = "documento";              	 	  	
+				}else if ( file.extension.toLowerCase() == "jpg" || file.extension.toLowerCase() =="jpeg" || file.extension.toLowerCase() == "png" ){
+					//referencia.tipo = "imagen";
+				} else if( file.extension.toLowerCase() == "mov" ){
+					//referencia.tipo = "video";
+				}else{
+					Alert.show("Formato de archivo no permitido","¡Atención!");
+					referencia = null;
+					return;
+				} 
+				this.listaReferencias.addItem( referencia );
+				this.dtgReferencias.dataProvider = this.listaReferencias;
+				this.file = null;
+			}
+			
+			/**
+			 *  Metodo que elimina uan referefencia o visualiza un archivo
+			 */ 
+			private function gridClickEvent(event:ListEvent):void{	 
+				var bandera:Boolean = new Boolean;	  
+				if (event.columnIndex == 4) {
+					//if( vieneD == "url" || this.dtgReferencias.selectedItem.urlArchivo != 0 ){
+					if(this.dtgReferencias.selectedItem.urlArchivo == null || this.dtgReferencias.selectedItem.urlArchivo == ""){
+						var url:URLRequest = new URLRequest( RutasPdF.GENERAL_RUTA + RutasPdF.INCIDENTE_RUTA + this.dtgReferencias.selectedItem.idReferencia
+							+ "." + this.dtgReferencias.selectedItem.extensionArchivo );
+						navigateToURL( url );	
+					}else{
+						var carpetaLocal:URLRequest = new URLRequest("file://" + this.dtgReferencias.selectedItem.urlArchivo);
+						navigateToURL( carpetaLocal );	
+					}			    		
+					
+				}else if (event.columnIndex == 5 ){
+					if( this.dtgReferencias.selectedItem.nombreResonsable == DatosGlobales.getInstance()._usuario.usuario ){
+						var nombreArchivoGrid:String = this.dtgReferencias.selectedItem.nombreArchivo;
+						for( var i:int = 0; i < listaReferencias.source.length;  i++ ){
+							if( ( this.listaReferencias.getItemAt( i ) as Referencia ).nombreArchivo == nombreArchivoGrid){
+								if(this.listaReferencias[i].folio != null){
+									this.referenciasEliminadas.addItem(this.listaReferencias[i]);
+								}
+								this.listaReferencias.removeItemAt( i );
+							}
+						}
+						for( var y:int = 0; y < listaReferencias.source.length;  y++ ){
+							if( this.listaReferencias.source.length > 0 ) {
+								(this.listaReferencias.getItemAt( y ) as Referencia).numFila = y + 1;
+							}
+						}
+						//this.listaReferencias.refresh();
+						this.dtgReferencias.dataProvider = this.listaReferencias;
+					}else{
+						Alert.show("Usted no es responsable del documento y por lo tanto no es posible eliminar la referencia.","¡ATENCION!");
+					} 
+				}else{
+					
+				}
+			}
+			
+			/**
+			 * Metodo para asignar la lista de referencias al componente RegistroIncidentes
+			 */ 
+			private function asignaReferencias():void{
+				if( this.listaReferencias != null ){
+					/* if(this.listaReferencias.source.length > 0 ){ */
+					if( this.Origen == "Acción"){
+						var	evento:EventoIncidente = new EventoIncidente( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE_ACCIONES);
+						evento.listaDeArchivos = this.listaReferencias;
+						evento.listaDeArchivosEliminados = this.referenciasEliminadas;
+						evento.vieneD = "Aceptar";
+						dispatchEvent( evento );
+					}else if ( this.Origen == "Verificación" ){
+						var	eventoV:EventoIncidente = new EventoIncidente( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE_VERIFICACION);
+						eventoV.listaDeArchivos = this.listaReferencias;
+						eventoV.listaDeArchivosEliminados = this.referenciasEliminadas;
+						eventoV.vieneD = "Aceptar";
+						dispatchEvent( eventoV );						
+					}
+					/* } */
+				}
+				cierraReferencias();
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:VBox width="100%" height="100%">
+		<!--<mx:Label text="Referencias" fontSize="40" fontWeight="bold"/>-->
+		<label:labelTitulo_Otros text="Referencias"/>
+		<!--<mx:Spacer height="3"/>-->
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		
+		<mx:HBox width="100%" horizontalAlign="right">
+			<!--<mx:Button click="buscarArchivo()" width="80" id="btnAdjunto" label="Adjunto"/>-->
+			<s:Button styleName="botonNegroOld" click="buscarArchivo()" width="80" id="btnAdjunto" label="Adjunto"/>
+		</mx:HBox>
+		<mx:DataGrid width="100%" height="100%" id="dtgReferencias" itemClick="gridClickEvent(event)" textAlign="center" >
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" dataField="numFila" width="0.04"/>
+				<mx:DataGridColumn headerText="Nombre de Archivo" dataField="nombreArchivo" width="0.4"/>
+				<mx:DataGridColumn headerText="Origen" dataField="origen" width="0.09"/>
+				<mx:DataGridColumn headerText="Responsable" dataField="nombreResonsable" width="0.3" />  	
+				<mx:DataGridColumn headerStyleName="" width="0.07" >
+					<mx:itemRenderer>
+						<mx:Component>
+							<mx:LinkButton label="Ver" textDecoration="underline" color="#0C4AFC" />
+						</mx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="" width="0.1">
+					<mx:itemRenderer>
+						<mx:Component>
+							<mx:LinkButton label="Eliminar" textDecoration="underline" color="#0C4AFC" enabled="{this.data.origen == this['outerDocument'].Origen}" />
+						</mx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="url" dataField="urlArchivo" visible="false"/>  	
+				<mx:DataGridColumn headerText="Extension" dataField="extensionArchivo" visible="false"/>	
+				<mx:DataGridColumn headerText="IdReferencia" dataField="idReferencia" visible="false"/>	
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:Spacer height="3"/>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<mx:HBox width="100%">
+			<!--<mx:Button label="Cancelar" click="cierraReferencias()" width="80" />-->
+			<s:Button styleName="botonNegroOld" label="Cancelar" click="cierraReferencias()" width="80" />
+			<mx:Spacer width="100%"/>
+			<!--<mx:Button label="Guardar" click="asignaReferencias()" width="80"  id="btnGuardar"/>-->
+			<s:Button styleName="botonNegroOld" label="Guardar" click="asignaReferencias()" width="80"  id="btnGuardar"/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:TitleWindow>

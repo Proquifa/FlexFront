@@ -1,0 +1,1002 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:otros="skins.otros.*"
+		 xmlns:dateField="skins.skin.dateField.*" 
+		 xmlns:boton="skins.skin.botones.boton.*"
+		 width="100%" height="100%"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 creationComplete="group1_creationCompleteHandler(event)" xmlns:itemRender="vista.vistas.reporte.visita.cotizar.itemRender.*" xmlns:cotizar="vista.vistas.reporte.visita.cotizar.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.HallazgosAcciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import vista.evento.reportarVisita.EventoReportarVisita;
+			
+			[Bindable] public static var maxLength:int = 0;
+			[Bindable] private var currentPendiente:HallazgosAcciones;
+			[Bindable]public var marcas:ArrayCollection = new ArrayCollection();
+			[Bindable] public var campanas:ArrayCollection = new ArrayCollection();
+			[Bindable] public var precios:ArrayCollection = new ArrayCollection();
+			[Bindable] public var totalListaProductos:Number = 0;
+			[Bindable]public var familias:ArrayCollection = new ArrayCollection();
+			
+			public var listaTodosLosProductos:ArrayCollection = new ArrayCollection();
+			private var visitaCliente:VisitaCliente;
+		    public var universoDeproductos:ArrayCollection = new ArrayCollection();
+			private var empleadoAct:Empleado = DatosGlobales.getInstance()._usuario;
+			public var empresaActCliente:String = "";
+			public var cliente:Cliente = new Cliente();
+			
+			[Bindable]	
+			public var alfabeto:ArrayCollection = new ArrayCollection([{valor:"Alfabético (A-Z)",llave:1},
+				{valor:"Alfabético (Z-A)",llave:2},
+				{valor:"Precio (Menor-Mayor)",llave:3},
+				{valor:"Precio (Mayor-Menor)",llave:4}]);
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				obtenerEmpresas();
+				listaProductos.addEventListener("abrirPopUpCotizacionReportarVisita",enviarProductoSeleccionado);
+				cmbalfabeto1.addEventListener("cambioComboBlancoFlechaNegra",cambiarOrden);
+				cmbalfabeto2.addEventListener("cambioComboBlancoFlechaNegra",cambiarOrdenListaCo);
+				vistaConfiguracion.addEventListener("regregra_vistaAnterior_reportarVisita_cotazacion",cambiarVistaPrincipal);
+				listaProSeleccionados.addEventListener("eliminarProductoAcotizar",eliminarProductoAcotizar);
+				addEventListener(EventoReportarVisita.ELIMINAR_PRODUCTOS_DEL_CARRITO,eliminarProductoSeleccionadoDeLaLista);
+			}
+			
+			private function obtenerEmpresas():void
+			{
+				var eventEm:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.OBTENER_LISTA_DE_EMPRESAS_PARA_COMBO);
+				dispatchEvent(eventEm);
+			}
+			
+			private function cambiarVistaPrincipal(eve:Event):void
+			{
+			
+				vistaConfiguracion.visible = vistaConfiguracion.includeInLayout = false;
+				vistaPrincipal.visible = vistaPrincipal.includeInLayout = true;
+			}
+			
+			
+			public function iniciaVista(data:ArrayCollection, visita:VisitaCliente):void {
+			
+				radioActividado.visible = radioActividado.includeInLayout = false;
+				radioDesactivado.visible = radioDesactivado.includeInLayout = true;
+				cmbMarcas.enabled = false; cmbMarcas.colorCombo = 0xbfc0c7; cmbMarcas.labelDisplay.setStyle( "color","0xFFFFFF" );cmbMarcas.labelDisplay.setStyle( "fontWeight","bold" ); cmbMarcas.visibleFlechaBlanca = true; cmbMarcas.visibleFlechaNegra = false;
+				cmbCampanas.enabled = false; cmbCampanas.colorCombo = 0xbfc0c7; cmbCampanas.labelDisplay.setStyle( "color","0xFFFFFF" );cmbCampanas.labelDisplay.setStyle( "fontWeight","bold" ); cmbCampanas.visibleFlechaBlanca = true; cmbCampanas.visibleFlechaNegra = false;
+				cmbfamilias.enabled = false; cmbfamilias.colorCombo = 0xbfc0c7; cmbfamilias.labelDisplay.setStyle( "color","0xFFFFFF" );cmbfamilias.labelDisplay.setStyle( "fontWeight","bold" );cmbfamilias.visibleFlechaBlanca = true; cmbfamilias.visibleFlechaNegra = false;
+				cmbPrecios.enabled = false; cmbPrecios.colorCombo = 0xbfc0c7; cmbPrecios.labelDisplay.setStyle( "color","0xFFFFFF" ); cmbPrecios.labelDisplay.setStyle( "fontWeight","bold" );cmbPrecios.visibleFlechaBlanca = true; cmbPrecios.visibleFlechaNegra = false;
+				limpiarSeccionCotizacion();
+				empresaActCliente = visita.cliente.empresaFactura;
+				visitaCliente = visita;
+				cmbMarcas.dataProvider = marcas;
+		
+				
+				
+			}
+			
+			
+			
+			public function limpiarSeccionCotizacion():void
+			{
+				listaProductos.dataProvider = new ArrayCollection();
+				vistaConfiguracion.visible = vistaConfiguracion.includeInLayout = false;
+				vistaPrincipal.visible = vistaPrincipal.includeInLayout = true;
+				listaProSeleccionados.dataProvider = new ArrayCollection();
+				totalListaProductos = 0;
+				vistaConfiguracion.listaCOtizaciones.dataProvider = new ArrayCollection();
+				vistaConfiguracion.listaProductosCOtizados.dataProvider = new ArrayCollection();
+				
+			}
+
+			protected function activarFiltrado(event:MouseEvent,accion:String):void
+			{
+				
+				if(accion == "activar")
+				{
+					radioActividado.visible = radioActividado.includeInLayout = true;
+					radioDesactivado.visible = radioDesactivado.includeInLayout = false;
+					cmbMarcas.enabled = true; cmbMarcas.colorCombo = 0xFFFFFF; cmbMarcas.labelDisplay.setStyle( "color","0x000000" ); cmbMarcas.labelDisplay.setStyle( "fontWeight","normal" ); cmbMarcas.visibleFlechaBlanca = false; cmbMarcas.visibleFlechaNegra = true;
+					cmbCampanas.enabled = true; cmbCampanas.colorCombo = 0xFFFFFF; cmbCampanas.labelDisplay.setStyle( "color","0x000000" ); cmbCampanas.labelDisplay.setStyle( "fontWeight","normal" ); cmbCampanas.visibleFlechaBlanca = false; cmbCampanas.visibleFlechaNegra = true;
+					cmbfamilias.enabled = true; cmbfamilias.colorCombo = 0xFFFFFF; cmbfamilias.labelDisplay.setStyle( "color","0x000000" ); cmbfamilias.labelDisplay.setStyle( "fontWeight","normal" ); cmbfamilias.visibleFlechaBlanca = false; cmbfamilias.visibleFlechaNegra = true;
+					cmbPrecios.enabled = true; cmbPrecios.colorCombo = 0xFFFFFF; cmbPrecios.labelDisplay.setStyle( "color","0x000000" ); cmbPrecios.labelDisplay.setStyle( "fontWeight","normal" );cmbPrecios.visibleFlechaBlanca = false; cmbPrecios.visibleFlechaNegra = true;
+					
+					
+				}
+				else if(accion =="apagar")
+				{
+					radioActividado.visible = radioActividado.includeInLayout = false;
+					radioDesactivado.visible = radioDesactivado.includeInLayout = true;
+					cmbMarcas.enabled = false; cmbMarcas.colorCombo = 0xbfc0c7; cmbMarcas.labelDisplay.setStyle( "color","0xFFFFFF" );cmbMarcas.labelDisplay.setStyle( "fontWeight","bold" ); cmbMarcas.visibleFlechaBlanca = true; cmbMarcas.visibleFlechaNegra = false;
+					cmbCampanas.enabled = false; cmbCampanas.colorCombo = 0xbfc0c7; cmbCampanas.labelDisplay.setStyle( "color","0xFFFFFF" );cmbCampanas.labelDisplay.setStyle( "fontWeight","bold" ); cmbCampanas.visibleFlechaBlanca = true; cmbCampanas.visibleFlechaNegra = false;
+					cmbfamilias.enabled = false; cmbfamilias.colorCombo = 0xbfc0c7; cmbfamilias.labelDisplay.setStyle( "color","0xFFFFFF" );cmbfamilias.labelDisplay.setStyle( "fontWeight","bold" );cmbfamilias.visibleFlechaBlanca = true; cmbfamilias.visibleFlechaNegra = false;
+					cmbPrecios.enabled = false; cmbPrecios.colorCombo = 0xbfc0c7; cmbPrecios.labelDisplay.setStyle( "color","0xFFFFFF" ); cmbPrecios.labelDisplay.setStyle( "fontWeight","bold" );cmbPrecios.visibleFlechaBlanca = true; cmbPrecios.visibleFlechaNegra = false;
+				   
+					cmbCampanas.selectedIndex = 0;
+					cmbfamilias.selectedIndex = 0;
+					cmbMarcas.selectedIndex = 0;
+					cmbPrecios.selectedIndex = 0;
+					aplicarFiltros(null);
+				
+				}
+				
+			}
+			
+			protected function aplicarFiltros(event:MouseEvent):void
+			{
+				
+				var evtFil:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.APLICAR_FILTROS_A_LISTA_PRODUCTOS);
+				
+				if(cmbMarcas.selectedIndex != 0)
+				evtFil.marca = cmbMarcas.dataProvider[cmbMarcas.selectedIndex].valor;
+				else
+					evtFil.marca = null;
+				
+				if(cmbCampanas.selectedIndex != 0)
+					evtFil.idcampana = cmbCampanas.dataProvider[cmbCampanas.selectedIndex].llave;
+				
+				else
+					evtFil.idcampana = null;
+					
+				if(cmbfamilias.selectedIndex != 0)
+				evtFil.familia = cmbfamilias.dataProvider[cmbfamilias.selectedIndex].valor;
+				
+				else
+					evtFil.familia = null;	
+					
+				if(cmbPrecios.selectedIndex != 0)
+				evtFil.costo = cmbPrecios.dataProvider[cmbPrecios.selectedIndex].valor;
+				else
+					evtFil.costo  = null;
+				
+			
+				evtFil.listaProductos = listaTodosLosProductos;
+				
+				dispatchEvent(evtFil);
+				
+			}
+			
+			
+			private function enviarProductoSeleccionado(event:Event):void{
+				var abrirPop:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.ABRIR_POPUP_COTIZACION);
+				abrirPop.producto = listaProductos.selectedItem;
+				abrirPop.idCliente = visitaCliente.cliente.idCliente;
+				abrirPop.vieneDe = "Agregar";
+				dispatchEvent(abrirPop);
+			}
+			
+			
+			public var dataProviderProductosSelect:ArrayCollection = new ArrayCollection();
+			public function agregarProductoAlistaParaCotizar(cantPza:Number,costoPro:Number,indicePrecio:Number):void
+			{
+				var indice:int = listaProductos.selectedIndex;
+				var inicial:ArrayCollection = listaProductos.dataProvider as ArrayCollection;
+				var final:ArrayCollection = listaProSeleccionados.dataProvider as ArrayCollection;
+				var currentCopia:Producto = ObjectUtil.copy(inicial[indice]) as Producto;  
+				
+				currentCopia.cantPiezas = cantPza;
+				currentCopia.costoAux = costoPro;
+				currentCopia.indicePrecio = indicePrecio;
+				currentCopia.totalCostoPiezas = cantPza * currentCopia.costoAux;
+				totalListaProductos = totalListaProductos + currentCopia.totalCostoPiezas;
+				
+				if(final == null)
+					final = new ArrayCollection();
+				
+				inicial.removeItemAt(indice);
+				final.addItem(currentCopia);
+				
+				var arrayTemp:ArrayCollection = UtilsGrid.indexQueryCampoX(listaTodosLosProductos, "idProducto", currentCopia.idProducto.toString());
+				if (arrayTemp.length > 0 )
+				{
+					listaTodosLosProductos.removeItemAt(arrayTemp.getItemAt(0) as int);
+				}
+				listaProductos.dataProvider = inicial;
+				listaProSeleccionados.dataProvider = final;
+				dataProviderProductosSelect = final;
+				universoDeproductos = ObjectUtil.copy(final) as ArrayCollection;
+				actualizarVista();
+				
+			}
+			
+			private function eliminarProductoAcotizar(event:Event):void{
+				var indice:int = listaProSeleccionados.selectedIndex;
+				var final:ArrayCollection = listaProSeleccionados.dataProvider as ArrayCollection;
+				var currentCopia:Producto = ObjectUtil.copy(final[indice]) as Producto;
+				var inicial:ArrayCollection = listaProductos.dataProvider as ArrayCollection;
+				totalListaProductos = totalListaProductos - currentCopia.totalCostoPiezas;
+				currentCopia.asignado = false;
+				
+				inicial.addItem(currentCopia);
+				final.removeItemAt(indice);
+				dataProviderProductosSelect = ObjectUtil.copy(final) as ArrayCollection;
+				universoDeproductos = ObjectUtil.copy(inicial) as ArrayCollection;
+				
+				if(vistaConfiguracion.listaCOtizaciones != null &&vistaConfiguracion.listaCOtizaciones.dataProvider != null && vistaConfiguracion.listaCOtizaciones.dataProvider.length > 0)
+				{
+					vistaConfiguracion.eliminarPartidasDeCotizaciones(currentCopia);
+				}
+				
+				revisarCarrito();
+ 				
+			}
+			
+			public function actualizarVista():void
+			{
+				if(listaProSeleccionados.dataProvider.length > 0)
+				{
+					textoG.visible = textoG.includeInLayout = false;
+					grupoPro.visible = grupoPro.includeInLayout = true;
+					/*listaProSeleccionados.visible = listaProSeleccionados.includeInLayout = true;*/
+				}
+				else {
+					textoG.visible = textoG.includeInLayout = true;
+					grupoPro.visible = grupoPro.includeInLayout = false;
+					/*listaProSeleccionados.visible = listaProSeleccionados.includeInLayout = false;*/
+				}
+			}
+			
+			
+			protected function cmbalfabeto2_creationCompleteHandler(event:FlexEvent):void
+			{
+				cmbalfabeto2.labelDisplay.setStyle( "fontWeight","normal" ); 
+				cmbalfabeto2.selectedIndex = 0;
+				
+			}
+			
+			
+			
+			
+			protected function cmbalfabeto1_creationCompleteHandler(event:FlexEvent):void
+			{
+				cmbalfabeto1.labelDisplay.setStyle( "fontWeight","normal" ); 
+				cmbalfabeto1.selectedIndex = 0;
+				
+			}
+			
+			
+			private var listaOrdenada:ArrayCollection = new ArrayCollection;
+			protected function cambiarOrden(eve:Event):void
+			{
+				listaOrdenada = new ArrayCollection;
+				if(cmbalfabeto1.selectedIndex == 0){
+					listaOrdenada =  Util.sortArray(listaProductos.dataProvider as ArrayCollection,'concepto',false);
+					setTimeout(asignarOrdenamiento,300);
+				}
+				else if(cmbalfabeto1.selectedIndex == 1){
+					listaOrdenada =  Util.sortArray(listaProductos.dataProvider as ArrayCollection,'concepto',true);
+					setTimeout(asignarOrdenamiento,300);
+				}
+				else if(cmbalfabeto1.selectedIndex == 2){
+					listaOrdenada =  Util.sortArray(listaProductos.dataProvider as ArrayCollection,'costo',false);
+					setTimeout(asignarOrdenamiento,300);
+				}
+				else if(cmbalfabeto1.selectedIndex == 3){
+					listaOrdenada =  Util.sortArray(listaProductos.dataProvider as ArrayCollection,'costo',true);
+					setTimeout(asignarOrdenamiento,300);
+				}
+				
+			}
+			
+			private function asignarOrdenamiento():void
+			{
+				listaProductos.dataProvider = listaOrdenada;
+			}
+			
+			private var listaOrdenadaCo:ArrayCollection = new ArrayCollection;
+			protected function cambiarOrdenListaCo(eve:Event):void
+			{
+				listaOrdenada = new ArrayCollection;
+				if(cmbalfabeto2.selectedIndex == 0){
+					listaOrdenadaCo =  Util.sortArray(listaProSeleccionados.dataProvider as ArrayCollection,'concepto',false);
+					setTimeout(asignarOrdenamientoListaCo,300);
+				}
+				else if(cmbalfabeto2.selectedIndex == 1){
+					listaOrdenadaCo =  Util.sortArray(listaProSeleccionados.dataProvider as ArrayCollection,'concepto',true);
+					setTimeout(asignarOrdenamientoListaCo,300);
+				}
+				else if(cmbalfabeto2.selectedIndex == 2){
+					listaOrdenadaCo =  Util.sortArray(listaProSeleccionados.dataProvider as ArrayCollection,'costoAux',false);
+					setTimeout(asignarOrdenamientoListaCo,300);
+				}
+				else if(cmbalfabeto2.selectedIndex == 3){
+					listaOrdenadaCo =  Util.sortArray(listaProSeleccionados.dataProvider as ArrayCollection,'costoAux',true);
+					setTimeout(asignarOrdenamientoListaCo,300);
+				}
+				
+			}
+			
+			private function asignarOrdenamientoListaCo():void
+			{
+				listaProSeleccionados.dataProvider = listaOrdenadaCo;
+			}
+			
+			protected function cambiarDeVista(event:MouseEvent):void
+			{
+			    vistaConfiguracion.empresaAct = empresaActCliente;	
+				if(listaProSeleccionados.dataProvider && listaProSeleccionados.dataProvider.length > 0)
+				{
+					var listaCot: ArrayCollection = new ArrayCollection();
+					listaCot = generarCotizaciones();
+					vistaConfiguracion.llenarListas(listaCot);
+					vistaConfiguracion.visible = vistaConfiguracion.includeInLayout = true;
+					vistaPrincipal.visible = vistaPrincipal.includeInLayout = false;
+				}
+				else
+				{
+					alertaSingleton.show("No hay productos para cotizar");
+				}
+			
+				
+			}
+			
+			private function generarCotizaciones():ArrayCollection
+			{
+				var listaCotizaciones:ArrayCollection = new ArrayCollection();
+				var listaCotizacionesCombo:ArrayCollection = new ArrayCollection();
+				var listaPartidas:ArrayCollection = new ArrayCollection();
+				var listaPublicaciones :ArrayCollection = new ArrayCollection();
+				var listaControlados :ArrayCollection = new ArrayCollection();
+				var lista:ArrayCollection = listaProSeleccionados.dataProvider as ArrayCollection;
+				var sqlTipo:Query = new Query(lista, ['control','familiaString']);
+				var punterosControl:Array = new Array;
+				var punterosFam:Array = new Array;
+				var total:Number = 0;
+				var totalPublicaciones:Number = 0;
+				var totalControlados:Number = 0;
+				
+				punterosControl = sqlTipo.getPunteros(['control']);
+				punterosFam = sqlTipo.getPunteros([null,'familiaString']);
+				
+				
+				
+				for (var i:int = 0; i < lista.length; i++) 
+				{
+					var partida:PartidaCotizacion = new PartidaCotizacion();
+					var p = lista[i] as Producto;
+					
+					if(!p.asignado) /*pregunta si el producto se encuentra en una cotizacion actualmente */
+					{
+						if(p.tipo)
+						{
+							if(p.tipo.toLowerCase() != 'Publicaciones')
+							{
+								if(p.control)
+								{
+									if(p.control.toLowerCase() !='origen' && p.control.toLowerCase() != 'mundiales' && p.control.toLowerCase() != 'nacionales')
+									{
+										partida.producto = lista[i] as Producto;
+										partida.cantidad = lista[i].cantPiezas;
+										partida.idProducto = lista[i].idProducto;
+										partida.fabrica = lista[i].fabrica;
+										partida.concepto = lista[i].concepto;
+										partida.estado = "Cotización";
+										partida.costo = 0;
+										partida.indicePrecio = lista[i].indicePrecio;
+										partida.destino = 'Enviada';
+										partida.monedaAbreviatura = "USD";
+										partida.monedaSimbolo = "$";
+										partida.medioEnvio = "C";
+										partida.presentacion = partida.producto.tipoPresentacion;
+										partida.totalPartidas = lista[i].totalCostoPiezas;
+										total = total + lista[i].totalCostoPiezas;
+										listaPartidas.addItem(partida);
+										lista[i].asignado = true;
+									}
+									else{
+										partida.producto = lista[i] as Producto;
+										partida.cantidad = lista[i].cantPiezas;
+										partida.idProducto = lista[i].idProducto;
+										partida.fabrica = lista[i].fabrica;
+										partida.concepto = lista[i].concepto;
+										partida.estado = "Cotización";
+										partida.costo = 0;
+										partida.indicePrecio = lista[i].indicePrecio;
+										partida.destino = 'Enviada';
+										partida.monedaAbreviatura = "USD";
+										partida.monedaSimbolo = "$";
+										partida.medioEnvio = "C";
+										partida.presentacion = partida.producto.tipoPresentacion;
+										partida.totalPartidas = lista[i].totalCostoPiezas;
+										totalControlados = totalControlados + lista[i].totalCostoPiezas;
+										listaControlados.addItem(partida);
+										lista[i].asignado = true;
+									}
+									
+								}
+								else{
+									partida.producto = lista[i] as Producto;
+									partida.cantidad = lista[i].cantPiezas;
+									partida.idProducto = lista[i].idProducto;
+									partida.fabrica = lista[i].fabrica;
+									partida.concepto = lista[i].concepto;
+									partida.estado = "Cotización";
+									partida.costo = 0;
+									partida.indicePrecio = lista[i].indicePrecio;
+									partida.destino = 'Enviada';
+									partida.monedaAbreviatura = "USD";
+									partida.monedaSimbolo = "$";
+									partida.medioEnvio = "C";
+									partida.presentacion = partida.producto.tipoPresentacion;
+									partida.totalPartidas = lista[i].totalCostoPiezas;
+									totalPublicaciones = totalPublicaciones + lista[i].totalCostoPiezas;
+									listaPublicaciones.addItem(partida);
+									lista[i].asignado = true;
+								}
+							}
+							else if(p.tipo.toLowerCase() == 'Publicaciones')
+							{
+								partida.producto = lista[i] as Producto;
+								partida.cantidad = lista[i].cantPiezas;
+								partida.idProducto = lista[i].idProducto;
+								partida.fabrica = lista[i].fabrica;
+								partida.concepto = lista[i].concepto;
+								partida.estado = "Cotización";
+								partida.costo = 0;
+								partida.indicePrecio = lista[i].indicePrecio;
+								partida.destino = 'Enviada';
+								partida.monedaAbreviatura = "USD";
+								partida.monedaSimbolo = "$";
+								partida.medioEnvio = "C";
+								partida.presentacion = partida.producto.tipoPresentacion;
+								partida.totalPartidas = lista[i].totalCostoPiezas;
+								totalPublicaciones = totalPublicaciones + lista[i].totalCostoPiezas;
+								listaPartidas.addItem(partida);
+								lista[i].asignado = true;
+							}
+						}
+						else{
+							partida.producto = lista[i] as Producto;
+							partida.cantidad = lista[i].cantPiezas;
+							partida.idProducto = lista[i].idProducto;
+							partida.fabrica = lista[i].fabrica;
+							partida.concepto = lista[i].concepto;
+							partida.estado = "Cotización";
+							partida.costo = 0;
+							partida.indicePrecio = lista[i].indicePrecio;
+							partida.destino = 'Enviada';
+							partida.monedaAbreviatura = "USD";
+							partida.monedaSimbolo = "$";
+							partida.medioEnvio = "C";
+							partida.presentacion = partida.producto.tipoPresentacion;
+							partida.totalPartidas = lista[i].totalCostoPiezas;
+							total = total + lista[i].totalCostoPiezas;
+							listaPartidas.addItem(partida);
+							lista[i].asignado = true;
+						}
+					}
+					
+				}
+				if(listaPartidas.length > 0)
+				{
+					var cot:Cotizacion = new Cotizacion;
+					cot.nombreCotizacion = "Productos generales ";
+					cot.tipoCotizacion = "generales";
+					cot.deSistema = true;
+					cot.idCotizacion = 0;
+					cot.cliente = visitaCliente.cliente;
+					cot.contacto = visitaCliente.contacto.nombreCompleto;
+					cot.contactos = visitaCliente.contacto;
+					cot.vendedor = empleadoAct.usuario;
+					cot.moneda = visitaCliente.cliente.monedaFactura;
+					if(visitaCliente.cliente.aceptaParciales)
+						cot.parciales = "SI";
+					else
+						cot.parciales = "NO";
+					cot.cpago = visitaCliente.cliente.condicionesPago;
+					cot.zona = visitaCliente.cliente.zona;
+					cot.estado = 'Cotizada';
+					cot.imoneda = 'Dolares';
+					cot.monedaAbreviatura = "USD";
+					cot.monedaSimbolo = "$";
+					cot.gravaIva = true;
+					cot.idContacto = visitaCliente.contacto.idContacto;
+					cot.infoFacturacion = false;
+					cot.cotizo = empleadoAct.usuario;
+					cot.abierto = true;
+					cot.idVisita = visitaCliente.idVisitaCliente;
+					cot.factura = visitaCliente.cliente.empresaFactura;
+					cot.numPartidas = listaPartidas.length;
+					cot.numCotizacion = 1;
+					cot.totalCosto = total;
+					cot.partidas =  ObjectUtil.copy(listaPartidas) as ArrayCollection;
+					listaCotizaciones.addItem(cot);
+					
+				}
+				
+				/*CREACION DE LA COTIZACION PUBLICACIONES */
+				if(listaPublicaciones.length > 0)
+				{
+					var cot:Cotizacion = new Cotizacion;
+					cot.nombreCotizacion = "Publicaciones";
+					cot.tipoCotizacion = "publicaciones";
+					cot.deSistema = true;
+					cot.idCotizacion = 0;
+					cot.cliente = visitaCliente.cliente;
+					cot.contacto = visitaCliente.contacto.nombreCompleto;
+					cot.contactos = visitaCliente.contacto;
+					cot.vendedor = empleadoAct.usuario;
+					cot.moneda = visitaCliente.cliente.monedaFactura;
+					if(visitaCliente.cliente.aceptaParciales)
+						cot.parciales = "SI";
+					else
+						cot.parciales = "NO";
+					
+					cot.cpago = visitaCliente.cliente.condicionesPago;
+					cot.zona = visitaCliente.cliente.zona;
+					cot.estado = 'Cotizada';
+					cot.imoneda = 'Dolares';
+					cot.monedaAbreviatura = "USD";
+					cot.monedaSimbolo = "$";
+					cot.gravaIva = false;
+					cot.idContacto = visitaCliente.contacto.idContacto;
+					cot.infoFacturacion = false;
+					cot.cotizo = empleadoAct.usuario;
+					cot.abierto = true;
+					cot.idVisita = visitaCliente.idVisitaCliente;
+					cot.numPartidas = listaPublicaciones.length;
+					cot.factura = "GOLOCAER";
+					cot.canceladaDesde = null;
+					cot.confirmo = null;
+					cot.numCotizacion = 2;
+					cot.totalCosto = totalPublicaciones;
+					cot.partidas =  ObjectUtil.copy(listaPublicaciones) as ArrayCollection;
+					listaCotizaciones.addItem(cot);
+				}
+				
+				
+				/*CREACION DE LA COTIZACION DE SUSTANCIAS CONTROLADAS */
+				
+				if(listaControlados.length > 0 )
+				{
+					var cot:Cotizacion = new Cotizacion;
+					cot.nombreCotizacion = "Sustancias Controladas";
+					cot.tipoCotizacion = "controlados";
+					cot.deSistema = true;
+					cot.idCotizacion = 0;
+					cot.cliente = visitaCliente.cliente;
+					cot.contacto = visitaCliente.contacto.nombreCompleto;
+					cot.contactos = visitaCliente.contacto;
+					cot.vendedor = empleadoAct.usuario;
+					cot.moneda = visitaCliente.cliente.monedaFactura;
+					if(visitaCliente.cliente.aceptaParciales)
+						cot.parciales = "SI";
+					else
+						cot.parciales = "NO";
+					
+					cot.cpago = visitaCliente.cliente.condicionesPago;
+					cot.zona = visitaCliente.cliente.zona;
+					cot.estado = 'Cotizada';
+					cot.imoneda = 'Dolares';
+					cot.monedaAbreviatura = "USD";
+					cot.monedaSimbolo = "$";
+					cot.gravaIva = true;
+					cot.idContacto = visitaCliente.contacto.idContacto;
+					cot.infoFacturacion = false;
+					cot.cotizo = empleadoAct.usuario;
+					cot.abierto = true;
+					cot.idVisita = visitaCliente.idVisitaCliente;
+					cot.numPartidas = listaControlados.length;
+					cot.factura = visitaCliente.cliente.empresaFactura;
+					cot.numCotizacion = 3;
+					cot.totalCosto = totalControlados;
+					cot.partidas =  ObjectUtil.copy(listaControlados) as ArrayCollection;
+					listaCotizaciones.addItem(cot);
+				}
+			
+				return listaCotizaciones;
+			}
+			
+			
+			private var timer:uint;
+			
+			protected function txtBuscador_changingHandler(event:Event):void
+			{
+				if(!timer)
+					timer = setTimeout(busqueda_concidencias,500);	
+			}
+			
+			
+			protected function busqueda_concidencias():void
+			{
+				
+				listaProSeleccionados.dataProvider = UtilsGrid.queryCampoXLikeVariosCampos(dataProviderProductosSelect as ArrayCollection,['concepto','fabrica'],txtBuscaPS.text);
+				
+				if(timer)
+					timer = 0;
+				
+			}
+			
+			private function revisarCarrito():void
+			{
+				var existenProGenerales:Boolean;
+				var existenProPublicaciones:Boolean;
+				var existenProControlados:Boolean;
+				var pro:Producto = new Producto();
+				var listaOr:ArrayCollection = new ArrayCollection();
+				for (var i:int = 0; i < listaProSeleccionados.dataProvider.length; i++) 
+				{
+					pro = listaProSeleccionados.dataProvider[i] as Producto;
+					if(pro.tipo)
+					{
+						if(pro.tipo.toLowerCase() != 'Publicaciones')
+						{
+							if(pro.control)
+							{
+								if(pro.control.toLowerCase() !='origen' && pro.control.toLowerCase() != 'mundiales' && pro.control.toLowerCase() != 'nacionales')
+								{
+									existenProGenerales = true;
+								}
+								else{
+								existenProControlados = true;
+								}
+								
+							}
+							else{
+								existenProPublicaciones = true;
+							}
+						}
+						else if(pro.tipo.toLowerCase() == 'Publicaciones')
+						{
+							existenProPublicaciones = true;
+						}
+					}
+					else{
+						existenProGenerales = true;
+						
+					}
+				}
+				
+				
+				if(!existenProGenerales)
+				{
+					for (var j:int = 0; j < vistaConfiguracion.listaCOtizaciones.dataProvider.length; j++) 
+					{
+						if(vistaConfiguracion.listaCOtizaciones.dataProvider[j].tipoCotizacion == "generales")
+						{
+							vistaConfiguracion.listaCOtizaciones.dataProvider.removeItemAt(j--);
+						}
+					}
+					
+				}
+				
+				if(!existenProPublicaciones)
+				{
+					for (var j:int = 0; j < vistaConfiguracion.listaCOtizaciones.dataProvider.length; j++) 
+					{
+						if(vistaConfiguracion.listaCOtizaciones.dataProvider[j].tipoCotizacion == "publicaciones")
+						{
+							vistaConfiguracion.listaCOtizaciones.dataProvider.removeItemAt(j--);
+						}
+					}
+					
+				}
+				
+				if(!existenProControlados)
+				{
+					for (var j:int = 0; j < vistaConfiguracion.listaCOtizaciones.dataProvider.length; j++) 
+					{
+						if(vistaConfiguracion.listaCOtizaciones.dataProvider[j].tipoCotizacion == "controlados")
+						{
+							vistaConfiguracion.listaCOtizaciones.dataProvider.removeItemAt(j--);
+						}
+					}
+					
+				}
+				
+				listaOr = ObjectUtil.copy(vistaConfiguracion.listaCOtizaciones.dataProvider) as ArrayCollection; 
+				
+				if(listaOr.length > 0)
+				{
+					vistaConfiguracion.listaOrdenada =  Util.sortArray(listaOr,'numCotizacion',false);
+					vistaConfiguracion.asinarValoresAlistas();
+				}
+				else{
+					vistaConfiguracion.visible = vistaConfiguracion.includeInLayout = false;
+					vistaPrincipal.visible = vistaPrincipal.includeInLayout = true;
+				}
+				
+				
+			}
+			
+			
+			private function eliminarProductoSeleccionadoDeLaLista(event:EventoReportarVisita):void{
+				
+				var list:ArrayCollection = ObjectUtil.copy(listaProSeleccionados.dataProvider) as ArrayCollection; 
+				var listaProaux:ArrayCollection = ObjectUtil.copy(listaProductos.dataProvider) as ArrayCollection; 
+				var actualizarLista:Boolean = false;
+				var prodAux:Producto = new Producto;
+				for (var i:int = 0; i < event.listaProductos.length; i++) 
+				{
+					var arrayTemp:ArrayCollection = UtilsGrid.indexQueryCampoX(list, "idProducto", event.listaProductos[i].producto.idProducto);
+					if (arrayTemp.length > 0 )
+					{
+						prodAux = list[arrayTemp.getItemAt(0) as int];
+						list.removeItemAt(arrayTemp.getItemAt(0) as int);
+						prodAux.asignado = false;
+						listaTodosLosProductos.addItem(prodAux);
+						listaProaux.addItem(prodAux);
+						totalListaProductos = totalListaProductos - prodAux.totalCostoPiezas;
+						actualizarLista = true;
+					}
+				}
+				if(actualizarLista)
+				{
+					listaProSeleccionados.dataProvider = ObjectUtil.copy(list) as ArrayCollection;
+					dataProviderProductosSelect = ObjectUtil.copy(list) as ArrayCollection;
+				}
+					
+				
+				listaProductos.dataProvider = listaProaux;
+				revisarCarrito();
+			}
+			
+			
+		
+			
+			private var timerPrin:uint;
+			protected function buscarEntodosLosProductos(event:Event):void
+			{
+				if(!timerPrin)
+					timerPrin = setTimeout(busqueda_Concidencias_Principal,500);	
+			}
+			
+			
+			protected function busqueda_Concidencias_Principal():void
+			{
+				
+				listaProductos.dataProvider = UtilsGrid.queryCampoXLikeVariosCampos(universoDeproductos,['concepto','fabrica'],txtBuscador.text);
+				
+				if(timerPrin)
+					timerPrin = 0;
+				
+			}
+			
+			
+			
+			public function actualizaPiezasYcostos(cantPza:Number,idProducto:Number,costoPro:Number,indicePrecio:Number):void
+			{
+				
+				var listaRespaldo:ArrayCollection = ObjectUtil.copy(listaProSeleccionados.dataProvider as ArrayCollection) as ArrayCollection;
+				var arrayTemp:ArrayCollection = UtilsGrid.indexQueryCampoX(listaRespaldo, "idProducto",idProducto.toString());
+				var partidaAux:PartidaCotizacion = vistaConfiguracion.listaProductosCOtizados.selectedItem;
+				var indice:Number = 0;
+				var resTotal:Number = 0;
+				var indexAct:Number = 0;
+				if (arrayTemp.length > 0 )
+				{
+					indice = arrayTemp.getItemAt(0) as int
+					listaRespaldo[indice].cantPiezas = cantPza;
+					listaRespaldo[indice].costoAux = costoPro;
+					totalListaProductos = totalListaProductos - listaRespaldo[indice].totalCostoPiezas;
+					resTotal = listaRespaldo[indice].totalCostoPiezas = cantPza * listaRespaldo[indice].costoAux;
+					totalListaProductos = totalListaProductos + resTotal;
+				}
+				
+				indexAct = vistaConfiguracion.listaCOtizaciones.selectedIndex;
+				listaProSeleccionados.dataProvider = listaRespaldo;
+				dataProviderProductosSelect = listaRespaldo;
+				vistaConfiguracion.listaProductosCOtizados.dataProvider[vistaConfiguracion.listaProductosCOtizados.selectedIndex].cantidad = cantPza;
+				vistaConfiguracion.listaProductosCOtizados.dataProvider[vistaConfiguracion.listaProductosCOtizados.selectedIndex].producto.costoAux = costoPro;
+				vistaConfiguracion.listaProductosCOtizados.dataProvider[vistaConfiguracion.listaProductosCOtizados.selectedIndex].producto.cantPiezas = cantPza;
+				vistaConfiguracion.listaProductosCOtizados.dataProvider[vistaConfiguracion.listaProductosCOtizados.selectedIndex].totalPartidas = resTotal;
+				vistaConfiguracion.listaProductosCOtizados.dataProvider[vistaConfiguracion.listaProductosCOtizados.selectedIndex].producto.totalCostoPiezas = resTotal;
+				vistaConfiguracion.listaProductosCOtizados.dataProvider[vistaConfiguracion.listaProductosCOtizados.selectedIndex].indicePrecio = indicePrecio;  
+				
+				resTotal = 0;
+				vistaConfiguracion.listaCOtizaciones.dataProvider[vistaConfiguracion.listaCOtizaciones.selectedIndex].totalCosto = 0;
+				for (var i:int = 0; i < vistaConfiguracion.listaCOtizaciones.dataProvider[indexAct].partidas.length; i++) 
+				{
+					
+					resTotal = resTotal + vistaConfiguracion.listaCOtizaciones.dataProvider[indexAct].partidas[i].totalPartidas;
+					
+				}
+				
+				vistaConfiguracion.listaCOtizaciones.dataProvider[vistaConfiguracion.listaCOtizaciones.selectedIndex].totalCosto = resTotal
+				vistaConfiguracion.calcularTodosLosTotales();
+			
+				
+			}
+			
+		
+			
+			
+			public function set recibeRepuestaGuardar(res:Number):void{
+				
+				if(res > 0)
+				{
+					alertaSingleton.show("Operación Exitosa");
+				}
+				
+			}
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" padding="1" gap="0" id="vistaPrincipal">
+		
+		<s:VGroup width="70%" height="100%" gap="0" >   
+			
+			<s:VGroup width="100%" height="16%" left="-25" >
+				<s:Group width="100%" height="100%" left="-25" >
+					<s:Rect width="100%" height="100%" left="-25">
+						<s:fill>
+							<s:SolidColor color="#F2F7F7"  />
+						</s:fill>
+					</s:Rect>
+					<s:VGroup width="100%" height="100%" paddingBottom="20" paddingTop="20" fontStyle="normal" >
+						
+						<s:VGroup width="100%" height="100%" paddingRight="20" gap="20" >
+							
+							<s:Label text="Buscar Productos" width="100%" fontSize="24" color="0x008895" fontWeight="bold" />
+							
+							<s:HGroup width="100%" verticalAlign="middle" >
+								
+								<s:TextInput id="txtBuscador"  width="90%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" prompt="Concepto,Familia" change="buscarEntodosLosProductos(event)"/>
+								
+								<s:Spacer width="40" />
+								
+								<s:HGroup width="10" height="10" click="activarFiltrado(event,'activar')" id="radioDesactivado">
+									
+									<s:Ellipse width="10" height="10" >
+										<s:fill>
+											<s:SolidColor color="#808080"  />
+										</s:fill>
+									</s:Ellipse>
+									
+								</s:HGroup>  
+								
+								<s:HGroup width="10" height="10" click="activarFiltrado(event,'apagar')" id="radioActividado" visible="false" includeInLayout="false">
+									
+									<s:Ellipse width="10" height="10" >
+										<s:fill>
+											<s:SolidColor color="#008895"  />
+										</s:fill>
+									</s:Ellipse>
+									
+								</s:HGroup>  
+								
+								
+								<s:Label text="Filtrar Resultados" fontSize="14" color="#808080" fontWeight="bold" />
+								
+							</s:HGroup>  
+							
+							
+							
+							<s:HGroup width="100%" >
+								
+								<s:HGroup width="90%"  >
+									
+									<cmbCat:ComboFlechaNegraDelgada width="25%" height="34" id="cmbMarcas" dataProvider="{marcas}" enabled="false" visibleFlechaBlanca="true" visibleFlechaNegra="false" />
+									<cmbCat:ComboFlechaNegraDelgada width="25%" height="34" id="cmbCampanas" dataProvider="{campanas}" enabled="false" visibleFlechaBlanca="true" visibleFlechaNegra="false"  />
+									<cmbCat:ComboFlechaNegraDelgada width="25%" height="34" id="cmbfamilias" dataProvider="{familias}" enabled="false" visibleFlechaBlanca="true" visibleFlechaNegra="false"  />
+									<cmbCat:ComboFlechaNegraDelgada width="25%" height="34" id="cmbPrecios" dataProvider="{precios}" enabled="false"  visibleFlechaBlanca="true" visibleFlechaNegra="false"  />
+									
+								</s:HGroup>  
+								
+								<s:Spacer width="40" />
+								
+								<s:HGroup width="10" height="10" visible="false" includeInLayout="false">
+									
+								</s:HGroup>  
+								
+								<pqNet:botonPqNetLargo label="APLICAR"  colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" width="135" click="aplicarFiltros(event)" />
+								
+								
+								
+							</s:HGroup>  
+							
+						</s:VGroup>  
+						
+					</s:VGroup>  
+					
+				</s:Group> 
+				
+			</s:VGroup> 
+			
+			<s:HGroup width="100%" height="3%" paddingTop="13"  paddingBottom="10" verticalAlign="middle" paddingRight="18" >
+				
+				<s:HGroup width="70%" height="100%" verticalAlign="middle" top="-18" >
+					<s:Label text="Resultados de Búsqueda ·"  fontSize="21" color="0x008895" fontWeight="bold" />
+					<s:Label text="{listaProductos.dataProvider.length }{listaProductos.dataProvider.length == 1?' Producto Encontrado': ' Productos Encontrados' }"  fontSize="21" color="0x008895" fontWeight="bold" />
+				</s:HGroup>  
+				
+				<s:HGroup width="30%" height="100%" horizontalAlign="right" verticalAlign="middle" >
+					<s:Label text="Ordenar Por:"  fontSize="21" />
+					<cmbCat:ComboFlechaNegraDelgada top="-18" width="140" height="34" id="cmbalfabeto1" dataProvider="{alfabeto}" colorCombo="#FFFFFF" creationComplete="cmbalfabeto1_creationCompleteHandler(event)" colorLetra="#000000" fontWeight="normal" />
+				</s:HGroup>  
+				
+			</s:HGroup>  
+			
+			
+			<s:VGroup width="100%" height="87%" paddingRight="18" >
+			
+					<s:List width="100%" height="100%" id="listaProductos" borderVisible="false" verticalScrollPolicy="on" horizontalScrollPolicy="off" focusColor="#FFFFFF"
+							itemRenderer="vista.vistas.reporte.visita.cotizar.itemRender.IRreportarVisita_listaProductos"/>
+				
+			</s:VGroup>  
+			
+		</s:VGroup>  
+		
+		<otros:divisionDegradadoVertical height="100%" width="2" />
+		
+		
+		<s:Spacer width="25" />
+		
+		
+		
+		<s:VGroup width="30%" height="100%" >
+			<s:Label text="Productos Seleccionados"  fontSize="24" color="0x008895" fontWeight="bold" />
+			<s:Spacer height="20" />
+			<s:TextInput id="txtBuscaPS" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" prompt="Concepto,Marca" change="txtBuscador_changingHandler(event)"/>
+			
+			<s:HGroup width="100%" height="5%" horizontalAlign="right" verticalAlign="middle" >
+				<s:Label text="Ordenar Por:"  fontSize="21" color="0x008895" fontWeight="bold" />
+				<cmbCat:ComboFlechaNegraDelgada width="140" height="34" id="cmbalfabeto2" dataProvider="{alfabeto}" colorCombo="#FFFFFF" creationComplete="cmbalfabeto2_creationCompleteHandler(event)" colorLetra="#000000" fontWeight="normal" />
+			</s:HGroup>  
+			
+			<s:VGroup width="100%" height="90%" id="textoG" verticalAlign="middle">
+				<label:TituloNovecento_18  text="NINGÚN PRODUCTO"  width="100%" textAlign="center" verticalAlign="middle" horizontalCenter="0" color="#c2c3c9" fontSize="30" />
+				<label:TituloNovecento_18  text="SELECCIONADO"  width="100%"  textAlign="center" verticalAlign="middle" horizontalCenter="0" color="#c2c3c9" fontSize="30" />
+			</s:VGroup>
+			<s:Group width="100%" height="90%" left="-22" id="grupoPro" visible="false" includeInLayout="false" >
+				<s:VGroup width="100%" height="100%" left="-22" >
+			<s:List width="100%" height="100%" id="listaProSeleccionados" borderVisible="false" verticalScrollPolicy="on"  horizontalScrollPolicy="off" focusColor="#FFFFFF" 
+					itemRenderer="vista.vistas.reporte.visita.cotizar.itemRender.listaProductosAcotizar"/>
+				</s:VGroup>  
+			</s:Group> 
+			
+			<otros:divicionDegradadaDelgadahorizontal height="1" width="100%"/>
+			<s:HGroup width="100%" height="5%" verticalAlign="middle" >
+				<s:Label  text="{listaProSeleccionados.dataProvider.length}{listaProSeleccionados.dataProvider.length==1?' Producto':' Productos'} "  width="100%"  textAlign="center"  fontWeight="bold" fontSize="18" />
+				<s:Label  text="Total"  width="100%"  textAlign="center"  fontSize="18" fontWeight="bold" />	
+				<s:Label text="${UtilsFormatosNumericos.precisionADosDecimalesConComas(totalListaProductos)}"  width="100%"  textAlign="right"  fontWeight="bold"  fontSize="18" />			
+			</s:HGroup>  
+			
+	
+			<s:VGroup width="100%" height="40" >
+				<boton:BotonDefault width="100%" height="100%" conTexto="true" color="#0C8893" label="COTIZAR" id="btnAplicar"
+									horizontalCenter="0" verticalCenter="0" styleNameLabel="titulo_blanco_Novecento" click="cambiarDeVista(event)"  />
+				
+				
+			</s:VGroup>  
+			
+			
+		</s:VGroup>  
+		
+	
+	</s:HGroup>
+	
+	
+	<s:VGroup width="100%" height="100%" >
+		
+		<cotizar:VistaConfiguracionCotizacion width="100%" height="100%" id="vistaConfiguracion" visible="false" includeInLayout="false" />
+		
+	</s:VGroup>  
+	
+	
+	
+</s:Group>

@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoRecibido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoAbiertoVsCerrado:ArrayCollection;
+			
+			public function set recibirDocumentos($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				_infoAbiertoVsCerrado = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				if($infoGrafica.length >0){
+					
+					/**
+					 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+					 * */
+					
+					var arrayTemp:Array = new Array();
+					arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+					/**
+					 * Se elimina el último elemento del arreglo que trae el conteo de las filas.
+					 * */
+					if(arrayTemp.length>1)
+						arrayTemp.pop();
+					
+					arrayTemp.forEach(setearElEstado);
+					
+					arrayTemp.sortOn("estado");
+					
+					/**
+					 * Se obtiene un array con los estados Abierto/cerrado sin duplicarse, que será el que controlará el for para las sumas.
+					 * */
+					keys = new Object();
+					
+					var arrayTotalEstados:Array = new Array();
+					arrayTotalEstados = arrayTemp.filter(quitaDuplicados);
+					
+					FormarLosEstados(arrayTotalEstados,arrayTemp,_infoAbiertoVsCerrado);
+					
+					if(_infoAbiertoVsCerrado.length == 2){
+						/**
+						 * Se invierte el orden para que los de estado cerrado sean los primeros que lleguen a la gráfica y asigne correctamente 
+						 * los colores, El verde para los Cerrados, y rojo para los Abiertos
+						 * */
+						_infoAbiertoVsCerrado.addItem(ObjectUtil.copy(_infoAbiertoVsCerrado[0]));
+						_infoAbiertoVsCerrado.removeItemAt(0);
+						
+					}else if(_infoAbiertoVsCerrado.length ==1){
+						var itemResumenConsulta:ResumenConsulta;
+						if((_infoAbiertoVsCerrado[0] as ResumenConsulta).etiqueta == 'ABIERTO'){
+							itemResumenConsulta = new ResumenConsulta();
+							itemResumenConsulta.etiqueta = 'CERRADO';
+							itemResumenConsulta.totalClientes = 0;
+							itemResumenConsulta.totalDocumentos = 0;
+							
+							_infoAbiertoVsCerrado.addItemAt(itemResumenConsulta,0);
+						}
+					}
+					
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoAbiertoVsCerrado,null,'totalDocumentos');
+					
+					//Para liberar Memoria
+					arrayTemp = new Array();
+					arrayTotalEstados = new Array();
+					keys = new Object();
+				}
+			}
+			private function setearElEstado(item:DocumentoRecibido, id:uint, docto:Array):void
+			{
+				var temp:String = item.cerradoAbierto;
+				if(temp != 'Abierto'){
+					item.estado = 'Cerrado';
+				}else{
+					item.estado = 'Abierto';
+				}
+			}
+			private function quitaDuplicados(item:DocumentoRecibido, id:uint, docto:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.estado)){
+					return false;
+				}else{
+					keys[item.estado]= item.estado;
+					return true;
+				}
+			}
+			
+			private function FormarLosEstados(TotalEstados:Array,estadosInfo:Array,infoEstados:ArrayCollection):void
+			{
+				
+				var totalDoctoRecibido:int;
+				var currentDoctoRecibido:DocumentoRecibido; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				var totalClientes:int;
+				keys = new Object();
+				var keysCerrados:Object;
+				
+				for(var i:int =0; i<TotalEstados.length; i++){
+					j=0;
+					totalDoctoRecibido =0;
+					totalClientes =0;
+					keysCerrados = new Object();
+					
+					currentDoctoRecibido = estadosInfo[j] as DocumentoRecibido;
+					while( (TotalEstados[i] as DocumentoRecibido).estado == currentDoctoRecibido.estado ){
+						
+						totalDoctoRecibido++;
+						if(currentDoctoRecibido.estado == 'Abierto'){
+							if(!keys.hasOwnProperty(currentDoctoRecibido.nombreEmpresa)){
+								keys[currentDoctoRecibido.nombreEmpresa] = currentDoctoRecibido.nombreEmpresa;
+								totalClientes++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentDoctoRecibido.nombreEmpresa) && !keysCerrados.hasOwnProperty(currentDoctoRecibido.nombreEmpresa)){
+								keysCerrados[currentDoctoRecibido.nombreEmpresa] = currentDoctoRecibido.nombreEmpresa;
+								totalClientes++;
+							}
+						}
+						
+						estadosInfo.shift();
+						if(estadosInfo.length >0)
+							currentDoctoRecibido = estadosInfo[j] as DocumentoRecibido;
+						else
+							currentDoctoRecibido =new DocumentoRecibido();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalEstados[i] as DocumentoRecibido).estado.toLocaleUpperCase();
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalDocumentos = totalDoctoRecibido;
+					
+					infoEstados.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="15%" verticalAlign="middle" horizontalAlign="center">
+		<s:Spacer width="100%" height="5%"/>
+		<componentes:tituloChartTablero width="100%"	text="ABIERTO VS CERRADO" textAlign="center" />
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" gap="0">
+		<s:Spacer width="100%" height="15%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%"  horizontalCenter="0" verticalCenter="0"
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesVS field="totalDocumentos"/>
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="25%"/>
+	</s:VGroup>
+</s:Group>

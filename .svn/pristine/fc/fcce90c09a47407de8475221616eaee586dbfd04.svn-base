@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="100%" height="100%"
+		  xmlns:otros="skins.otros.*"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		  resize="resize_ventana(event)"
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  >
+	<fx:Script>
+
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			[Bindable] public var dataProvider:ArrayCollection = new ArrayCollection();
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFontAgente:Number;
+			[Bindable]
+			private var selectCurrent:OrdenDespacho;
+			[Bindable]
+			private var colorGuardado:uint = 0x008894;
+			[Bindable] public  var permitirGuardar:Boolean;
+			[Bindable] public  var cargarVentana:Boolean;
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				lstAcuses.dataProvider = UtilsGrid.queryCampoXLike(dataProvider,"acuseRecibo",txtBuscador.text);
+			}
+			
+			protected function lstOrdenCompra_changingHandler(event:IndexChangeEvent):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_URL_IMAGEN_CARGADA_ANTERIOR_CARGAR_ACUSE_RECIBIDO);
+				var orden:OrdenDespacho = ObjectUtil.copy(lstAcuses.selectedItem) as OrdenDespacho
+				evento.ordenDespacho = orden;
+				dispatchEvent(evento);
+			}
+			
+			public function setData(value:ArrayCollection):void
+			{
+				var x:int;
+				if(value == null || value.length == 0)
+					return;
+				var totalMonto:Number=0;
+				var totalPiezas:int;
+				var totalOD:int;
+				resetFormatoGuardado();
+				
+				for(x=0;x<value.length;x++){
+					totalMonto += value[x].totalMonto;
+					totalPiezas += value[x].totalPiezas;
+					totalOD += value[x].totalOD;
+				}
+				if(value.length>0)
+					lblNombreAgente.text = value[0].nombreAgenteAduanal;
+				
+				dataProvider = ObjectUtil.copy(value) as ArrayCollection;
+				lstAcuses.dataProvider = dataProvider 
+				lstAcuses.selectedIndex = 0;
+				lblTotalMonto.text = 'Monto: $ '+UtilsFormatosNumericos.precisionADosDecimalesConComas(totalMonto);
+				lblTotalOD.text = "AR: "+value.length;
+				lblTotalPiezas.text = totalPiezas == 1 ? totalPiezas +' Pieza':totalPiezas+' Piezas';
+				selectCurrent = lstAcuses.selectedItem;
+				
+				if(lstAcuses != null || lstAcuses.dataProvider.length != 0){
+					var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_URL_IMAGEN_CARGADA_ANTERIOR_CARGAR_ACUSE_RECIBIDO);
+					evento.ordenDespacho = ObjectUtil.copy(lstAcuses.selectedItem) as OrdenDespacho
+					dispatchEvent(evento);
+				}
+			}
+			
+			protected function resize_ventana(event:ResizeEvent):void
+			{
+				sizeFont = (16 / 2005) * (unscaledWidth);
+				sizeFontAgente = (20 / 2005) * (unscaledWidth);
+				
+				sizeFont = sizeFont > 16 ? 16:sizeFont;
+				sizeFont = sizeFont < 10 ? 10:sizeFont;
+				
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+			}
+			
+			private var file:File;
+			protected function cargarArchivos(event:MouseEvent):void
+			{
+					var docFilter:FileFilter;
+					file = new File();
+					file.addEventListener(Event.SELECT, selectHandler);
+					file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+					file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+					file.addEventListener(Event.COMPLETE,completeHandlerArchivo);
+					docFilter = new FileFilter("Documents", "*.pdf");
+					file.browse([docFilter])
+			}
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+			}
+			
+			private var pdfNew:ByteArray;
+			private var indexCargada:Number;
+			private function completeHandlerArchivo(event:Event):void
+			{
+				var tmpAdicional:OrdenDespacho = new OrdenDespacho();
+				pdfNew = new ByteArray();
+				try
+				{
+					pdfNew = event.target.data;
+					
+					indexCargada = lstAcuses.selectedIndex;
+					
+					var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_URL_IMAGEN_CARGADA_CARGAR_ACUSE_RECIBIDO);
+					var orden:OrdenDespacho = ObjectUtil.copy(lstAcuses.selectedItem) as OrdenDespacho
+					orden.documentoAcuseRecibo = pdfNew;
+					evento.ordenDespacho = orden;
+					dispatchEvent(evento);
+					
+					//cambio de botones
+					activarFormatoGuardado();
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+			}
+			private function resetFormatoGuardado():void
+			{
+				grupCargar.visible = grupCargar.includeInLayout = true;
+				grupImagen.visible = grupImagen.includeInLayout = false;
+				colorGuardado=0xbfc0c7;
+				lblRecargar.visible = lblRecargar.includeInLayout = false;
+				btnGuardado.mouseEnabled = false;
+				permitirGuardar = false;
+			}
+			private function activarFormatoGuardado():void
+			{
+				grupCargar.visible = grupCargar.includeInLayout = false;
+				grupImagen.visible = grupImagen.includeInLayout = true;
+				colorGuardado=0x008894;
+				lblRecargar.visible = lblRecargar.includeInLayout = true;
+				btnGuardado.mouseEnabled = true;
+				permitirGuardar = true;
+			}
+			
+			protected function guardarArchivo(event:MouseEvent):void
+			{
+				if(permitirGuardar){
+					var eve:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.CERRAR_PENDIENTE_CARGAR_ACUSE);
+					eve.ordenDespacho = lstAcuses.selectedItem;
+					eve.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(eve);
+					cargarVentana = true;
+				}
+				else{
+					alertaSingleton.show("No se cargo ningún archivo",catalogoAlertas.TIT_ADV_atencion);
+				}
+			}
+			public function set recibeRutaPDFCargada(value:String):void
+			{
+				if(value == null || value == ""){
+					resetFormatoGuardado();
+					return ;
+				}
+				
+				var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + value);
+				var img:Loader = new Loader();
+				img.load(url);
+				img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);
+			}
+			public function loaded(e:Event):void
+			{
+				var bitmap:Bitmap = e.target.content;
+				imagenVisualizaId.source = bitmap;
+				e.target.removeEventListener(Event.COMPLETE,loaded);
+				activarFormatoGuardado();
+			}
+			
+			public var exitoVentana:PopUpExitoCargarAcuse;
+			public function set recibeRespuesta(value:Boolean):void
+			{
+				if(value){
+					if( exitoVentana == null ){
+						exitoVentana = PopUpExitoCargarAcuse(PopUpManager.createPopUp( this, PopUpExitoCargarAcuse, true ) );
+						PopUpManager.centerPopUp( exitoVentana );
+						exitoVentana.setAcuseFolio(lstAcuses.selectedItem.acuseRecibo);
+						exitoVentana.setOrden(lstAcuses.selectedItem.folio);
+						exitoVentana.addEventListener("aceptarPopUP",cerrarPopUp);
+					}
+					else{
+						PopUpManager.addPopUp( exitoVentana , this, true );
+					}
+				}
+				/*else{
+					alertaSingleton.show("Error al guardar archivo",catalogoAlertas.TIT_ADV_atencion);
+				}*/
+			}
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( exitoVentana );
+				exitoVentana = null;
+				dispatchEvent( new Event("recargarPendientes",true));
+				
+				var evtCA:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_ORDEN_DESPACHO_COMPLETAS_CARGAR_ACUSE);
+				evtCA.usuario =DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(evtCA);
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" gap="0"> 
+		<s:HGroup width="100%" height="100%" paddingLeft="5" paddingTop="20" gap="0">
+			<s:VGroup id="grpOrden" width="30%" height="100%" gap="20"> <!--gap = 10-->
+				<s:Label styleName="tab_texto_14_Helvetica" id="lblNombreAgente" fontWeight="bold" fontSize="{sizeFontAgente}" color="#008893" text="" width="100%" textAlign="left" />
+				<s:TextInput prompt="Acuse de Recibo" id="txtBuscador" width="100%" maxWidth="{grpOrden.width}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)"/>
+				<s:VGroup width="100%" height="100%" gap="0">
+					<otros:LineaDivision width="100%" height="1" color="#707070" />
+					<s:List width="100%" height="93%" borderVisible="false" horizontalScrollPolicy="off"
+							selectedIndex="0" id="lstAcuses" contentBackgroundAlpha="0"
+							itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.OrdenesDespacho_CargarAcuse"
+							changing="lstOrdenCompra_changingHandler(event)"
+							/>
+					<otros:LineaDivision width="100%" height="1" color="#707070" />
+					<s:HGroup width="100%" paddingTop="10" paddingBottom="20" verticalAlign="middle" horizontalAlign="center" paddingLeft="20" paddingRight="20">
+						<s:HGroup width="10%" maxWidth="50" height="100%" >
+							<s:Label styleName="tab_texto_14_Helvetica"  fontSize="{sizeFont}" text="" textAlign="left" width="100%" />
+						</s:HGroup>
+						<s:HGroup width="100%" height="100%" gap="5" horizontalAlign="center">
+							<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalOD" width="25%" text="AR: 0" textAlign="left" fontSize="{sizeFont}"/>
+							<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalPiezas" width="30%" text="0 Piezas" textAlign="left" fontSize="{sizeFont}"/>
+							<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalMonto" width="55%" text="Monto: $ 0.00" textAlign="left" fontSize="{sizeFont}"/>
+						</s:HGroup>
+						
+					</s:HGroup>  
+				</s:VGroup>  
+			</s:VGroup>  
+			<s:HGroup height="100%" verticalAlign="middle" paddingLeft="16" paddingRight="20" paddingTop="20" paddingBottom="20">
+				<otros:divisionDegradadoVertical height="100%" /> 
+			</s:HGroup>
+			
+			<s:VGroup width="80%" height="100%" paddingRight="20" gap="0">
+				<s:HGroup width="100%" height="93%" horizontalAlign="center" verticalAlign="middle">
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#f3f3f4" />
+							</s:fill>
+						</s:Rect>
+						<s:VGroup id="grupCargar" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" >
+							<mx:Image source="{catalogoIconosBotones.getInstance().cargar_faltante_cruz}" horizontalCenter="0" verticalCenter="0" 
+									  click="cargarArchivos(event)" buttonMode="true"/>
+							<label:Texto_16_Helvetica text="Cargar Acuse de Recibo" color="#404040" fontSize="25" fontWeight="bold"/>
+						</s:VGroup>
+						<s:VGroup id="grupImagen" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" visible="false" includeInLayout="false">
+							<mx:Image verticalAlign="middle" horizontalAlign="center" width="100%" height="100%" id="imagenVisualizaId"/>
+						</s:VGroup>
+						
+					</s:Group>
+					
+				</s:HGroup>	
+				
+				<s:HGroup width="100%" height="7%" horizontalAlign="right" verticalAlign="middle" gap="10">
+					<s:VGroup width="100%" height="100%" verticalAlign="middle" paddingRight="40" horizontalAlign="right">
+						<pqNet:botonPqNetLargo icono="recargarImg" id="lblRecargar"  height="30" width="30" click="cargarArchivos(event)"
+												colorBase="0x008894" includeInLayout="false" visible="false" colorOver="0x008894" />
+					</s:VGroup>  
+					
+					<s:VGroup id="btnGuardado" width="130" height="25" maxWidth="130" maxHeight="25" horizontalAlign="right" verticalAlign="middle" click="guardarArchivo(event)" >
+						<s:Group width="170" height="30" >
+							<s:Rect width="100%" height="100%">
+								<s:fill>
+									<s:SolidColor color="{colorGuardado}"/>
+								</s:fill>
+							</s:Rect>
+							<s:Label styleName="TituloNovecento_18" fontSize="18" fontWeight="bold" text="GUARDAR" color="#FFFFFF" width="100%" height="100%" textAlign="center" verticalAlign="middle"/> 
+						</s:Group>  
+					</s:VGroup>  
+				</s:HGroup>
+				
+				
+				
+			</s:VGroup>  
+		</s:HGroup>  
+		
+	</s:VGroup>  
+	
+</s:VGroup>

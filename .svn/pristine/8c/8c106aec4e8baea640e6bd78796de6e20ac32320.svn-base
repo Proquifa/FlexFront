@@ -1,0 +1,645 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:textinput="skins.skin.textinput.*" 
+		  xmlns:otros="skins.otros.*"
+		  xmlns:contenedores="skins.skin.contenedores.*"
+		  width="100%" height="100%"
+		  creationComplete="vgroup1_creationCompleteHandler(event)" xmlns:coverflowpqnet="mx.com.proquifa.proquifanet.rsl.vista.vistas.comun.coverflowpqnet.*" 
+		  >
+	
+	<fx:Declarations>
+		<s:Sine id="sineEasing" easeInFraction="0.3"/>
+		<s:Power id="powerEasing"  exponent="4"/>
+		<s:Move id="moveRight"  target="{grpImagenes}" easer="{powerEasing}"/>
+		<s:Move id="moveLeft"  target="{grpImagenes}" easer="{powerEasing}"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoAuxiliarEnLaActualizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.tecnicos.EventoCatProClasificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ClasificacionConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.tecnicos.itemRender.CatProClasificacionIR_TituloAnimados;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			//================================= PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION =======PARA EL CINTURON DE ORION =======PARA EL CINTURON DE ORION =======
+			private var _indiceSeleccionado:int;
+			private var arregroTitulosPorFamilia:ArrayCollection;
+			private var numeroDeConfifuracionSeleccionada:uint;
+			private var _primerResize:Boolean = true;
+			private var _cargatitulos:Boolean;
+			
+			
+			private function cambia( $sentido:String, totalmovimientos:int = 1 ):void
+			{
+				$sentido == 'izquierda' ?   _indiceSeleccionado = _indiceSeleccionado - 1 : _indiceSeleccionado = _indiceSeleccionado + 1;
+				_indiceSeleccionado == 0 ? btnIzquierdo.enabled = false : btnIzquierdo.enabled = true;
+				_indiceSeleccionado == arregroTitulosPorFamilia.length - 1 ? btnDerecho.enabled = false : btnDerecho.enabled = true;
+				
+				for( var m:int = 0; m < arregroTitulosPorFamilia.length; m++ )
+				{
+					( arregroTitulosPorFamilia[m] as ConfiguracionPrecio ).animacion = false;	
+				}
+				
+				for( var r:int = 0; r < arregroTitulosPorFamilia.length; r++ )
+				{
+					( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).titutloSeleccionado = false;
+					if( ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).numFila == _indiceSeleccionado )
+					{
+						( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).titutloSeleccionado = true;	
+						( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).animacion = true;
+						
+						if( $sentido == 'derecha' )
+						{ //se mueve a la izquierda se anima el de la derecha
+							( arregroTitulosPorFamilia[r-1] as ConfiguracionPrecio ).animacion = true;
+						}
+						else
+						{
+							( arregroTitulosPorFamilia[r+1] as ConfiguracionPrecio ).animacion = true;
+						}
+						numeroDeConfifuracionSeleccionada = ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).numFila;
+					}
+				}
+				
+				cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				
+				if( $sentido == 'izquierda' )
+				{
+					moveRight.stop();
+					moveRight.duration = 1000;
+					moveRight.xBy = 178;
+					moveRight.play();
+					
+					grpImagenes.x = ( cnvPanel.width/2 ) -120;
+					moveRight.stop();
+					moveRight.duration = 0;
+					moveRight.xBy = -178 * _indiceSeleccionado;
+					moveRight.play();
+					_primerResize = false;
+					
+				}
+				else
+				{
+					
+					moveLeft.stop();
+					moveLeft.duration = 1000;
+					moveLeft.xBy = -178;		
+					moveLeft.play();
+					
+					grpImagenes.x = ( cnvPanel.width/2 ) -120;
+					moveLeft.stop();
+					moveLeft.duration = 0;
+					moveLeft.xBy = -178 * _indiceSeleccionado;
+					moveLeft.play();
+					_primerResize = false;
+				}
+				
+			}
+			
+			private function cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias():void
+			{
+				grpImagenes.removeAllElements();
+				var numItemsQueCaben:int = 0;
+				var iniciaConteo:Boolean = false;
+				numItemsQueCaben = ( cnvPanel.width / 2  )  / 177;
+				
+				for(var g:int =0; g < arregroTitulosPorFamilia.length; g++ )
+				{
+					
+					var currentItem:ConfiguracionPrecio = arregroTitulosPorFamilia[g] as ConfiguracionPrecio;
+					
+					currentItem.numFila = g ;
+					
+					var _titulo:CatProClasificacionIR_TituloAnimados = new CatProClasificacionIR_TituloAnimados;
+					
+					if(g==0)
+					{
+						currentItem.ubicacionItem = 'Primero';
+					}
+					else
+					{
+						if((g+1) == arregroTitulosPorFamilia.length)
+						{
+							currentItem.ubicacionItem = 'Ultimo';
+						}
+						else
+						{
+							currentItem.ubicacionItem = 'Medio';
+						}
+						
+					}
+					
+					_titulo.data = currentItem;
+					
+					if( !iniciaConteo )
+					{
+						grpImagenes.addElement(_titulo);
+					}
+					else
+					{
+						if( numItemsQueCaben > 0)
+						{
+							grpImagenes.addElement(_titulo);
+							numItemsQueCaben = numItemsQueCaben - 1;
+						}
+					}
+					
+					if(( arregroTitulosPorFamilia[g] as ConfiguracionPrecio ).titutloSeleccionado )
+					{
+						iniciaConteo = true;
+					}
+				}
+			}
+			
+			private function acomodaTodasLasFamilias():void
+			{
+				if( arregroTitulosPorFamilia != null && arregroTitulosPorFamilia.length > 0)
+				{
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				}
+				
+				grpImagenes.x = ( cnvPanel.width/2 ) -120;
+				moveLeft.stop();
+				moveLeft.duration = 0;
+				moveLeft.xBy = -177 * _indiceSeleccionado;
+				moveLeft.play();
+				_primerResize = false;
+			}
+			
+			protected function vgroup1_creationCompleteHandler(event:FlexEvent):void
+			{
+				btnDerecho.enabled = false;
+				btnIzquierdo.enabled = false;
+				addEventListener(ResizeEvent.RESIZE,recibeResize,false,0,true);
+				addEventListener(EventoCatProClasificacion.RECORRER_FAMILIA_EN_CINTURON_DE_ORION,escucharClickDadoEnElBotonDeFamilia,false,0,true);
+				lstConceptos.addEventListener("EliminarItemSeleccionadoEventoCatProIR_ConceptosClasificacion",escucharEliminarElementoSeleccionado,false,0,true);
+				
+				addEventListener(EventoCatProClasificacion.CAMBIA_NIVEL_EN_VISTA_CLASIFICACION,escucharClickDadoEnElBotonDeFamilia,false,0,true);
+			}
+			
+			private function recibeResize($evt:Event):void
+			{
+				setTimeout( acomodaTodasLasFamilias, 130 );
+			}
+			
+			public function set recibeTodasLasFamiliasOrdenadas($todasLasFamilias:ArrayCollection):void
+			{
+				if($todasLasFamilias == null)
+					return;
+				
+				arregroTitulosPorFamilia = ObjectUtil.copy($todasLasFamilias) as ArrayCollection;
+				cmpCoverflow.recibeFamilias(arregroTitulosPorFamilia);
+				
+				isEditando = false;
+				
+				if(currentConfSeleccionada)
+				{
+					
+					for (var i:int = 0; i < $todasLasFamilias.length; i++) 
+					{
+						if(currentConfSeleccionada.idConfiguracionPrecio == (arregroTitulosPorFamilia[i] as ConfiguracionPrecio).idConfiguracionPrecio)
+						{
+							numeroDeConfifuracionSeleccionada = i;
+							_indiceSeleccionado = i;
+							break;
+						}
+					}
+					currentConfSeleccionada = (arregroTitulosPorFamilia[i] as ConfiguracionPrecio);
+					currentConfSeleccionada.titutloSeleccionado = true;
+				}
+				else
+				{
+					numeroDeConfifuracionSeleccionada = 0;
+					_indiceSeleccionado = 0;
+					currentConfSeleccionada = arregroTitulosPorFamilia[0] as ConfiguracionPrecio; 
+					currentConfSeleccionada.titutloSeleccionado = true; 
+				}
+				
+				btnIzquierdo.enabled = false;
+				btnDerecho.enabled = false;	
+				if( arregroTitulosPorFamilia.length > 1 )
+				{
+					btnDerecho.enabled = true;
+				}
+				
+				acomodaTodasLasFamilias();
+				
+				var solicitarConceptosClasi:EventoCatProClasificacion = new EventoCatProClasificacion(EventoCatProClasificacion.SOLICITAR_CONCEPTOS_DE_CLASIFICACION_POR_FAMILIA);
+				solicitarConceptosClasi.idConfiguracionFamilia = currentConfSeleccionada.idConfiguracionPrecio;
+				dispatchEvent(solicitarConceptosClasi);
+			}
+			
+			private function escucharClickDadoEnElBotonDeFamilia(event:EventoCatProClasificacion):void
+			{
+				var totalMovimientos:int = 0;
+				totalMovimientos = event.posicionDeLaConfEnElCinturon; 
+				totalMovimientos = totalMovimientos - numeroDeConfifuracionSeleccionada;
+				var $dato:String = '';
+				
+				if( totalMovimientos < 0)
+				{
+					$dato = 'izquierda';
+					totalMovimientos = totalMovimientos * (-1);
+				}
+				else if(  totalMovimientos > 0  )
+				{
+					$dato = 'derecha';
+				}
+				else
+				{
+					totalMovimientos = 0;
+				}
+				
+				for( var i:int = totalMovimientos; i > 0; i-- ){
+					cambia( $dato,totalMovimientos );
+				}
+				
+				currentConfSeleccionada = event.configuracionPrecio;
+				
+				var solicitarConceptosClasi:EventoCatProClasificacion = new EventoCatProClasificacion(EventoCatProClasificacion.SOLICITAR_CONCEPTOS_DE_CLASIFICACION_POR_FAMILIA);
+				solicitarConceptosClasi.idConfiguracionFamilia = currentConfSeleccionada.idConfiguracionPrecio;
+				dispatchEvent(solicitarConceptosClasi);
+				
+			}
+			//================================= PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION =======PARA EL CINTURON DE ORION =======PARA EL CINTURON DE ORION ==============PARA EL CINTURON DE ORION =======PARA EL CINTURON DE ORION ==============PARA EL CINTURON DE ORION =======PARA EL CINTURON DE ORION =======
+			
+			private var _currentProveedor:Proveedor;
+			[Bindable]
+			private var isEditando:Boolean = false;
+			private var respaldoConceptos:ArrayCollection;
+			private var currentConfSeleccionada:ConfiguracionPrecio;
+			private var listaTempBorrar:ArrayCollection;
+			private var listaOrdenadaConceptos:Array;
+			
+			
+			public function set recibeConceptosClasificacion($conceptos:ArrayCollection):void
+			{
+				if($conceptos == null)
+				{
+					verificarLengthDelaLista();
+					return;
+				}
+				
+				isEditando = false;
+				ordenarConceptos(ObjectUtil.copy($conceptos.source) as Array);
+				respaldoConceptos = new ArrayCollection(ObjectUtil.copy(listaOrdenadaConceptos) as Array);
+				
+				lstConceptos.dataProvider = ObjectUtil.copy(respaldoConceptos) as ArrayCollection;
+				verificarLengthDelaLista();
+			}
+			
+			protected function btnEditar_clickHandler(event:MouseEvent):void
+			{
+				if(isEditando)
+				{
+					isEditando = false;
+				}
+				else
+				{
+					isEditando = true;
+				}
+				activarListaEditable(isEditando);
+			}
+			
+			
+			private function ordenarConceptos($listaConceptos:Array):void
+			{
+				if($listaConceptos.length > 1)
+					$listaConceptos.sortOn("conceptoMinuscula");
+				listaOrdenadaConceptos = $listaConceptos;
+			}
+			
+			private function activarListaEditable($seEstaEditando:Boolean):void
+			{
+				if(lstConceptos.dataProvider != null)
+				{
+					var i:int;
+					var currentItem:ClasificacionConfiguracionPrecio;
+					if($seEstaEditando)
+					{
+						for (i = 0; i < lstConceptos.dataProvider.length; i++) 
+						{
+							if(lstConceptos.dataProvider[i] is ClasificacionConfiguracionPrecio)
+							{
+								currentItem = (lstConceptos.dataProvider[i] as ClasificacionConfiguracionPrecio);
+								
+								currentItem.estaEnEdicion = true;
+							}
+						}
+					}
+					else
+					{
+						for (i = 0; i < lstConceptos.dataProvider.length; i++) 
+						{
+							if(lstConceptos.dataProvider[i] is ClasificacionConfiguracionPrecio)
+							{
+								currentItem = (lstConceptos.dataProvider[i] as ClasificacionConfiguracionPrecio);
+								
+								currentItem.estaEnEdicion = false;
+							}
+						}
+					}
+				}
+			}
+			
+			protected function btnAgregarConcepto_clickHandler(event:MouseEvent):void
+			{
+				if(StringUtil.trim(txtConcepto.text).length > 0 )
+				{
+					if(lstConceptos.dataProvider == null)
+					{
+						lstConceptos.dataProvider = new ArrayCollection;
+					}
+					
+					var tempClasificacion:ClasificacionConfiguracionPrecio = new ClasificacionConfiguracionPrecio;
+					tempClasificacion.idConfigFamilia = currentConfSeleccionada.idConfiguracionPrecio;
+					tempClasificacion.concepto = txtConcepto.text;
+					tempClasificacion.estaEnEdicion = true;
+					
+					listaOrdenadaConceptos = ObjectUtil.copy((lstConceptos.dataProvider as ArrayCollection).source) as Array;
+					listaOrdenadaConceptos.push(tempClasificacion);
+					
+					ordenarConceptos(listaOrdenadaConceptos);
+					
+					//lstConceptos.dataProvider.addItem(tempClasificacion);
+					lstConceptos.dataProvider = new ArrayCollection(listaOrdenadaConceptos);
+					txtConcepto.text = "";
+					verificarLengthDelaLista();
+				}
+				else
+				{
+					alertaSingleton.show("Es necesario escribir un concepto",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+			}
+			
+			protected function btnCancelar_clickHandler(event:MouseEvent):void
+			{
+				isEditando = false;
+				lstConceptos.dataProvider = new ArrayCollection;
+				lstConceptos.dataProvider = ObjectUtil.copy(respaldoConceptos) as ArrayCollection;
+				verificarLengthDelaLista();
+			}
+			
+			protected function btnGuardar_clickHandler(event:MouseEvent):void
+			{
+				
+				var currListaItem:ClasificacionConfiguracionPrecio;
+				var currRespaldoItem:ClasificacionConfiguracionPrecio;
+				var tempConceptos:ArrayCollection = ObjectUtil.copy(respaldoConceptos) as ArrayCollection;
+				
+				if(indicesConceptosAEliminar != null && indicesConceptosAEliminar.length > 0)
+				{
+					for (var i:int = 0; i < tempConceptos.length; i++) 
+					{
+						currRespaldoItem = tempConceptos[i] as ClasificacionConfiguracionPrecio;
+						
+						for (var i3:int = 0; i3 < indicesConceptosAEliminar.length; i3++) 
+						{
+							if(currRespaldoItem.idClasificacion == indicesConceptosAEliminar[i3])
+							{
+								(tempConceptos[i] as ClasificacionConfiguracionPrecio).eliminar = true;
+							}
+						}
+					}
+				}
+				
+				var conceptosNuevos:ArrayCollection = new ArrayCollection;
+				for (var j:int = 0; j < lstConceptos.dataProvider.length; j++) 
+				{
+					currListaItem = lstConceptos.dataProvider[j] as ClasificacionConfiguracionPrecio;
+					
+					if(isNaN(currListaItem.idClasificacion))
+					{
+						conceptosNuevos.addItem(currListaItem);
+					}
+					
+					for (var k:int = 0; k < tempConceptos.length; k++) 
+					{
+						currRespaldoItem = tempConceptos[k] as ClasificacionConfiguracionPrecio;
+						
+						if(currRespaldoItem.idClasificacion == currListaItem.idClasificacion)
+						{
+							tempConceptos[k] = currListaItem;
+							break;
+						}
+					}
+				}
+				
+				for (var i2:int = 0; i2 < conceptosNuevos.length; i2++) 
+				{
+					tempConceptos.addItem(conceptosNuevos[i2]);
+				}
+				
+				var actualizarConceptos:EventoCatProClasificacion = new EventoCatProClasificacion(EventoCatProClasificacion.AGREGAR_ACTUALIZAR_CONCEPTOS_CLASIFICACION);
+				actualizarConceptos.conceptos = tempConceptos;
+				
+				if (tempConceptos.length > 0)
+					actualizarConceptos.ventana = "CatProveedor_Clasificacion ( idProveedor:"+_currentProveedor.idProveedor+", idConfigFamilia:"+(tempConceptos[0] as ClasificacionConfiguracionPrecio).idConfigFamilia+" )"
+				else
+					actualizarConceptos.ventana = "CatProveedor_Clasificacion ( idProveedor:"+_currentProveedor.idProveedor+" )"
+				
+				dispatchEvent(actualizarConceptos);
+				
+				txtConcepto.text = "";
+				lstConceptos.dataProvider = new ArrayCollection;
+				isEditando = false;
+				verificarLengthDelaLista();
+			}
+			
+			public function set recibeConfirmacionDeActualizarConceptos($resultadoDeActualizar:Number):void
+			{
+				indicesConceptosAEliminar = null;
+				
+				if(!isNaN($resultadoDeActualizar))
+				{
+					
+					/* if($resultadoDeActualizar == 1)
+					{
+					}
+					else */ 
+					if($resultadoDeActualizar == -3)
+					{
+						alertaSingleton.show('Existe al menos un concepto de clasificación con productos relacionados.',catalogoAlertas.TIT_ADV_operacionImposible);
+					}
+					else if($resultadoDeActualizar == -2)
+					{
+						alertaSingleton.show('Al intentar modificar un concepto de clasificación.',catalogoAlertas.TIT_ADV_operacionImposible);
+					}
+					else if($resultadoDeActualizar == -1)
+					{
+						alertaSingleton.show("Al intentar guardar un concepto de clasificación.",catalogoAlertas.TIT_ADV_operacionImposible);
+					}
+					
+					var solicitarClasificaciones:EventoAuxiliarEnLaActualizacion = new EventoAuxiliarEnLaActualizacion(EventoAuxiliarEnLaActualizacion.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES);
+					solicitarClasificaciones.actualizarCinturonFamilias = true;
+					dispatchEvent(solicitarClasificaciones);
+				}
+			}
+			
+			protected function verificarLengthDelaLista():void
+			{
+				if(lstConceptos.dataProvider == null || lstConceptos.dataProvider.length <= 0)
+				{
+					divListaSinConceptos.visible = divListaSinConceptos.includeInLayout = true;
+				}
+				else
+				{
+					divListaSinConceptos.visible = divListaSinConceptos.includeInLayout = false;
+				}
+			}
+			
+			private var indicesConceptosAEliminar:Array;
+			private function escucharEliminarElementoSeleccionado(event:Event):void
+			{
+				if(indicesConceptosAEliminar == null)
+					indicesConceptosAEliminar = new Array;
+				indicesConceptosAEliminar.push((lstConceptos.selectedItem as ClasificacionConfiguracionPrecio).idClasificacion);
+				
+				lstConceptos.dataProvider.removeItemAt(lstConceptos.selectedIndex);
+				(lstConceptos.dataProvider as ArrayCollection).refresh(); 
+				
+				verificarLengthDelaLista();
+			}
+			
+			//====== GETTER's AND SETTER's ============= GETTER's AND SETTER's ============= GETTER's AND SETTER's ============= GETTER's AND SETTER's ============= GETTER's AND SETTER's =======
+			public function get currentProveedor():Proveedor
+			{
+				return _currentProveedor;
+			}
+			
+			public function set currentProveedor(value:Proveedor):void
+			{
+				currentConfSeleccionada = null;
+				_currentProveedor = value;
+			}
+			//====== GETTER's AND SETTER's ============= GETTER's AND SETTER's ============= GETTER's AND SETTER's ============= GETTER's AND SETTER's ============= GETTER's AND SETTER's =======
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				
+				super.updateDisplayList($width,$height);
+				cmpCoverflow.showIconos = false;
+				cmpCoverflow.vista = "clasificacion";
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" paddingTop="20" paddingLeft="20" paddingRight="20" verticalAlign="bottom">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_ofertaGris}"/>
+		<label:TituloBankGothic_30 text="CLASIFICACIÓN" width="100%"/>
+		<label:TituloBankGothic_24 id="lblSeccion"/>
+	</s:HGroup>
+	<s:Spacer height="30"/>
+	
+	<coverflowpqnet:CoverFlowDefaultPQNet id="cmpCoverflow" showIconos="false" vista="clasificacion" />
+	
+	<s:VGroup width="100%" height="0" verticalAlign="middle" visible="false">
+		<s:Group width="100%" height="100%">
+			<s:Rect id="fondo" width="100%" height="100%" >
+				<s:filters>
+					<s:DropShadowFilter alpha="1" angle="90" blurX="0" blurY="7" color="#424242" distance="1" hideObject="false" inner="false"
+										knockout="false" quality="3" strength="0.9"/>
+					<s:DropShadowFilter alpha="1" angle="270" blurX="0" blurY="7" color="#424242" distance="1" hideObject="false" inner="false"
+										knockout="false" quality="3" strength="0.9"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="black" />
+				</s:fill>
+			</s:Rect>
+			<s:HGroup width="100%" height="135" gap="0" verticalAlign="middle" id="grpNegro"  >
+				<s:Group width="170" height="135" mouseDown="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierdaDown}" id="btnIzquierdo" click="cambia('izquierda')"
+						 mouseOver="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierdaDown }" mouseOut="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierda}" >
+					<s:Image source="{ catalogoIconosBotoneras.getInstance().fondoBotonNegroGrande}" height="135" width="169"/>
+					<s:Image id="imgBotonI" source="{ catalogoIconosBotoneras.getInstance().flechasIzquierda }" horizontalCenter="15" verticalCenter="0" />
+				</s:Group>
+				<s:VGroup paddingTop="-4" width="83%" depth="-5000" id="grpPanel">
+					<s:Panel  width="100%" depth="-5000" id="pnlImagenes" borderVisible="false" borderAlpha="0" dropShadowVisible="false"  contentBackgroundAlpha="0" backgroundAlpha="0" 
+							  controlBarVisible="false" skinClass="skins.skin.panelSpark.PanelSinTitleBar"   >
+						<mx:Canvas width="100%" id="cnvPanel" borderAlpha="0" dropShadowVisible="false" contentBackgroundAlpha="0" backgroundAlpha="0" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+							<s:HGroup width="100%" verticalAlign="middle" id="grpImagenes" gap="-2" />
+						</mx:Canvas>
+					</s:Panel>
+				</s:VGroup>
+				<s:Group width="170" height="135" mouseDown="{imgBotonD.source = catalogoIconosBotoneras.getInstance().flechasDerechaDown}"  id="btnDerecho" click="cambia('derecha')"
+						 mouseOver="{imgBotonD.source= catalogoIconosBotoneras.getInstance().flechasDerechaDown }" mouseOut="{imgBotonD.source= catalogoIconosBotoneras.getInstance().flechasDerecha}" >
+					<s:Image source="{ catalogoIconosBotoneras.getInstance().fondoBotonNegroGrande}" height="135" width="170"/>
+					<s:Image id="imgBotonD" source="{ catalogoIconosBotoneras.getInstance().flechasDerecha }" horizontalCenter="-15" verticalCenter="0"/>
+				</s:Group>
+			</s:HGroup>
+		</s:Group>
+	</s:VGroup>
+	
+	<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%">
+		
+		<s:Scroller width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" horizontalAlign="center">
+				
+				<s:VGroup width="100%" height="100%" maxWidth="1050" minWidth="340">
+					<s:Spacer height="100%" width="100%"/>
+					<s:HGroup width="100%" verticalAlign="middle" gap="10">
+						
+						<s:VGroup  id="conceptosLugar" width="100%" height="100%" gap="10" visible="{isEditando}" includeInLayout="{isEditando}" >
+							<label:Titulo text="Concepto:" paddingTop="0"/>
+							<textinput:txtInputBlancoDefaultPQNet id="txtConcepto" width="100%" />
+							<s:HGroup width="100%" horizontalAlign="center">
+								<pqNet:botonPqNetLargo width="100%" icono="agregar" id="btnAgregarConcepto" colorBase="0x2e99b4" gradientePqnet="true" click="btnAgregarConcepto_clickHandler(event)"/>
+							</s:HGroup>
+						</s:VGroup>
+						
+						<s:Spacer id="spacerconceptosLugar" visible="{isEditando}" includeInLayout="{isEditando}" />
+						<otros:VDivisionHueca id="divisionConceptoLugar" height="100%" visible="{isEditando}" includeInLayout="{isEditando}"/>
+						<s:Spacer id="spacerconceptosLugar1" visible="{isEditando}" includeInLayout="{isEditando}" />
+						
+						<s:VGroup  id="listasConceptos" width="100%" height="500" gap="10">
+							<s:HGroup width="100%">
+								<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_menulineas}"/>
+								<label:Titulo text="CATÁLOGO DE CONCEPTOS"  height="100%" verticalAlign="middle" paddingTop="0"/> 
+							</s:HGroup>
+							<otros:division id="divListaSinConceptos" width="100%" visible="false" includeInLayout="false"/>
+							<s:List id="lstConceptos" borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%" 
+									itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.tecnicos.itemRender.CatProIR_ConceptosClasificacion">
+							</s:List>
+						</s:VGroup>
+					</s:HGroup>
+					<s:Spacer height="100%" width="100%"/>
+				</s:VGroup>  
+			</s:VGroup>
+		</s:Scroller>
+		
+		
+		
+		
+		<s:VGroup width="100%" gap="10">
+			<otros:divisionGruesa width="100%"/>
+			<s:Group width="100%" id="grpBotones">
+				<s:HGroup width="100%" horizontalAlign="right" verticalAlign="middle" id="grpBotonEditar"  >
+					<pqNet:botonPqNetLargo label="Editar" id="btnEditar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="btnEditar_clickHandler(event)"/><!--click="seEstaEditando=false;editarInfo()"-->
+				</s:HGroup>
+				<s:HGroup width="100%" id="grpGuardarCancelar" visible="{isEditando}">
+					<pqNet:botonPqNetLargo label="Guardar" id="btnGuardar" click="btnGuardar_clickHandler(event)"/>
+					<s:Spacer width="100%"/>
+					<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" id="btnCancelar" click="btnCancelar_clickHandler(event)"/> <!--click="seEstaEditando=true;editarInfo('cancelar');cancelaGuardado()"-->
+				</s:HGroup>
+			</s:Group>
+		</s:VGroup>  
+	</contenedores:VGroupConPaddingStandardPqNet>
+</s:VGroup>

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		 xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		 xmlns:cargarFaltante="mx.com.proquifa.vista.vistas.cargarFaltante.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*" 	
+		 xmlns:principal="mx.com.proquifa.vista.vistas.cargarFaltante.principal.*" 
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*" 
+		 width="100%" height="100%"
+		 creationComplete="init(event)" 
+		 >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.cargarFaltante.EventoCargarFaltante;
+			import mx.events.FlexEvent;
+			
+			private var sql:Query;
+			[Bindable] public var sizeFont:Number;
+			public var agenteAduanalAux:String;
+			
+			protected function init(event:FlexEvent):void
+			{
+				grpVistaPrincipal.addEventListener("cambiaAlInicioVista",cambiaVistaDefault);
+				ListAgente.addEventListener(EventoCargarFaltante.CAMBIAR_VISTA_PRINCIPAL_FALTANE_AGENTE,cambiaVistaPrincipal);
+				cargarPlantilla();
+			}
+			
+			private function cambiaVistaDefault(evt:Event):void
+			{
+				plantilla.indice = 0;
+				grpVistaPrincipal.lstOrdenes.lstOrdenes.selectedIndex = -1;
+				grpVistaPrincipal.lstOrdenes.indice = -1;
+				ListAgente.gridProveedores.selectedIndex = -1;
+				cmpTitulo.isVisble = false;
+			}
+			protected function vistaAnterior(event:EventoGestorCompras):void
+			{
+				/*dispatchEvent( new Event("cambiaAlInicioVista",true));*/
+				plantilla.indice = 0;
+				grpVistaPrincipal.lstOrdenes.lstOrdenes.selectedIndex = -1;
+				grpVistaPrincipal.lstOrdenes.indice = -1;
+				ListAgente.gridProveedores.selectedIndex = -1;
+				cmpTitulo.isVisble = false;
+			}
+			private function cambiaVistaPrincipal(evt:EventoCargarFaltante):void
+			{
+				var lista:ArrayCollection = sql.armarLista( sql.getPunteros([evt.agenteAduanal]) );
+				grpVistaPrincipal.recibeOrdenesDespacho(lista);
+				plantilla.indice = 1;
+				agenteAduanalAux = evt.agenteAduanal;
+				cmpTitulo.isVisble = true;
+			}
+			
+			
+			public function set recibeListaFaltanteOD($arreglo:ArrayCollection):void
+			{
+				if($arreglo == null)
+					return;
+				var lista:ArrayCollection;
+				var nombresAgentes:Array = new Array();
+				var totalOD:Number;
+				var totalProv:Number;
+				var listaFinal:ArrayCollection;
+				var totales:OrdenDespacho = new OrdenDespacho();
+				var arregloPie:ArrayCollection = new ArrayCollection();
+				
+				sql = new Query($arreglo,['nombreAgenteAduanal','idAgenteAduanal','idOrdenDespacho','folio','nombreProveedor']);
+				
+				nombresAgentes = sql.getPunteros(['nombreAgenteAduanal']);
+				listaFinal = new ArrayCollection();
+				
+				if(nombresAgentes.length > 0)
+				{
+					
+					for (var j:int = 0; j < nombresAgentes.length; j++) 
+					{
+						var tmpOrden:OrdenDespacho = new OrdenDespacho();
+						var tmpPuntero:Array = new Array();
+						var graficaPie:ResumenConsulta = new ResumenConsulta();
+						tmpPuntero = sql.getPunteros([nombresAgentes[j]]);
+						
+						tmpOrden.numFila = j + 1;
+						tmpOrden.nombreAgenteAduanal = nombresAgentes[j];
+						tmpOrden.certificadosFaltantes = sql.getSumarCampo('certificadosFaltantes',tmpPuntero);
+						tmpOrden.cartasFaltantes = sql.getSumarCampo('cartasFaltantes',tmpPuntero);
+						tmpOrden.totalProveedores = sql.getSumarCampo('totalProveedores',tmpPuntero);
+						tmpOrden.totalOrdenDespacho = tmpPuntero.length;
+						if(tmpOrden.numFila == nombresAgentes.length)
+							tmpOrden.ultimaFila = true;
+						else
+							false;
+						listaFinal.addItem(tmpOrden);
+						
+						graficaPie.etiqueta = nombresAgentes[j];
+						graficaPie.totalAgentesAduanales = 1;
+						graficaPie.totalOrdenesDespacho = tmpPuntero.length;
+						graficaPie.totalCertificado = tmpOrden.certificadosFaltantes;
+						graficaPie.totalCartaUso = tmpOrden.cartasFaltantes;
+						arregloPie.addItem(graficaPie);
+					}
+					
+					ListAgente.dataProvider = listaFinal;
+					
+					//   TOTALES
+					totales.numFila = listaFinal.length;
+					totales.totalOrdenDespacho = sql.universo.length; 
+					totales.certificadosFaltantes = sql.getSumarCampo('certificadosFaltantes',tmpPuntero,'',true);
+					totales.cartasFaltantes = sql.getSumarCampo('cartasFaltantes',tmpPuntero,'',true);
+					totales.totalProveedores = sql.getSumarCampo('totalProveedores',tmpPuntero,'',true);
+					ListAgente.totales = totales;
+					
+					graficaPie_AgenteA.dataProvider = arregloPie;
+					graficaDocumentos(tmpPuntero);
+					
+					if(grpVistaPrincipal.currentOrden != null){
+						lista = sql.armarLista( sql.getPunteros([grpVistaPrincipal.currentOrden.nombreAgenteAduanal]) );
+						grpVistaPrincipal.recibeOrdenesDespacho(lista);
+					}
+				}
+				if(grpVistaPrincipal.recargar){
+					if(ListAgente.gridProveedores.selectedIndex >= 0){
+						lista = sql.armarLista( sql.getPunteros([agenteAduanalAux]) );
+						grpVistaPrincipal.recibeOrdenesDespacho(lista);
+						plantilla.indice = 1;
+						cmpTitulo.isVisble = true;
+					}else{
+						plantilla.indice = 0;
+						cmpTitulo.isVisble = false;
+					}
+					grpVistaPrincipal.recargar = false;
+				}
+			}
+			
+			
+			private function graficaDocumentos($puntero:Array):void
+			{
+				var listaDocumentos:ArrayCollection = new ArrayCollection();
+				var certificados:ResumenConsulta = new ResumenConsulta();
+				var cartas:ResumenConsulta = new ResumenConsulta();
+				
+				certificados.etiqueta = "Certificados";
+				certificados.totalCertificado = sql.getSumarCampo('certificadosFaltantes',$puntero,'',true);
+				certificados.total = sql.getSumarCampo('certificadosFaltantes',$puntero,'',true);
+				
+				cartas.etiqueta = "Cartas de Uso";
+				cartas.totalCartaUso = sql.getSumarCampo('cartasFaltantes',$puntero,'',true);
+				cartas.total = sql.getSumarCampo('cartasFaltantes',$puntero,'',true);
+				
+				listaDocumentos.addItem(certificados);
+				listaDocumentos.addItem(cartas);
+				
+				graficaPie_Documentos.dataProvider = listaDocumentos;
+			}
+			
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				
+				sizeFont = (20 / 2005) * ($width);
+				sizeFont = sizeFont > 20 ? 20:sizeFont;
+				sizeFont = sizeFont < 15 ? 15:sizeFont;
+			}
+			private function cargarPlantilla():void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(ListAgente);
+				plantilla.cargarGraficas(grpGrafica);
+				plantilla.cargarOperacion(grpVistaPrincipal);
+				plantilla.sinLeyenda();
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" visible="false" includeInLayout="false">
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="CARGAR DOCUMENTACIÓN FALTANTE" vistaAnterior="vistaAnterior(event)"/>
+		
+		<cargarFaltante:CargarFaltante_ListaAgenteAduanal id="ListAgente" width="100%" height="100%"/>
+		
+		<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" gap="0" id="grpGrafica" >
+			<s:VGroup width="100%" height="100%" gap="0" paddingTop="10" paddingBottom="10">
+				<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" text="AGENTE ADUANAL" textAlign="center" fontSize="{sizeFont}" />
+				<s:Spacer height="5%" />
+				<cargarFaltante:GraficaPie_AgenteAduanal id="graficaPie_AgenteA" width="100%" height="100%" />
+				<s:Spacer height="18%" />
+				<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" width="100%" text="DOCUMENTOS FALTANTES" textAlign="center" fontSize="{sizeFont}" />
+				<s:Spacer height="5%" />
+				<cargarFaltante:GraficaPie_DocumentosFaltantes id="graficaPie_Documentos" width="100%" height="100%" />
+			</s:VGroup>
+		</s:VGroup>  
+		
+		
+		<!-- LA VISTA EN LA QUE SE MUESTRA LA LISTA Y DOCUMENTOS-->
+		<principal:CargarFaltante_VistaPrincipal id="grpVistaPrincipal" width="100%" height="100%" />
+	</s:VGroup>  
+	
+	<plantilla:Plantilla_VistaInicial id="plantilla" width="100%" height="100%" />
+</s:Group>

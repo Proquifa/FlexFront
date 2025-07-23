@@ -1,0 +1,915 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								   xmlns:s="library://ns.adobe.com/flex/spark"
+								   xmlns:mx="library://ns.adobe.com/flex/mx"
+								   xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+								   xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+								   xmlns:panelCtaGenerales="skins.skin.comun.consultas.panelCtaGenerales.*" 
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+								   xmlns:linkButton="skins.skin.linkButton.*"
+								   xmlns:dateField="skins.skin.dateField.*"
+								   xmlns:pqNet="skins.botones.pqNet.*" 
+								   xmlns:label="skins.skin.label.*"
+								   xmlns:chekbox="skins.skin.chekbox.*"
+								   xmlns:otros="skins.otros.*" 
+								   titulo="CONSULTA COBROS"
+								   width="100%" height="100%"
+								   creationComplete="inicia()">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.menu.EventoMenuContinuo;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.cobros.EventoConsultaCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.proveedor.OCTableroProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.finanzas.facturacion.comun.HelpMenuSeleccionObject;
+			import mx.utils.StringUtil;
+			
+			import spark.components.ButtonBar;
+			import spark.events.IndexChangeEvent;
+			
+			private var urlreq:URLRequest;
+			private var ruta:String;
+ 			private var _pagoSeleccionado:Cobros;
+			[Bindable] private var _listaBotones:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1},{valor:'Rápida',llave:0} ] );
+			
+			private var isFueraDeSistema:Boolean= false;
+			private var ultimaSeleccionES:HelpMenuSeleccionObject;
+			private var nuevaSeleccionES:HelpMenuSeleccionObject;
+			private var ultimaSeleccionFS:HelpMenuSeleccionObject;
+			private var nuevaSeleccionFS:HelpMenuSeleccionObject;
+			private var _currenVista:String = "tablaGrid";
+			private	var _usuario:Empleado = DatosGlobales.getInstance()._usuario;
+			
+			[Bindable] private var estadoFactura:String;
+			
+			[Bindable]
+			public function get pagoSeleccionado():Cobros
+			{
+				return _pagoSeleccionado;
+			}
+			
+			public function makeRequest():void 
+			{ 
+				if (pagoSeleccionado.monedaEsperadaCobro == "Pesos" || pagoSeleccionado.monedaEsperadaCobro == "M.N.")
+					 Util.restAPIStatusFactura(pagoSeleccionado.receptor, pagoSeleccionado.emisor, pagoSeleccionado.totalPesos.toString(), pagoSeleccionado.uuid, httpRequestComplete, httpRequestError);
+				else
+					 Util.restAPIStatusFactura(pagoSeleccionado.receptor, pagoSeleccionado.emisor, pagoSeleccionado.totalDlls.toString(), pagoSeleccionado.uuid, httpRequestComplete, httpRequestError);
+			} 
+			
+			
+			private function httpRequestComplete( event:Event ):void 
+			{ 
+				trace( event.target.data );
+				estadoFactura = event.target.data;
+				
+			} 
+			
+			private function httpRequestError( error:ErrorEvent ):void{ 
+				trace( "An error occured: " + error );     
+			}
+
+			public function set pagoSeleccionado(value:Cobros):void
+			{
+				_pagoSeleccionado = value;
+				if((pagoSeleccionado.cpedido == 'N/A' || pagoSeleccionado.cpedido == null) && pagoSeleccionado.ordenCompra != null ){
+					lblPInterno.text = 'Orden Compra:'
+					lnkInterno.label = pagoSeleccionado.ordenCompra;
+				}else{
+					lblPInterno.text = 'P.Interno:'
+					lnkInterno.label = pagoSeleccionado.cpedido;
+				}
+				
+				makeRequest();
+				
+			}
+			
+			public function set estadoDeLaFactura(data:String):void {
+				if (!data) return;
+				
+				this.estadoFactura = data;
+			}
+
+			private function inicia():void{
+				this.dtpFInicio.text  = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				this.dtpFInicio.selectedDate = new Date();
+				this.dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				this.dtpFFin.selectedDate = new Date();
+				this.vstBusqueda.selectedIndex = 1;
+				GridConsultaCobros.switchCombo.addEventListener(Event.CHANGE,recibeSwitch);
+				cmbBanco.visible = cmbBanco.includeInLayout = false;
+				lblBanco.visible = lblBanco.includeInLayout = false;				
+				cmbCuenta.visible = cmbCuenta.includeInLayout = false;
+				lblCuenta.visible = lblCuenta.includeInLayout = false;
+				
+				btnGridToDetalle.addEventListener(MouseEvent.CLICK,btnRegresar_MouseEventClick,false,0,true);
+				
+				var evt:EventoConsultaCobros= new EventoConsultaCobros(EventoConsultaCobros.MOSTRAR_OCULTAR_TAB_GRAFICAS);
+				evt.tabGrafica = true;
+				dispatchEvent(evt);
+				
+				if( _usuario.nivel == 1 // PLozada
+					|| _usuario.nivel == 35 // Ing
+					|| _usuario.esGerente == true
+					|| _usuario.idFuncion == 37) // Master ESAC
+				{
+					mostrarCombos(true);
+				}
+				else
+				{
+					mostrarCombos(false);
+				}
+				
+				realizarBusquedaInicial();
+			}
+			private function recibeSwitch(event:Event):void
+			{
+				/*var btnBarBtn:ButtonBarButton = btnBarra.dataGroup.getElementAt(1) as ButtonBarButton;*/
+				if(GridConsultaCobros.switchCombo.selected){
+					isFueraDeSistema = true;
+					
+					ultimaSeleccionES.isBusquedaAvanzada = btnBarra.selectedIndex == 0 ? true:false;
+					
+					btnBusqueda.CambiarToActualizarTipoBoton(ultimaSeleccionFS.isBtnActualizarAvanzada);
+					btnBarra.selectedIndex = ultimaSeleccionES.isBusquedaAvanzada ? 0:1;
+					
+					vstBusqueda.selectedIndex = btnBarra.selectedIndex == 0 ? 1 : 0;
+					
+					dtpFInicio.selectedDate = nuevaSeleccionFS.finicio;
+					dtpFFin.selectedDate = nuevaSeleccionFS.ffin;
+					cmbCliente.selectedIndex = cmbCliente.seleccionarValorPorNumero(nuevaSeleccionFS.idCliente,"llave");
+					cmbCobrador.selectedIndex =cmbCobrador.seleccionarValor(nuevaSeleccionFS.cobrador);
+					cmbVendio.selectedIndex = cmbVendio.seleccionarValor(nuevaSeleccionFS.facturo);
+					cmbCPago.selectedIndex = cmbCPago.seleccionarValor(nuevaSeleccionFS.cpago);
+					cmbDiasPago.selectedIndex = cmbDiasPago.seleccionarValor(nuevaSeleccionFS.diasPago);
+					cmbEstado.selectedIndex = cmbEstado.seleccionarValor(nuevaSeleccionFS.estado);
+					
+					/*btnBarBtn.enabled = false;*/
+					cmbBanco.visible = cmbBanco.includeInLayout = true;
+					lblBanco.visible = lblBanco.includeInLayout = true;
+					cmbCuenta.visible = cmbCuenta.includeInLayout = true;
+					lblCuenta.visible = lblCuenta.includeInLayout = true;
+					
+					spbanco.visible = spbanco.includeInLayout = true;
+					spcuenta.visible = spcuenta.includeInLayout = true;
+					
+				}
+				else{
+					isFueraDeSistema = false;
+					ultimaSeleccionFS.isBusquedaAvanzada = btnBarra.selectedIndex == 0 ? true:false;
+					btnBusqueda.CambiarToActualizarTipoBoton(ultimaSeleccionES.isBtnActualizarAvanzada);
+					btnBarra.selectedIndex = ultimaSeleccionES.isBusquedaAvanzada ? 0:1;
+					
+					vstBusqueda.selectedIndex = btnBarra.selectedIndex == 0 ? 1 : 0;
+					
+					dtpFInicio.selectedDate = nuevaSeleccionES.finicio;
+					dtpFFin.selectedDate = nuevaSeleccionES.ffin;
+					cmbCliente.selectedIndex = cmbCliente.seleccionarValorPorNumero(nuevaSeleccionES.idCliente,"llave");
+					cmbCobrador.selectedIndex = cmbCobrador.seleccionarValor(nuevaSeleccionES.cobrador);
+					cmbVendio.selectedIndex = cmbVendio.seleccionarValor(nuevaSeleccionES.facturo);
+					cmbCPago.selectedIndex = cmbCPago.seleccionarValor(nuevaSeleccionES.cpago);
+					cmbDiasPago.selectedIndex = cmbDiasPago.seleccionarValor(nuevaSeleccionES.diasPago);
+					cmbEstado.selectedIndex = cmbEstado.seleccionarValor(nuevaSeleccionES.estado);
+					
+					/*btnBarBtn.enabled = true;*/
+					cmbBanco.visible = cmbBanco.includeInLayout = false;
+					lblBanco.visible = lblBanco.includeInLayout = false;
+					cmbCuenta.visible = cmbCuenta.includeInLayout = false;
+					lblCuenta.visible = lblCuenta.includeInLayout = false;
+					spbanco.visible = spbanco.includeInLayout = false;
+					spcuenta.visible = spcuenta.includeInLayout = true;
+				}
+			}
+			
+			private function mostrarCombos($visible:Boolean):void
+			{
+				cmbCobrador.visible = cmbCobrador.includeInLayout = $visible;
+				lblCobrador.visible = lblCobrador.includeInLayout = $visible;
+				spcCobrador.visible = spcCobrador.includeInLayout = $visible;
+			}
+			
+			
+			private function regresaMenu():void{
+				var evento:EventoMenuContinuo = new EventoMenuContinuo(EventoMenuContinuo.REGRESA_MENU);
+				dispatchEvent( evento );
+			}
+			
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if((event.currentTarget as ButtonBar).selectedItem == null){
+					event.preventDefault();
+				}else{
+					this.vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoConsultaCobros= new EventoConsultaCobros(EventoConsultaCobros.MOSTRAR_OCULTAR_TAB_GRAFICAS);
+					event.currentTarget.selectedItem.llave == 0 ? evt.tabGrafica = false : evt.tabGrafica = true;
+					dispatchEvent(evt);   
+					
+					if(((event.currentTarget as ButtonBar).selectedItem as Object).valor == 'Rápida'){
+						realizarBusquedaRapida();
+					}else{
+						_currenVista = "tablaGrid"
+						realizarBusqueda();
+					}
+				}
+			}
+			
+			public function set recibirLaVistaSeleccionada($vista:String):void
+			{
+				if($vista == null) return;
+				_currenVista = $vista;	
+			}
+			
+			public function realizarBusqueda():void{
+				var eventEspera:EventoEsperar;
+				var evtPasarCondicioneATot:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.COPIAR_CONDICIONES_A_TOTALES_INDIVIDUALES);
+				var cobros:EventoConsultaCobros;
+				if(_currenVista == "tablaGrid"){
+					//configurar Espera
+					eventEspera= new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					
+					if(isFueraDeSistema == true){
+						eventEspera.tipoEventos.push("OBTENER_CONSULTA_COBROS");
+						dispatchEvent(eventEspera);		
+						
+						
+						cobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_CONSULTA_COBROS);
+						
+						evtPasarCondicioneATot.parametros.fechaInicio = cobros.parametros.fechaInicio = this.dtpFInicio.selectedDate;
+						evtPasarCondicioneATot.parametros.fechaFin = cobros.parametros.fechaFin = this.dtpFFin.selectedDate;
+						evtPasarCondicioneATot.parametros.idCliente = cobros.parametros.idCliente = this.cmbCliente.selectedItem.llave;
+						evtPasarCondicioneATot.parametros.medioPago = cobros.parametros.medioPago	 = "";
+						cmbVendio.selectedItem.valor == '--TODOS--' ? cobros.parametros.fpor = "" : cobros.parametros.fpor = this.cmbVendio.selectedItem.valor;
+						cmbEstado.selectedItem.valor == '--TODOS--' ? cobros.parametros.estado = "" : cobros.parametros.estado = this.cmbEstado.selectedItem.valor;
+						cmbCPago.selectedItem.valor == '--TODOS--' ? cobros.parametros.cpago = "" : cobros.parametros.cpago = this.cmbCPago.selectedItem.valor;
+						cmbCobrador.selectedItem.valor == '--TODOS--' ? cobros.parametros.cobrador = 0 : cobros.parametros.cobrador = this.cmbCobrador.selectedItem.llave;
+						if(GridConsultaCobros.switchCombo.selected == true){	
+							if(cmbBanco.selectedItem == "--TODOS--"){
+								cobros.parametros.banco = ""
+								
+							}else{
+								cmbBanco.selectedItem.valor == '--TODOS--' ? cobros.parametros.banco = "" : cobros.parametros.banco = this.cmbBanco.selectedItem.valor;
+							}
+							if(cmbCuenta.selectedItem!= undefined && cmbCuenta.selectedItem!="--TODOS--"){
+								cmbCuenta.selectedItem.valor == '--TODOS--' ? cobros.parametros.cuenta = "" : cobros.parametros.cuenta = numeroCuenta(this.cmbCuenta.selectedItem.valor);
+							}else{
+								cobros.parametros.cuenta = "";	
+							}
+						}else{
+							cobros.parametros.banco = "";
+							cobros.parametros.cuenta = "";	
+						}
+						evtPasarCondicioneATot.parametros.fpor = cobros.parametros.fpor; 
+						evtPasarCondicioneATot.parametros.estado = cobros.parametros.estado;
+						evtPasarCondicioneATot.parametros.cpago = cobros.parametros.cpago;
+						evtPasarCondicioneATot.parametros.banco = cobros.parametros.banco;
+						evtPasarCondicioneATot.parametros.cuenta = cobros.parametros.cuenta;
+						evtPasarCondicioneATot.parametros.drc = cobros.parametros.drc = this.cmbDiasPago.selectedItem.llave;
+						evtPasarCondicioneATot.parametros.factura = cobros.parametros.factura = "";
+						evtPasarCondicioneATot.parametros.idUsuarioLogueado = cobros.parametros.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+						cobros.parametros.busquedaCR = GridConsultaCobros.switchCombo.selected;
+						dispatchEvent(cobros);
+						
+						ultimaSeleccionFS.finicio = cobros.parametros.fechaInicio;
+						ultimaSeleccionFS.ffin =  cobros.parametros.fechaFin;
+						ultimaSeleccionFS.idCliente =  cobros.parametros.idCliente;
+						ultimaSeleccionFS.idCobrador = cobros.parametros.cobrador
+						ultimaSeleccionFS.facturo = cobros.parametros.fpor;
+						ultimaSeleccionFS.estado = cobros.parametros.estado;
+						ultimaSeleccionFS.isBusquedaAvanzada = true;  
+					}else{
+						eventEspera.tipoEventos.push("OBTENER_CONSULTA_COBROS");
+						dispatchEvent(eventEspera);		
+						
+						
+						cobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_CONSULTA_COBROS);
+						
+						evtPasarCondicioneATot.parametros.fechaInicio = cobros.parametros.fechaInicio = this.dtpFInicio.selectedDate;
+						evtPasarCondicioneATot.parametros.fechaFin = cobros.parametros.fechaFin = this.dtpFFin.selectedDate;
+						evtPasarCondicioneATot.parametros.idCliente = cobros.parametros.idCliente = this.cmbCliente.selectedItem.llave;
+						evtPasarCondicioneATot.parametros.medioPago = cobros.parametros.medioPago	 = "";
+						cmbVendio.selectedItem.valor == '--TODOS--' ? cobros.parametros.fpor = "" : cobros.parametros.fpor = this.cmbVendio.selectedItem.valor;
+						cmbEstado.selectedItem.valor == '--TODOS--' ? cobros.parametros.estado = "" : cobros.parametros.estado = this.cmbEstado.selectedItem.valor;
+						cmbCPago.selectedItem.valor == '--TODOS--' ? cobros.parametros.cpago = "" : cobros.parametros.cpago = this.cmbCPago.selectedItem.valor;
+						cmbCobrador.selectedItem.valor == '--TODOS--' ? cobros.parametros.cobrador = 0 : cobros.parametros.cobrador = this.cmbCobrador.selectedItem.llave;
+						if(GridConsultaCobros.switchCombo.selected == true){						
+							cmbBanco.selectedItem.valor == '--TODOS--' ? cobros.parametros.banco = "" : cobros.parametros.banco = this.cmbBanco.selectedItem.valor;
+							if(cmbCuenta.selectedItem!= undefined && cmbCuenta.selectedItem!="--TODOS--"){
+								cmbCuenta.selectedItem.valor == '--TODOS--' ? cobros.parametros.cuenta = "" : cobros.parametros.cuenta = this.cmbCuenta.selectedItem.valor;
+							}else{
+								cobros.parametros.cuenta = "";	
+							}
+						}else{
+							cobros.parametros.banco = "";
+							cobros.parametros.cuenta = "";	
+						}
+						evtPasarCondicioneATot.parametros.fpor = cobros.parametros.fpor; 
+						evtPasarCondicioneATot.parametros.estado = cobros.parametros.estado;
+						evtPasarCondicioneATot.parametros.cpago = cobros.parametros.cpago;
+						evtPasarCondicioneATot.parametros.banco = cobros.parametros.banco;
+						evtPasarCondicioneATot.parametros.cuenta = cobros.parametros.cuenta;
+						evtPasarCondicioneATot.parametros.drc = cobros.parametros.drc = this.cmbDiasPago.selectedItem.llave;
+						evtPasarCondicioneATot.parametros.factura = cobros.parametros.factura = "";
+						evtPasarCondicioneATot.parametros.idUsuarioLogueado = cobros.parametros.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+						cobros.parametros.busquedaCR = GridConsultaCobros.switchCombo.selected;
+						dispatchEvent(cobros);
+						
+						ultimaSeleccionES.finicio = cobros.parametros.fechaInicio;
+						ultimaSeleccionES.ffin =  cobros.parametros.fechaFin;
+						ultimaSeleccionES.idCliente =  cobros.parametros.idCliente;
+						ultimaSeleccionES.idCobrador = cobros.parametros.cobrador
+						ultimaSeleccionES.facturo = cobros.parametros.fpor;
+						ultimaSeleccionES.drc = cobros.parametros.drc;
+						ultimaSeleccionES.estado = cobros.parametros.estado;
+						ultimaSeleccionES.isBusquedaAvanzada = true;  
+					}
+					
+				}else{
+					//configurar Espera
+					eventEspera = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = []; 
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.idButtons.push("btnTotales");
+					eventEspera.tipoEventos.push("OBTENER_CONSULTA_COBROS");
+					eventEspera.tipoEventos.push("OBTENER_TOTALES_COBROS");
+					dispatchEvent(eventEspera);
+					
+					cobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_CONSULTA_COBROS);
+					var eventoTotales:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_TOTALES_COBROS);
+					cobros.parametros.fechaInicio = eventoTotales.parametros.fechaInicio = evtPasarCondicioneATot.parametros.fechaInicio = this.dtpFInicio.selectedDate;
+					cobros.parametros.fechaFin = eventoTotales.parametros.fechaFin = evtPasarCondicioneATot.parametros.fechaFin = this.dtpFFin.selectedDate;
+					cobros.parametros.idCliente = eventoTotales.parametros.idCliente = evtPasarCondicioneATot.parametros.idCliente = this.cmbCliente.selectedItem.llave;
+					cobros.parametros.medioPago = eventoTotales.parametros.medioPago = evtPasarCondicioneATot.parametros.medioPago = "";
+					cmbVendio.selectedItem.valor == '--TODOS--' ? eventoTotales.parametros.fpor = "" : eventoTotales.parametros.fpor = this.cmbVendio.selectedItem.valor;
+					cmbEstado.selectedItem.valor == '--TODOS--' ? eventoTotales.parametros.estado = "" : eventoTotales.parametros.estado = this.cmbEstado.selectedItem.valor;
+					cmbCPago.selectedItem.valor == '--TODOS--' ? eventoTotales.parametros.cpago = "" : eventoTotales.parametros.cpago = this.cmbCPago.selectedItem.valor;
+					cmbCobrador.selectedItem.valor == '--TODOS--' ? eventoTotales.parametros.cobrador = 0 : eventoTotales.parametros.cobrador = this.cmbCobrador.selectedItem.llave;
+					if(GridConsultaCobros.switchCombo.selected == true){						
+						cmbBanco.selectedItem.valor == '--TODOS--' ? cobros.parametros.banco = "" : cobros.parametros.banco = this.cmbBanco.selectedItem.valor;
+						if(cmbCuenta.selectedItem!= undefined && cmbCuenta.selectedItem!="--TODOS--"){
+							cmbCuenta.selectedItem.valor == '--TODOS--' ? cobros.parametros.cuenta = "" : cobros.parametros.cuenta = this.cmbCuenta.selectedItem.valor;
+						}else{
+							cobros.parametros.cuenta = "";	
+						}
+					}else{
+						cobros.parametros.banco = "";
+						cobros.parametros.cuenta = "";	
+					}
+					cobros.parametros.fpor = evtPasarCondicioneATot.parametros.fpor = eventoTotales.parametros.fpor;
+					cobros.parametros.estado  = evtPasarCondicioneATot.parametros.estado = eventoTotales.parametros.estado;
+					cobros.parametros.cpago = evtPasarCondicioneATot.parametros.cpago = eventoTotales.parametros.cpago;
+					cobros.parametros.banco = evtPasarCondicioneATot.parametros.banco = eventoTotales.parametros.banco;
+					cobros.parametros.cuenta = evtPasarCondicioneATot.parametros.cuenta = eventoTotales.parametros.cuenta;
+					cobros.parametros.drc = eventoTotales.parametros.drc = evtPasarCondicioneATot.parametros.drc = this.cmbDiasPago.selectedItem.llave;
+					cobros.parametros.factura = eventoTotales.parametros.factura = evtPasarCondicioneATot.parametros.factura = "";
+					cobros.parametros.idUsuarioLogueado = evtPasarCondicioneATot.parametros.idUsuarioLogueado =  DatosGlobales.getInstance()._usuario.clave;
+					cobros.parametros.busquedaCR = GridConsultaCobros.switchCombo.selected;
+					eventoTotales.individual = false;
+					dispatchEvent(eventoTotales);	
+					dispatchEvent(cobros);
+					
+					ultimaSeleccionES.finicio = cobros.parametros.fechaInicio;
+					ultimaSeleccionES.ffin =  cobros.parametros.fechaFin;
+					ultimaSeleccionES.idCliente =  cobros.parametros.idCliente;
+					ultimaSeleccionES.idCobrador = cobros.parametros.cobrador
+					ultimaSeleccionES.facturo = cobros.parametros.fpor;
+					ultimaSeleccionES.estado = cobros.parametros.estado;
+					ultimaSeleccionES.banco = cobros.parametros.banco;
+					ultimaSeleccionES.cuenta = cobros.parametros.cuenta;
+					ultimaSeleccionES.isBusquedaAvanzada = true;  
+					
+				}
+				dispatchEvent(evtPasarCondicioneATot);
+				
+				var actualizarVistaCurrent:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.ACTUALIZAR_VISTA_ACTUAL);
+				actualizarVistaCurrent.actualizarVistaCurrent = true;
+				dispatchEvent(actualizarVistaCurrent);
+				
+				
+				//Para verificar si los datos cambian
+				currentFInicio = cobros.parametros.fechaInicio;
+				currentFFin = cobros.parametros.fechaFin;
+				currentIdCliente = cobros.parametros.idCliente;
+				currentMedioPago = cobros.parametros.medioPago;
+				currentFpor = cobros.parametros.fpor;
+				currentEstado = cobros.parametros.estado;
+				currentCPago = cobros.parametros.cpago;
+				currentDrc = cobros.parametros.drc;
+				currentBanco = cobros.parametros.banco;
+				currentCuenta = cobros.parametros.cuenta;
+				currentCobrador = cmbCobrador.selectedItem.valor == '--TODOS--' ? "" : cmbCobrador.selectedItem.valor;
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			public function numeroCuenta(cuentaNum:String):String{
+				var cuentaBanco:Array = cuentaNum.split(" ");
+				return cuentaBanco[0];
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar){
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar){
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			public function realizarBusquedaInicial():void{
+				
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("OBTENER_CONSULTA_COBROS");
+				dispatchEvent(eventEspera);
+				
+				ultimaSeleccionES = new HelpMenuSeleccionObject;
+				nuevaSeleccionES = new HelpMenuSeleccionObject;
+				ultimaSeleccionFS = new HelpMenuSeleccionObject;
+				nuevaSeleccionFS = new HelpMenuSeleccionObject;
+				
+				ultimaSeleccionES.isBusquedaAvanzada = nuevaSeleccionES.isBusquedaAvanzada = true;
+				ultimaSeleccionFS.isBusquedaAvanzada = nuevaSeleccionFS.isBusquedaAvanzada = true;
+				
+				var evt:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_CONSULTA_COBROS);
+				var evtPasarCondicioneATot:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.COPIAR_CONDICIONES_A_TOTALES_INDIVIDUALES);
+				ultimaSeleccionES.finicio = nuevaSeleccionES.finicio = ultimaSeleccionFS.finicio = nuevaSeleccionFS.finicio = evtPasarCondicioneATot.parametros.fechaInicio = evt.parametros.fechaInicio = this.dtpFInicio.selectedDate;
+				ultimaSeleccionES.ffin = nuevaSeleccionES.ffin = ultimaSeleccionFS.ffin = nuevaSeleccionFS.ffin = evtPasarCondicioneATot.parametros.fechaFin = evt.parametros.fechaFin = this.dtpFFin.selectedDate;
+				ultimaSeleccionES.idCliente = nuevaSeleccionES.idCliente = ultimaSeleccionFS.idCliente = nuevaSeleccionFS.idCliente = evtPasarCondicioneATot.parametros.idCliente = evt.parametros.idCliente = 0;
+				ultimaSeleccionES.medioPago = nuevaSeleccionES.medioPago = ultimaSeleccionFS.medioPago = nuevaSeleccionFS.medioPago = evtPasarCondicioneATot.parametros.medioPago = evt.parametros.medioPago = "";
+				ultimaSeleccionES.facturo = nuevaSeleccionES.facturo = ultimaSeleccionFS.facturo = nuevaSeleccionFS.facturo = evtPasarCondicioneATot.parametros.fpor = evt.parametros.fpor = ""; 
+				ultimaSeleccionES.estado = nuevaSeleccionES.estado = ultimaSeleccionFS.estado = nuevaSeleccionFS.estado = evtPasarCondicioneATot.parametros.estado = evt.parametros.estado = "";
+				ultimaSeleccionES.cpago = nuevaSeleccionES.cpago = ultimaSeleccionFS.cpago = nuevaSeleccionFS.cpago = evtPasarCondicioneATot.parametros.cpago = evt.parametros.cpago = ""; 
+				ultimaSeleccionES.drc = nuevaSeleccionES.drc = ultimaSeleccionFS.drc = nuevaSeleccionFS.drc = evtPasarCondicioneATot.parametros.drc = evt.parametros.drc = 5;
+				ultimaSeleccionES.factura = nuevaSeleccionES.factura = ultimaSeleccionFS.factura = nuevaSeleccionFS.factura = evtPasarCondicioneATot.parametros.factura = evt.parametros.factura = "";
+				ultimaSeleccionES.idCobrador = nuevaSeleccionES.idCobrador = ultimaSeleccionFS.idCobrador = nuevaSeleccionFS.idCobrador = evtPasarCondicioneATot.parametros.cobrador = evt.parametros.cobrador = 0;
+				ultimaSeleccionES.idUsuarioLogueado = nuevaSeleccionES.idUsuarioLogueado = ultimaSeleccionFS.idUsuarioLogueado = nuevaSeleccionFS.idUsuarioLogueado = evtPasarCondicioneATot.parametros.idUsuarioLogueado = evt.parametros.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent(evt);
+				dispatchEvent(evtPasarCondicioneATot);
+				
+				var actualizarVistaCurrent:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.ACTUALIZAR_VISTA_ACTUAL);
+				actualizarVistaCurrent.actualizarVistaCurrent = true;
+				dispatchEvent(actualizarVistaCurrent);
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = evt.parametros.fechaInicio;
+				currentFFin = evt.parametros.fechaFin;
+				currentIdCliente = evt.parametros.idCliente;
+				currentMedioPago = evt.parametros.medioPago;
+				currentFpor = evt.parametros.fpor;
+				currentEstado = evt.parametros.estado;
+				currentCPago = evt.parametros.cpago;
+				currentDrc = evt.parametros.drc;
+				currentCobrador = '';
+			}
+			
+			private function realizarBusquedaRapida():void{
+				var tempFolio:String = StringUtil.trim(txtBuscaRapida.visible ==true ? txtBuscaRapida.text : txtBuscaRapidaUUID.text);
+				if( tempFolio.length >0){
+					
+					//configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("OBTENER_CONSULTA_COBROS");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_CONSULTA_COBROS);
+					evt.parametros.fechaInicio = null;
+					evt.parametros.fechaFin = null;
+					evt.parametros.idCliente = 0;
+					evt.parametros.medioPago = "";
+					evt.parametros.fpor = "";
+					evt.parametros.estado = "";
+					evt.parametros.cpago = "";
+					evt.parametros.drc = 5;
+					evt.parametros.factura = txtBuscaRapida.visible == true ? tempFolio : "";
+					evt.parametros.uuid = txtBuscaRapidaUUID.visible == true ? tempFolio : "";
+					evt.parametros.cobrador = 0;
+					evt.parametros.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+					dispatchEvent(evt);
+					currentFolioFactura = tempFolio;
+				}else{
+					dispatchEvent(new Event("LimpiarGridConsultaCobros",true));
+					currentFolioFactura = "";
+				}
+			}
+			
+			public function cambiaIndex( $indice:int ):void{
+				
+				this.espacioInfoGenerales.selectedIndex = $indice;
+				
+				if($indice == 1)
+					this.btnGridToDetalle.visible = true;
+				else
+					this.btnGridToDetalle.visible = false;
+				
+			}
+			
+			private function btnRegresar_MouseEventClick(e:MouseEvent):void{
+				cambiaIndex(0);
+				var evento:EventoConsultaCobros = new EventoConsultaCobros( EventoConsultaCobros.CAMBIA_INDICE);
+				evento.indiceVistas = 0;
+				dispatchEvent( evento );
+			}
+			
+			private function verContrarecibo():void{
+				if (this.lblCondicion.text != "PREPAGO 100%" && this.lnkContrarecibo.label != "N/A"){
+					var path:Object = Util.rutaNueva(this.lnkContrarecibo.label);
+					ruta = RutasPdF.GENERAL_RUTA + RutasPdF.AMPARA_REVISION_RUTA + path.ruta + this.lnkContrarecibo.label  +".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );	
+					
+				}else if ( this.lblCondicion.text == "PREPAGO 100%" && this.lnkContrarecibo.label != "N/A"){
+					ruta = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + this.lnkContrarecibo.label  +".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}
+			}
+			
+			private function verPInterno():void{
+				if ( pagoSeleccionado.cpedido != "N/D" && pagoSeleccionado.cpedido != "N/A"){
+					var path:Object = Util.rutaNueva(this.lnkInterno.label);
+					ruta = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + path.ruta + this.lnkInterno.label  +".pdf";
+					urlreq = new URLRequest( ruta );
+					navigateToURL( urlreq );
+				} 	
+				else if ( (pagoSeleccionado.cpedido == "N/D" || pagoSeleccionado.cpedido == "N/A") && pagoSeleccionado.ordenCompra != null ){
+					var path:Object = Util.rutaNueva(this.lnkInterno.label);
+					ruta = RutasPdF.GENERAL_RUTA + RutasPdF.OC_RUTA + path.ruta + this.lnkInterno.label  +".pdf";
+					urlreq = new URLRequest( ruta );
+					navigateToURL( urlreq );
+				}
+			}
+			
+			private function verFactura():void{
+				var path:Object = Util.rutaFecha(this.pagoSeleccionado.fechaFacturacion);
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + this.lblVendio.text +"/"+ path.ruta + this.lnkFactura.label +".pdf";
+				urlreq = new URLRequest( ruta );
+				navigateToURL( urlreq );
+			}
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentIdCliente:int;
+			private var currentMedioPago:String;
+			private var currentFpor:String;
+			private var currentEstado:String;
+			private var currentCPago:String;
+			private var currentDrc:int;
+			private var currentBanco:String;
+			private var currentCuenta:String;
+			private var currentFolioFactura:String;
+			private var currentCobrador:String;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				if(event.currentTarget is ComboCatalogos){
+					if((event.currentTarget as ComboCatalogos).id == "cmbVendio")
+					{
+						if(cmbVendio.selectedItem.valor == "--TODOS--"){
+							cmbBanco.obtenerBancosClientes("","--TODOS--");
+							cmbCuenta.obtenerCuentasBanco("--TODOS--","","--TODOS--");
+						}else{
+						cmbBanco.obtenerBancosClientes(cmbVendio.selectedItem.valor,"--TODOS--")
+						cmbCuenta.obtenerCuentasBanco("--TODOS--",cmbVendio.selectedItem.valor,"--TODOS--");
+						}
+					}
+					if((event.currentTarget as ComboCatalogos).id == "cmbBanco")
+					{
+						if(cmbBanco.selectedItem == "--TODOS--"){
+							cmbCuenta.obtenerCuentasBanco("--TODOS--","","--TODOS--");
+						}else{
+						cmbCuenta.obtenerCuentasBanco(cmbBanco.selectedItem.valor,cmbVendio.selectedItem.valor,"--TODOS--");
+						}
+					}
+				}
+				var tempVendio:String = cmbVendio.selectedItem.valor == '--TODOS--' ? "" : cmbVendio.selectedItem.valor;
+				var tempEstado:String = cmbEstado.selectedItem.valor == '--TODOS--' ? "" :  cmbEstado.selectedItem.valor;
+				var tempCPago:String = cmbCPago.selectedItem.valor == '--TODOS--' ? "" : cmbCPago.selectedItem.valor;
+				var tempCobrador:String = cmbCobrador.selectedItem.valor == '--TODOS--' ? "" : cmbCobrador.selectedItem.valor;
+				if(isFueraDeSistema){
+					switch(event.currentTarget.id)
+					{
+						case "dtpFInicio":{
+							nuevaSeleccionFS.finicio = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionFS.finicio.time,ultimaSeleccionFS.finicio.time,"dtpFInicio",btnBusqueda);
+							break;
+						}
+						case "dtpFFin":{
+							nuevaSeleccionFS.ffin = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionFS.ffin.time,ultimaSeleccionFS.ffin.time,"dtpFFin",btnBusqueda);	
+							break;
+						}
+						case "cmbCliente":	{
+							nuevaSeleccionFS.idCliente = cmbCliente.selectedItem.llave; 
+							CompararYControlarBoton(nuevaSeleccionFS.idCliente,ultimaSeleccionFS.idCliente,"cmbCliente",btnBusqueda);
+							break;
+						}
+						case "cmbVendio":{
+							nuevaSeleccionFS.facturo = cmbVendio.selectedItem.valor == "--TODOS--" ? "":cmbVendio.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.facturo,ultimaSeleccionFS.facturo,"cmbVendio",btnBusqueda);
+							break;
+						}
+						case "cmbCPago":{
+							nuevaSeleccionFS.cpago = cmbCPago.selectedItem.valor == "--TODOS--" ? "":cmbCPago.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.cpago,ultimaSeleccionFS.cpago,"cmbCPago",btnBusqueda);
+							break;
+						}
+						case "cmbEstado":{
+							nuevaSeleccionFS.estado = cmbEstado.selectedItem.valor == "--TODOS--" ? "":cmbEstado.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.estado,ultimaSeleccionFS.estado,"cmbEstado",btnBusqueda);
+							break;
+						}
+						case "cmbDiasPago":	{
+							nuevaSeleccionFS.diasPago = cmbDiasPago.selectedItem.valor == "--TODOS--" ? "":cmbDiasPago.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.diasPago,ultimaSeleccionFS.diasPago,"cmbDiasPago",btnBusqueda);
+							break;
+						}
+						case "cmbCobrador":	{
+							nuevaSeleccionFS.cobrador = cmbCobrador.selectedItem.valor == "--TODOS--" ? "":cmbCobrador.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.cobrador,ultimaSeleccionFS.cobrador,"cmbCobrador",btnBusqueda);
+							break;
+						}
+						case "checkComboFacturaUUID": {
+							nuevaSeleccionES.chkPedidoFactura = checkComboFacturaUUID.selected ? "UUID" : "FACTURA";
+							if(nuevaSeleccionES.chkPedidoFactura == 'UUID'){
+								txtBuscaRapida.visible = txtBuscaRapida.includeInLayout = false;
+								txtBuscaRapidaUUID.visible = txtBuscaRapidaUUID.includeInLayout = true;
+							}else if(nuevaSeleccionES.chkPedidoFactura == 'FACTURA'){
+								txtBuscaRapida.visible = txtBuscaRapida.includeInLayout = true;
+								txtBuscaRapidaUUID.visible = txtBuscaRapidaUUID.includeInLayout = false;
+							}
+							break;
+						}
+					}
+				}else{
+					switch(event.currentTarget.id)
+					{
+						case "dtpFInicio":{
+							nuevaSeleccionES.finicio = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionES.finicio.time,ultimaSeleccionES.finicio.time,"dtpFInicio",btnBusqueda);
+							break;
+						}
+						case "dtpFFin":{
+							nuevaSeleccionES.ffin = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionES.ffin.time,ultimaSeleccionES.ffin.time,"dtpFFin",btnBusqueda);	
+							break;
+						}
+						case "cmbCliente":	{
+							nuevaSeleccionES.idCliente = cmbCliente.selectedItem.llave; 
+							CompararYControlarBoton(nuevaSeleccionES.idCliente,ultimaSeleccionES.idCliente,"cmbCliente",btnBusqueda);
+							break;
+						}
+						case "cmbVendio":{
+							nuevaSeleccionES.facturo = cmbVendio.selectedItem.valor == "--TODOS--" ? "":cmbVendio.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.facturo,ultimaSeleccionES.facturo,"cmbVendio",btnBusqueda);
+							break;
+						}
+						case "cmbCPago":{
+							nuevaSeleccionES.cpago = cmbCPago.selectedItem.valor == "--TODOS--" ? "":cmbCPago.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.cpago,ultimaSeleccionES.cpago,"cmbCPago",btnBusqueda);
+							break;
+						}
+						case "cmbEstado":{
+							nuevaSeleccionES.estado = cmbEstado.selectedItem.valor == "--TODOS--" ? "":cmbEstado.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.estado,ultimaSeleccionES.estado,"cmbEstado",btnBusqueda);
+							break;
+						}
+						case "cmbDiasPago":	{
+							nuevaSeleccionES.diasPago = cmbDiasPago.selectedItem.valor == "--TODOS--" ? "":cmbDiasPago.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.diasPago,ultimaSeleccionES.diasPago,"cmbDiasPago",btnBusqueda);
+							break;
+						}
+						case "cmbCobrador":	{
+							nuevaSeleccionES.cobrador = cmbCobrador.selectedItem.valor == "--TODOS--" ? "":cmbCobrador.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.cobrador,ultimaSeleccionES.cobrador,"cmbCobrador",btnBusqueda);
+							break;
+						}
+						case "checkComboFacturaUUID": {
+							nuevaSeleccionES.chkPedidoFactura = checkComboFacturaUUID.selected ? "UUID" : "FACTURA";
+							if(nuevaSeleccionES.chkPedidoFactura == 'UUID'){
+								txtBuscaRapida.visible = txtBuscaRapida.includeInLayout = false;
+								txtBuscaRapidaUUID.visible = txtBuscaRapidaUUID.includeInLayout = true;
+							}else if(nuevaSeleccionES.chkPedidoFactura == 'FACTURA'){
+								txtBuscaRapida.visible = txtBuscaRapida.includeInLayout = true;
+								txtBuscaRapidaUUID.visible = txtBuscaRapidaUUID.includeInLayout = false;
+							}
+							break;
+						}
+					}
+				}
+			}
+			
+			protected function txtBuscaRapida_keyUpHandler(event:KeyboardEvent):void
+			{
+				var tempFolio:String = StringUtil.trim(txtBuscaRapida.visible == true ? txtBuscaRapida.text : txtBuscaRapidaUUID.text);
+				if(tempFolio.length >0){
+					if(tempFolio != currentFolioFactura){
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(false);
+					}else{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+					}
+				}
+			}
+			
+			public function cargarComboBanco():void
+			{
+				if(cmbCuenta!=null && cmbCuenta.dataProvider.length>0)
+				{
+					cmbCuenta.selectedIndex = 0;
+				}
+			}
+			
+			[Bindable]
+			private function fechaRevision():String
+			{
+				if(_pagoSeleccionado.cpedido == 'N/A' || _pagoSeleccionado.cpedido == null){
+					return this._pagoSeleccionado.formatoFechaRevisionND;
+				}else
+					return this._pagoSeleccionado.formatoFechaRevision;
+			}
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%" >
+			<pq:MobViewStack width="100%" height="100%" id="espacioInfoGenerales" creationPolicy="all" >
+				<s:NavigatorContent width="100%" height="100%">
+					<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+						<s:VGroup width="100%" gap="0">
+							<s:Spacer height="13"/>
+							<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" requireSelection="true" />
+							<s:Spacer height="30"/>
+							<otros:divisionHueca width="100%"/>
+						</s:VGroup>	
+						<pq:MobViewStack width="100%" height="37%" id="vstBusqueda">
+							
+							<!--BusquedaRapida-->
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" id="porFolio" >
+									<s:Spacer height="15"/>
+									<chekbox:CheckBoxPq id="checkComboFacturaUUID" labelLeft="Factura" labelRight="UUID" change="filtros_changeEvent(event)" />
+									<s:Spacer height="15"/>
+									<label:Titulo_w100  text="{checkComboFacturaUUID.selected ? 'UUID:' : 'Folio factura:'}" paddingTop="0" />
+									<s:TextInput id="txtBuscaRapida" width="100%" fontStyle="normal" enter="realizarBusquedaRapida()" toolTip="Factura" keyUp="txtBuscaRapida_keyUpHandler(event)"/>
+									<s:TextInput id="txtBuscaRapidaUUID" enter="realizarBusquedaRapida()" width="100%" toolTip="UUID" fontStyle="normal" keyUp="txtBuscaRapida_keyUpHandler(event)" visible="false" includeInLayout="false"/>
+									<s:Spacer height="15"/>
+									<pqNet:botonPqNetLargo id="btnBusquedaRapida" width="100%" click="realizarBusquedaRapida()" botonRedondo="true" icono="ojomordor"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+							
+							<!--BusquedaAvanzada-->
+							<s:NavigatorContent width="100%" height="100%"> 
+								<s:VGroup width="100%" height="100%" horizontalAlign="center">
+									<s:HGroup width="100%" >
+										<s:VGroup width="50%">
+											<label:Titulo_w100  text="Del" paddingTop="0" />
+											<dateField:DatePickerSpanish id="dtpFInicio"  width="130"  change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+										<s:Spacer width="100%"/>
+										<s:VGroup width="50%">
+											<label:Titulo_w100  text="Al" paddingTop="0" />
+											<dateField:DatePickerSpanish id="dtpFFin" width="130" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+									</s:HGroup>	
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Cliente" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCliente" creationComplete="{cmbCliente.cargaClientesUsuarioLogueado('--TODOS--',_usuario.clave) }" width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer id="spcCobrador" height="1"/>
+									<label:Titulo_w100 id="lblCobrador" text="Cobrador" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCobrador" creationComplete="{ cmbCobrador.cargarEmpleadosPorSoloPorTipo('Contabilidad','--TODOS--')}" width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>	
+									<label:Titulo_w100  text="Vendió" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbVendio"  creationComplete="cmbVendio.cargaEmpresas('--TODOS--')"  width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Condiciones de pago" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCPago" creationComplete="cmbCPago.cargaCreditoPago('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Días restantes de crédito" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbDiasPago" creationComplete="cmbDiasPago.cargaDiasRestantes('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Estado" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbEstado"  creationComplete="cmbEstado.cargaEstadoCobro('--TODOS--')"  width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer id="spbanco" height="1"/>
+									<label:Titulo_w100  id="lblBanco" text="Banco" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbBanco"  creationComplete="cmbBanco.obtenerBancosClientes('--TODOS--','--TODOS--')"  width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  id="lblCuenta" text="Cuenta" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCuenta"  creationComplete="cmbCuenta.obtenerCuentasBanco('--TODOS--','','--TODOS--')"  width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer id="spcuenta" height="15"/>
+									<pqNet:botonPqNetLargo id="btnBusqueda"	width="100%" click="realizarBusqueda()" botonRedondo="true" icono="iconoActualizarNormal"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+						</pq:MobViewStack>
+					</s:VGroup>
+				</s:NavigatorContent>
+				<s:NavigatorContent width="100%" height="100%">
+					<s:VGroup width="100%" height="100%">
+						<panelCtaGenerales:Titulo text="{pagoSeleccionado.nombreCliente}"/>
+						<label:Titulo_w100  text="Nivel de ingreso:" />
+						<label:Texto_w100 id="NI" text="{this.pagoSeleccionado.nivelIngreso}" />
+						<label:Titulo_w100  text="Factura:" />
+						<linkButton:LinkButtonPQNet2 label="{this.pagoSeleccionado.factura }" id="lnkFactura" click="verFactura()"/>
+						<label:Titulo_w100  text="Estado de la factura:" />
+						<label:Texto_w100 id="efac" text="{this.estadoFactura}" />
+						<label:Titulo_w100  text="Vendió:" />
+						<label:Texto_w100 id="lblVendio" text="{this.pagoSeleccionado.fpor}" />
+						<label:Titulo_w100  text="P.Interno:" id="lblPInterno" />
+						<linkButton:LinkButtonPQNet2  id="lnkInterno" click="verPInterno()"/>
+						<label:Titulo_w100  text="Monto estimado de cobro:" />
+						<label:Texto_w100 id="lblMonto" text="{this.pagoSeleccionado.formatoMontoEsperadoCobro }" />
+						<label:Titulo_w100  text="Condiciones de pago:" />
+						<label:Texto_w100 id="lblCondicion" text="{ this.pagoSeleccionado.cpago }" />
+						<label:Titulo_w100  text="Medio de pago:" />
+						<label:Texto_w100 id="lblMedio" text="{this.pagoSeleccionado.medioPago}" />
+						<label:Titulo_w100  text="Fecha facturación:" />
+						<label:Texto_w100 id="lblFFactura" text="{ this.pagoSeleccionado.formatoFechaFacturacion }" />
+						<label:Titulo_w100 id="fRevision" text="Fecha revisión:" />
+						<label:Texto_w100 id="lblFRevision"  text="{fechaRevision()}" /> <!--text="{this._pagoSeleccionado.formatoFechaRevisionND}"-->
+						<label:Titulo_w100  text="Contrarecibo:" />
+						<linkButton:LinkButtonPQNet2 label="{this.pagoSeleccionado.contrarecibo }" id="lnkContrarecibo" click="verContrarecibo()"/>
+						<label:Texto_w100 id="lbl_Contrarecibo" text="{this.pagoSeleccionado.contrarecibo}" />
+						<s:Spacer height="15"/>
+						<otros:divisionHueca width="100%"/>
+					</s:VGroup>
+				</s:NavigatorContent>
+			</pq:MobViewStack>
+		</s:VGroup>				
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

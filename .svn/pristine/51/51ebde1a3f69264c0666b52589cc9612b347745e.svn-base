@@ -1,0 +1,620 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:s="library://ns.adobe.com/flex/spark" 
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:mx="library://ns.adobe.com/flex/mx" 
+									  xmlns:otros="skins.otros.*" 
+									  xmlns:pqNet1="skins.botones.pqNet.*" 
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:label="skins.skin.label.*"
+									  width="100%" height="100%"
+									  creationComplete="completeHandler()" 
+									  >
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.pedidos.EventoConsultaPedidosNuevo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pedido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaAbiertoVsCerrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaESAC;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaEstado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaMarca;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaNivelIngresos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaPedidosETVsFT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.GraficaTipo;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.graficosETvsFT.GraficaPedidosAbiertasVsCerradas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.graficosETvsFT.GraficaPedidosClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.graficosETvsFT.GraficaPedidosETVsFTSecundaria;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.graficosETvsFT.GraficaPedidosFlete;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.ventas.consultaPedidosNuevo.componentesGraficas.graficosETvsFT.GraficaPedidosMarcas;
+			import mx.core.IVisualElement;
+			import mx.events.CalendarLayoutChangeEvent;
+			import mx.formatters.DateFormatter;
+			import mx.graphics.SolidColor;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable] private var _imgPiezas:Class;
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgPedido:Class;
+			private var _piezasActual:int = 0;
+			private var _piezasPasado:int = 0;
+			
+			private var _piezasPosPasado:int = 0;
+			private var _pedidoActual:int = 0;
+			private var _pedidoPasado:int = 0;
+			private var _pedidoPosPasado:int = 0;
+			private var _montoActual:Number = 0;
+			private var _montoPasado:Number = 0;
+			private var _montoPosPasado:Number = 0;
+			[Bindable] private var _finicio:String;
+			[Bindable] private var _ffin:String;
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var graficas1erNivel:ContenedorGraficas = new ContenedorGraficas();
+			
+			public function set obtenerPedidoInterno($pedido:ArrayCollection):void
+			{
+				if( $pedido == null ){ return; }
+				
+				this.gridPedidos.dataProvider = new ArrayCollection();
+				
+				for(var d:int = 0; d<$pedido.length ; d++)
+				{
+					$pedido[d].fechaFacturaFormato = UtilsFecha.formatoFechaDDMMMYYYY( $pedido[d].fecha );
+				}
+				var temp:ArrayCollection = ObjectUtil.copy( $pedido) as ArrayCollection;
+				this.gridPedidos.dataProvider = temp;
+				
+				if ($pedido.length > 0 ){
+					headGrid.btnExportar.enabled = true;
+				}
+				else{
+					headGrid.btnExportar.enabled = false;
+				}
+			}
+			
+			public function set recibeTotalPorPeriodo(totales:ArrayCollection):void
+			{
+				if(totales == null) return;
+				
+				for(var d:int = 0 ; d<totales.length ; d++)
+				{
+					if(totales[d].etiqueta	== "TOTALPIEZASPASADO" && totales[d].conceptoResultado == "actual")
+					{
+						numPiezas.text = (totales[d].piezasTotal).toString();
+						_piezasActual = totales[d].piezasTotal;
+						_finicio = UtilsFecha.formatoFecha_dia_mes_Anio(filtrosConsultaActual.finicio);
+						_ffin = UtilsFecha.formatoFecha_dia_mes_Anio(filtrosConsultaActual.ffin); 
+					}
+					if(totales[d].etiqueta	== "TOTALPIEZASPASADO" && totales[d].conceptoResultado == "pasado")
+					{
+						if((totales[d] as ResumenConsulta).fechaInicio != null)
+						{
+							currentDatePasadoIni = this.dtpFInicioPasado.selectedDate = (totales[d] as ResumenConsulta).fechaInicio ;
+							currentDatePasadoFin = this.dtpFFinPasado.selectedDate = (totales[d] as ResumenConsulta).fechaFinal; 
+						}
+						numPiezasPasado.text = (totales[d].piezasTotal).toString();
+						_piezasPasado = totales[d].piezasTotal;
+					}
+					if(totales[d].etiqueta	== "TOTALPIEZASPASADO" && totales[d].conceptoResultado == "postpasado")
+					{
+						if((totales[d] as ResumenConsulta).fechaInicio != null)
+						{
+							currentDatePostpasadoIni = this.dtpFInicioPosPasado.selectedDate = (totales[d] as ResumenConsulta).fechaInicio;
+							currentDatePostpasadoFin = this.dtpFFinPosPasado.selectedDate = (totales[d] as ResumenConsulta).fechaFinal ; 
+						}
+						numPiezasPosPasado.text = (totales[d].piezasTotal).toString();
+						_piezasPosPasado = totales[d].piezasTotal;
+					}
+					
+					if(totales[d].etiqueta	== "TOTALPEDIDOSPASADOS" && totales[d].conceptoResultado == "actual")
+					{
+						numPedidos.text = (totales[d].piezasTotal).toString();
+						_pedidoActual = totales[d].piezasTotal;
+					}
+					if(totales[d].etiqueta	== "TOTALPEDIDOSPASADOS" && totales[d].conceptoResultado == "pasado")
+					{
+						numPedidosPasado.text = (totales[d].piezasTotal).toString();
+						_pedidoPasado = totales[d].piezasTotal;
+					}
+					if(totales[d].etiqueta	== "TOTALPEDIDOSPASADOS" && totales[d].conceptoResultado == "postpasado")
+					{
+						numPedidosPosPasado.text = (totales[d].piezasTotal).toString();
+						_pedidoPosPasado = totales[d].piezasTotal;
+					}
+					
+					if(totales[d].etiqueta	== "TOTALMONTODLLSPASADO" && totales[d].conceptoResultado == "actual")
+					{
+						monto.text = '$' + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales[d].total); 
+						_montoActual = totales[d].total;
+					}
+					if(totales[d].etiqueta	== "TOTALMONTODLLSPASADO" && totales[d].conceptoResultado == "pasado")
+					{
+						montoPasado.text = '$' + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales[d].total);
+						_montoPasado = totales[d].total;
+					}
+					if(totales[d].etiqueta	== "TOTALMONTODLLSPASADO" && totales[d].conceptoResultado == "postpasado")
+					{
+						montoPosPasado.text = '$' + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales[d].total);
+						_montoPosPasado = totales[d].total;
+					}
+				}
+				
+				var _promedioPiezas:int = (_piezasPasado + _piezasPosPasado)/2;
+				var _promedioPedidos:int = (_pedidoPasado + _pedidoPosPasado)/2;
+				var _promedioMontos:Number = (_montoPasado + _montoPosPasado)/2; 
+				
+				if(_piezasActual > _promedioPiezas) this._imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_piezasActual < _promedioPiezas) this._imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_piezasActual == _promedioPiezas) this._imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_pedidoActual > _promedioPedidos) this._imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_pedidoActual < _promedioPedidos) this._imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_pedidoActual == _promedioPedidos) this._imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_montoActual > _promedioMontos) this._imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_montoActual < _promedioMontos) this._imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_montoActual == _promedioMontos) this._imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			}
+			
+			public function set mostrarOcultarTabGrafica(tabGrafica:Boolean):void
+			{
+				this.imgTab.visible = tabGrafica;
+				if(vistaSelected == _GRAFICAS)
+				{
+					compararVistas();
+				}
+			}
+			
+			private function buttonRegresar_clickEventListener(event:Event):void
+			{
+				stack.selectedIndex=0;
+			}
+			
+			private function muestraOcultaSelectedGafica(evt:EventoConsultaPedidosNuevo):void
+			{
+				conceptoPie.text = evt.tipo.toUpperCase();
+				
+				if(evt.valorAdicional =="grafETVsFT"){
+					stack.selectedIndex=evt.seleccionarGraficas; 
+					
+					var eventoSetFiltro:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+					eventoSetFiltro.tipo = evt.tipo; 
+					dispatchEvent(eventoSetFiltro);   
+				}
+			}
+			
+			
+			protected function completeHandler():void
+			{
+				headGrid.btnExportar.enabled = false;
+				this.addEventListener(EventoConsultaPedidosNuevo.MOSTRAR_SELECTED_GRAFICA, muestraOcultaSelectedGafica);
+				
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				var graficaEncimada:ArrayCollection = new ArrayCollection();
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new GraficaClientes());
+				graficas.addItem(new GraficaProductos());
+				graficas.addItem(new GraficaNivelIngresos());
+				graficas.addItem(new GraficaTipo());
+				graficas.addItem(new GraficaESAC());
+				graficas.addItem(new GraficaMarca());
+				graficas.addItem(new GraficaAbiertoVsCerrado()); 
+				graficas.addItem(new GraficaEstado());
+				
+				graficaEncimada.addItem(new GraficaPedidosETVsFT()); 
+				
+				this.graficas1erNivel.insertarGraficas(graficas,graficaEncimada);
+				agregarEspacioTrabajo(graficas1erNivel);
+				
+				var graficas2doNivel:ContenedorGraficas = new ContenedorGraficas();
+				graficas2doNivel.tipoDeBotonBack = "flecha";
+				graficas2doNivel.addEventListener("btnRegresarConsultasGraficasPrincipal",buttonRegresar_clickEventListener,false,0,true);
+				
+				var arrGraficas:ArrayCollection = new ArrayCollection();
+				arrGraficas.addItem(new GraficaPedidosAbiertasVsCerradas());
+				arrGraficas.addItem(new GraficaPedidosFlete());
+				arrGraficas.addItem(new GraficaPedidosClientes());
+				arrGraficas.addItem(new GraficaPedidosMarcas());
+				arrGraficas.addItem(new GraficaPedidosETVsFTSecundaria());
+				graficas2doNivel.insertarGraficasInverso( arrGraficas );
+				espacioSelectedGrafica.addElement( graficas2doNivel );
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			[Bindable]
+			public var filtrosConsultaActual:Object;
+			[Bindable]
+			public var actualizarVistaActual:Boolean;
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible){
+					compararVistas();
+					var seleccionarVista:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.SETTEAR_CURRENT_VISTA_SELECTED);
+					
+					//Configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					
+					if( vistaSelected == _TABLA_GRID ){
+						seleccionarVista.selectedVista = _GRAFICAS;
+						
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnTotales");
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_TOTALES_POR_PERIODO");
+							eventEspera.tipoEventos.push("OBTENER_INFO_GRAFICA");
+							eventEspera.tipoEventos.push("OBTENER_INFO_GRAFICA_SECUNDARIAS");
+							dispatchEvent(eventEspera);
+							
+							var ev:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.OBTENER_TOTALES_POR_PERIODO);
+							var evt:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.OBTENER_INFO_GRAFICA);
+							var grafSec:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.OBTENER_INFO_GRAFICA_SECUNDARIAS);
+							grafSec.finicio = ev.finicio = evt.finicio = filtrosConsultaActual.finicio;
+							grafSec.ffin = ev.ffin = evt.ffin = filtrosConsultaActual.ffin;
+							grafSec.idCliente = ev.idCliente =evt.idCliente= filtrosConsultaActual.idCliente; 
+							grafSec.tramito = ev.tramito = evt.tramito = filtrosConsultaActual.tramito;
+							grafSec.edo = ev.edo = evt.edo =filtrosConsultaActual.edo;
+							grafSec.referencia = ev.referencia = evt.referencia = filtrosConsultaActual.referencia;
+							ev.individual =evt.individual = false;
+							dispatchEvent(evt);
+							dispatchEvent(ev);
+							dispatchEvent(grafSec);
+						}
+					}else{
+						seleccionarVista.selectedVista = _TABLA_GRID;
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("BUSCAR_DOCUMENTOS_POR_FOLIO");
+							dispatchEvent(eventEspera);
+							
+							var evento:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo( EventoConsultaPedidosNuevo.BUSCAR_DOCUMENTOS_POR_FOLIO );
+							evento.ffin = filtrosConsultaActual.finicio;
+							evento.finicio = filtrosConsultaActual.ffin;
+							evento.idCliente = filtrosConsultaActual.idCliente;
+							evento.tramito = filtrosConsultaActual.tramito;
+							evento.edo = filtrosConsultaActual.edo;
+							evento.referencia =filtrosConsultaActual.referencia;
+							dispatchEvent(evento); 
+						}
+					}
+					dispatchEvent(seleccionarVista);
+				}
+			}
+			
+			private function encuentraTotalesXPeriodo():void{
+				
+				//Configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnTotales");
+				eventEspera.tipoEventos.push("OBTENER_TOTALES_POR_PERIODO_POSPASADO");
+				eventEspera.tipoEventos.push("OBTENER_TOTALES_POR_PERIODO_PASADO");
+				dispatchEvent(eventEspera);
+				
+				
+				var evt:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.OBTENER_TOTALES_POR_PERIODO_POSPASADO);
+				evt.finicio = this.dtpFInicioPasado.selectedDate;
+				evt.ffin = this.dtpFFinPasado.selectedDate;
+				evt.idCliente = filtrosConsultaActual.idCliente; 
+				evt.tramito = filtrosConsultaActual.tramito;
+				evt.edo = filtrosConsultaActual.edo;
+				evt.referencia = filtrosConsultaActual.referencia;
+				evt.folioText = "";
+				evt.individual =true;
+				dispatchEvent(evt);
+				
+				var event:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo(EventoConsultaPedidosNuevo.OBTENER_TOTALES_POR_PERIODO_PASADO);
+				event.finicio = this.dtpFInicioPosPasado.selectedDate;
+				event.ffin = this.dtpFFinPosPasado.selectedDate;
+				event.idCliente = filtrosConsultaActual.idCliente; 
+				event.tramito = filtrosConsultaActual.tramito;
+				event.edo = filtrosConsultaActual.edo;
+				event.referencia = filtrosConsultaActual.referencia;
+				event.folioText = "";
+				event.individual = true;
+				dispatchEvent(event);
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void{
+				if(espacio == null){
+					return;
+				}
+				this.graficos.addItem(espacio);
+				if(graficos.length == 1){
+					this.espacioGraficas.removeAllElements();
+					this.espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			public function limpiarGrid():void
+			{
+				gridPedidos.dataProvider = new ArrayCollection();
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnTotales":
+							{
+								if(btnTotales.isCurrentButtonActualizar){
+									btnTotales.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnTotales.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private var currentDatePasadoIni:Date;
+			private var currentDatePasadoFin:Date;
+			private var currentDatePostpasadoIni:Date;
+			private var currentDatePostpasadoFin:Date;
+			protected function fechasPasadas_changeHandler(event:CalendarLayoutChangeEvent):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicioPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoIni.time,"dtpFInicioPasado",btnTotales);break;}
+					case "dtpFFinPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoFin.time,"dtpFFinPasado",btnTotales);	break;}
+					case "dtpFInicioPosPasado":	{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoIni,"dtpFInicioPosPasado",btnTotales);break;}
+					case "dtpFFinPosPasado":{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoFin,"dtpFFinPosPasado",btnTotales);break;}
+				}
+			}
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			private function compareFunction_HeaderFecha(item1:Object,item2:Object):int
+			{
+				var formatoFecha:DateFormatter = new DateFormatter;
+				formatoFecha.formatString = "YYYYMMDD"
+				var fech1:String = (formatoFecha.format( item1.fecha));
+				var fech2:String = (formatoFecha.format( item2.fecha));
+				
+				return ObjectUtil.stringCompare(fech1,fech2); 
+			}
+			
+			protected function headGrid_clickExportarHandler(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Fecha");
+				fila[2] = hoja.addItem("Cliente");
+				fila[3] = hoja.addItem("Contacto");
+				fila[4] = hoja.addItem("Tramitó");
+				fila[5] = hoja.addItem("P. Interno");
+				fila[6] = hoja.addItem("Referencia");
+				fila[7] = hoja.addItem("Estado");
+				
+				for(var i:int = 0; i < gridPedidos.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = gridPedidos.dataProvider[i].numFila;
+					fila[1] = '"' + gridPedidos.dataProvider[i].fechaFacturaFormato + '"';
+					fila[2] = '"' + (gridPedidos.dataProvider[i] as Pedido).nombreCliente + '"';
+					fila[3] = '"' + (gridPedidos.dataProvider[i] as Pedido).contacto + '"';
+					fila[4] = '"' + (gridPedidos.dataProvider[i] as Pedido).tramito + '"';
+					fila[5] = '"' + (gridPedidos.dataProvider[i] as Pedido).cpedido + '"';
+					fila[6] = '"' + (gridPedidos.dataProvider[i] as Pedido).referencia + '"';
+					fila[7] = '"' + (gridPedidos.dataProvider[i] as Pedido).estado + '"';
+					hoja.addItem('\r' + fila);
+				}
+				file.save(hoja,"ConsultaPedidos-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" id="gridConsultaPedidos" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<consultas:HeaderParaGridConsultas id="headGrid" mostrarBtnExportar="true" clickExportar="headGrid_clickExportarHandler(event)" />
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter  id="gridPedidos" width="100%" height="100%" anchoColumnas="['45','=','25%','25%','=','=','=','=','50']" tipoDeConsulta="Pedidos"
+														  disableSortableColumns="{[8]}" disableDragableColumns="{[0,8]}" disableResizableColumns="{[0,8]}">
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+					<mx:AdvancedDataGridColumn headerText="Fecha" dataField="fechaFacturaFormato" sortCompareFunction="{compareFunction_HeaderFecha}"/>
+					<mx:AdvancedDataGridColumn headerText="Cliente" dataField="nombreCliente"/>
+					<mx:AdvancedDataGridColumn headerText="Contacto" dataField="contacto" />							
+					<mx:AdvancedDataGridColumn headerText="Tramitó" dataField="tramito"/>
+					<mx:AdvancedDataGridColumn headerText="P. Interno" dataField="cpedido"/>
+					<mx:AdvancedDataGridColumn headerText="Referencia" dataField="referencia"/>
+					<mx:AdvancedDataGridColumn headerText="Estado" dataField="estado"/>
+					<mx:AdvancedDataGridColumn headerText=" ">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.ventas.pedidos.EventoConsultaPedidosNuevo;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pedido;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											public function regresaCotizacion():void{
+												var evento:EventoConsultaPedidosNuevo = new EventoConsultaPedidosNuevo( EventoConsultaPedidosNuevo.OBTENER_PPEDIDOS );
+												evento.cpedido = data.cpedido;
+												evento.folio = data.folio;
+												evento.pedido = data as Pedido;
+												evento.folioDR = data.doctoR;
+												dispatchEvent(evento);
+											}
+										]]>
+									</fx:Script>
+									<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="regresaCotizacion()" id="imgInfo" horizontalCenter="0"/>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>	
+	</comun:espacioA>
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" width="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas" />
+					<s:BorderContainer width="260" height="100%" backgroundColor="#363636"> <!--width="240"-->
+						<s:Scroller height="100%">
+							<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" >
+								<s:Label width="100%" text="TOTALES" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal" paddingTop="20" /> <!--paddingTop="60" paddingBottom="5" -->
+								<otros:divisionGruesa color="0x{catalogoColores.LABEL_BLANCO}"/>
+								<s:HGroup width="100%" paddingTop="30" paddingBottom="15"> 
+									<s:Image source="{this._imgMonto}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Monto USD:"  color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="monto" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="montoPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="montoPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15">
+									<s:Image source="{this._imgPedido}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="No. Pedidos:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numPedidos" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numPedidosPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numPedidosPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15"> 
+									<s:Image source="{this._imgPiezas}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Total piezas:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezas" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezasPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezasPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<otros:divisionHueca color="#{catalogoColores.LABEL_NEGRO}"/>
+								<s:Label text="{this._finicio == null ? '' : this._finicio} - {this._ffin == null ? '' : this._ffin}" width="100%" color="0x{catalogoColores.LABEL_BLANCO}" fontSize="14" paddingTop="15" paddingBottom="25" textAlign="center"/>
+								<s:HGroup paddingBottom="30">
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_AZUL_REY}"/>
+												</s:fill>		
+											</s:Ellipse>									
+											<mx:DateField id="dtpFInicioPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup paddingBottom="30" >
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_MORADO_FUERTE}"/>
+												</s:fill>		
+											</s:Ellipse>
+											<mx:DateField id="dtpFInicioPosPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPosPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<pqNet1:botonPqNetLargo id="btnTotales" width="100%" click="encuentraTotalesXPeriodo()" botonRedondo="true" icono="iconoActualizarNormal"/>
+							</s:VGroup>
+						</s:Scroller>
+					</s:BorderContainer>				
+				</s:HGroup>
+			</s:VGroup>	
+<!--			<s:VGroup id="grpSelectedGrafica" height="100%" width="100%" gap="0" paddingLeft="20" paddingRight="20" paddingTop="30" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				<s:Label fontSize="14" fontWeight="bold" id="conceptoPie" paddingBottom="10" maxWidth="{this.width}"/>
+				<s:Group height="100%" width="100%">
+					<otros:divisionGruesa width="100%"/>
+					<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica" paddingTop="20" />
+					<s:VGroup width="100%" height="80%" verticalAlign="bottom" horizontalAlign="left" verticalCenter="0">
+						<s:Image id="imgRegresar" source="{catalogoIconosBotoneras.getInstance().flechaGrandeIzquierdaupdown}" click="regresaPrincipalGraficas()"
+								 mouseOver="{ this.imgRegresar.source = catalogoIconosBotoneras.getInstance().flechaGrandeIzquierdaArribaUp}" width="30%"
+								 mouseOut="{ this.imgRegresar.source = catalogoIconosBotoneras.getInstance().flechaGrandeIzquierdaupdown}"/>
+					</s:VGroup>
+				</s:Group>	
+			</s:VGroup>-->
+			<s:VGroup id="grpSelectedGrafica" height="100%" width="100%" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" gap="0" paddingTop="28" paddingLeft="10" paddingRight="20">
+				<label:Titulo id="conceptoPie" maxWidth="{this.width}" paddingTop="0" paddingBottom="6"/>
+				<otros:divisionGruesa width="100%"/>
+				<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica"/>
+			</s:VGroup>
+		</pq:MobViewStack>
+	</comun:espacioB>
+</comun:ContenedorComparacionConsultas>

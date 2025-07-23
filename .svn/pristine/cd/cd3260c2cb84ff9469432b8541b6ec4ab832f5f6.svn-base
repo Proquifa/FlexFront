@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:textinput="skins.skin.textinput.*" 
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*"
+		 creationComplete="init(event)"
+		 width="100%" height="100%" xmlns:pqNet="skins.botones.pqNet.*" 
+		 >
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.carteras.EventoCatClientes_Carteras;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			private var _arreglo:ArrayCollection;
+			private var _universoNew:ArrayCollection;
+			private var _keyPrincipal:String;
+			private var _sql:Query;
+			private var _edita:Boolean;
+			
+			protected function init(event:FlexEvent):void
+			{
+				lblTipo.text = "Cartera clientes";
+				lblTitulo.text = "Nueva Cartera";
+			}
+			
+			protected function regresaACarteras(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("cambiarVistaEdicionCarteraEdita"));
+				limpiarCampos();
+			}
+			
+			private function limpiarCampos():void
+			{
+				txt_nombreCartera.text = "";
+				cmbCobrador.selectedIndex = 0;
+				cmbESAC.selectedIndex = 0;
+				cmbEV.selectedIndex = 0;
+				cmbIndustria.selectedIndex = 0;
+				cmbNivel.selectedIndex = 0;
+			}
+			
+			public function set recibeClientesDisponibles($array:ArrayCollection):void
+			{
+				if($array == null)
+					return;
+				
+				_arreglo = new ArrayCollection();
+				_arreglo = ObjectUtil.copy($array) as ArrayCollection;
+				_sql = new Query(_arreglo,["nombre","nivelIngreso","ruta","cli_nombreEsac","cli_nombreEv","cli_nombreCobrador","industria"],true);
+			}
+			
+			private function hacerBusqueda():void
+			{
+				var arrayTemp:Array = new Array();
+				var nivel:String = cmbNivel.selectedIndex != 0 ? (cmbNivel.selectedItem.valor == "AA+" ? "aaplus": (cmbNivel.selectedItem.valor as String).toLowerCase()):null;
+				var industria:String = cmbIndustria.selectedIndex != 0 ? (cmbIndustria.selectedItem.valor as String).toLowerCase():null;
+				var esac:String = cmbESAC.selectedIndex != 0 ? (cmbESAC.selectedItem.valor as String).toLowerCase():null;
+				var ev:String = cmbEV.selectedIndex != 0 ? (cmbEV.selectedItem.valor as String).toLowerCase():null;
+				var cobrador:String = cmbCobrador.selectedIndex !=0 ? (cmbCobrador.selectedItem.valor as String).toLowerCase():null;
+				
+				arrayTemp = _sql.getPunteros([null,nivel,null,esac,ev,cobrador,industria]);
+				_universoNew = _sql.armarLista(arrayTemp);
+				
+				if(StringUtil.trim(txt_nombreCartera.text).length > 0 )
+				{
+					var sqlBusqueda:Query;
+					var punteroCliente:Array = new Array();
+					var nom:String;
+					var parecidos:Array = new Array();
+					var arreTemp:Array = new Array();
+					var arregloTe:ArrayCollection = new ArrayCollection();
+					var _valoresActuales:ArrayCollection = ObjectUtil.copy(_universoNew.length > 0 ? _universoNew:_arreglo) as ArrayCollection;
+					
+					sqlBusqueda = new Query(_valoresActuales,["nombre"],true);
+					punteroCliente = new Array();
+					nom = StringUtil.trim( txt_nombreCartera.text).toLowerCase();
+					parecidos = sqlBusqueda.getCampoLikeLowerCase("nombre",nom);
+					
+					if (parecidos.length > 0)
+					{
+						for ( var i:int = 0; i<parecidos.length; i++)
+						{
+							punteroCliente.push(sqlBusqueda.getPunteros([parecidos[i],null]));
+						}
+					}
+					
+					//  ---------------------------------- ORDENA Y ELIMINA REPETIDOS  ----------------------------------
+					arreTemp = UtilsGrid.generateArrayBiToArrayUni(punteroCliente);
+					arregloTe = sqlBusqueda.armarLista(StringFunciones.removerDuplicados(arreTemp));
+					_universoNew = arregloTe;
+					
+				}
+				
+				var evt:EventoCatClientes_Carteras = new EventoCatClientes_Carteras(EventoCatClientes_Carteras.ENVIAR_NUEVO_UNIVERSO_BUSQUEDA);
+				evt.universoNew = _universoNew;
+				dispatchEvent(evt);
+				btnBusqueda.CambiarToActualizarTipoBoton(false);
+				_keyPrincipal = generateKey();
+			}
+			
+			private function generateKey():String
+			{
+				var valor:String ="";
+				
+				valor += txt_nombreCartera.text+"_";
+				valor += cmbNivel.selectedItem.llave+"_";
+				valor += cmbESAC.selectedItem.llave+"_";
+				valor += cmbEV.selectedItem.llave+"_";
+				valor += cmbCobrador.selectedItem.llave+"_";
+				valor += cmbIndustria.selectedItem.llave;
+				
+				return valor;
+			}
+			
+			private function validarCambios():void
+			{
+				var _consulta:String = generateKey();
+				if(_consulta == _keyPrincipal)
+					btnBusqueda.CambiarToActualizarTipoBoton(false);
+				else
+					btnBusqueda.CambiarToActualizarTipoBoton(true);
+			}
+			
+			public function set edita(value:Boolean):void
+			{
+				_edita = value;
+				
+				if(_edita)
+					lblTitulo.text = "Editar Borrador";
+				else
+					lblTitulo.text = "Nueva Cartera";
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	
+	<s:VGroup width="100%" height="100%" horizontalAlign="center" paddingLeft="20" paddingRight="20" paddingTop="15">
+		<s:Group width="100%" maxHeight="30">
+			<label:TituloBankGothic_22 id="lblTipo" verticalCenter="-3" textAlign="center" width="100%" maxDisplayedLines="2"/> 
+			<s:Image id="imgRegresar" source="{catalogoIconosBotoneras.getInstance().flechaIzquierdaupdown}" click="regresaACarteras(event)"
+					 mouseOver="{ this.imgRegresar.source = catalogoIconosBotoneras.getInstance().flechaIzquierdaover}"
+					 mouseOut="{ this.imgRegresar.source = catalogoIconosBotoneras.getInstance().flechaIzquierdaupdown}"/>
+		</s:Group>
+		<otros:divisionHueca width="100%"/>
+		<label:TituloBankGothic_22 id="lblTitulo" paddingTop="7" paddingBottom="10" textAlign="center" width="100%" maxDisplayedLines="2"/> 
+		<otros:divisionHueca width="100%"/>
+		<s:VGroup  id="grpMain" width="100%" height="100%" horizontalAlign="center">
+			<label:Titulo_w100  text="Cliente" />
+			<textinput:txtInputBlancoDefaultPQNet id="txt_nombreCartera" width="100%" keyUp="validarCambios()" />
+			<label:Titulo_w100  text="Nivel de Ingreso" paddingTop="5" />
+			<comboPqNet:ComboCatalogos id="cmbNivel" width="100%" creationComplete="{ cmbNivel.cargaNivelIngreso('--TODOS--') }" changing="validarCambios()" />
+			<label:Titulo_w100  text="Industria" paddingTop="0" />
+			<comboPqNet:ComboCatalogos id="cmbIndustria" width="100%" creationComplete="{ cmbIndustria.cargaIndustria('--TODOS--') }" changing="validarCambios()"/>
+			<label:Titulo_w100  text="ESAC" paddingTop="0" />
+			<comboPqNet:ComboCatalogos id="cmbESAC" creationComplete="{ cmbESAC.cargaEmpleadosPorFunciones([5,37],'--TODOS--') }" width="100%" changing="validarCambios()"/>
+			<label:Titulo_w100  text="EV" paddingTop="0" />
+			<comboPqNet:ComboCatalogos id="cmbEV" creationComplete="{ cmbEV.cargarEmpleadosXTipoTablero( 'ev','--TODOS--' ) }" width="100%" changing="validarCambios()"/>
+			<label:Titulo_w100  text="Cobrador" paddingTop="0" />
+			<comboPqNet:ComboCatalogos id="cmbCobrador" width="100%" creationComplete="{ cmbCobrador.cargarEmpleadosPorSoloPorTipo('Contabilidad','--TODOS--') }" changing="validarCambios()"/>
+			<s:Spacer height="15"/>
+			<pqNet:botonPqNetLargo id="btnBusqueda"	width="100%" botonRedondo="true" icono="iconoActualizarNormal" click="hacerBusqueda()"/>
+			<s:Spacer height="15"/>
+			<otros:divisionHueca width="100%"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>

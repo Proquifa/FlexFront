@@ -1,0 +1,825 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:gestionarac="mx.com.proquifa.vista.vistas.gestionarac.*"
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.componentes.*"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:botonMenu="mx.com.proquifa.vista.vistas.skin.botoneramenu.*"
+		 resize="calc(event)" 
+		 >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.eventos.EventoInterlocutor;
+			import mx.com.proquifa.vista.modelo.GestionarAvisoDeCambios;
+			import mx.com.proquifa.vista.vistas.monitorearOcNoArribada.componentes.popUpHistorialOc;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import imagenes.CatalogoImagenes;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			
+			[Bindable] public var sizeFontAgente:Number;
+			[Bindable] public var sizeFont:Number;
+			[Bindable] public var sizeFont12:Number;
+			[Bindable] public var sizeFont14:Number;
+			[Bindable] public var sizeFont18:Number;
+			private var query:Query;
+			private var _origen:String;
+			private var cliente:String;
+			
+			private var dias:String = "todos";
+			private var gestion:String = "todos";
+			
+			private var universoContactos:ArrayCollection;
+			private var universoNotificado:ArrayCollection;
+			private var registrar:Boolean = false;
+			
+			private var bytes:ByteArray;
+			public var file:File = new File();
+			public var listaAGuardar:ArrayCollection;
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontAgente = (20 / 2016) * (unscaledWidth);
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+				
+				sizeFont = (16 / 2016) * (unscaledWidth);
+				sizeFont = sizeFont > 16 ? 16:sizeFont;
+				sizeFont = sizeFont < 12 ? 12:sizeFont;
+				
+				sizeFont12 = (12 / 2016) * (unscaledWidth);
+				sizeFont12 = sizeFont12 > 12 ? 12 : sizeFont12;
+				sizeFont12 = sizeFont12 < 8 ? 8 : sizeFont12;
+				
+				sizeFont14 = (14 / 2016) * (unscaledWidth);
+				sizeFont14 = sizeFont14 > 14 ? 14 : sizeFont14;
+				sizeFont14 = sizeFont14 < 9 ? 9 : sizeFont14;
+				
+				sizeFont18 = (18 / 2016) * (unscaledWidth);
+				sizeFont18 = sizeFont18 > 18 ? 18 : sizeFont18;
+				sizeFont18 = sizeFont18 < 11 ? 11 : sizeFont18;
+			}
+			
+			protected function txtBuscador_changeHandler(event:TextOperationEvent):void
+			{
+				busquedaGlobal();
+			}
+			
+			public function limpiarDatos():void
+			{
+				txtBuscador.text = "";
+				grpBotoneraHead.selectIndex = 0;
+				grpFooter.selectIndex = 0;
+				popUpCorreo = false;
+				limpiarBotonRegistrar();
+			}
+			
+			
+			public function recibeDatos(sql:Query, cliente:String):void
+			{
+				query = sql;
+				this.cliente = cliente;
+				var punterosContacto:Array = new Array();
+				punterosContacto = query.getPunteros([origen,cliente],"contacto");
+				var arrayContactos:ArrayCollection = new ArrayCollection;
+				
+				for (var i:int = 0; i < punterosContacto.length; i++) 
+				{
+					var punterosPorContacto:Array = query.getPunteros([origen, cliente, query.universo.getItemAt(punterosContacto[i]).contacto]);
+					if (punterosPorContacto.length > 0)
+					{
+						var avisoCambio:GestionarAvisoDeCambios = query.universo.getItemAt(punterosPorContacto[0]) as GestionarAvisoDeCambios;
+						var contacto:Object = new Object;
+						
+						var gestion:Array = query.getValoresCampoOmitiendoRepetidos("gestionada",punterosPorContacto);
+						contacto.gestion = false;
+						for (var k:int = 0; k < gestion.length; k++) 
+						{
+							if (gestion[k] == 1)
+								contacto.gestion = true;
+						}
+						
+						contacto.nombreContacto = avisoCambio.contacto;
+						contacto.email = avisoCambio.email;
+						contacto.telefono = avisoCambio.tel;
+						contacto.folio = "NT";
+						contacto.origen = origen;
+						
+						contacto.notificaciones = query.getPunteros([origen, cliente, avisoCambio.contacto], "folioNT").length;
+						contacto.ac = contacto.notificaciones;
+						contacto.pedidos = query.getPunteros([origen, cliente, avisoCambio.contacto], "cpedido").length;
+						
+						var date:Date = query.universo.getItemAt(punterosPorContacto[0]).fee;
+						for (var j:int = 1; j < punterosPorContacto.length; j++) 
+						{
+							if (query.universo.getItemAt(punterosPorContacto[j-1]).fee && query.universo.getItemAt(punterosPorContacto[j]).fee)
+							{
+								if (query.universo.getItemAt(punterosPorContacto[j-1]).fee.time < query.universo.getItemAt(punterosPorContacto[j]).fee.time)
+									date = query.universo.getItemAt(punterosPorContacto[j-1]).fee;
+								else
+									date = query.universo.getItemAt(punterosPorContacto[j]).fee;
+							}
+							else
+							{
+								if (query.universo.getItemAt(punterosPorContacto[j-1]).fee)
+								{
+									dateFPG = query.universo.getItemAt(punterosPorContacto[j-1]).fee;
+								}
+								else if (query.universo.getItemAt(punterosPorContacto[j]).fee)
+								{
+									dateFPG = query.universo.getItemAt(punterosPorContacto[j]).fee;
+								}
+							}
+						}
+						if (contacto.gestion)
+						{
+							var dateFPG:Date = query.universo.getItemAt(punterosPorContacto[0]).fpg;
+							for (j = 1; j < punterosPorContacto.length; j++) 
+							{
+								if (query.universo.getItemAt(punterosPorContacto[j-1]).fpg && query.universo.getItemAt(punterosPorContacto[j]).fpg)
+								{
+									if (query.universo.getItemAt(punterosPorContacto[j-1]).fpg.time < query.universo.getItemAt(punterosPorContacto[j]).fpg.time)
+										dateFPG = query.universo.getItemAt(punterosPorContacto[j-1]).fpg;
+									else
+										dateFPG = query.universo.getItemAt(punterosPorContacto[j]).fpg;
+								}
+								else
+								{
+									if (query.universo.getItemAt(punterosPorContacto[j-1]).fpg)
+									{
+										dateFPG = query.universo.getItemAt(punterosPorContacto[j-1]).fpg;
+									}
+									else if (query.universo.getItemAt(punterosPorContacto[j]).fpg)
+									{
+										dateFPG = query.universo.getItemAt(punterosPorContacto[j]).fpg;
+									}
+								}
+							}
+							
+							if (date.time < dateFPG.time)
+							{
+								contacto.fee = date;
+								contacto.isFee = true;
+							}
+							else
+								contacto.fee = dateFPG;
+							contacto.isFee = false;
+						}
+						else
+							contacto.fee = date;
+						
+						contacto.dia1 = query.getSumarCampo("dia1",punterosPorContacto);
+						contacto.dia2 = query.getSumarCampo("dia2",punterosPorContacto);
+						contacto.dia3 = query.getSumarCampo("dia3",punterosPorContacto);
+						contacto.dia4 = query.getSumarCampo("dia4",punterosPorContacto);
+						
+						arrayContactos.addItem(contacto);
+					}
+				}
+				
+				universoContactos = ObjectUtil.copy(arrayContactos) as ArrayCollection;
+				lstContactos.dataProvider = arrayContactos;
+				
+				calcularTotales();
+			}
+			
+			protected function grpBotoneraHead_clickBotoneraDiasHandler(event:EventoInterlocutor):void
+			{
+				dias = event.current;
+				busquedaGlobal();
+			}
+			
+			protected function botoneraregistrarconfirmacionfooter1_clickBotoneraGestionarHandler(event:EventoInterlocutor):void
+			{
+				gestion = event.current;
+				grpFooterNotificado.habilitado = true;
+				if (gestion != "todos")
+				{
+					grpFooterNotificado.selectIndex = grpFooter.selectIndex;
+					grpFooterNotificado.habilitado = false;
+				}
+				
+				busquedaGlobal();
+			}
+			
+			private function calcularTotales():void
+			{
+				var total4dias:int = 0;
+				var total3dias:int = 0;
+				var total2dias:int = 0;
+				var total1dias:int = 0;
+				var totalContactos:int = 0;
+				var totalNotificaciones:int = 0;
+				var totalPedidos:int = 0;
+				
+				for (var i:int = 0; i < lstContactos.dataProvider.length; i++) 
+				{
+					total1dias += lstContactos.dataProvider[i].dia1;
+					total2dias += lstContactos.dataProvider[i].dia2;
+					total3dias += lstContactos.dataProvider[i].dia3;
+					total4dias += lstContactos.dataProvider[i].dia4;
+					
+					totalContactos += lstContactos.dataProvider[i].contactos;
+					totalNotificaciones += lstContactos.dataProvider[i].notificaciones;
+					totalPedidos += lstContactos.dataProvider[i].pedidos;
+				}
+				
+				txtTotalPendientes.text = lstContactos.dataProvider.length.toString();
+				txtTotalNotificaciones.text = totalNotificaciones.toString().concat(totalNotificaciones == 1 ? " notificado" : " notificados");
+				txtTotalPedidos.text = totalPedidos.toString().concat(totalPedidos == 1 ? " pedido" : " pedidos");
+				
+				lbl4dias.text = total4dias.toString();
+				lbl3dias.text = total3dias.toString();
+				lbl2dias.text = total2dias.toString();
+				lbl1dias.text = total1dias.toString();
+				
+				lstContactos.selectedIndex = 0;
+				lstContactos.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING, false, false, 0, 0));
+			}
+			
+			private function busquedaGlobal():void
+			{
+				var temp:ArrayCollection = new ArrayCollection();
+				if ( gestion == "todos" )
+					temp = ObjectUtil.copy(universoContactos) as ArrayCollection;
+				else
+					temp = UtilsGrid.queryCampoXLike(universoContactos, "gestion", gestion == "parciales" ? 'true' : 'false');
+				
+				if (dias != "todos")
+				{
+					for (var i:int = 0; i < temp.length; i++) 
+					{
+						var valor:int = dias == "dia1" ? 1 : dias == "dia2" ? 2 : dias == "dia3" ? 3 : 4;
+						if (valor == 4 )
+						{
+							if (temp[i].dia < valor )
+								temp.removeItemAt(i--);
+						}
+						else if (temp[i].dia != valor )
+							temp.removeItemAt(i--);
+					}
+				}
+				
+				
+				lstContactos.dataProvider = UtilsGrid.queryCampoXLikeDosCampos(temp, "nombreContacto", "folio", txtBuscador.text);
+				
+				calcularTotales();
+			}
+			
+			
+			protected function txtBuscadorNotificados_changeHandler(event:TextOperationEvent):void
+			{
+				busquedaNotificado()
+			}
+			
+			protected function grpFooterNotificado_clickBotoneraGestionarHandler(event:EventoInterlocutor):void
+			{
+				busquedaNotificado();
+			}
+			
+			private function busquedaNotificado():void
+			{
+				var temp:ArrayCollection = new ArrayCollection();
+				
+				if ( grpFooterNotificado.tipoSelect == "todos" )
+					temp = ObjectUtil.copy(universoNotificado) as ArrayCollection;
+				else
+					temp = UtilsGrid.queryCampoXLike(universoNotificado, "gestion", grpFooterNotificado.tipoSelect == "parciales" ? 'true' : 'false');
+				
+				temp = UtilsGrid.queryCampoXLike(temp, "folio", txtBuscadorNotificados.text);
+				
+				lstNotificaciones.dataProvider = temp;
+				lstNotificaciones.selectedIndex = 0;
+				lstNotificaciones.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING,false, false, 0, 0));
+			}
+			
+			protected function lstContactos_changingHandler(event:IndexChangeEvent):void
+			{
+				var arrayContactos:ArrayCollection = new ArrayCollection;
+				if (lstContactos.selectedItem)
+				{
+					var punterosNotificado:Array = query.getPunteros([origen, cliente, lstContactos.selectedItem.nombreContacto], "folioNT");
+					for (var i:int = 0; i < punterosNotificado.length; i++) 
+					{
+						var punterosPorNotificado:Array = query.getPunteros([origen, cliente, lstContactos.selectedItem.nombreContacto, query.universo.getItemAt(punterosNotificado[i]).folioNT]);
+						if (punterosPorNotificado.length > 0 )
+						{
+							var avisoCambio:GestionarAvisoDeCambios = query.universo.getItemAt(punterosPorNotificado[0]) as GestionarAvisoDeCambios;
+							var folio:Object = new Object;
+							
+							var gestion:Array = query.getValoresCampoOmitiendoRepetidos("gestionada",punterosPorNotificado);
+							folio.gestion = false;
+							for (var k:int = 0; k < gestion.length; k++) 
+							{
+								if (gestion[k] == 1)
+									folio.gestion = true;
+							}
+							folio.gestion = avisoCambio.gestionada == 0 ? false : true;
+							folio.folio = avisoCambio.folioNT;
+							if (folio.gestion)
+								folio.fee = avisoCambio.fpg;
+							else
+								folio.fee = avisoCambio.fee;
+							folio.piezas = query.getSumarCampo("piezas",punterosPorNotificado);
+							folio.pu = avisoCambio.pu;
+							folio.pt = avisoCambio.pt;
+							
+							if ( avisoCambio.dia1 > 0 )
+								folio.dia = 1;
+							else if ( avisoCambio.dia2 > 0 )
+								folio.dia = 2;
+							else if ( avisoCambio.dia3 > 0 )
+								folio.dia = 3;
+							else if ( avisoCambio.dia4 > 0 )
+								folio.dia = 4;
+							
+							arrayContactos.addItem(folio);
+						}
+					}
+				}
+				universoNotificado = ObjectUtil.copy(arrayContactos) as ArrayCollection;
+				if (grpFooterNotificado.tipoSelect == "todos" )
+				{
+					lstNotificaciones.dataProvider = arrayContactos;
+					lstNotificaciones.selectedIndex = 0;
+					lstNotificaciones.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING,false, false, 0, 0));
+				}
+				else
+				{
+					busquedaNotificado();
+				}
+			}
+			
+			public function limpiarBotonRegistrar():void
+			{
+				rutaDoc = "";
+				registrar = false;
+				btnRegistrar.enabled = false;
+				registrar = false;
+				documentoCargado = false;
+				btnRegistrar.color = 0xc2c3ca;
+				habilitarBoton();
+				bytes = null;
+				
+				btnVisualizar.icono = CatalogoImagenes.images.vistaDisabled;
+				btnCargar.icono = CatalogoImagenes.images.cargar;
+				btnVisualizar.color = 0xC2C3C9;
+			}
+			
+			private var arrayPedido:ArrayCollection
+			protected function lstNotificaciones_changingHandler(event:IndexChangeEvent):void
+			{
+				grpPedidos.removeAllElements();
+				limpiarBotonRegistrar();
+				
+				arrayPedido = new ArrayCollection;
+				var totalPiezas:int = 0;
+				var total:int = 0;
+				if (lstNotificaciones.selectedItem)
+				{
+					var punterosPedido:Array = query.getPunteros([origen, cliente, lstContactos.selectedItem.nombreContacto, lstNotificaciones.selectedItem.folio],"cpedido");
+					for (var i:int = 0; i < punterosPedido.length; i++) 
+					{
+						var pedido:Object = new Object;
+						var punterosPorPedido:Array = query.getPunteros([origen, cliente, lstContactos.selectedItem.nombreContacto, lstNotificaciones.selectedItem.folio, query.universo.getItemAt(punterosPedido[i]).cpedido]);
+						if (punterosPorPedido.length > 0)
+						{
+							var partidas:GestionarAvisoDeCambios = query.universo.getItemAt(punterosPorPedido[0]) as GestionarAvisoDeCambios;;
+							pedido.pedido = partidas.cpedido;
+							pedido.partidas = query.armarLista(punterosPorPedido);
+							
+							totalPiezas += query.getSumarCampo("piezas",punterosPorPedido);
+							total += partidas.pt;
+						}
+						
+						arrayPedido.addItem(pedido);
+						var listaPedidos:ListaPedidos = new ListaPedidos();
+						listaPedidos.datos = pedido;
+						listaPedidos.removeEventListener(EventoInterlocutor.TODOS_DATOS, verificarTodosDatos);
+						listaPedidos.addEventListener(EventoInterlocutor.TODOS_DATOS, verificarTodosDatos, false, 0 , true);
+						grpPedidos.addElement(listaPedidos);
+					}
+				}
+				
+				txtTotalPartidasGrid.text = arrayPedido.length.toString();
+				txtTotalPiezasGrid.text = totalPiezas.toString() + (totalPiezas == 1 ? " pza" : " pzas");
+				txtTotalMontoGrid.text = "Monto Total: $ " + total.toString();
+			}
+			
+			public function verificarTodosDatos(event:EventoInterlocutor):void
+			{
+				listaAGuardar = new ArrayCollection;
+				registrar = true;
+				for (var i:int = 0; i < arrayPedido.length; i++) 
+				{
+					for (var j:int = 0; j < arrayPedido[i].partidas.length; j++) 
+					{
+						if ( !arrayPedido[i].partidas[j].selecionDato )
+						{
+							registrar = false;
+						}
+						listaAGuardar.addAll(arrayPedido[i].partidas);
+					}
+					
+				}
+				
+				habilitarBoton();
+			}
+			
+			private function habilitarBoton():void
+			{
+				if ( registrar && documentoCargado )
+				{
+					btnRegistrar.color = 0x51a534;
+					btnRegistrar.enabled = true;
+				}
+				else
+				{
+					btnRegistrar.enabled = false;
+					btnRegistrar.color = 0xc2c3ca;
+				}
+			}
+			
+			private function generarDatosGrid():void
+			{
+				grpPedidos.removeAllElements();
+				var arrayPedido:ArrayCollection = new ArrayCollection;
+				var totalPiezas:int = 0;
+				var total:int = 0;
+				for (var j:int = 0; j < (Math.floor(Math.random() * (10 - 1 + 1)) + 1); j++) 
+				{
+					var pedido:Object = new Object;
+					pedido.pedido = (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + "-" + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString();
+					var arrayDatosPedido:ArrayCollection = new ArrayCollection;
+					for (var i:int = 0; i < (Math.floor(Math.random() * (10 - 1 + 1)) + 1); i++) 
+					{
+						var obj:Object = new Object;
+						obj.gestion = false;
+						if (i == 0)
+						{
+							obj.gestion = true;
+						}
+						obj.codigo = (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString() + (Math.floor(Math.random() * (9 - 0 + 1)) + 0).toString();
+						obj.descripcion = "Enoxaparin Sodium for Bioassays (Coldshipment) ";
+						obj.cantidad = (Math.floor(Math.random() * (200 - 10 + 1)) + 10);
+						obj.unidad = "mg";
+						obj.marca = "USP";
+						obj.pieza = (Math.floor(Math.random() * (20 - 1 + 1)) + 1);
+						obj.pu = (Math.floor(Math.random() * (999 - 10 + 1)) + 1);
+						obj.pt = obj.piezas * obj.pu;
+						
+						obj.fdp = new Date(2016,(Math.floor(Math.random() * (4 - 3 + 1)) + 3), (Math.floor(Math.random() * (30 - 1 + 1)) + 1));
+						obj.anterior = new Date(2016,(Math.floor(Math.random() * (4 - 3 + 1)) + 3), (Math.floor(Math.random() * (30 - 1 + 1)) + 1));
+						obj.nueva = new Date(2016,(Math.floor(Math.random() * (6 - 5 + 1)) + 5), (Math.floor(Math.random() * (30 - 1 + 1)) + 1));
+						
+						arrayDatosPedido.addItem(obj);
+						
+						totalPiezas += obj.pieza;
+						total += obj.pt;
+					}
+					
+					pedido.partidas = arrayDatosPedido;
+					arrayPedido.addItem(pedido);
+					
+					var listaPedidos:ListaPedidos = new ListaPedidos();
+					listaPedidos.datos = pedido;
+					grpPedidos.addElement(listaPedidos);
+				}
+				
+				txtTotalPartidasGrid.text = arrayPedido.length.toString();
+				txtTotalPiezasGrid.text = totalPiezas.toString() + (totalPiezas == 1 ? "pza" : "pzas");
+				txtTotalMontoGrid.text = "Monto Total: $ " + total.toString();
+				
+			}
+			
+			public function get origen():String
+			{
+				return _origen;
+			}
+			
+			public function set origen(value:String):void
+			{
+				_origen = value;
+			}
+			
+			public var popUpCorreo:Boolean = false;
+			protected function botondefault1_mouseDownHandler(event:MouseEvent):void
+			{
+				if(registrar && documentoCargado)
+				{
+					
+					for each (var gestion:GestionarAvisoDeCambios in listaAGuardar) 
+					{
+						gestion.documento = bytes;
+						if ( !gestion.fechaContinuar )
+							popUpCorreo = true;
+						gestion.fpg = gestion.fechaContinuar;
+					}
+					
+					var eventoGuardar:EventoInterlocutor = new EventoInterlocutor(EventoInterlocutor.GUARDAR_NOTIFICADOS);
+					eventoGuardar.current = listaAGuardar;
+					dispatchEvent(eventoGuardar);
+				}
+			}
+			
+			private var documentoCargado:Boolean = false;
+			protected function botondefault2_mouseDownHandler(event:MouseEvent):void
+			{
+				browseFileSystem();
+			}
+			
+			private function browseFileSystem():void{
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				
+				var docFilter:FileFilter = new FileFilter("File", "*.pdf");
+				file.browse([docFilter]);
+			}
+			
+			private function selectHandler(event:Event):void {				
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void 
+			{
+				bytes = file.data;
+				rutaDoc = file.nativePath;
+				documentoCargado = true;
+				habilitarBoton();
+				btnVisualizar.color = 0x0b8894;
+				btnVisualizar.icono = CatalogoImagenes.images.vista_previa;
+				btnCargar.icono = CatalogoImagenes.images.recargar;
+			}
+			
+			private var rutaDoc:String = "";
+			protected function label1_mouseDownHandler(event:MouseEvent):void
+			{
+				if (rutaDoc != "")
+				{
+					var request:URLRequest = new URLRequest("file://"+  encodeURI(rutaDoc));
+					navigateToURL(request);
+				}
+			}
+			
+			private var popUpHistorial:popUpHistorialOc;
+			public function set enviarResultadoHistorial(listaHistorial:ArrayCollection):void
+			{
+				if( popUpHistorial == null ){
+					var evento:EventoInterlocutor = listaHistorial.removeItemAt(0) as EventoInterlocutor;
+					popUpHistorial = popUpHistorialOc(PopUpManager.createPopUp( this, popUpHistorialOc, true ) );
+					PopUpManager.centerPopUp( popUpHistorial );
+					popUpHistorial.lstHistorial.dataProvider = listaHistorial;
+					popUpHistorial.recibirInfo = evento.cuerpo;
+					popUpHistorial.addEventListener("cerrarPopUp",cerrarPopUpHistorial);
+				}else{
+					PopUpManager.addPopUp( popUpHistorial , this, true );
+				}
+			}
+			
+			private function cerrarPopUpHistorial(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpHistorial );
+				popUpHistorial = null;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" gap="0">
+		<s:HGroup width="100%" height="100%" gap="0" >
+			
+			<!---
+			Inicia Listado Contacto
+			-->
+			<s:VGroup width="30%" height="100%" paddingTop="14" gap="20" paddingBottom="15" paddingRight="20">
+				<gestionarac:BotoneraRegistrarConfirmacionHeader id="grpBotoneraHead" tamMax="598" clickBotoneraDias="grpBotoneraHead_clickBotoneraDiasHandler(event)" 
+																 redimension="true" />
+				<s:HGroup width="100%" height="30" verticalAlign="middle" >
+					<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontAgente}" color="#000000" text="CONTACTOS" textAlign="left" />
+					<s:TextInput id="txtBuscador" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changeHandler(event)" prompt="Contacto, Pedido"/>
+				</s:HGroup>  
+				
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+						selectedIndex="0" id="lstContactos" contentBackgroundAlpha="0" changing="lstContactos_changingHandler(event)"
+						itemRenderer="mx.com.proquifa.vista.vistas.gestionarac.itemrenderer.ContactosGestionarAC_IR"
+						/>
+				
+				<otros:division width="100%" grueso="2" height="2" color="#a5a5a5"/>
+				<s:HGroup width="100%" paddingLeft="20" paddingTop="-10" >
+					<s:Label id="txtTotalPendientes" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+					<s:Spacer width="17%" />
+					<s:Label id="txtTotalNotificaciones" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+					<s:Spacer width="14%" />
+					<s:Label id="txtTotalPedidos" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+				</s:HGroup>
+				
+				<s:HGroup width="100%" horizontalAlign="left" paddingLeft="20">
+					<s:HGroup verticalAlign="middle" >
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont14}" text="3+ DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+						<s:Label id="lbl4dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+					</s:HGroup>
+					<s:Spacer width="5%" />
+					<s:HGroup  verticalAlign="middle" >
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont14}" text="3 DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+						<s:Label id="lbl3dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+					</s:HGroup>
+					<s:Spacer width="5%" />
+					<s:HGroup verticalAlign="middle" >
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont14}" text="2 DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+						<s:Label id="lbl2dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+					</s:HGroup>
+					<s:Spacer width="5%" />
+					<s:HGroup verticalAlign="middle" >
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont14}" text="1 DÍAS:" textAlign="center" fontFamily="Novecento" color="#008894" fontWeight="bold"/>
+						<s:Label id="lbl1dias" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+					</s:HGroup>
+					<s:Spacer width="20%" />
+				</s:HGroup>
+				
+				<gestionarac:BotoneraRegistrarConfirmacionFooter tamMax="598" clickBotoneraGestionar="botoneraregistrarconfirmacionfooter1_clickBotoneraGestionarHandler(event)" 
+																 redimension="true" id="grpFooter" />
+				
+			</s:VGroup>
+			<!---
+			Termina Listado Contacto
+			-->
+			<!---
+			Inicia Listado Notificado
+			-->
+			<s:Spacer width="2" />
+			<otros:divisionDegradadoVertical height="100%" width="2" />
+			<s:Spacer width="2" />
+			<s:Group width="20%" height="100%" >
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="#F9F9FA" />
+					</s:fill>
+				</s:Rect>
+				
+				<s:VGroup width="100%" height="100%" padding="15" gap="10">
+					<s:HGroup width="100%" >
+						<mx:Image source="{catalogoIconosBotones.getInstance().contacto_svg}" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="{lstContactos.selectedItem.nombreContacto}" color="#008894" width="100%" maxDisplayedLines="2" fontWeight="bold" />
+					</s:HGroup>
+					<s:HGroup width="100%" >
+						<mx:Image source="{catalogoIconosBotones.getInstance().mail_svg}" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" text="{lstContactos.selectedItem.email}" width="100%" maxDisplayedLines="2" />
+					</s:HGroup>
+					<s:HGroup width="100%" >
+						<mx:Image source="{catalogoIconosBotones.getInstance().telefono_svg}" />	
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" text="{lstContactos.selectedItem.telefono}" width="100%" maxDisplayedLines="1" />
+					</s:HGroup>
+					
+					<s:Spacer height="1" />
+					<otros:LineaDivision id="linea" width="100%" height="2" color="#f4f4f4" top="0" />
+					
+					<s:HGroup width="100%" height="30" verticalAlign="middle" paddingTop="10" paddingBottom="10" >
+						<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontAgente}" color="#000000" text="NOTIFICADOS" textAlign="left" />
+						<s:TextInput id="txtBuscadorNotificados" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscadorNotificados_changeHandler(event)" prompt="Notificado"/>
+					</s:HGroup>  
+					
+					<s:VGroup width="100%" height="100%" gap="0" >
+						<otros:LineaDivision width="100%" height="2" color="#f4f4f4" visible="{lstNotificaciones.selectedIndex == 0 ? false : true}" />
+						
+						<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" 
+								selectedIndex="0" id="lstNotificaciones" contentBackgroundAlpha="0" changing="lstNotificaciones_changingHandler(event)"
+								itemRenderer="mx.com.proquifa.vista.vistas.gestionarac.itemrenderer.NotificacionesGestionarAC_IR"
+								/>
+					</s:VGroup>  
+					
+					
+					<gestionarac:BotoneraRegistrarConfirmacionFooter size="13" tamMax="598" clickBotoneraGestionar="grpFooterNotificado_clickBotoneraGestionarHandler(event)" 
+																	 redimension="true" id="grpFooterNotificado" />
+					
+				</s:VGroup>
+			</s:Group>  
+			<!---
+			Termina Listado Notificado
+			-->
+			<!---
+			Inicia Grid Partidoas
+			-->
+			<otros:divisionDegradadoVertical height="100%" width="2" />
+			
+			<s:Group width="50%" height="100%" >
+				<s:VGroup width="100%" height="100%" padding="15">
+					<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontAgente}" color="#000000" text="Respuesta de Avisos de Cambios" textAlign="left" />
+					<s:HGroup width="100%" paddingBottom="20" >
+						<componentes:BotonDefault id="btnCargar" conTexto="false" conImagen="true" color="#0b8894" icono="{CatalogoImagenes.images.cargar}" width="150" height="35" mouseDown="botondefault2_mouseDownHandler(event)"  />
+						<componentes:BotonDefault id="btnVisualizar" conTexto="false" conImagen="true" color="#C2C3C9" icono="{CatalogoImagenes.images.vistaDisabled}" width="150" height="35" mouseDown="label1_mouseDownHandler(event)"  />
+						<s:Label paddingRight="20" styleName="TituloNovecento_18" fontSize="{sizeFontAgente}" fontWeight="bold" color="#008894" textAlign="right" width="100%" 
+								 text="{lstNotificaciones.selectedItem.dia == 1 ? '1 DÍA' : lstNotificaciones.selectedItem.dia == 2 ? '2 DÍAS' : lstNotificaciones.selectedItem.dia == 3 ? '3 DÍAS' : '3+ DÍAS' } · {lstNotificaciones.selectedItem.folio}" />
+					</s:HGroup>  
+					
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:stroke>
+								<s:SolidColorStroke color="#008894" weight="1"/>
+							</s:stroke>
+						</s:Rect>
+						
+						
+						<s:VGroup width="100%" height="100%" >
+							<s:HGroup width="100%" gap="0" padding="15">
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="PEDIDOS" color="#000000" width="35%" fontWeight="bold" />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="FDP" color="#000000" width="17%" textAlign="center" fontWeight="bold" />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="FEE" color="#000000" width="17%" textAlign="center" fontWeight="bold" />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="HISTORIAL" color="#000000" width="13%" textAlign="center" fontWeight="bold" />
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="¿ESPERA?" color="#000000" width="18%" fontWeight="bold" />
+							</s:HGroup>
+							<otros:LineaDivision width="100%" height="2" color="#000000" top="0" />
+							
+							<s:Scroller width="100%" height="100%">
+								<s:VGroup width="100%" height="100%" id="grpPedidos" gap="0" paddingBottom="10" />
+							</s:Scroller>
+							
+							<otros:LineaDivision width="100%" height="1" color="#000000" top="0" />
+							
+							<s:HGroup width="100%" padding="10">
+								<s:Label id="txtTotalPartidasGrid" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+								<s:Spacer width="10%" />
+								<s:Label id="txtTotalPiezasGrid" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+								<s:Spacer width="10%" />
+								<s:Label id="txtTotalMontoGrid" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" />
+							</s:HGroup>
+							
+						</s:VGroup>  
+						
+						
+					</s:Group>  
+					
+					<s:HGroup width="100%" paddingTop="10" >
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="" color="#000000" width="35%" fontWeight="bold" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="" color="#000000" width="22%" textAlign="center" fontWeight="bold" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont18}" text="" color="#000000" width="21%" textAlign="center" fontWeight="bold" />
+						<s:HGroup width="22%" horizontalAlign="right">
+							<componentes:BotonDefault conTexto="true" text="REGISTRAR" width="150" height="35"
+													  conImagen="false" color="#c2c3ca" id="btnRegistrar" 
+													  styleText="tab_texto_18_Helvetica" mouseDown="botondefault1_mouseDownHandler(event)" />
+						</s:HGroup>  
+					</s:HGroup>  
+					
+				</s:VGroup>
+			</s:Group>  
+			<!---
+			Termina Grid Partidoas
+			-->
+		</s:HGroup>
+		
+		<s:Spacer height="1" />
+		<s:Group width="100%" height="2">
+			<otros:division width="100%" grueso="2" height="2" color="#a5a5a5" left="-12" />
+		</s:Group>
+		<s:Spacer height="6" />
+		<s:HGroup width="100%" paddingTop="10" verticalAlign="middle">
+			<s:HGroup width="14%" horizontalAlign="center" verticalAlign="middle">
+				<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().regular_azul}" />
+				<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="Regular" />
+			</s:HGroup>
+			<s:HGroup width="14%" horizontalAlign="center" verticalAlign="middle">
+				<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().programado_azul}" />
+				<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="Programado" />
+			</s:HGroup>
+			<s:HGroup width="14%" horizontalAlign="center" verticalAlign="middle">
+				<mx:Image smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().flete_express_azul}" />
+				<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="Flete Express" />
+			</s:HGroup>
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="PU Precio Unitario" width="14%" />
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="PT Precio Total" width="14%" />
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="FPG Fecha Proxima Gestion" width="14%" />
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont12}" textAlign="center" text="FDP Fecha Disponibilidad de Proveedor" width="14%" />
+		</s:HGroup>  
+		
+	</s:VGroup>  
+	
+	
+	
+</s:Group>

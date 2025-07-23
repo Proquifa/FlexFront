@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 creationComplete="ini(event)" xmlns:label="skins.skin.label.*" xmlns:pqNet="skins.botones.pqNet.*" >
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.soliciud.EventoSolicitarVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.interlocutor.AvisoDeCambios;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.DocumentoSolicitudVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitudVisita.recursos.IR.itemVisualizarArchivos;
+			import mx.effects.AnimateProperty;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.core.NavigationUnit;
+			import spark.events.IndexChangeEvent;
+			
+			import flashx.textLayout.container.ScrollPolicy;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.skin.textarea.TextArea2D_azulSkin;
+			import skins.skin.textinput.skinTextInpuntContornoAzul;
+ 			private var _listaDocumentos:ArrayCollection;
+			private var _font18:Number = 18;
+			[Bindable] public var currentDocumento:DocumentoSolicitudVisita;
+			private var indiceEliminar:int;
+			private var indiceCambiar:int;
+			private var eliminarDisponible:Boolean;
+			
+			[Bindable]
+			public function get listaDocumentos():ArrayCollection
+			{
+				return _listaDocumentos;
+			}
+
+			public function set listaDocumentos(value:ArrayCollection):void
+			{
+				_listaDocumentos = value;
+			}
+
+			[Bindable]
+			public function get font18():Number
+			{
+				return _font18;
+			}
+
+			public function set font18(value:Number):void
+			{
+				_font18 = value;
+			}
+
+			protected function ini(event:FlexEvent):void
+			{
+				lstDocs.addEventListener("cambiarVistaEditable",cambiarVista);
+				lstDocs.addEventListener("cambiarVistaNormal",cambiarVistaNormal);
+				lstDocs.addEventListener("eliminarDocumento",eliminarDocumento);
+				lstDocs.addEventListener("deseleccionar",quitarSeleccion);
+				lstDocs.addEventListener(MouseEvent.CLICK,verificarBloqueo);
+				listaDocumentos = new ArrayCollection();
+				
+			}
+			protected function quitarSeleccion(event:Event):void
+			{
+				lstDocs.selectedIndex = -1;
+			}
+			protected function verificarBloqueo(event:MouseEvent):void
+			{
+				if(EventoSolicitarVisita.bloqueoEditarDoc){
+					event.preventDefault();
+				}
+			}
+			protected function cambiarVista(event:Event):void
+			{
+				lstDocs.setStyle('verticalScrollPolicy', ScrollPolicy.OFF);
+				btnAgregar.visible = btnAgregar.includeInLayout = false;
+			}
+			protected function cambiarVistaNormal(event:Event):void
+			{
+				lstDocs.setStyle('verticalScrollPolicy', ScrollPolicy.ON);
+				btnAgregar.visible = btnAgregar.includeInLayout = true;
+			}
+			
+			private var file:File;
+			public function cargarArchivos(event:MouseEvent):void
+			{
+				var docFilter:FileFilter;
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				docFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter])
+			}
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				trace("ARCHIVO CARGADO: " + event);
+				
+				var tmpAdicional:DocumentoOrdenDespacho = new DocumentoOrdenDespacho();
+				try
+				{
+					/*tmpAdicional = ObjectUtil.copy(currentDocumentoOrden) as DocumentoOrdenDespacho;*/
+					var archivo:DocumentoSolicitudVisita = new DocumentoSolicitudVisita();
+					archivo.nombre = event.target.name;
+					archivo.titulo = event.target.name.split(".")[0];
+					archivo.archivo = event.target.data;
+					archivo.ruta = file.nativePath;
+					
+					listaDocumentos.addItem(archivo);
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+				
+			}
+			
+			protected function llenarCurrent(event:IndexChangeEvent):void
+			{
+				indiceEliminar = lstDocs.selectedIndex;
+				eliminarDisponible = true;
+				EventoSolicitarVisita.indiceSiguiente = lstDocs.selectedIndex + 1;
+			}
+			protected function eliminarDocumento(event:Event):void
+			{
+				eliminarIndice();
+			}
+			
+			private function eliminarIndice():void
+			{
+				if (eliminarDisponible)
+				{
+					lstDocs.dataProvider.removeItemAt(indiceEliminar);
+					lstDocs.selectedIndex = -1;
+					eliminarDisponible = false;
+				}
+				else
+				{
+					setTimeout(eliminarIndice,100);
+				}
+			}
+			
+			protected function checarBloqueo(event:IndexChangeEvent):void
+			{
+				if(EventoSolicitarVisita.bloqueoEditarDoc){
+					event.preventDefault();
+				}
+			}
+			
+			private function scrollToIndex(index:int, animationDuration:int = 100):void 
+			{
+				var pt:Point = lstDocs.layout.getScrollPositionDeltaToElement(index);
+				var verticalScroll:int = lstDocs.layout.verticalScrollPosition;
+				var verticalScrollOld:int = lstDocs.layout.verticalScrollPosition;
+				var delta:int = -1;
+				if (pt != null )
+				{
+					while (pt)
+					{
+						lstDocs.validateNow();
+						if (pt.y > 0) {
+							delta = lstDocs.layout.getVerticalScrollPositionDelta(NavigationUnit.DOWN);
+						} else {
+							verticalScrollOld = delta;
+							delta = lstDocs.layout.getVerticalScrollPositionDelta(NavigationUnit.UP);
+						}
+						lstDocs.layout.verticalScrollPosition += delta;
+						verticalScroll += delta;
+						pt = lstDocs.layout.getScrollPositionDeltaToElement(index);
+						if ((delta == 0 || verticalScrollOld == delta) && pt != null ){
+							break;
+						}
+					}
+					var animation:AnimateProperty = new AnimateProperty(lstDocs.dataGroup);
+					animation.property = "verticalScrollPosition";
+					animation.duration = animationDuration;
+					animation.toValue = verticalScroll;
+				}
+			}
+			
+			protected function verificarVisible(event:MouseEvent):void
+			{
+				scrollToIndex(lstDocs.selectedIndex);
+			}
+			
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="edit"/>
+	</s:states>
+	<s:VGroup width="100%" height="100%" >
+		
+	
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" includeIn="normal,edit">
+		<s:HGroup width="100%" height="100%" maxHeight="40" verticalAlign="middle" includeIn="normal,edit">
+			<label:Texto_18_NovecentoWideAzul text="CARGAR ARCHIVOS RELACIONADOS" fontSize="{font18}" fontWeight="bold" width="100%" color="#008894"/>
+			<mx:Image id="btnAgregar" includeIn="normal" source="{catalogoIconosBotones.getInstance().agregarArchivo}" click="cargarArchivos(event)"/>
+		</s:HGroup>
+		<s:HGroup width="100%" height="100%" >
+			<s:List includeIn="normal,edit" width="100%" height="100%" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitudVisita.recursos.IR.itemDocumentosRelacionadosCargados"
+					id="lstDocs" borderVisible="false" horizontalScrollPolicy="off" minHeight="70" dataProvider="{listaDocumentos}" change="llenarCurrent(event)"
+					changing="checarBloqueo(event)" click="verificarVisible(event)"/>
+		</s:HGroup>  
+	</s:VGroup>
+	</s:VGroup>  
+</s:Group>

@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+								   titulo="reporte seguiMientos" xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*" 
+								   creationComplete="completeHandler(event)"
+								   xmlns:otros="skins.otros.*"
+								   xmlns:comboCata="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+								   xmlns:chekbox="skins.skin.chekbox.*"
+								   xmlns:btnToggleEstados="skins.botonesToggle.btnToggleEstados.*" xmlns:botonesToggle="skins.botonesToggle.*" xmlns:pqNet="skins.botones.pqNet.*"
+								   >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoCambioIndex;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.cobros.EventoReporteCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.seguimiento.EventoReporteSeguimiento;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.events.FlexEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable]	private var _arrTipo:ArrayCollection = new ArrayCollection(["--TODOS--",
+				"Estandares",
+				"Biológicos",
+				"Reactivos",
+				"Publicaciones",
+				"Labware"
+			]);
+			
+			[Bindable]	private var _arrControl:ArrayCollection = new ArrayCollection(["--TODOS--",
+				"Nacionales",
+				"Mundiales",
+				"Normal"
+			]);
+			
+			[Bindable]	private var _arrOrigen:ArrayCollection = new ArrayCollection(["--TODOS--",
+				"Seguimiento",
+				"Confirmación",
+				"Cancelable"
+			]);
+			
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection([{label:"Seguimiento",  icono: "cancelable"}, 
+																					{label:"Confirmación", icono: "confirmacion"},
+																					{label:"Cancelable",   icono: "cancelable" }
+																					]);
+			
+			[Bindable]	private var _listaBotones:ArrayCollection = new ArrayCollection( [{ valor:'Avanzada', llave: 0 }, 
+				        { valor:'Rápida', llave: 1 } ]);
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizar.png")]
+			private var imgNormal:Class;
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizarverde.png")]
+			private var imgDown:Class;
+			
+			[Bindable]	public var _vistaAvanzada:Boolean = true;
+			[Bindable]	private var _clickeado:String = "DIA0";
+			private var _vistaSelected:String;
+			[Bindable]	private var _esGerente:Boolean = false;
+			private var _emp:Empleado = DatosGlobales.getInstance()._usuario;
+			
+			protected function initReporte():void
+			{
+				if( _emp.idFuncion == 5 || _emp.idFuncion == 7 )
+				{
+					_esGerente = false;
+					cmbCliente.cargaClientes( (_emp.idFuncion == 7 ? _emp.idEmpleado.toString(): _emp.usuario), '--TODOS--' );
+				}
+				else
+				{
+					_esGerente = true;
+					cmbCliente.cargaClientes( '--TODOS--');
+					if( _emp.usuario == "CTirado" )
+					{
+						cmbResponsable.cargarEmpleadosXTipoTablero( 'esac_master-esac-eve', '', '--TODOS--' );
+					}
+					else if( _emp.idFuncion == 3 || _emp.idFuncion == 4 )
+					{
+						_emp.idFuncion == 4 ? cmbResponsable.cargarEmpleadosXTipoTablero( 'esac', '', '--TODOS--' ) : cmbResponsable.cargarEmpleadosXTipoTablero( 'eve', '', '--TODOS--' );
+					}
+					else if( _emp.idFuncion == 37 )
+					{ // esac master
+						cmbResponsable.cargarEmpleadosXTipoTablero( "esac_master", _emp.usuario, '--TODOS--' );
+					}
+					else
+					{
+						cmbResponsable.cargarEmpleadosXTipoTablero( 'esac_master-esac-eve', '', '--TODOS--' );
+					}
+				}
+				addEventListener("clickCustomButton", escucharBotonTablaGrafica);
+				validaOrigen();
+				cargarUniversoXEmpleado();
+				imgActualizar.source = imgNormal;
+			}
+			
+			protected function escucharBotonTablaGrafica(event:Event):void
+			{
+				var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+				eventoindex.vieneD = "reporteSeguimientos";
+				_vistaSelected = event.target.imagen;
+				if( event.target.imagen == "tabla" )
+				{
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+					eventoindex.nuevoIndex = 0;
+				}
+				else if( event.target.imagen == "grafica" )
+				{
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablaminigris;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficamini;
+					eventoindex.nuevoIndex = 1;
+				}
+				dispatchEvent(eventoindex);
+				if( event.target.id != null )
+					var id:String = event.target.id.toString();
+				if( id == "btn0" )
+					_clickeado = "PASADO";
+				if( id == "btn1" )
+					_clickeado = "DIA-3";
+				if( id == "btn2" )
+					_clickeado = "DIA-2";
+				if( id == "btn3" )
+					_clickeado = "DIA-1";
+				if( id == "btn4" )
+					_clickeado = "DIA0";
+				if( id == "btn5" )
+					_clickeado = "DIA1";
+				if( id == "btn6" )
+					_clickeado = "DIA2";
+				if( id == "btn7" )
+					_clickeado = "DIA3";
+				if( id == "btn8" )
+					_clickeado = "FUTURO";
+				if( id == "btnTodo" )
+					_clickeado = "TODO";
+				filtrarDatos();
+			}
+			
+			protected function seleccionaButtonBar(event:IndexChangeEvent):void
+			{
+				if( event.currentTarget.selectedItem == null )
+					return;
+				if(event.currentTarget.selectedItem.llave == 0)
+				{
+					_vistaAvanzada = true;
+					txtFolioCotizacion.text = "";
+					filtrarDatos();
+				}
+				else
+				{
+					_vistaAvanzada = false;
+					filtrarDatos();
+				}
+				var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+				eventoindex.vieneD = "reporteSeguimientos";
+				eventoindex.nuevoIndex = 0;
+				dispatchEvent( eventoindex );
+			}
+			
+			protected function busquedaPorFolio(event:FlexEvent):void
+			{
+				if( txtFolioCotizacion.text != "" )
+				{
+					var evento:EventoReporteSeguimiento = new EventoReporteSeguimiento(EventoReporteSeguimiento.BUSCAR_COTIZACION_POR_FOLIO);
+					evento.folioCotizacion = txtFolioCotizacion.text;
+					dispatchEvent(evento);
+				}
+			}
+			
+			protected function cargarUniversoXEmpleado():void
+			{
+				var ahorita:Number = new Date().time;
+				var antes:Number = _cronometro.time;
+				var diferencia:Number = ( ahorita - antes ) / 1000;
+				if( diferencia < 0.5 )
+					return;
+				
+				var eventEspera:EventoReporteSeguimiento = new EventoReporteSeguimiento(EventoReporteSeguimiento.CONFIGURAR_ESPERA_REPORTE_SEGUIMIENTO);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.tipoEventos = [];
+				eventEspera.tipoEventos.push("OBTENER_UNIVERSO_COTIZACIONES_EN_SEGUIMIENTO");
+				dispatchEvent(eventEspera);
+				
+				var evento:EventoReporteSeguimiento = new EventoReporteSeguimiento(EventoReporteSeguimiento.OBTENER_UNIVERSO_COTIZACIONES_EN_SEGUIMIENTO);
+				if(_emp.idFuncion == 5 || _emp.idFuncion == 7 )
+				{// ESAC EV
+					evento.empleado = _emp.usuario;
+				}
+				else
+				{// en caso contrario es gerente o directivo
+					evento.empleado = _emp.usuario;
+					if(	cmbResponsable.selectedItem != null  && cmbResponsable.selectedItem is CatalogoItem )
+					{
+						evento.empleado = cmbResponsable.selectedItem.valor == '--TODOS--' ? _emp.usuario : cmbResponsable.selectedItem.valor.toString();
+					}
+					else if( cmbResponsable.selectedItem != null && cmbResponsable.selectedItem is Empleado )
+					{
+						evento.empleado = cmbResponsable.selectedItem.usuario == '--TODOS--' ? _emp.usuario : cmbResponsable.selectedItem.usuario.toString();
+					}
+					if( botoneraBarra.selectedItem.label == 'Cancelable' )
+					{ 
+						
+						if( _emp.idFuncion == 37 )
+							evento.esacMasterActivado = 1;
+						if( cmbResponsable.selectedItem is CatalogoItem && (cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac_master" 
+							|| cmbResponsable.selectedItem is Empleado && (cmbResponsable.selectedItem as Empleado).idFuncion == 37 )
+						{
+							evento.esacMasterActivado = 1;
+						}
+						if( _esGerente )
+							evento.esacMasterActivado = 1;
+					}
+				}
+				evento.origenFiltro = botoneraBarra.selectedItem.label;
+				evento.confirmacionFiltro = 2;
+				trace( 'Master ACtivado: ' + evento.esacMasterActivado.toString() );
+				dispatchEvent(evento);
+				//lblDebug.text = evento.toString();
+				_cronometro = new Date();
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				if($actualizarEstadoEspera.hasOwnProperty("isBusy")){
+					if(!$actualizarEstadoEspera.isBusy){
+						switch(_clickeado)
+						{
+							case 'PASADO': {btn0.imagen = 'tabla'; btn0.currentState = 'normal';	break;}
+							case 'ANTE ANTIER': {btn1.imagen = 'tabla';btn1.currentState = 'normal';	break;}
+							case 'ANTIER': {btn2.imagen = 'tabla';btn2.currentState = 'normal';	break;}
+							case 'AYER': {btn3.imagen = 'tabla';btn3.currentState = 'normal';	break;}
+							case 'HOY': {btn4.imagen = 'tabla';btn4.currentState = 'normal';	break;}
+							case 'MAÑANA': {btn5.imagen = 'tabla';btn5.currentState = 'normal';	break;}
+							case 'PASADO MAÑANA': {btn6.imagen = 'tabla';btn6.currentState = 'normal';	break;}
+							case 'POS PASADO': {btn7.imagen = 'tabla';btn7.currentState = 'normal';	break;}
+							case 'FUTURO': {btn8.imagen = 'tabla';btn8.currentState = 'normal';	break;}
+							case 'TODO': {btnTodo.imagen = 'tabla';btnTodo.currentState = 'normal';	break;}
+						}
+	
+						_clickeado = "DIA0"; //HOY
+						btn4.currentState = "seleccionado";
+						
+						btnBarra.selectedIndex = 0;
+
+						//btnBarra.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));  
+					}
+				}
+			}
+			
+			private var _cronometro:Date = new Date();
+			
+			protected function filtrarDatos( ):void
+			{
+				if( cmbCliente.selectedItem == null || _esGerente && cmbResponsable.selectedItem == null )
+					return;
+				///
+				//validarComboOrigen();
+				///
+				var evento:EventoReporteSeguimiento = null;
+				if( _vistaAvanzada )
+				{ // primer buttonbar
+					evento = new EventoReporteSeguimiento(EventoReporteSeguimiento.FILTRAR_COTIZACIONES_VISTA);
+				}
+				else
+				{ // busqueda
+					evento = new EventoReporteSeguimiento(EventoReporteSeguimiento.BUSCAR_COTIZACION_POR_CLIENTE);
+				}
+				evento.cliente = cmbCliente.selectedItem.valor == '--TODOS--' ? '': cmbCliente.selectedItem.valor;
+				evento.tipoFiltro = cmbTipoFiltro.selectedItem == '--TODOS--' ? '': cmbTipoFiltro.selectedItem; 
+				evento.marcaFiltro = cmbMarcaFiltro.selectedItem.valor == '--TODOS--' ? '': cmbMarcaFiltro.selectedItem.valor;
+				evento.controlFiltro = cmbControlFiltro.selectedItem == '--TODOS--' ? '': cmbControlFiltro.selectedItem;
+				evento.diaSeleccionado = _clickeado;
+				evento.confirmacionFiltro = 2;
+				evento.origenFiltro  = botoneraBarra.selectedItem.label;  
+				evento.vistaSelected = _vistaSelected;
+				if( evento.origenFiltro == "Cancelable" )
+				{
+					evento.esacMaster = cmbResponsable.selectedItem.valor == '--TODOS--' ? '': cmbResponsable.selectedItem.valor;
+				}
+				dispatchEvent( evento );
+				//lblDebug.text = evento.toString();
+			}
+			
+			public function set recibirObjLabels( $objLabel:Object ):void
+			{
+				if( $objLabel == null )
+					return;
+				var todo:int = 0;
+				btn0.total = validaDisplay( $objLabel["PASADO"] );
+				if( $objLabel["PASADO"] != ""){ todo = todo + parseInt( $objLabel["PASADO"] ) }
+				btn1.total = validaDisplay( $objLabel["DIA-3"] );
+				if( $objLabel["DIA-3"] != ""){ todo = todo + parseInt( $objLabel["DIA-3"] ) }
+				btn2.total = validaDisplay( $objLabel["DIA-2"] );
+				if( $objLabel["DIA-2"] != ""){ todo = todo + parseInt( $objLabel["DIA-2"] ) }
+				btn3.total = validaDisplay( $objLabel["DIA-1"] );
+				if( $objLabel["DIA-1"] != ""){ todo = todo + parseInt( $objLabel["DIA-1"] ) }
+				btn4.total = validaDisplay( $objLabel["DIA0"] );
+				if( $objLabel["DIA0"] != ""){ todo = todo + parseInt( $objLabel["DIA0"] ) }
+				btn5.total = validaDisplay( $objLabel["DIA1"] );
+				if( $objLabel["DIA1"] != ""){ todo = todo + parseInt( $objLabel["DIA1"] ) }
+				btn6.total = validaDisplay( $objLabel["DIA2"] );
+				if( $objLabel["DIA2"] != ""){ todo = todo + parseInt( $objLabel["DIA2"] ) }
+				btn7.total = validaDisplay( $objLabel["DIA3"] );
+				if( $objLabel["DIA3"] != ""){ todo = todo + parseInt( $objLabel["DIA3"] ) }
+				btn8.total = validaDisplay( $objLabel["FUTURO"] );
+				if( $objLabel["FUTURO"] != ""){ todo = todo + parseInt($objLabel["FUTURO"] ) }
+				//btnTodo.total = validaDisplay( $objLabel["TODO"] );
+				btnTodo.total = todo.toString();
+				btn3.label2 = validaDisplay( $objLabel.ayer );
+				btn4.label2 = validaDisplay( $objLabel.hoy );
+				btn5.label2 = validaDisplay( $objLabel.manana );
+				var tr:String =  validaDisplay( $objLabel.tazaRealizacion );
+				lblTazaRealizacion.text = tr.substring(2,tr.length);
+			}
+			
+			private function validaDisplay( $propiedad:* ):String
+			{
+				if( $propiedad == null )
+					return '';
+				return $propiedad.toString();
+			}
+			
+			[Bindable]	private var _icoGrafica:Class = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+			[Bindable]	private var _icoTabla:Class = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+			
+			private var _origenAnterior:String = "";
+			private var _resposableAnterior:String = "";
+			
+			protected function validaOrigen():void
+			{
+				var evt:EventoReporteSeguimiento = new EventoReporteSeguimiento( EventoReporteSeguimiento.SETEAR_ORIGEN );
+				evt.origenFiltro =  botoneraBarra.selectedItem.label; 
+				/* var newOrigen:String = cmbOrigen.selectedItem; */ 
+				var newOrigen:String = botoneraBarra.selectedItem.label 
+				var newResponsable:String = cmbResponsable.selectedItem == null ? "": cmbResponsable.selectedItem.valor;
+				if( _esGerente )
+				{
+					if( cmbResponsable.selectedItem != null )
+					{
+						if( _emp.idFuncion == 37 )
+						{// esacMAster
+							if( (cmbResponsable.selectedItem as CatalogoItem).valor == "--TODOS--" )
+							{// validar si aplica al usuario esacMaster logeado o al responsable seleccionado
+								evt.esacMaster =  _emp.usuario;
+							}
+							else if( (cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac_master" )
+							{
+								evt.esacMaster =  cmbResponsable.selectedItem.valor;
+							}
+							else
+							{
+								evt.esacMaster = 'no encontrar para bloquear consulta de los cancelable del esac o ev';
+							}
+						}
+						else
+						{// gerente normal
+							if( (cmbResponsable.selectedItem as CatalogoItem).valor == "--TODOS--" )
+							{// aplica cuando se quieren ver todas las cotizaciones cancelables
+								evt.esacMaster = "";
+							}
+							else if( (cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac_master" )
+							{// si el responsable es un esacMaster entonces mandar su usuario
+								evt.esacMaster =  cmbResponsable.selectedItem.valor;
+							}
+							else
+							{
+								evt.esacMaster = 'no encontrar para bloquear consulta de los cancelable del esac o ev';
+							}
+						}
+					}
+				}
+				else
+				{// esac normal
+					evt.esacMaster = 'no encontrar para bloquear consulta de los cancelable del esac o ev';
+				}
+				/*  valido si se manda a llamar del servicio o se filtra con los datos del modelo */
+				if( _esGerente && (newOrigen == "Cancelable" || _origenAnterior == "Cancelable"
+					|| newResponsable != _resposableAnterior ) )
+				{
+					//trace( '#### se mando a llamar universo: ' + newOrigen + ' - ' + newResponsable );
+					/*  _origenAnterior = cmbOrigen.selectedItem;  */
+					_origenAnterior = botoneraBarra.selectedItem.label; 
+					_resposableAnterior = cmbResponsable.selectedItem == null ? "": cmbResponsable.selectedItem.valor;
+					cargarUniversoXEmpleado();
+				}
+				else
+				{
+					dispatchEvent( evt );
+				}
+			}
+			
+			protected function completeHandler(event:FlexEvent):void
+			{
+				setTimeout( initReporte, 300 );
+			}
+			
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+
+		<s:VGroup width="100%" height="100%" gap="15">
+			
+			<s:HGroup horizontalAlign="center" width="100%" >
+				<!--visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"-->
+				<s:Image id="imgActualizar" click="cargarUniversoXEmpleado()"/>
+			</s:HGroup>
+			<!--visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"-->
+			<otros:divisionHueca width="100%" />
+			
+			<s:ButtonBar change="seleccionaButtonBar(event)" 
+						 selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" />
+			
+			<otros:divisionHueca width="100%" />
+			
+			<botonesToggle:ButtonBarColores width="100%" height="30" id="botoneraBarra" selectedIndex="0" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"
+											dataProvider="{_arrButton}" change="validaOrigen()" />
+			
+			<s:Label visible="{this._vistaAvanzada &amp;&amp; this._esGerente}" includeInLayout="{this._vistaAvanzada &amp;&amp; this._esGerente}" text="Responsable:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="-10" />
+			<comboCata:ComboCatalogos id="cmbResponsable" visible="{this._vistaAvanzada &amp;&amp; this._esGerente}" includeInLayout="{this._vistaAvanzada &amp;&amp; this._esGerente}" width="100%" selectedIndex="0"
+									  change="validaOrigen()"/>
+			
+			<s:Label text="Cliente:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="-10" />
+			<comboCata:ComboCatalogos   id="cmbCliente" width="100%"  selectedIndex="0" 
+										change="filtrarDatos()"/>
+			
+			<s:Label text="Tipo:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<s:ComboBox id="cmbTipoFiltro"  width="100%" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" selectedIndex="0"
+						dataProvider="{ this._arrTipo }" change="filtrarDatos()"/>
+			
+			<s:Label text="Marca:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<comboCata:ComboCatalogos id="cmbMarcaFiltro" width="100%" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"
+									  creationComplete="{ cmbMarcaFiltro.cargarMarcas( '--TODOS--' ) }" change="filtrarDatos()" />
+			
+			<s:Label text="Control:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<s:ComboBox id="cmbControlFiltro" width="100%" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" selectedIndex="0"
+						dataProvider="{this._arrControl}" change="filtrarDatos()"/>
+			
+			<s:Label visible="{!this._vistaAvanzada}" includeInLayout="{!this._vistaAvanzada}" text="Busqueda por Folio:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="-10" />
+			<s:TextInput id="txtFolioCotizacion" width="100%" visible="{!this._vistaAvanzada}" includeInLayout="{!this._vistaAvanzada}" enter="busquedaPorFolio(event)"/>
+			
+			<otros:divisionHueca width="100%"/>
+			
+			<s:HGroup width="100%" horizontalAlign="right" gap="9" paddingRight="5" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" >
+				<s:Image id="icoGrafica" source="{ this._icoGrafica }" />
+				<s:Image id="icoTabla" source="{ this._icoTabla }" />
+			</s:HGroup>
+			
+
+			<s:Group width="100%" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" >
+				<s:layout>
+					<btnToggleEstados:LayoutBotoneraReporteAHyM minGap="2" minWidthElement="92" /> 		
+				</s:layout>
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="ayer" id="btn3" label1="AYER" currentState="{_clickeado == 'DIA-1' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="hoy" id="btn4" label1="HOY" currentState="{_clickeado == 'DIA0' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="manana" id="btn5" label1="MAÑANA" currentState="{_clickeado == 'DIA1' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="antier" id="btn2" label1="ANTIER" currentState="{_clickeado == 'DIA-2' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pasadomanana"  id="btn6" label1="PASADO MAÑANA" currentState="{_clickeado == 'DIA2' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="anteantier" id="btn1" label1="ANTE ANTIER" currentState="{_clickeado == 'DIA-3' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="todo" id="btnTodo" label1="TODO" currentState="{_clickeado == 'TODO' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pospasado" id="btn7" label1="POS PASADO" currentState="{_clickeado == 'DIA3' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pasado" id="btn0" label1="PASADO" currentState="{_clickeado == 'PASADO' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="futuro" id="btn8" label1="FUTURO" currentState="{_clickeado == 'FUTURO' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+			</s:Group>
+			<s:Spacer height="5"/>
+			<otros:divisionHueca width="100%" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"/>
+			
+			<s:Label id="lblTazaRealizacionTR" width="100%" textAlign="center" fontWeight="bold" fontSize="15" fontFamily="Helvetica" fontStyle="normal" paddingTop="25" text="TR:"  color="0x{catalogoColores.LABEL_GRIS }"/>
+			<s:Label id="lblTazaRealizacion" width="100%" textAlign="center" fontWeight="bold"  fontFamily="Helvetica" fontStyle="normal" paddingBottom="50"  color="0x{catalogoColores.LABEL_GRIS }"/>
+		</s:VGroup>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

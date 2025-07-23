@@ -1,0 +1,637 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:formato ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" 
+		  xmlns:label="skins.skin.label.*"  xmlns:otros="skins.otros.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:grafica="skins.botones.grafica.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+		  width="100%" height="100%" 
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15">
+	<fx:Script>
+		<![CDATA[
+			
+			
+			import skins.catalogos.catalogoColores;
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="600"/>
+		<s:SolidColorStroke id = "sA" color="0x3b98af" weight="2"/>
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="6"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+		
+		<s:LinearGradient id="sc1" rotation="90">
+			<s:GradientEntry alpha="1.0" color="#b4c871" ratio="0"/>
+			<s:GradientEntry alpha="1.0" color="#8da741" ratio="1"/> 
+		</s:LinearGradient>
+		<s:LinearGradient id="sc2" rotation="90">
+			<s:GradientEntry alpha="1.0" color="#990429" ratio="0"/>
+			<s:GradientEntry alpha="1.0" color="#910824" ratio="1"/>
+		</s:LinearGradient>
+		
+		
+		<mx:SolidColorStroke id = "s2" color="0xdd9c12" weight="2"/>
+		<mx:SolidColor id="sc3" color="0x{catalogoColores.LABEL_NARANJA}" alpha="1"/>
+		<s:SolidColorStroke id="stroke2" color="0x{catalogoColores.LABEL_NARANJA}" weight="5"/>
+		<mx:SolidColorStroke id = "sObj" color="0xC54B8C" weight="3"/>
+		<mx:SolidColor id="sc4" color="0xC54B8C" alpha="1"/>
+		<s:SolidColorStroke id="s4" color="0xC54B8C" weight="2"/>
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.productos.OCTableroProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.productos.ProductoTableroProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.PeriodoToolTip;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable]
+			private var _clientesParaTabla:ArrayCollection;
+			private var _sql:Query;
+			[Bindable]private var currentRazon:String = null;
+			private var _respaldo:ArrayCollection;
+			private var yallegaronLasCompras:Boolean = false;
+			
+			private function maxTopClientes():void
+			{	
+				var evt:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.VOLVER_A_TABLERO_PRODUCTOS);
+				dispatchEvent(evt);				
+			}
+			
+			public function set resumenComparativaClientesProd(comparativa:ArrayCollection):void
+			{
+				if(comparativa == null)
+				{
+					return;
+				}
+				
+				var arreTotal:ArrayCollection = UtilsGrid.queryCampoX( comparativa, "etiqueta", "TOTAL_PROVEEDORES_0" );
+				var arrPie:ArrayCollection = UtilsGrid.queryCampoX( comparativa, "etiqueta", "CLIENTES_0" );
+				arrPie = ordenarPorRanking(ObjectUtil.copy(arrPie) as ArrayCollection);
+				
+				for(var i:int = 0;i < arrPie.length;i++){
+					arrPie[i].activarRankingTableroProductos = 1;
+					arrPie[i].totalPedidos = arrPie[i].totalCompras;
+					arrPie[i].clientes = 1;
+					/*arrPie[i].rankingTableroProductos = i+1;*/
+				}
+				
+				if(arreTotal.length > 0)
+				{
+					var valorProv:Number = (arreTotal[0] as ResumenConsulta).clientes_proveedores;
+					for(var h:int = 0; h < arrPie.length; h++)
+					{
+						(arrPie[h] as ResumenConsulta).provedorIndividual = valorProv;
+					}
+				}
+				/*ordenarPorRanking(ObjectUtil.copy(arrPie) as ArrayCollection);*/
+				myChart.dataProvider = myChart.aplicarFormatoTableroProductosRanking( arrPie,'CLIENTES' );
+				myChartMini.dataProvider = myChartMini.aplicarFormatoTableroProductosRanking( ObjectUtil.copy(arrPie) as ArrayCollection,'CLIENTES' );
+			}
+			
+			/**
+			 * Metodo que muestra grafica maximizada  
+			 */
+			public function seleccionarGrafica():void
+			{
+				this.stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			
+			public function seleccionaTabla():void{			
+				this.stackGeneral.selectedChild = this.vistaTabla;
+			} 
+			
+			/**
+			 * Metodo que recibe del mapa el top ten de clientes  
+			 */
+			public function set obtenerClientesGrid(clientes:ArrayCollection):void{
+				if (clientes==null){
+					return ;
+				}
+				currentRazon = null;
+				_respaldo = new ArrayCollection();
+				_sql = new Query(clientes,["concepto"]);
+				_respaldo = ObjectUtil.copy(clientes) as ArrayCollection;
+				this._clientesParaTabla = new ArrayCollection(); 
+				this._clientesParaTabla = clientes;
+				setValoresFooter(clientes);
+				
+				yallegaronLasCompras = true;
+			}
+			
+			private function generaArchivo():void
+			{
+				if(!_clientesParaTabla){
+					alertaSingleton.show("No hay información para generar el archivo.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				var file2:File = new File();
+				
+				var dato0:Number = new Number;
+				var dato1:String = new String;
+				var dato2:String = new String;
+				var dato3:String = new String;
+				
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				var longitud:int =  new int ;
+				longitud = this._clientesParaTabla.length;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Nombre Cliente");
+				fila1[2] = hoja.addItem("Piezas");
+				fila1[3] = hoja.addItem("Monto Compra USD");
+				
+				for(var i:int = 0 ; i<longitud ; i++ ){
+					fila1 = new Array();	
+					
+					dato0 = (this.tablaGrid.dataProvider[i] ).numFila;
+					dato1 = '"' + (this.tablaGrid.dataProvider[i] ).concepto + '"';
+					dato2 = '"' + (this.tablaGrid.dataProvider[i] ).cantidadPiezas +'"';
+					dato3 = '"' + (this.tablaGrid.dataProvider[i] ).formatoMonto + '"';
+					
+					fila1[0] = dato0;
+					fila1[1] = dato1;
+					fila1[2] = dato2;
+					fila1[3] = dato3;
+					
+					hoja.addItem('\r' + fila1 );
+					fila1 = null;
+					
+				}
+				file2.save( hoja, "Clientes_TabProductos.csv");
+			}
+			
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				var _sql:Query = new Query($arreglo,["concepto"]);
+				
+				var _piezas:Number = _sql.getSumarCampo("cantidadPiezas",[],"",true);
+				var _costoUnitario:Number = _sql.getSumarCampo("costo",[],"",true);
+				var _costoTotal:Number = _sql.getSumarCampo("monto",[],"",true);
+				
+				lblTotal.text = ""+$arreglo.length;
+				lblPiezas.text = _piezas == 1 ? "1 Pieza":_piezas.toString()+" Piezas";
+				lblCostoUnitario.text = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_costoUnitario);
+				lblCostoTotal.text = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_costoTotal);
+				
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso =  '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private var _anioMultiple:Boolean;
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				if(_anioMultiple){
+					return int($etiqueta).toString();
+				}else{
+					return _listaMensual[ int($etiqueta) -1 ].toUpperCase();				
+				}
+			}
+			
+			protected function selectRazon(event:ChartItemEvent):void
+			{
+				if(_sql == null)
+					return ;
+				currentRazon = (event.hitData.item as ResumenConsulta).etiqueta;
+				var temp:ProductoTableroProducto;
+				var listaCliente:ArrayCollection = new ArrayCollection();
+				var punteros:Array = _sql.getPunteros([currentRazon]);
+				for(var i:int = 0; i < punteros.length ; i++){
+					temp = ObjectUtil.copy(_sql.universo.getItemAt(punteros[i])) as ProductoTableroProducto;
+					listaCliente.addItem(temp);
+				}
+				this._clientesParaTabla = ObjectUtil.copy(listaCliente) as ArrayCollection;
+				myChartPuntos.dataProvider = graficarVariacion(ObjectUtil.copy(_clientesParaTabla) as ArrayCollection,currentRazon);
+				setValoresFooter(ObjectUtil.copy(listaCliente) as ArrayCollection);
+			}
+			
+			protected function contenido_clickHandler(event:MouseEvent):void
+			{
+				currentRazon = null;
+				this._clientesParaTabla = ObjectUtil.copy(_respaldo) as ArrayCollection;
+				myChartPuntos.dataProvider = graficarVariacion(ObjectUtil.copy(_clientesParaTabla) as ArrayCollection);
+				setValoresFooter(ObjectUtil.copy(_respaldo) as ArrayCollection);
+			}
+			
+			private function graficarVariacion(valores:ArrayCollection, cliente:String = null):ArrayCollection
+			{
+				if(valores == null)
+					return new ArrayCollection();
+				
+				var primero:Boolean = true;
+				var sqlVar:Query;
+				var total:Object = new Object;
+				sqlVar = new Query(valores,["cpedido","cliente"]);
+				var listaMontos:ArrayCollection = new ArrayCollection();
+				var sumador:int = 0;
+				var contador:int = 1;
+				
+				var punteros:Array;
+				if(cliente != null){
+					punteros = sqlVar.getPunteros(["cpedido",cliente]);	
+				}
+				else{
+					punteros = sqlVar.getPunteros(["cpedido"]);
+				}
+				
+				/*var punteros:Array = sqlVar.getPunteros(["cpedido"]);*/	
+				for(var y:int = 0; y < punteros.length ; y++){
+					var punterosPedido:Array = sqlVar.getPunteros([punteros[y]]);
+					var temp:int;
+					for(var i:int = 0; i < punterosPedido.length; i++){
+						var tempCosto:int;
+						var tempProducto:ProductoTableroProducto;
+						tempProducto = (sqlVar.universo.getItemAt(punterosPedido[i]) as ProductoTableroProducto);
+						tempCosto = tempProducto.costo;
+						sumador += tempCosto
+					}
+					temp = sumador / punterosPedido.length;
+					total.montoUSD_0 = 0;
+					total.montoUSD_0 = temp;
+					
+					total.mes = ""+punteros[y];
+					/*total.mes = _listaMensual[y];*/
+					
+					total.numeroMes = 0;
+					total.numeroMes = y+1;
+					
+					if(primero){
+						listaMontos.addItem(new Object());
+						primero = false;
+					}
+					
+					listaMontos.addItem(total);
+					
+					temp = 0;
+					sumador = 0;
+					total = new Object;
+				}
+				
+				listaMontos.addItem(new Object());
+				return listaMontos;
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection
+			{
+				var cuenta:int = 1;
+				var primero:Boolean = true;
+				var objeto:Object ;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				while( cuenta < 13)
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					
+					if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+					{	
+						if(primero){
+							var relleno:Object = {montoUSD_0:0,numeroMes:0}
+							arrReturn.addItem(new Object());
+							primero = false;
+						}
+						arrReturn.addItem($lista[cuenta-1]);
+					}
+					cuenta++;
+				}
+				arrReturn.addItem(new Object());
+				return arrReturn;
+			}
+			
+			private var _desempenoActual:Number = 0;
+			private var totalLegend:Number = 0;
+			private var _desepenoAnterior:Number = 0;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _event:EventoTableroProductos;
+			private var _anioFiltro:Number;
+			private var _anioInicio:int = 0;
+			private var _anioFin:int = 0;
+			private var cont:Number=0;
+			private var fecha:Date = new Date();
+			
+			public function set recibeFiltros(parametros:EventoTableroProductos):void{
+				
+				if(parametros == null) return;
+				_event = parametros;
+				_minimoMeses = _event.parametros.mesInicio;
+				_maximoMeses = _event.parametros.mesFin;
+				_anioFiltro = _event.parametros.anioInicio;
+				_anioMultiple = _event.parametros.aniosMultiple;
+				
+				if(_anioMultiple){
+					_anioInicio = _event.parametros.anioInicio;
+					_anioFin = _event.parametros.anioFin;
+				}
+				
+				cont++;				
+				llamarAIniciarGrafica();		
+			}
+			
+			private function llamarAIniciarGrafica():void
+			{
+				if(yallegaronLasCompras)
+				{			
+					var tempArray:ArrayCollection;
+					yallegaronLasCompras = false;
+					if(_anioMultiple){
+						/*myChartPuntos.dataProvider = graficarVariacionAnio( ObjectUtil.copy(_clientesParaTabla) as ArrayCollection );*/
+						myChartPuntos.dataProvider = graficarVariacion( ObjectUtil.copy(_clientesParaTabla) as ArrayCollection );
+					}else{
+						/*tempArray = graficarVariacion(ObjectUtil.copy(_clientesParaTabla) as ArrayCollection);
+						myChartPuntos.dataProvider = ObjectUtil.copy(iniciarGrafica( tempArray )) as ArrayCollection;*/
+						myChartPuntos.dataProvider = graficarVariacion(ObjectUtil.copy(_clientesParaTabla) as ArrayCollection);
+					}
+				}
+				else
+				{
+					setTimeout(llamarAIniciarGrafica,300);
+				}
+			}
+			
+			private function ordenaRankea($arreglo:ArrayCollection):ArrayCollection
+			{
+				var tempArray:ArrayCollection = Util.sortArray( $arreglo,"total",true);
+				for (var r:int = 1; r<=tempArray.length; r++)
+				{
+					(tempArray[r-1] as ResumenConsulta).rankingTableroCliente = r;
+				}
+				return tempArray;
+			}
+			private function ordenarPorRanking(arrayProvider:ArrayCollection,campo:String = "total"):ArrayCollection
+			{
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = campo;
+				dataSortField.descending = true;
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				arrayProvider.sort = numericDataSort;
+				arrayProvider.refresh();
+				
+				for (var r:int = 1; r <= arrayProvider.length; r++)
+				{
+					(arrayProvider[r-1] as ResumenConsulta).rankingTableroProductos = r;
+				}
+				return arrayProvider;
+			}
+			
+			private function graficarVariacionAnio(valores:ArrayCollection):ArrayCollection
+			{
+				var sqlVar:Query;
+				var total:Object = new Object;
+				var primero:Boolean = true;;
+				sqlVar = new Query(valores,["fpedidoAnio"]);
+				var listaMontos:ArrayCollection = new ArrayCollection();
+				var sumador:int = 0;
+				var contador:int = 1;
+				
+				for(var y:int = _anioInicio; y <= _anioFin ; y++){
+					var temp:int;
+					var punteros:Array = sqlVar.getPunteros([y]);
+					for(var i:int = 0; i <= punteros.length; i++){
+						var tempCosto:int;
+						tempCosto = (_sql.universo.getItemAt(punteros[i]) as ProductoTableroProducto).costo;
+						sumador += tempCosto
+					}
+					temp = sumador / punteros.length;
+					total.montoUSD_0 = 0;
+					total.montoUSD_0 = temp;
+					
+					total.Ventas = "";
+					
+					total.mes = "";
+					total.mes = ""+y;
+					
+					total.numeroMes = 0;
+					total.numeroMes = y;
+					if(primero){
+						listaMontos.addItem(new Object());
+						primero = false;
+					}
+					
+					listaMontos.addItem(total);
+					
+					temp = 0;
+					sumador = 0;
+					total = new Object;
+				}
+				listaMontos.addItem(new Object());
+				return listaMontos;
+			}
+			
+			private function iniciarGraficaMulti( $lista:ArrayCollection ):ArrayCollection
+			{
+				var cuenta:int = 1;
+				var primero:Boolean = true;
+				var objeto:Object ;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				while( cuenta < 13)
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					
+					if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+					{	
+						if(primero){
+							var relleno:Object = {montoUSD_0:0,numeroMes:0}
+							arrReturn.addItem(new Object());
+							primero = false;
+						}
+						arrReturn.addItem($lista[cuenta-1]);
+					}
+					cuenta++;
+				}
+				arrReturn.addItem(new Object());
+				return arrReturn;
+			}
+			
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero width="100%" text="CLIENTES" />
+	<mx:ViewStack  id="stackGeneral" width="100%" height="100%" creationPolicy="all"> 
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="0">
+				<otros:divisionGruesa width="100%" />
+				<s:Spacer height="20" />
+				<s:HGroup width="100%" height="100%" >
+					<s:VGroup width="60%" height="100%" paddingBottom="20">
+						<s:Group width="100%" height="100%" >
+							<s:Rect width="100%" height="100%">
+								<s:stroke>
+									<s:SolidColorStroke color="#008894" weight="1"/>
+								</s:stroke>
+							</s:Rect>
+							<s:VGroup width="100%" height="100%" gap="0" verticalAlign="middle" top="1" bottom="1" right="1" left="1">
+								<s:HGroup width="100%" height="15%" maxHeight="60" verticalAlign="middle">
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<s:Label text="#" width="100%" textAlign="center" fontWeight="bold"/>
+									</s:HGroup>  
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<label:Texto text="FECHA" width="100%" fontSize="12" fontWeight="bold" textAlign="center"/>
+									</s:HGroup>  
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<label:Texto text="CLIENTE" width="100%" fontSize="12" fontWeight="bold" textAlign="center"/>
+									</s:HGroup>  
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<label:Texto text="PED. INT." width="100%" fontSize="12" fontWeight="bold" textAlign="center"/>
+									</s:HGroup>  
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<label:Texto text="PIEZAS" width="100%" fontSize="12" fontWeight="bold" textAlign="center"/>
+									</s:HGroup>  
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<label:Texto text="PRECIO UNITARIO" fontSize="12" fontWeight="bold" width="100%" maxDisplayedLines="2" textAlign="center"/>
+									</s:HGroup>  
+									<s:HGroup width="14.3%" height="100%" horizontalAlign="center" verticalAlign="middle">
+										<label:Texto text="PRECIO TOTAL" fontSize="12" fontWeight="bold" width="100%" maxDisplayedLines="2" textAlign="center"/>
+									</s:HGroup>
+								</s:HGroup>
+								<otros:division width="100%" grueso="1" colorLinea="negro"/>
+								<s:VGroup width="100%" height="100%" top="1" bottom="1" right="1" left="1">
+									<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+											id="tablaGrid" contentBackgroundAlpha="0"  dataProvider="{this._clientesParaTabla}"
+											itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.productos.itemRenderer.IR_TabProductosClientes"/> 
+								</s:VGroup>
+								
+								<otros:division width="100%" grueso="1" colorLinea="negro"/>
+								<s:HGroup width="100%" height="15%" maxHeight="50" verticalAlign="middle">
+									<label:Texto id="lblTotal" text="Total" width="100%" textAlign="center"/>
+									<label:Texto width="100%" fontSize="12" maxDisplayedLines="2" textAlign="center"/>
+									<label:Texto width="100%" fontSize="12" maxDisplayedLines="2" textAlign="center"/>
+									<label:Texto width="100%" fontSize="12" maxDisplayedLines="2" textAlign="center"/>
+									<label:Texto id="lblPiezas" width="100%" fontSize="12" maxDisplayedLines="2" textAlign="center"/>
+									<label:Texto id="lblCostoUnitario" width="100%" fontSize="12" maxDisplayedLines="2" textAlign="center"/>
+									<label:Texto id="lblCostoTotal" width="100%" fontSize="12" maxDisplayedLines="2" textAlign="center"/>
+								</s:HGroup>
+								
+							</s:VGroup>  
+							
+						</s:Group> 
+					</s:VGroup>  
+					<s:VGroup width="40%" height="100%" >
+						<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+							<label:Texto text="{currentRazon == null ? 'TODOS':currentRazon}" width="100%" textAlign="center" fontSize="15" maxDisplayedLines="2" fontWeight="bold"/>
+							<graficas:PieChartPqGris id="myChartMini" width="100%" height="90%" dataProvider="{null}" paddingTop="30" paddingBottom="10" showDataTips="false" innerRadius=".5"
+													 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" cambioProvTotales="true" 
+													 sinOver="true" icono="todos_mundo" esConRealse="true" itemClick="selectRazon(event)" clickImagen="contenido_clickHandler(event)">
+								<graficas:series>
+									<graficas:pieSeriesPqNet field="total" />
+								</graficas:series>
+							</graficas:PieChartPqGris>	
+						</s:VGroup>  
+						<s:VGroup width="100%" height="100%" horizontalAlign="center">
+							<label:Texto text="VARIACIÓN DE PRECIOS" width="100%" textAlign="center" fontSize="15" maxDisplayedLines="2" fontWeight="bold"/>
+							<mx:LineChart height="90%" width="100%" id="myChartPuntos"
+										  mouseSensitivity="5" 
+										  dataTipRenderer="{PeriodoToolTip}" 
+										  showDataTips="true" 
+										  showDataTipTargets="false"  
+										  dataTipMode="single" 
+										  paddingRight="30" paddingLeft="20" paddingTop="40"
+										  paddingBottom="40"
+										  seriesFilters="[]">
+								<mx:series>					
+									
+									<mx:LineSeries yField="montoUSD_0" xField="numeroMes" form="segment"  lineStroke="{s1}" showDataEffect="{fxInterpolateIn}" />
+									<mx:PlotSeries yField="montoUSD_0" xField="numeroMes" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXItemRenderer>
+													<fx:Script>
+														<![CDATA[
+															import skins.catalogos.catalogoColores;
+														]]>
+													</fx:Script>
+													<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+														<s:fill>
+															<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+														</s:fill>		
+													</s:Ellipse>
+												</s:MXItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:PlotSeries>
+								</mx:series>
+								<mx:horizontalAxis>
+									<mx:CategoryAxis id="vMesMini" categoryField="numeroMes"  />
+								</mx:horizontalAxis>
+								<mx:verticalAxis>
+									<mx:LinearAxis id="vCantidadMini" labelFunction="formateoEje" autoAdjust="false" padding="1"  minimum="0"/>
+								</mx:verticalAxis>
+								<mx:verticalAxisRenderers>
+									<mx:AxisRenderer axis="{vCantidadMini}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"/>
+								</mx:verticalAxisRenderers>
+								<mx:horizontalAxisRenderers>
+									<mx:AxisRenderer axis="{vMesMini}" axisStroke="{trazoGruezo}" tickPlacement="none" showLine="true" showLabels="false" 
+													 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal"  />
+								</mx:horizontalAxisRenderers>
+							</mx:LineChart>
+						</s:VGroup>  
+						
+					</s:VGroup>  
+					
+				</s:HGroup>
+				<s:VGroup width="100%" gap="0">
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+						<pqNet:botonPqNetLargo label="Inicio" click="maxTopClientes()" />
+						<s:Spacer width="100%" />
+						<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:VGroup>  
+		</s:NavigatorContent>
+		
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20">
+					<otros:divisionGruesa width="100%" />
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" dataProvider="{null}" paddingTop="30" paddingBottom="10" showDataTips="false" innerRadius=".5"
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" cambioProvTotales="true" >
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total" />
+						</graficas:series>
+					</graficas:PieChartPqGris>	
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="stackGeneral.selectedChild = vistaTabla" />
+						<pqNet:botonPqNetLargo label="Inicio" click="maxTopClientes()" />
+					</s:HGroup>
+				</s:VGroup>
+				<!--<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_PROVEEDORES_TOP10_CLIENTES}"/>-->
+			</s:HGroup>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+</s:VGroup>

@@ -1,0 +1,369 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:graficas="skins.skin.graficas.*" 
+		 xmlns:label="skins.skin.label.*"
+		 width="100%" height="100%"
+		 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.resumenVentasEnPeriodoMax.EventoResumenVentasEnPeriodoMax;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			private const CLIENTE_VISTA:String = "cliente";
+			private const ESAC_VISTA:String = "esac";
+			
+			private var _currentVista:String = CLIENTE_VISTA;
+			
+			private var updateCalculosVCliente:Boolean = false;
+			private var updateCalculosVEsac:Boolean = false;
+			
+			[Bindable]
+			private var vistaCliente:Boolean = true;
+			
+			private var _sql:Query;
+			
+			//GRID
+			private var maProvider:ArrayCollection;
+			private var mmProvider:ArrayCollection;
+			private var mbProvider:ArrayCollection;
+			
+			public function set recibeListaResumenVentasTodosClientesMedios($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+				{
+					return;
+				}
+				
+				_sql = new Query($clientes,["nivelIVista","usuarioVista","conceptoResultado"]);
+				
+				if(_currentVista == CLIENTE_VISTA)
+				{
+					updateCalculosVEsac = true;
+					hacerCalculosVistaCliente();
+				}
+				else if(_currentVista == ESAC_VISTA)
+				{
+					updateCalculosVCliente = true;
+					hacerCalculosVistaEsac();
+				}
+			}
+			
+			private function hacerCalculosVistaCliente():void
+			{
+				
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					updateCalculosVCliente = false;
+					maProvider = _sql.armarLista(_sql.getPunteros(["MA"]));
+					mmProvider = _sql.armarLista(_sql.getPunteros(["MM"]));
+					mbProvider = _sql.armarLista(_sql.getPunteros(["MB"]));  
+					
+					calcularTotalesParaElGrid(maProvider);
+					calcularTotalesParaElGrid(mmProvider);
+					calcularTotalesParaElGrid(mbProvider); 
+					
+					var providerChartTodosLosEsacs:ArrayCollection;
+					providerChartTodosLosEsacs = new ArrayCollection; 
+					providerChartTodosLosEsacs = generateChartReporte("nivelIVista",null,["nivelIVista",null,null]);
+					
+					chartClientesEsacs.dataProvider = chartClientesEsacs.aplicarFormatoClientesDistribucionXNiveles(providerChartTodosLosEsacs);
+					enviarDataProviderAlGrid((providerChartTodosLosEsacs[0] as ResumenConsulta).etiqueta);
+				}
+				else
+				{
+					chartClientesEsacs.dataProvider = new ArrayCollection;
+					enviarDataProviderAlGrid("Sin datos");
+				}
+			}
+			
+			private var _currentEsac:String;
+			private function hacerCalculosVistaEsac():void
+			{
+				updateCalculosVEsac = false;
+				
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					var providerChartClientesPorEsac:ArrayCollection = new ArrayCollection;
+					providerChartClientesPorEsac = generateChartReporte("nivelIVista",null,["nivelIVista",currentEsac,null]);
+					piechartTodosClientesPorEsac.dataProvider = piechartTodosClientesPorEsac.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesPorEsac);
+					
+					var providerChartClientesMA:ArrayCollection = new ArrayCollection;
+					providerChartClientesMA = generateChartReporte("conceptoResultado",null,["MA",currentEsac,"conceptoResultado"]);
+					piechartTodosClientesMA.dataProvider = piechartTodosClientesMA.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesMA);
+					
+					var providerChartClientesMM:ArrayCollection = new ArrayCollection;
+					providerChartClientesMM = generateChartReporte("conceptoResultado",null,["MM",currentEsac,"conceptoResultado"]);
+					piechartTodosClientesMM.dataProvider = piechartTodosClientesMM.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesMM);
+					
+					var providerChartClientesMB:ArrayCollection = new ArrayCollection;
+					providerChartClientesMB = generateChartReporte("conceptoResultado",null,["MB",currentEsac,"conceptoResultado"]);
+					piechartTodosClientesMB.dataProvider = piechartTodosClientesMB.aplicarFormatoClientesDistribucionXNiveles(providerChartClientesMB);
+				}
+				else
+				{
+					piechartTodosClientesPorEsac.dataProvider = new ArrayCollection;
+					piechartTodosClientesMA.dataProvider = new ArrayCollection;
+					piechartTodosClientesMM.dataProvider = new ArrayCollection;
+					piechartTodosClientesMB.dataProvider = new ArrayCollection;
+				}
+			}
+			
+			private function generateChartReporte( $propiedad:String, $filtro:String, $consulta:Array ):ArrayCollection
+			{
+				var arrayProvider:ArrayCollection = new ArrayCollection();
+				if( _sql.indexObject[ $propiedad ] != null )
+				{
+					// determino si el filtro aplica por campo o por propiedad en campo
+					var posIdx:int = $consulta.indexOf( $propiedad );
+					for( var key:String in _sql.indexObject[ $propiedad ] )
+					{
+						var consultaReformulada:Array = ObjectUtil.copy( $consulta ) as Array; 
+						if( posIdx != -1 )
+							consultaReformulada[ posIdx ] = key;
+						if( $filtro != null )
+							consultaReformulada[ posIdx ] = $filtro;
+						if( posIdx != -1 && $filtro == null || key == $filtro )
+						{
+							var cachoPie:ResumenConsulta = new ResumenConsulta();
+							cachoPie.etiqueta = key;
+							var punterosFiltro:Array = _sql.getPunteros( consultaReformulada );
+							cachoPie.clientes = punterosFiltro.length; 
+							cachoPie.total = _sql.getSumarCampo( "total", punterosFiltro);
+							
+							if(currentVista == CLIENTE_VISTA)
+								cachoPie.porcentajeDistribucion = UtilsFormatosNumericos.truncarDecimalesCeil((punterosFiltro.length * 100)/_sql.universo.length,2);
+							else if(currentVista == ESAC_VISTA)
+							{
+								var punterosEsac:Array = _sql.getPunteros([null,currentEsac]);
+								var totalXEsac:Number = _sql.getSumarCampo( "total", punterosEsac);
+								cachoPie.porcentajeDistribucion = UtilsFormatosNumericos.truncarDecimalesCeil((cachoPie.total * 100)/totalXEsac,2);
+							}
+							
+							arrayProvider.addItem( cachoPie );
+						}
+					}
+				}
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "total";
+				dataSortField.descending = true;
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				arrayProvider.sort = numericDataSort;
+				arrayProvider.refresh();
+				return arrayProvider;
+			}
+			
+			private var _event:EventoTableroClientes;
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				_event = $event;
+				
+			}
+			
+			private function calcularTotalesParaElGrid($tempArray:ArrayCollection):void
+			{
+				var totalmonto:Number = 0;
+				var totalObjetivoPercent:Number = 0;
+				var totalObjetivoDinero:Number = 0;
+				
+				for (var i:int = 0; i < $tempArray.length; i++) 
+				{
+					var item:ResumenConsulta = $tempArray[i] as ResumenConsulta;
+					item.numFila = i+1;
+					
+					totalmonto += item.total; 
+					totalObjetivoPercent += item.porcentaje; 
+					totalObjetivoDinero += item.monto; 
+				}
+				
+				totalObjetivoPercent = totalObjetivoPercent / $tempArray.length;
+				
+				var totales:Object = new Object;
+				totales.totalMonto = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalmonto);
+				totales.totalObjetivoPercent = UtilsFormatosNumericos.truncarDecimalesCeil(totalObjetivoPercent,2) + " %";
+				totales.totalObjetivoMonto = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalObjetivoDinero);
+				
+				$tempArray.addItemAt(totales,0);
+			}
+			
+			
+			public function get currentVista():String
+			{
+				return _currentVista;
+			}
+			
+			public function set currentVista(value:String):void
+			{
+				_currentVista = value;
+			}
+			
+			protected function enviarDataProviderAlGrid($currentEtiqueta:String):void
+			{
+				var eventoEnviarClientesAGrid:EventoResumenVentasEnPeriodoMax = new EventoResumenVentasEnPeriodoMax(EventoResumenVentasEnPeriodoMax.ENVIAR_CLIENTES_MEDIOS_A_OTRA_VISTA_GRID);
+				
+				switch($currentEtiqueta)
+				{
+					case "MA":
+					{
+						eventoEnviarClientesAGrid.clientes = maProvider;
+						break;
+					}
+					case "MM":
+					{
+						eventoEnviarClientesAGrid.clientes = mmProvider;
+						break;
+					}
+					case "MB":
+					{
+						eventoEnviarClientesAGrid.clientes = mbProvider;
+						break;
+					}
+					default:
+					{
+						eventoEnviarClientesAGrid.clientes = new ArrayCollection;
+						break;
+					}
+				}
+				
+				dispatchEvent(eventoEnviarClientesAGrid);
+			}
+			
+			protected function chartClientesEsacs_itemClickHandler(event:ChartItemEvent):void
+			{
+				var arr:Array = [];
+				arr[event.hitData.chartItem.index] = 0.2;
+				seriesAltos.perWedgeExplodeRadius   = arr;
+				
+				enviarDataProviderAlGrid((event.hitData.item as ResumenConsulta).etiqueta);
+			}
+			
+			public function recibeSeleccionDeVistaMedios($vista:String):void
+			{
+				if(!$vista)
+					return;
+				
+				if($vista != _currentVista)
+				{
+					if($vista == CLIENTE_VISTA)
+					{
+						_currentVista = CLIENTE_VISTA;
+						vistaCliente = true;
+						
+						if(updateCalculosVCliente)
+						{
+							hacerCalculosVistaCliente();
+						}
+					}
+					else
+					{
+						_currentVista = ESAC_VISTA;
+						vistaCliente = false;
+						
+						if(updateCalculosVEsac)
+						{
+							hacerCalculosVistaEsac();
+						}
+						
+					}
+				}
+				
+			}
+			
+			public function get currentEsac():String
+			{
+				return _currentEsac;
+			}
+			
+			public function set currentEsac(value:String):void
+			{
+				_currentEsac = value;
+				
+				lblTituloNIPorEsacs.text = "% MEDIOS "+_currentEsac;
+				
+				if(currentVista == ESAC_VISTA)
+				{
+					hacerCalculosVistaEsac();
+				}
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<s:VGroup height="100%" horizontalAlign="center" paddingLeft="15" paddingRight="15" visible="{vistaCliente}" width="100%">
+		<s:Spacer height="20%"/>
+		<label:Titulo_14_pTop10 text="RESUMEN MEDIOS" />
+		<graficas:PieChartPqGris width="100%" height="80%" id="chartClientesEsacs" showDataTips="false" innerRadius=".5" esConRealse="true" useCursorHand="true"  esConAutoseleccion="true"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" itemClick="chartClientesEsacs_itemClickHandler(event)">
+			<graficas:series>
+				<graficas:pieSeriesPqNet id="seriesAltos" field="total" /> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer height="20%"/>
+	</s:VGroup>  
+	
+	<s:VGroup width="100%" height="100%" visible="{!vistaCliente}" gap="0" paddingTop="30" paddingBottom="30">
+		<s:VGroup width="100%" height="35%" horizontalAlign="center">
+			<label:Titulo_14_pTop10 id="lblTituloNIPorEsacs"/>
+			<graficas:PieChartPqGris width="100%" height="100%" id="piechartTodosClientesPorEsac" showDataTips="false" innerRadius=".5" 
+									 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true">
+				<graficas:series>
+					<graficas:pieSeriesPqNet field="total" /> 
+				</graficas:series>
+			</graficas:PieChartPqGris>
+		</s:VGroup>  
+		<s:Spacer height="5%"/>
+		<s:VGroup width="100%" height="60%" gap="0" >
+			<s:HGroup height="40%" width="100%">
+				<s:VGroup height="100%" width="100%" horizontalAlign="center">
+					<label:Titulo_12 text="% MEDIOS · MA" paddingTop="0" />
+					<graficas:PieChartPqGris width="95%" height="100%" id="piechartTodosClientesMA" showDataTips="false" innerRadius=".5" 
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true">
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total" /> 
+						</graficas:series>
+					</graficas:PieChartPqGris>
+				</s:VGroup>
+				
+				<s:VGroup width="100%" height="100%" horizontalAlign="center">
+					<label:Titulo_12 text="% MEDIOS · AA" paddingTop="0" />
+					<graficas:PieChartPqGris width="95%" height="100%" id="piechartTodosClientesMM" showDataTips="false" innerRadius=".5" 
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true">
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total" /> 
+						</graficas:series>
+					</graficas:PieChartPqGris>
+				</s:VGroup>  
+				
+			</s:HGroup>  
+			<s:Spacer height="10%"/>
+			
+			<s:HGroup width="100%" height="40%" horizontalAlign="center" verticalAlign="middle">
+				<s:VGroup height="100%" horizontalAlign="center">
+					<label:Titulo_12 text="% MEDIOS · AM" paddingTop="0" />
+					<graficas:PieChartPqGris width="95%" height="100%" id="piechartTodosClientesMB" showDataTips="false" innerRadius=".5" 
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true">
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total" /> 
+						</graficas:series>
+					</graficas:PieChartPqGris>
+				</s:VGroup>  
+			</s:HGroup>  
+		</s:VGroup>
+		
+	</s:VGroup>  
+	
+</s:Group>

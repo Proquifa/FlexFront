@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" titulo="CONSULTA PERMISOS IMPORTACION"
+								   xmlns:s="library://ns.adobe.com/flex/spark" 
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*" creationComplete="inicia()"
+								   xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+								   xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+								   xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+								   xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pqNet="skins.botones.pqNet.*" 
+								   xmlns:tabla="skins.botones.tabla.*" xmlns:linkButton="skins.skin.linkButton.*" xmlns:dateField="skins.skin.dateField.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.despachos.EventoConsultaPermisos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PermisoImportacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosBotoneras;
+			
+			[Bindable] private var _listaBotones:ArrayCollection = new ArrayCollection([ {valor:'Avanzada',llave:0},
+				{valor:'Rápida',llave:1} 
+			] );
+			[Bindable] private var _opcionTodos:ArrayCollection = new ArrayCollection([ {valor:'--TODOS-- ',llave:0} ]);
+			
+			[Bindable]
+			public var _permiso:PermisoImportacion;
+			
+			[Bindable]
+			private var _botonPresionado:Boolean = false;
+			
+			private var _currenVista:String = "tablaGrid";
+			
+			public function set recibirLaVistaSeleccionada($vista:String):void
+			{
+				if($vista == null) return;
+				_currenVista = $vista;	
+			}
+			
+			private function inicia():void{
+				
+				btnGridToDetalle.addEventListener(MouseEvent.CLICK,btnRegresar_MouseEventClick,false,0,true);
+				
+				_permiso = new PermisoImportacion();
+				btnBarra.selectedIndex = 0;
+				vstBusqueda.selectedIndex = 0;
+				cargaCatalogo();
+				this.dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() ); 
+				this.dtpFFin.selectedDate = new Date();
+				this.dtpFInicio.text =  UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				this.dtpFInicio.selectedDate = new Date();
+				realizaConsultaAvanzada();
+			}
+			
+			/**
+			 * funcion que cambia el indice del stack en el precio
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if( event.currentTarget.selectedItem == null ) {
+					event.preventDefault();
+				}else{
+					this.vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.VALIDA_INDICE );
+					evt.indiceVistas = event.currentTarget.selectedItem.llave;
+					dispatchEvent( evt );
+				}
+			}
+			private function realizarBusquedaRapida():void{
+				if( this.txtBuscaRapida.text != '' ){
+					
+					btnBusquedaRapida.isBusyActualizar = true;
+					
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.tipoEventos.push("CONSULTA_PERMISOS_RAPIDA");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.CONSULTA_PERMISOS_RAPIDA );
+					evt.catalogo = this.txtBuscaRapida.text;
+					dispatchEvent( evt );
+					
+				}else{
+					alertaSingleton.show('Es necesario introducir algun dato', catalogoAlertas.TIT_ADV_informacionIncompleta );
+				}
+			} 
+			//recibe del mapa
+			public function indicaGraficaOTabla( $dato:Boolean ):void{
+				_botonPresionado = $dato;
+			}
+			
+			private function realizaConsultaAvanzada():void{
+				
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("CONSULTA_PERMISOS");
+				dispatchEvent(eventEspera);
+				
+				btnBusqueda.isBusyActualizar = true;
+				
+				btnBusqueda.CambiarToActualizarTipoBoton(true);
+				var evt:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.CONSULTA_PERMISOS );
+				evt.finicio = this.dtpFInicio.selectedDate;
+				evt.ffin = this.dtpFFin.selectedDate; 
+				this.cmbProveedor.dataProvider != null ? evt.proveedor = this.cmbProveedor.selectedItem.llave : evt.proveedor = 0;
+				if (cmbCatalgo.selectedItem == null){
+					evt.catalogo = "--TODOS--";
+				}
+				else
+				{
+					evt.catalogo = this.cmbCatalgo.selectedItem.valor;
+				}
+				if (cmbPermiso.selectedItem == null){
+					evt.tipoPermiso = "--TODOS--";
+				}
+				else
+				{
+					evt.tipoPermiso = this.cmbPermiso.selectedItem.valor;
+				}
+				if (cmbTipoProducto.selectedItem == null){
+					evt.tipoProducto = "--TODOS--";
+				}
+				else
+				{
+					evt.tipoProducto = this.cmbTipoProducto.selectedItem.valor;
+				}
+				if (cmbSubtipoProd.selectedItem == null){
+					evt.subTipo = "--TODOS--";
+				}
+				else
+				{
+					evt.subTipo = this.cmbSubtipoProd.selectedItem.valor;
+				}
+				if (cmbClasificacion.selectedItem == null){
+					evt.clasificacion = "--TODOS--";
+				}
+				else
+				{
+					evt.clasificacion = this.cmbClasificacion.selectedItem.valor;
+				}
+				if (cmbControl.selectedItem == null){
+					evt.control = "--TODOS--";
+				}
+				else
+				{
+					evt.control = this.cmbControl.selectedItem.valor;
+				}
+				if (cmbEstado.selectedItem == null){
+					evt.estado = "--TODOS--";
+				}
+				else
+				{
+					evt.estado = this.cmbEstado.selectedItem.valor2;
+				}
+				if (cmbEstadoCerrado.selectedItem == null){
+					evt.estCerrado = "--TODOS--";
+				}
+				else
+				{
+					evt.estCerrado = this.cmbEstadoCerrado.selectedItem.valor;
+				}
+				
+				dispatchEvent( evt );
+				buscaDatosPorPeriodo();
+				if( _botonPresionado ){
+					var evtG:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.CONSULTA_GRAFICAS );
+					evtG.finicio = this.dtpFInicio.selectedDate;
+					evtG.ffin = this.dtpFFin.selectedDate; 
+					this.cmbProveedor.dataProvider != null ? evtG.proveedor = this.cmbProveedor.selectedItem.llave : evtG.proveedor = 0;
+					evtG.catalogo = this.cmbCatalgo.selectedItem.valor;
+					evtG.tipoPermiso = this.cmbPermiso.selectedItem.valor;
+					evtG.tipoProducto = this.cmbTipoProducto.selectedItem.valor;
+					evtG.subTipo = this.cmbSubtipoProd.selectedItem.valor;
+					evtG.clasificacion = this.cmbClasificacion.selectedItem.valor;
+					evtG.control = this.cmbControl.selectedItem.valor;
+					evtG.estado = this.cmbEstado.selectedItem.valor2;
+					evtG.estCerrado = this.cmbEstadoCerrado.selectedItem.valor;
+					dispatchEvent( evtG ); 
+				}
+			}
+			
+			protected function cargaCatalogo():void
+			{
+				if( cmbProveedor.dataProvider == null || cmbProveedor.selectedIndex == 0 ){
+					cmbCatalgo.dataProvider = _opcionTodos;
+					this.cmbCatalgo.selectedIndex = 0;
+				}else{
+					cmbCatalgo.cargaCatalogoProductos( this.cmbProveedor.selectedItem.llave, '--TODOS--');
+				}
+			}
+			public function cambiaIndex( $indice:int ):void{
+				this.espacioInfoGenerales.selectedIndex = $indice;
+				lnkIdPermiso.visible = false;
+				lblOrigen.visible = false;
+				if( _permiso.origenFolio == 'C-Productos' ){
+					lblOrigen.visible = true;
+				}else{
+					lnkIdPermiso.visible = true;
+				}
+				
+				if($indice == 1)
+					this.btnGridToDetalle.visible = true;
+				else
+					this.btnGridToDetalle.visible = false;
+				
+			}
+			
+			private function btnRegresar_MouseEventClick( e:MouseEvent ):void{
+				
+				cambiaIndex( 0 );
+				var evento:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.CAMBIA_INDICE);
+				evento.indiceVistas = 0;
+				dispatchEvent( evento );
+				
+			}
+			/**
+			 * muestra el pdf del pedido
+			 */ 
+			private function muestraPermiso():void{
+				var _url:URLRequest = new URLRequest();
+				var folio:String = '';
+				folio = this.lnkIdPermiso.label.substr( 2, this.lnkIdPermiso.label.length );
+				if( _permiso.origenFolio.substring(0,1) == 'P'){
+					var path:Object = Util.rutaNueva(folio);
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + path.ruta + folio + ".pdf";
+				}else{
+					var path:Object = Util.rutaNueva(folio);
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.COTIZACIONES_RUTA + path.ruta + folio + ".pdf";			
+				}
+				navigateToURL(_url );
+			}
+			/**
+			 * trasnporta  
+			 */ 
+			private function buscaDatosPorPeriodo():void{
+				var evt:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.TRNASPORTA_DATOS_PARA_TOTALES );
+				evt.finicio = this.dtpFInicio.selectedDate;
+				evt.ffin = this.dtpFFin.selectedDate;
+				this.cmbProveedor.dataProvider != null ? evt.proveedor = this.cmbProveedor.selectedItem.llave : evt.proveedor = 0;
+				evt.catalogo = this.cmbCatalgo.selectedItem == null ? "--TODOS--" : this.cmbCatalgo.selectedItem.valor;
+				evt.tipoPermiso = this.cmbPermiso.selectedItem == null ? "--TODOS--" : this.cmbPermiso.selectedItem.valor;
+				evt.tipoProducto = this.cmbTipoProducto.selectedItem == null ? "--TODOS--" : this.cmbTipoProducto.selectedItem.valor;
+				evt.subTipo = this.cmbSubtipoProd.selectedItem == null ? "--TODOS--" : this.cmbSubtipoProd.selectedItem.valor;
+				evt.clasificacion = this.cmbClasificacion.selectedItem == null ? "--TODOS--" : this.cmbClasificacion.selectedItem.valor;
+				evt.control = this.cmbControl.selectedItem == null ? "--TODOS--" : this.cmbControl.selectedItem.valor;
+				evt.estado = this.cmbEstado.selectedItem == null ? "--TODOS--" : this.cmbEstado.selectedItem.valor2;
+				evt.estCerrado = this.cmbEstadoCerrado.selectedItem == null ? "--TODOS--" : this.cmbEstadoCerrado.selectedItem.valor;
+				dispatchEvent( evt ); 
+			}
+			
+			public function CambiarToActualizarTipoBoton():void{
+				btnBusqueda.CambiarToActualizarTipoBoton(false);
+			}
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar){
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar){
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<pq:MobViewStack width="100%" id="espacioInfoGenerales" creationPolicy="all" >
+			<s:NavigatorContent>
+				<s:VGroup width="100%" height="100%" gap="10">
+					<s:VGroup width="100%" gap="0" >
+						<s:Spacer height="13"/>
+						<s:ButtonBar changing="seleccionaBoton(event)" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" 
+									 width="100%" requireSelection="true"/>
+						<s:Spacer height="30"/>
+						<otros:divisionHueca width="100%"/>
+					</s:VGroup>
+					<pq:MobViewStack width="100%" height="100%" id="vstBusqueda">
+						<s:NavigatorContent width="100%" height="100%">
+							<s:VGroup width="100%" height="100%" horizontalAlign="center">
+								<s:HGroup width="100%" >
+									<s:VGroup width="50%">
+										<label:Titulo_w100  text="Del" paddingTop="0"/>
+										<dateField:DatePickerSpanish id="dtpFInicio"  width="130" change="CambiarToActualizarTipoBoton()"/>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<label:Titulo_w100  text="Al" paddingTop="0"/>
+										<dateField:DatePickerSpanish id="dtpFFin" width="130" change="CambiarToActualizarTipoBoton()"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Proveedor:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbProveedor" creationComplete="{cmbProveedor.cargaProveedores('--TODOS--'); }" width="100%" change="cargaCatalogo(); CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100 id="lblTramito" text="Catálogo:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbCatalgo" width="100%" dataProvider="{_opcionTodos}" labelField="valor" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Tipo de permiso:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbPermiso"  width="100%" creationComplete="cmbPermiso.cargaTipoPermiso('--TODOS--')" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Tipo de producto:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbTipoProducto" creationComplete="cmbTipoProducto.cargaTipoProducto('--TODOS--')" width="100%" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Subtipo de producto:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbSubtipoProd" creationComplete="cmbSubtipoProd.cargaSubTipoProducto('--TODOS--')" width="100%" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Clasificación:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbClasificacion" creationComplete="cmbClasificacion.cargaClasifTodos('--TODOS--')" width="100%" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Control:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbControl" creationComplete="cmbControl.cargaControlProductos('--TODOS--')" width="100%" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Estado físico:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbEstado" creationComplete="cmbEstado.cargaEstadoFisico('--TODOS--')" width="100%" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Estado:" paddingTop="0"/>
+								<comboPqNet:ComboCatalogos id="cmbEstadoCerrado" creationComplete="cmbEstadoCerrado.cargaEstado('--TODOS--')" width="100%" change="CambiarToActualizarTipoBoton()"/>
+								<s:Spacer height="15"/>
+								<pqNet:botonPqNetLargo	width="100%" click="realizaConsultaAvanzada()" botonRedondo="true" icono="iconoActualizarNormal" id="btnBusqueda"/>
+								<s:Spacer height="15"/>
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:NavigatorContent>
+						<s:NavigatorContent height="100%" width="100%">
+							<s:VGroup width="100%" height="100%">
+								<s:Spacer height="15"/>
+								<label:Titulo_w100  text="Catálogo" paddingTop="0"/>
+								<s:TextInput id="txtBuscaRapida" width="100%" toolTip="# Pedido Interno" enter="realizarBusquedaRapida()" fontStyle="normal"/>
+								<s:Spacer height="15"/>
+								<pqNet:botonPqNetLargo	width="100%" click="realizarBusquedaRapida()" botonRedondo="true" icono="iconoActualizarNormal" id="btnBusquedaRapida"/>
+								<s:Spacer height="15"/>
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:NavigatorContent>
+					</pq:MobViewStack>
+				</s:VGroup>
+			</s:NavigatorContent>	
+			<s:NavigatorContent>
+				<s:VGroup width="100%" height="100%">
+					<label:Titulo_w100 text="{_permiso.codigoProducto +' '+ _permiso.nombreProducto +' '+ _permiso.fabrica}"/>
+					<label:Titulo_w100  text="Origen:"/>
+					<s:Group width="100%">
+						<linkButton:LinkButtonPQNet2 label="{_permiso.origenFolio}"  id="lnkIdPermiso" width="100%" click="muestraPermiso()"/>
+						<label:Texto_w100 text="{_permiso.origenFolio}" id="lblOrigen" visible="false"/>
+					</s:Group>
+					<label:Titulo_w100  text="FET:	"/>
+					<label:Fecha fecha="{_permiso.fechaET}"/>
+					<label:Titulo_w100  text="Tipo de producto:"/>
+					<label:Texto_w100  text="{  _permiso.tipoProducto }"/>
+					<label:Titulo_w100  text="Subtipo:"/>
+					<label:Texto_w100  text="{  _permiso.subTipo }"/>
+					<label:Titulo_w100  text="Clasificación:	"/>
+					<label:Texto_w100  text="{  _permiso.clasificacionProducto }"/>
+					<label:Titulo_w100  text="Tipo permiso:"/>
+					<label:Texto_w100  text="{  _permiso.tipoPermiso }"/>
+					<label:Titulo_w100  text="Control:"/>
+					<label:Texto_w100  text="{  _permiso.controlProducto }"/>
+					<label:Titulo_w100  text="CAS:"/>
+					<label:Texto_w100  text="{  _permiso.cas }"/>
+					<label:Titulo_w100  text="Estado físico:"/>
+					<label:Texto_w100  text="{  _permiso.estadoFisico }"/>
+					<label:Titulo_w100  text="Fracción arancelaria:"/>
+					<label:Texto_w100  text="{  _permiso.fraccionArancelaria }"/>
+					<s:Spacer height="15"/>
+					<otros:divisionHueca width="100%"/>
+					<s:VGroup width="100%" horizontalAlign="right">
+						<!--<s:Image id="imgGrid" source="{catalogoIconosBotoneras.getInstance().gridgris}" click="cambiaIndices(0)"
+								 mouseOver="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgrisover}"
+								 mouseOut="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgris}"/>-->
+					</s:VGroup>
+				</s:VGroup>
+			</s:NavigatorContent>
+		</pq:MobViewStack>		
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

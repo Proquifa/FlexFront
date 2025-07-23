@@ -1,0 +1,138 @@
+package mx.com.proquifa.vista.modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.ObjectUtil;
+	
+	public class ModeloGuardiaSeguridad extends EventDispatcher
+	{
+		
+		/////////////	OBTIENE RESPUESTA DE PENDIENTE DE ORDENES DE DESPACHO REGISTRADAS   ///////////
+		private var lisitaPendientes:ArrayCollection;
+		public function setOrdenRegistrarVisita(value:ArrayCollection):void
+		{
+			for(var i:int = 0;i<value.length;i++){
+				value[i].numFila = i+1;
+			}
+			if(value == null)
+				lisitaPendientes = new ArrayCollection();
+			else{
+				
+				lisitaPendientes = value;
+			}
+			dispatchEvent(new Event("obteneOrdenesPendietesRegistrarVisita"));
+		}
+		
+		[Bindable(event="obteneOrdenesPendietesRegistrarVisita")]
+		public function get enviarOrdenRegistrarVisita():ArrayCollection
+		{
+			return lisitaPendientes;
+		}
+		
+		/////////////	OBTIENE LOS CONTACTOS POR FLETERA   ///////////
+		private var contactosFletera:ArrayCollection;
+		public function setContactosPorFletera(value:ArrayCollection):void  
+		{
+			if(value == null)
+				return;
+			else
+				contactosFletera = value;
+			
+			dispatchEvent(new Event("contactosPorFleteraRegistrarVisita"));
+		}
+		[Bindable(event="contactosPorFleteraRegistrarVisita")]
+		public function get enviarContactosPorFletera():ArrayCollection
+		{
+			return contactosFletera;
+		}
+		
+		///////////////////////////// OBTIENE NUMERO PENDIENTES  ///////////////////////////// 
+		private var numeroPendientes:ArrayCollection;
+		public function setObtenerPendientesGuardiaSeguridad(data:ArrayCollection):void
+		{
+			if(data == null)
+				return ;
+			var temp:ArrayCollection = new ArrayCollection();
+			var arrayAux:Array;
+			var objectAux:Object = new Object();
+			objectAux.pendiente = "";
+			objectAux.conteo = "";
+			if(data.length != 0){
+				for(var x:int=0; x < data.length; x++){
+					arrayAux = (data[x] as String).split("/");
+					objectAux.pendiente = arrayAux[0];
+					objectAux.conteo = arrayAux[1];
+					temp.addItem(ObjectUtil.copy(objectAux));
+				}
+			}
+			numeroPendientes = temp;
+			dispatchEvent(new Event("obtenerNumeroDePendientesModeloGuardiaSeguridad"));
+		}
+		
+		[Bindable(event="obtenerNumeroDePendientesModeloGuardiaSeguridad")]
+		public function get enviarObtenerPendientesGuardia():ArrayCollection
+		{
+			return numeroPendientes;
+		}
+		
+		/**
+		 ************************************************************** GUARDAR NUEVO CONTACTO **************************************************************
+		 */
+		
+		private var _confirmaContactoGuardado:int;
+		public function setConfirmaContactoNuevo($dato:Number):void{
+			_confirmaContactoGuardado = $dato;
+			
+			dispatchEvent( new Event("enviarConfirmacionGuardadoContactoNuevoGuardiaSeguridad") );
+		}
+		[Bindable(Event="enviarConfirmacionGuardadoContactoNuevoGuardiaSeguridad")]
+		public function get ConfirmaContactoNuevo():Number{
+			return this._confirmaContactoGuardado;
+		}
+		
+		/**
+		 ************************************************************** Edita Contacto **************************************************************
+		 */ 
+		private var _confirmaEdicion:Boolean;
+		public function setEditaContacto(datos:Boolean):void{
+			this._confirmaEdicion = datos;
+			dispatchEvent(new Event ("confirmaEdicionContactoModeloCatAgenteContactos"));
+		}
+		
+		[Bindable(event="confirmaEdicionContactoModeloCatAgenteContactos")]
+		public function get EditaContacto():Boolean{
+			return this._confirmaEdicion;
+		}
+		/**
+		 ************************************************************** Exito Registrar Visita **************************************************************
+		 */ 
+		private var exitoRegistrarVisita:int;
+		public function setExitoRegistrarVisita(datos:Number):void{
+			this.exitoRegistrarVisita = datos;
+			dispatchEvent(new Event ("enviarRegistrarVisitaModeloGuardiaSeguridad"));
+		}
+		
+		[Bindable(event="enviarRegistrarVisitaModeloGuardiaSeguridad")]
+		public function get enviarRegistrarVisita():int{
+			return this.exitoRegistrarVisita;
+		}
+		
+		/**
+		 ************************************************************** error **************************************************************
+		 */
+		public function errorOrdenDespacho(objeto:Object):void
+		{
+			trace("ERROR ORDEN DESPACHO")
+			trace(objeto.toString())
+			alertaSingleton.show( objeto.toString() );
+		}
+		public function ModeloGuardiaSeguridad(target:IEventDispatcher=null)
+		{
+			super(target)
+		}
+	}
+}

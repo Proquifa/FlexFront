@@ -1,0 +1,1122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:otros="skins.otros.*"
+		 xmlns:dateField="skins.skin.dateField.*" 
+		 xmlns:boton="skins.skin.botones.boton.*"
+		 width="100%" height="100%"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:chekbox="skins.skin.chekbox.*"
+		 xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 creationComplete="group1_creationCompleteHandler(event)" xmlns:itemRender="vista.vistas.reporte.visita.cotizar.itemRender.*" xmlns:componentes="vista.vistas.reporte.visita.cotizar.componentes.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.MarcasCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.containers.Form;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import vista.evento.reportarVisita.EventoReportarVisita;
+			import vista.vistas.reporte.visita.VistaOperacionReportarVisita;
+			import vista.vistas.reporte.visita.cotizar.componentes.PopUpNotasCotizacionReportar;
+			
+			
+			
+			[Bindable]	
+			public var listaNombresCotizaciones:ArrayCollection = new ArrayCollection();
+			
+			public static var tipoSeleccionado:String = "";
+			public static var numCotizacionesUsuario:Number = 0;
+			[Bindable] public var cotizacionActual:Cotizacion = new Cotizacion();
+			private var universoPartidasActuales:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] public var empresaAct:String = "";
+			
+			[Bindable]	
+			public var monedas:ArrayCollection = new ArrayCollection([{valor:"USD",llave:0},
+				{valor:"MXN",llave:1},
+				{valor:"EUR",llave:2}]);
+			
+		
+				
+			
+			private var indiceActualListaCotizaciones:Number;
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				
+				listaProductosCOtizados.addEventListener("abrirPopUpAgregarNotasReportar",abrirPopUpNotas);
+				listaProductosCOtizados.addEventListener("abrirPopUpAbrirPopUpCotizacionModificar",abrirPopUPCotizacion);
+				addEventListener(EventoReportarVisita.CREAR_NUEVA_COTIZACION,crearNuevaCotizacion);
+				addEventListener(EventoReportarVisita.CAMBIAR_PRODUCTO_DE_COTIZACION,cambiarPartidasDeCotizacion);
+				cmbempresas.addEventListener("cambioComboBlancoFlechaNegra",asignarEmpresaAcotizacion);
+				cmbMoneda.addEventListener("cambioComboBlancoFlechaNegra",CambiarCotiacionDeMoneda);
+				
+			}
+			
+			[Bindable]	
+			private var empresas:ArrayCollection = new ArrayCollection();
+			
+			
+			public function set recibeEmpresas(emp:ArrayCollection):void{
+				
+				empresas = new ArrayCollection();
+				for (var j:int = 0; j < emp.length; j++) {
+					var empre:Object = new Object();
+					empre.valor = emp[j].alias;
+					empre.llave = emp[j].idEmpresa;
+					empresas.addItem(empre);
+				}
+				
+				cmbempresas.dataProvider = empresas;
+			}
+			
+			
+			public var listaOrdenada:ArrayCollection = new ArrayCollection();
+			public function llenarListas(listaRecivida:ArrayCollection):void
+			{
+				listaOrdenada = new ArrayCollection;
+				var listaA:ArrayCollection = new ArrayCollection();
+				var auxCotizacionesActuales:ArrayCollection = listaCOtizaciones.dataProvider as ArrayCollection;
+				if(listaCOtizaciones.dataProvider != null && listaCOtizaciones.dataProvider.length > 0)
+				{
+					for (var i:int = 0; i < listaRecivida.length; i++) 
+					{
+						var existeCotizacion:Boolean = false;
+						var indice:Number = 0;
+						for (var j:int = 0; j < listaCOtizaciones.dataProvider.length; j++) 
+						{
+							if(listaCOtizaciones.dataProvider[j].tipoCotizacion == listaRecivida[i].tipoCotizacion)
+							{
+								existeCotizacion = true;
+								indice = j;
+								break;
+							}
+						}
+						
+						if(existeCotizacion)
+						{
+							if(listaCOtizaciones.dataProvider[indice].imoneda != 'Dolares')
+							{
+								if(listaCOtizaciones.dataProvider[indice].imoneda == 'Euros')
+								{
+									listaRecivida[i].partidas.producto.costoAux =  Math.round(listaRecivida[i].partidas.producto.costoAux / listaRecivida[i].partidas.producto.edolar);  
+									listaRecivida[i].partidas.monedaAbreviatura = 'EUR';
+									listaRecivida[i].partidas.monedaSimbolo = '€';
+									listaRecivida[i].partidas[f].producto.totalCostoPiezas = listaRecivida[i].partidas[f].producto.costoAux * listaRecivida[i].partidas[f].producto.cantPiezas;
+								}
+									
+								else if(listaCOtizaciones.dataProvider[indice].imoneda == 'Pesos')
+								{
+									for (var f:int = 0; f < listaRecivida[i].partidas.length; f++) 
+									{
+										listaRecivida[i].partidas[f].producto.costoAux =  Math.round(listaRecivida[i].partidas[k].producto.costoAux * listaRecivida[i].partidas[f].producto.pdolar);  
+										listaRecivida[i].partidas[f].monedaAbreviatura = 'MXN';
+										listaRecivida[i].partidas[f].monedaSimbolo = '$';
+										listaRecivida[i].partidas[f].producto.totalCostoPiezas = listaRecivida[i].partidas[f].producto.costoAux * listaRecivida[i].partidas[f].producto.cantPiezas;
+									}
+									
+									
+								}
+							}
+						
+							
+							listaCOtizaciones.dataProvider[indice].partidas.addAll(listaRecivida[i].partidas);
+							listaCOtizaciones.dataProvider[indice].totalCosto = 0;
+							listaCOtizaciones.dataProvider[indice].numPartidas = listaCOtizaciones.dataProvider[indice].partidas.length;
+							
+							for (var k:int = 0; k < listaCOtizaciones.dataProvider[indice].partidas.length; k++) 
+							{
+								listaCOtizaciones.dataProvider[indice].totalCosto = listaCOtizaciones.dataProvider[indice].totalCosto + listaCOtizaciones.dataProvider[indice].partidas[k].producto.totalCostoPiezas;
+							}
+							
+						}
+						else{
+							var cot:Cotizacion = new Cotizacion;
+							cot = listaRecivida[i];
+							auxCotizacionesActuales.addItem(cot);
+						}
+						
+					}
+					
+					listaOrdenada =  Util.sortArray(auxCotizacionesActuales,'numCotizacion',false);
+					setTimeout(asinarValoresAlistas,300);
+				}
+				else
+				{
+					listaOrdenada =  Util.sortArray(listaRecivida,'numCotizacion',false);
+					setTimeout(asinarValoresAlistas,300);
+				}
+				
+				
+				
+				
+			}
+			
+			
+			
+			public function asinarValoresAlistas():void
+			{
+				var listaCotizacionesCombo:ArrayCollection = new ArrayCollection();
+				listaCOtizaciones.dataProvider = listaOrdenada;
+				var numCot:Number = 0;
+				for (var i:int = 0; i < listaOrdenada.length; i++) 
+				{
+					var co:Object = new Object();
+					co.valor = (i+1)+"."+" "+listaOrdenada[i].nombreCotizacion;
+					co.llave = i;
+					co.tipo = listaOrdenada[i].tipoCotizacion;
+					listaCotizacionesCombo.addItem(co);
+					
+					if(!listaOrdenada[i].deSistema)
+						numCot = numCot +1;
+				}
+				
+				if(numCot == 0)
+				{
+					numCotizacionesUsuario = 4;
+				}
+				else{
+					numCotizacionesUsuario = 4 + numCot;
+				}
+				listaNombresCotizaciones = listaCotizacionesCombo;
+				listaProductosCOtizados.dataProvider = listaOrdenada[0].partidas;
+				universoPartidasActuales = ObjectUtil.copy(listaOrdenada[0].partidas as ArrayCollection) as ArrayCollection;
+				/*if(listaCOtizaciones != null && listaCOtizaciones.data)*/
+				seleciconarEmpresa(listaCOtizaciones.dataProvider[0].tipoCotizacion);
+				listaCOtizaciones.selectedIndex = 0;
+				cotizacionActual = listaCOtizaciones.dataProvider[0] as Cotizacion;
+				indiceActualListaCotizaciones = 0;
+				listaCOtizaciones_changeHandler(null);
+				
+			}
+			private function seleciconarEmpresa(tipo:String):void
+			{
+				var empresaAselecionar:String = "";
+				var inabilitar:Boolean = false;
+				
+				if(tipo.toLowerCase() == 'publicaciones')
+				{
+					empresaAselecionar = 'Golocaer';
+					inabilitar = true;
+				}
+				else
+				{
+					empresaAselecionar = empresaAct;
+					
+				}
+				
+				for (var i:int = 0; i < cmbempresas.dataProvider.length; i++) 
+				{
+					if(empresaAselecionar == cmbempresas.dataProvider[i].valor )
+					{
+						cmbempresas.selectedIndex = i;
+						if(inabilitar)
+							cmbempresas.enabled = false;
+						else 
+							cmbempresas.enabled = true;
+						break;
+						
+					}
+					
+				}
+				
+			}
+			
+			private var popUpNot:PopUpNotasCotizacionReportar;	
+			private function abrirPopUpNotas(even:Event):void
+			{
+				if( popUpNot == null ){
+					popUpNot = PopUpNotasCotizacionReportar(PopUpManager.createPopUp( this, PopUpNotasCotizacionReportar, true ) );
+					PopUpManager.centerPopUp( popUpNot );
+					popUpNot.productoSeleccionado(listaProductosCOtizados.selectedItem);
+					popUpNot.num = listaProductosCOtizados.selectedIndex + 1;
+					popUpNot.addEventListener("cerrarNota",cerrarPopNotas);
+					popUpNot.addEventListener("aceptarPopNota",aceptarPopCotizacion);
+					
+				}else{
+					
+					PopUpManager.addPopUp( popUpNot , this, true );
+					
+				}
+			}
+			
+		
+			public function abrirPopUpCotizacion(event:EventoReportarVisita):void
+			{
+				
+				
+			}
+			
+			private function aceptarPopCotizacion(event:Event):void
+			{
+				listaProductosCOtizados.dataProvider[listaProductosCOtizados.selectedIndex].nota = popUpNot.nota;
+				PopUpManager.removePopUp( popUpNot );
+				popUpNot = null;
+				
+			}
+			
+			private function cerrarPopNotas(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpNot );
+				popUpNot = null;
+			}
+			
+			
+			protected function regregar_Vistra_Anterior(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("regregra_vistaAnterior_reportarVisita_cotazacion",true));
+				
+			}
+			
+			
+			[Bindable]	private var totalDeCotizacion:Number = 0;
+			[Bindable]	private var cantidadPiezasCotizacion:Number = 0;
+			[Bindable]	private var numMarcasCotizacion:Number = 0;
+			[Bindable]	private var ivaCotizacion:Number = 0;
+			[Bindable]	private var subtotalCOtizacion:Number = 0;
+			[Bindable]	private var listaProCOtizacionAct:ArrayCollection = new ArrayCollection();
+			[Bindable]	protected function listaCOtizaciones_changeHandler(event:IndexChangeEvent):void
+			{
+				calcularTodosLosTotales()
+				
+			}
+			
+			
+			public function calcularTodosLosTotales():void
+			{
+				var punterosMarca:Array = new Array;
+				listaProCOtizacionAct = new ArrayCollection();
+				numMarcasCotizacion = 0;
+				ivaCotizacion = 0;
+				subtotalCOtizacion = 0;
+				cantidadPiezasCotizacion = 0;
+				totalDeCotizacion = 0;
+				
+				listaProductosCOtizados.dataProvider = listaCOtizaciones.selectedItem.partidas;
+				universoPartidasActuales = ObjectUtil.copy(listaCOtizaciones.selectedItem.partidas as ArrayCollection) as ArrayCollection;
+				cotizacionActual = listaCOtizaciones.selectedItem;
+				
+				tipoSeleccionado = listaCOtizaciones.selectedItem.tipoCotizacion;
+				
+				seleciconarEmpresa(tipoSeleccionado);
+				
+				for (var i:int = 0; i < cmbMoneda.dataProvider.length; i++) 
+				{
+					if(cotizacionActual.monedaAbreviatura == cmbMoneda.dataProvider[i].valor )
+					{
+						cmbMoneda.selectedIndex = i;
+						break;
+					}
+				}
+				
+				if(cotizacionActual.partidas != null)
+				{
+					for (var j:int = 0; j < cotizacionActual.partidas.length; j++) 
+					{
+						cantidadPiezasCotizacion += cotizacionActual.partidas[j].producto.cantPiezas;
+						subtotalCOtizacion += cotizacionActual.partidas[j].producto.totalCostoPiezas;
+						listaProCOtizacionAct.addItem(cotizacionActual.partidas[j].producto);
+					}
+				}
+			
+				
+				
+				if(cotizacionActual.gravaIva)
+				{
+					ivaCotizacion = subtotalCOtizacion * 0.16;
+					totalDeCotizacion = subtotalCOtizacion + ivaCotizacion;
+				}
+				else{
+					ivaCotizacion = 0;
+					totalDeCotizacion = subtotalCOtizacion;
+				}
+				
+				if(listaProCOtizacionAct.length > 0)
+				{
+					var sqlMarcas:Query = new Query(listaProCOtizacionAct,["proveedor"],true);
+					punterosMarca = sqlMarcas.getPunteros(['proveedor']);
+					numMarcasCotizacion = punterosMarca.length;
+				}
+				else{
+					numMarcasCotizacion = 0;
+				}
+				
+				
+				
+				
+				todo.selected = false;
+			}
+			
+			protected function seleecionarTodo(event:MouseEvent):void
+			{
+				if(todo.selected)
+				{
+					for (var i:int = 0; i < listaProductosCOtizados.dataProvider.length; i++) 
+					{
+						listaProductosCOtizados.dataProvider[i].seleccionada = true;
+					}
+					
+				}
+				else if(!todo.selected)
+				{
+					for (var j:int = 0; j < listaProductosCOtizados.dataProvider.length; j++) 
+					{
+						listaProductosCOtizados.dataProvider[j].seleccionada = false;
+					}
+					
+				}
+				
+			}
+			
+			
+			private function crearNuevaCotizacion(event:EventoReportarVisita):void
+			{
+				indiceActualListaCotizaciones = listaCOtizaciones.selectedIndex;
+				var cotizacionesAux:ArrayCollection = ObjectUtil.copy(listaCOtizaciones.dataProvider as ArrayCollection) as ArrayCollection;
+				var listaNueva:ArrayCollection = new ArrayCollection();
+				
+				    event.cotizacion.numCotizacion = numCotizacionesUsuario;
+					cotizacionesAux.addItem(event.cotizacion);
+				
+				for (var j:int = 0; j < cotizacionesAux.length; j++) 
+				{
+					var co:Object = new Object();
+					co.valor = (j+1)+"."+" "+cotizacionesAux[j].nombreCotizacion;
+					co.llave = j;
+					co.tipo = cotizacionesAux[j].tipoCotizacion;
+					listaNueva.addItem(co);
+				}
+				
+				numCotizacionesUsuario = numCotizacionesUsuario + 1;
+				listaNombresCotizaciones = ObjectUtil.copy(listaNueva) as ArrayCollection;;
+				listaCOtizaciones.dataProvider = cotizacionesAux;
+				listaCOtizaciones.selectedIndex = indiceActualListaCotizaciones;
+			}
+			
+			
+			private function cambiarPartidasDeCotizacion(eve:EventoReportarVisita):void
+			{
+				var partidasSeleccionadas:ArrayCollection = new ArrayCollection();
+				var totalPartidaSeleccionadas:Number = 0;
+				var partida:PartidaCotizacion = new PartidaCotizacion();
+				
+				if(listaProductosCOtizados.dataProvider.length > 0)
+				{
+					for (var i:int = 0; i < listaProductosCOtizados.dataProvider.length; i++) 
+					{
+						if(listaProductosCOtizados.dataProvider[i].seleccionada)
+						{
+							partida = new PartidaCotizacion();
+							listaProductosCOtizados.dataProvider[i].seleccionada = false;
+							listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].totalCosto = listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].totalCosto - listaProductosCOtizados.dataProvider[i].producto.totalCostoPiezas;
+							partida = listaProductosCOtizados.dataProvider[i] as PartidaCotizacion;
+							
+							if(listaCOtizaciones.dataProvider[eve.index].imoneda != listaCOtizaciones.selectedItem.imoneda)
+							{
+								if(listaCOtizaciones.dataProvider[eve.index].imoneda == 'Dolares') /*cuando viene de una cotizacion dirente de dolares*/
+								{
+									partida.monedaAbreviatura = "USD";
+									partida.monedaSimbolo	= "$";
+									if(listaCOtizaciones.selectedItem.imoneda == 'Pesos')
+									{
+										partida.producto.costoAux =  Math.round(partida.producto.costoAux / partida.producto.pdolar);  
+									}
+									else if(listaCOtizaciones.selectedItem.imoneda == 'Euros')
+									{
+										partida.producto.costoAux =  Math.round(partida.producto.costoAux * partida.producto.edolar);
+									}
+								}
+								
+								
+								/*la cotizacion a la cual se van a cambiar las partidas tiene tipo de moneda pesos*/
+								else if(listaCOtizaciones.dataProvider[eve.index].imoneda == 'Pesos')
+								{
+									partida.monedaAbreviatura = "MXN";
+									partida.monedaSimbolo	= "$";
+									if(listaCOtizaciones.selectedItem.imoneda == 'Dolares')
+									{
+										partida.producto.costoAux =  Math.round(partida.producto.costoAux * partida.producto.pdolar);  
+									}
+									else if(listaCOtizaciones.selectedItem.imoneda == 'Euros')
+									{
+										partida.producto.costoAux = Math.round(partida.producto.costoAux * partida.producto.edolar);
+										partida.producto.costoAux =  Math.round(partida.producto.costoAux * partida.producto.pdolar); 
+									}
+								}
+								
+								/*la cotizacion a la cual se van a cambiar las partidas tiene tipo de moneda euros*/
+								else if(listaCOtizaciones.dataProvider[eve.index].imoneda == 'Euros')
+								{
+									partida.monedaAbreviatura = "EUR";
+									partida.monedaSimbolo	= "€";
+									if(listaCOtizaciones.selectedItem.imoneda == 'Dolares')
+									{
+										partida.producto.costoAux =  Math.round(partida.producto.costoAux / partida.producto.edolar);  
+									}
+									else if(listaCOtizaciones.selectedItem.imoneda == 'Pesos')
+									{
+										partida.producto.costoAux  = Math.round(partida.producto.costoAux / partida.producto.pdolar); 
+										partida.producto.costoAux  =  Math.round(partida.producto.costoAux / partida.producto.edolar); 
+									}
+									
+								}
+							}
+							partida.producto.totalCostoPiezas = partida.producto.cantPiezas * partida.producto.costoAux;
+							totalPartidaSeleccionadas = totalPartidaSeleccionadas + partida.producto.totalCostoPiezas;
+							partidasSeleccionadas.addItem(partida);
+							listaProductosCOtizados.dataProvider.removeItemAt(i--);
+							listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].partidas = listaProductosCOtizados.dataProvider as ArrayCollection;
+							listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].numPartidas = listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].numPartidas -1;
+						}
+					}
+					
+					if(partidasSeleccionadas.length > 0)
+					{
+						if(listaCOtizaciones.dataProvider[eve.index].partidas)
+						{
+							
+							listaCOtizaciones.dataProvider[eve.index].partidas.addAll(partidasSeleccionadas);
+							listaCOtizaciones.dataProvider[eve.index].totalCosto = listaCOtizaciones.dataProvider[eve.index].totalCosto + totalPartidaSeleccionadas;
+							listaCOtizaciones.dataProvider[eve.index].numPartidas = listaCOtizaciones.dataProvider[eve.index].partidas.length;
+							
+						}
+						else
+						{
+							listaCOtizaciones.dataProvider[eve.index].partidas = new ArrayCollection();
+							
+							listaCOtizaciones.dataProvider[eve.index].partidas.addAll(partidasSeleccionadas);
+							listaCOtizaciones.dataProvider[eve.index].totalCosto = listaCOtizaciones.dataProvider[eve.index].totalCosto + totalPartidaSeleccionadas;
+							listaCOtizaciones.dataProvider[eve.index].numPartidas = listaCOtizaciones.dataProvider[eve.index].partidas.length;
+							listaCOtizaciones.dataProvider[eve.index].tipoCotizacion = listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].tipoCotizacion;
+							listaNombresCotizaciones[eve.index].tipo = listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].tipoCotizacion;
+						}
+					}
+					
+					
+				}
+				
+				if(!listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].deSistema)
+				{
+					if(listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].numPartidas == 0)
+					{
+						listaCOtizaciones.dataProvider.removeItemAt(listaCOtizaciones.selectedIndex);
+						numCotizacionesUsuario = numCotizacionesUsuario - 1;
+					}
+				}
+				
+				todo.selected = false;
+				
+			}
+			
+			
+		/*	private var timer:uint;
+			protected function txtBuscador_changingHandler(event:Event):void
+			{
+				if(!timer)
+					timer = setTimeout(busqueda_concidencias,500);	
+			}
+			
+			
+			protected function busqueda_concidencias():void
+			{
+				
+			   listaProductosCOtizados.dataProvider = UtilsGrid.queryCampoXLikeVariosCampos(universoPartidasActuales,['concepto','fabrica'],txtBuscaPS.text);
+				
+				if(timer)
+					timer = 0;
+				
+			}*/
+			
+			
+		
+			
+			protected function eliminar_Partidas(event:MouseEvent):void
+			{
+				var partidasSeleccionadas:ArrayCollection = new ArrayCollection();
+				var totalPartidaSeleccionadas:Number = 0;
+				if(listaProductosCOtizados.dataProvider.length > 0)
+				{
+					for (var i:int = 0; i < listaProductosCOtizados.dataProvider.length; i++) 
+					{
+						if(listaProductosCOtizados.dataProvider[i].seleccionada)
+						{
+							listaProductosCOtizados.dataProvider[i].seleccionada = false;
+							totalPartidaSeleccionadas = totalPartidaSeleccionadas + listaProductosCOtizados.dataProvider[i].producto.totalCostoPiezas;
+							listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].totalCosto = listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].totalCosto - listaProductosCOtizados.dataProvider[i].producto.totalCostoPiezas;
+							partidasSeleccionadas.addItem(listaProductosCOtizados.dataProvider[i]);
+							listaProductosCOtizados.dataProvider.removeItemAt(i--);
+							listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].partidas = listaProductosCOtizados.dataProvider as ArrayCollection;
+							listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].numPartidas = listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].numPartidas -1;
+						}
+					}
+					
+				}
+				
+				var listaCotizacionesAuxP:ArrayCollection = ObjectUtil.copy(listaCOtizaciones.dataProvider as ArrayCollection) as ArrayCollection;
+				
+				for (var j:int = 0; j < listaCotizacionesAuxP.length; j++) 
+				{
+					if(listaCotizacionesAuxP[j].partidas != null && listaCotizacionesAuxP[j].partidas.length == 0)
+					{
+						if(!listaCotizacionesAuxP[j].deSistema)
+						{
+							listaCotizacionesAuxP.removeItemAt(j--);
+						}
+						
+					}
+				}
+				
+				listaCOtizaciones.dataProvider = listaCotizacionesAuxP;
+				if(partidasSeleccionadas.length > 0)
+				{
+					var eventoEliP:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.ELIMINAR_PRODUCTOS_DEL_CARRITO);
+					eventoEliP.listaProductos = partidasSeleccionadas;
+					dispatchEvent(eventoEliP);
+					
+				}
+				
+				todo.selected = false;
+			}
+			
+			
+		/*	eliminar partidas que fueron eliminadas del carrito directamente */
+			
+			public function eliminarPartidasDeCotizaciones(prod:Producto):void
+			{
+				var actulizarCotizacion:Boolean = false;
+				var indice:Number = 0;
+				for (var i:int = 0; i < listaCOtizaciones.dataProvider.length; i++) 
+				{
+					var arrayTemp:ArrayCollection = UtilsGrid.indexQueryCampoX(listaCOtizaciones.dataProvider[i].partidas as ArrayCollection, "idProducto", prod.idProducto.toString());
+					if (arrayTemp.length > 0 )
+					{
+						
+						listaCOtizaciones.dataProvider[i].partidas.removeItemAt(arrayTemp.getItemAt(0) as int);
+						actulizarCotizacion = true;
+						indice = i;
+					}
+					
+				}
+				
+				if(actulizarCotizacion)
+				{
+					if(listaCOtizaciones.dataProvider[indice].partidas.length > 0)
+					{
+						var numPar:Number = 0;
+						var totalPart:Number = 0;
+						for (var j:int = 0; j < listaCOtizaciones.dataProvider[indice].partidas.length; j++) 
+						{
+							numPar = numPar +1;
+							totalPart = totalPart + listaCOtizaciones.dataProvider[indice].partidas[j].producto.totalCostoPiezas;
+						}
+						listaCOtizaciones.dataProvider[indice].numPartidas = numPar;
+						listaCOtizaciones.dataProvider[indice].totalCosto = totalPart;
+						
+					}
+					else{
+						if(listaCOtizaciones.dataProvider[indice].deSistema)
+						{
+							listaCOtizaciones.dataProvider[indice].numPartidas = 0;
+							listaCOtizaciones.dataProvider[indice].totalCosto = 0;
+						}
+						else if(!listaCOtizaciones.dataProvider[indice].deSistema)
+						{
+							
+							listaCOtizaciones.dataProvider.removeItemAt(indice);
+						}
+						
+					}
+					
+				}
+				
+				todo.selected = false;
+				
+			}
+			
+			
+			private function abrirPopUPCotizacion(even:Event):void
+			{
+				var abrirPop:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.ABRIR_POPUP_COTIZACION);
+				abrirPop.partidaCo = listaProductosCOtizados.selectedItem;
+				abrirPop.vieneDe = "Editar";
+				dispatchEvent(abrirPop);
+			}
+			
+		/*	protected function guardar_cotizaciones(event:MouseEvent):void
+			{
+				var guardarCO:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.GUARDAR_GENERAR_COTIZACION_REPORTAR_VISITA);
+				guardarCO.listaCotizaciones = listaCOtizaciones.dataProvider as ArrayCollection;
+				guardarCO.idVisita = VistaOperacionReportarVisita.visitaClienteActual.idVisitaCliente;
+				dispatchEvent(guardarCO);
+				
+				
+			}*/
+			
+			
+			private function asignarEmpresaAcotizacion(even:Event):void
+			{
+				listaCOtizaciones.dataProvider[listaCOtizaciones.selectedIndex].factura = cmbempresas.dataProvider[cmbempresas.selectedIndex].valor; 
+			}
+			
+		/*	protected function generarCotizaciones(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+			}*/
+			
+			
+			public function set recibeRespuestaGuardarCotizaciones(respuesta:Number):void{
+				
+				if(respuesta > 0)
+				{
+					alertaSingleton.show("Operación Exitosa");
+				}
+				
+			}
+
+			
+			protected function cmbMoneda_creationCompleteHandler(event:FlexEvent):void
+			{
+				cmbMoneda.selectedIndex = 0;
+				
+			}
+			
+			private function CambiarCotiacionDeMoneda(even:Event):void
+			{
+				var cotAcambiar:Cotizacion = listaCOtizaciones.selectedItem as Cotizacion;
+				var partAux:PartidaCotizacion = new PartidaCotizacion;
+				var precioAux:Number = 0;
+				var totalCot:Number = 0;
+				var precioEnDolar:Number = 0;
+				var costoMo:Number = 0;
+				
+				if(cmbMoneda.selectedIndex == 0)
+				{
+					
+					if(cotAcambiar.partidas != null && cotAcambiar.partidas.length > 0)
+					{
+						for (var i:int = 0; i < cotAcambiar.partidas.length; i++) 
+						{
+							partAux = new PartidaCotizacion;
+							partAux = cotAcambiar.partidas[i] as PartidaCotizacion;
+							
+							if(cotAcambiar.imoneda == "Euros")
+							{
+								precioAux = Math.round(partAux.producto.costoAux * partAux.producto.edolar); 
+								
+								costoMo = Math.round(partAux.producto.costo * partAux.producto.edolar); 
+								
+							}
+								
+								
+							else if(cotAcambiar.imoneda == "Pesos")
+							{
+								precioAux =  Math.round(partAux.producto.costoAux / partAux.producto.pdolar); 
+								
+								costoMo = Math.round(partAux.producto.costo / partAux.producto.pdolar);  
+							}
+								
+							
+							else 
+							{
+								precioAux = partAux.producto.costoAux;
+								costoMo = partAux.producto.costo; 
+							}
+								
+							
+							partAux.producto.totalCostoPiezas = precioAux * partAux.producto.cantPiezas;
+							partAux.producto.costoAux = precioAux;
+							partAux.producto.costo = costoMo;
+							partAux.monedaAbreviatura = "USD"
+							partAux.monedaSimbolo = "$"
+							totalCot = totalCot + partAux.producto.totalCostoPiezas;
+							
+						}
+						
+						cotAcambiar.imoneda = "Dolares";
+						cotAcambiar.monedaAbreviatura = "USD";
+						cotAcambiar.monedaSimbolo = "$";
+						cotAcambiar.totalCosto = totalCot; cotAcambiar.partidas[0].producto.costo
+						
+					}
+				}
+				
+				else if(cmbMoneda.selectedIndex ==1)
+				{
+					
+					
+					if(cotAcambiar.partidas != null && cotAcambiar.partidas.length > 0)
+					{
+						for (var i:int = 0; i < cotAcambiar.partidas.length; i++) 
+						{
+							partAux = new PartidaCotizacion;
+							partAux = cotAcambiar.partidas[i] as PartidaCotizacion;
+							
+							if(cotAcambiar.imoneda == "Euros")
+							{
+								partAux.producto.costoAux  = Math.round(partAux.producto.costoAux * partAux.producto.edolar);
+								precioAux =  Math.round(partAux.producto.costoAux * partAux.producto.pdolar); 
+								
+								partAux.producto.costo = Math.round(partAux.producto.costo * partAux.producto.edolar);
+								costoMo =  Math.round(partAux.producto.costo * partAux.producto.pdolar); 
+							}
+								
+								
+							else if(cotAcambiar.imoneda == "Dolares"){
+								partAux.producto.costoAux  = partAux.producto.costoAux;
+								precioAux =  Math.round(partAux.producto.costoAux * partAux.producto.pdolar); 
+								
+								partAux.producto.costo = partAux.producto.costo;
+								costoMo =  Math.round(partAux.producto.costo * partAux.producto.pdolar); 
+							}
+								
+								
+							else 
+							{
+								precioAux = partAux.producto.costoAux;
+								costoMo = partAux.producto.costo;
+							}
+							
+							partAux.producto.totalCostoPiezas = precioAux * partAux.producto.cantPiezas;
+							partAux.producto.costoAux = precioAux;
+							partAux.producto.costo = costoMo;
+							partAux.monedaAbreviatura = "MXN"
+							partAux.monedaSimbolo = "$"
+							totalCot = totalCot + partAux.producto.totalCostoPiezas;
+							
+						}
+						
+						cotAcambiar.imoneda = "Pesos";
+						cotAcambiar.monedaAbreviatura = "MXN";
+						cotAcambiar.monedaSimbolo = "$";
+						cotAcambiar.totalCosto = totalCot; cotAcambiar.partidas[0].producto.costo
+						
+					}
+				}
+				
+				else if(cmbMoneda.selectedIndex == 2)
+				{
+					
+					if(cotAcambiar.partidas != null && cotAcambiar.partidas.length > 0)
+					{
+						for (var i:int = 0; i < cotAcambiar.partidas.length; i++) 
+						{
+							partAux = new PartidaCotizacion;
+							partAux = cotAcambiar.partidas[i] as PartidaCotizacion;
+							
+							if(cotAcambiar.imoneda == "Pesos")
+							{
+								partAux.producto.costoAux  = Math.round(partAux.producto.costoAux / partAux.producto.pdolar); 
+								precioAux =  Math.round(partAux.producto.costoAux / partAux.producto.edolar); 
+								
+								partAux.producto.costo  = Math.round(partAux.producto.costo / partAux.producto.pdolar); 
+								costoMo =  Math.round(partAux.producto.costo / partAux.producto.edolar); 
+							}
+								
+								
+							else if(cotAcambiar.imoneda == "Dolares"){
+								partAux.producto.costoAux  =  partAux.producto.costoAux;
+								precioAux =  Math.round(partAux.producto.costoAux / partAux.producto.edolar); 
+								
+								partAux.producto.costo  =  partAux.producto.costo;
+								costoMo =  Math.round(partAux.producto.costo / partAux.producto.edolar); 
+							}
+								
+								
+							else{
+								precioAux = partAux.producto.costoAux;
+								costoMo = partAux.producto.costo;
+							}
+							
+							partAux.producto.totalCostoPiezas = precioAux * partAux.producto.cantPiezas;
+							partAux.producto.costoAux = precioAux;
+							partAux.producto.costo = costoMo;
+							partAux.monedaAbreviatura = "EUR"
+							partAux.monedaSimbolo = "€"
+							totalCot = totalCot + partAux.producto.totalCostoPiezas;
+							
+						}
+						
+						cotAcambiar.imoneda = "Euros";
+						cotAcambiar.monedaAbreviatura = "EUR";
+						cotAcambiar.monedaSimbolo = "€";
+						cotAcambiar.totalCosto = totalCot; cotAcambiar.partidas[0].producto.costo
+						
+					}
+				}
+				
+				listaCOtizaciones_changeHandler(null);
+				
+			}
+			
+			[Bindable] public var sizeNormal:Number;
+			[Bindable] public var sizeGrande:Number;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				trace("medida de reportar:" + unscaledWidth);
+				
+				var tamReal:Number = ( unscaledWidth/ 1595) * 204;
+				tamReal = tamReal < 200 ? 175: tamReal;
+				
+				cmbMover.width = tamReal;
+				grupoEliminar.width = tamReal - 4;
+				bntEliminar.width = grupoEliminar.width -7;
+				
+				sizeNormal = ( unscaledWidth/ 1595) * 15;
+				sizeNormal = sizeNormal > 14 ? 14:sizeNormal;
+				sizeNormal = sizeNormal < 10 ? 12:sizeNormal;
+				
+				
+				sizeGrande = ( unscaledWidth/ 1595) * 20;
+				sizeGrande = sizeGrande > 20 ? 20:sizeGrande;
+				sizeGrande = sizeGrande < 16 ? 16:sizeGrande;
+				/*inicioCampana.widthLabelDatePicker = tamReal - 29;
+				finCampana.widthLabelDatePicker = tamReal - 29;
+				txtNombre.width = tamReal;*/
+				
+		/*		
+				var tamMonto:Number = (unscaledWidth / 1940.54) * 168;
+				tamMonto = tamMonto < 80 ? 30:tamMonto;
+				
+				
+				cantidadMonto.width = tamMonto;
+				
+				
+				var tamPorCentaje:Number = (unscaledWidth / 1940.54) * 105;
+				tamPorCentaje = tamPorCentaje < 80 ? 25:tamPorCentaje;
+				
+				cantidadPorcentaje.width = tamPorCentaje;
+				
+				
+				var tamRadios:Number = (unscaledWidth / 1940.54) * 25;
+				tamRadios = tamRadios < 10 ? 10:tamRadios;
+				
+				monto.width = tamRadios;
+				monto.height = tamRadios;
+				porcentaje.width = tamRadios;
+				porcentaje.height = tamRadios;
+				
+				
+				var letraComi:Number =  (unscaledWidth / 1940.54) * 14;
+				letraComi = letraComi < 10 ? 10:letraComi;
+				tamLetraComision = letraComi;
+				
+				if (unscaledWidth < 1254) {
+					grpCombo.layout = lyVertical;
+				} else {
+					grpCombo.layout = lyHorizontal;
+				}
+				*/
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" padding="1" gap="20">
+		
+		<s:VGroup width="100%" height="3%">
+			<s:HGroup width="100%" verticalAlign="middle" >
+				<s:Group height="100%" width="247" >
+				<pqNet:botonPqNetLargo id="btnRegresar" colorBase="#0b8692" width="245" fontSize="12"  color="#0b8692" icono="flechaBlancaIzquierda" label="CATÁLOGO DE PRODUCTOS" click="regregar_Vistra_Anterior(event)" />
+				</s:Group>  
+				<s:Spacer width="10" />
+				<s:Label text="Configurar Cotización" width="100%" fontSize="24" color="0x008895" fontWeight="bold" />
+			</s:HGroup>  
+			
+		</s:VGroup>  
+		
+		<s:VGroup width="100%"  >
+			<otros:division	width="100%" />	
+		</s:VGroup>  
+		
+		
+		<s:HGroup width="100%" height="95%" gap="0" >
+			<s:Group width="20%" height="100%" left="-25" minWidth="253"  >
+			<s:VGroup width="100%" height="100%" left="-25" >
+				
+				<s:Label text="COTIZACIONES" width="100%" fontSize="14" color="0x008895" fontWeight="bold" paddingLeft="25" />
+				<s:List width="100%" height="100%" id="listaCOtizaciones" borderVisible="false" verticalScrollPolicy="on" horizontalScrollPolicy="off" focusColor="#FFFFFF" focusEnabled="false"    
+						itemRenderer="vista.vistas.reporte.visita.cotizar.itemRender.IRListaDeCotizaciones" change="listaCOtizaciones_changeHandler(event)"/>
+				
+			</s:VGroup>  
+			</s:Group>  
+			
+			<s:VGroup width="80%" height="100%" >
+				
+				<s:HGroup width="100%" paddingLeft="17" >
+					<s:Label text="{listaCOtizaciones.selectedIndex + 1}.{cotizacionActual.nombreCotizacion.toUpperCase()}" fontSize="14" color="0x000000" fontWeight="bold" />
+					<s:Label text="{cotizacionActual.numPartidas} {cotizacionActual.numPartidas==1?'PARTIDA':'PARTIDAS'} · ${UtilsFormatosNumericos.precisionADosDecimalesConComas(cotizacionActual.totalCosto)} " width="100%" fontSize="14" color="0x008895" fontWeight="bold" />
+				</s:HGroup>  
+				
+				<s:VGroup width="100%" paddingLeft="17"  >
+					<otros:division	width="100%" />	
+				</s:VGroup> 
+				
+				<s:HGroup width="100%" verticalAlign="middle" paddingLeft="17">
+					<s:Group height="100%" width="206" id="grupoEliminar" >
+						<pqNet:botonPqNetLargo id="bntEliminar" sizeFuente="{sizeNormal}" colorBase="#0b8692"  color="#0b8692" icono="eliminar_blanco" label="ELIMINAR PARTIDAS" click="eliminar_Partidas(event)"  />
+					</s:Group>  
+					<componentes:ComboCambioDeCotizacionReportar dataProvider="{listaNombresCotizaciones}" width="210" height="35" id="cmbMover" numletra="{sizeNormal}"  colorCombo="#138894" colorLetra="#FFFFFF" fontWeight="bold" visibleBoton="true" visiblecabezera="true" textoBoton="Nueva Cotización"/>
+					<s:Spacer width="7" />
+					<s:Label text="EMPRESA QUE COTIZA:" fontSize="{sizeNormal}" color="0x008895" fontWeight="bold" />
+					<cmbCat:ComboGrisFlechaNegra width="15%" height="34" id="cmbempresas" colorCombo="0xFFFFFF" colorLetra="0x000000" fontWeight="normal" />
+					<s:Spacer width="7"/>
+					<s:Label text="TIPO DE MONEDA:" fontSize="{sizeNormal}" color="0x008895" fontWeight="bold" />
+					<cmbCat:ComboGrisFlechaNegra width="96" height="34" id="cmbMoneda" colorCombo="0xFFFFFF" colorLetra="0x000000" fontWeight="normal" dataProvider="{monedas}" creationComplete="cmbMoneda_creationCompleteHandler(event)" />
+					
+				</s:HGroup>  
+				
+				
+				<s:VGroup width="100%" height="100%" >
+					
+					<s:HGroup width="100%" height="10%" verticalAlign="bottom" horizontalAlign="center" gap="0" paddingLeft="17">
+						
+						<s:HGroup width="2%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+							<chekbox:checkBoxVerde styleCheck="checkBoxBlancoCuadroGrisPalomaVerde" click="seleecionarTodo(event)" id="todo"/>	
+						</s:HGroup>  
+						
+						<s:HGroup width="6%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+						<!--	imagen-->
+						</s:HGroup>  
+						
+						
+						<s:HGroup width="3%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+							<s:Label styleName="TituloNovecento_18" color="#424242" text="#" textAlign="center" maxDisplayedLines="1"/>			
+						</s:HGroup>  
+						
+						<s:HGroup width="33%" height="100%" verticalAlign="bottom" horizontalAlign="left">
+							<s:Label styleName="TituloNovecento_18" color="#424242" text="Concepto" textAlign="left" maxDisplayedLines="1"/>			
+						</s:HGroup>  
+						
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+							<s:Label styleName="TituloNovecento_18" color="#424242" text="TEE" textAlign="center" maxDisplayedLines="1"/>			
+						</s:HGroup>  
+						
+						<s:HGroup width="16%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" text="Marca" textAlign="center" maxDisplayedLines="1"  />			
+						</s:HGroup> 
+						
+						
+						<s:HGroup width="7%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" text="Cant.(Pzas)" textAlign="right" maxDisplayedLines="1"  />			
+						</s:HGroup>  
+						
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" text="P.U({cotizacionActual.monedaAbreviatura})" textAlign="right" maxDisplayedLines="1"  />				
+						</s:HGroup>  
+						
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" color="#424242" text="Total" textAlign="right" maxDisplayedLines="1" />			
+						</s:HGroup>
+						
+						<s:HGroup width="3%" height="100%" verticalAlign="middle" horizontalAlign="center" gap="0">
+							<!--imagen-->
+						</s:HGroup>
+						
+						
+					</s:HGroup>  
+					
+					
+					<s:List width="100%" height="100%" id="listaProductosCOtizados"  borderVisible="false" verticalScrollPolicy="on" horizontalScrollPolicy="off" focusColor="#FFFFFF" 
+							itemRenderer="vista.vistas.reporte.visita.cotizar.itemRender.IRListaDeProductosCotizados"/>
+				</s:VGroup> 
+				
+				
+				<s:VGroup width="100%" height="5%" gap="0" >
+					
+					<s:VGroup width="100%"  >
+						<otros:division	width="100%" />	
+					</s:VGroup>  
+					<s:Spacer height="10"/>
+					
+					<s:HGroup width="100%" height="10%" verticalAlign="bottom" horizontalAlign="center" gap="0" paddingLeft="17">
+						
+						<s:HGroup width="2%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+						</s:HGroup>  
+						
+						<s:HGroup width="6%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+							<!--	imagen-->
+						</s:HGroup>  
+						
+						
+						<s:HGroup width="36%" height="100%" verticalAlign="bottom" horizontalAlign="left">
+							<s:Label styleName="TituloNovecento_18" color="#424242" fontSize="{sizeGrande}" text="{listaProductosCOtizados.dataProvider.length} {listaProductosCOtizados.dataProvider.length==1?' Partida':' Partidas'}" textAlign="left" maxDisplayedLines="1"  verticalAlign="middle" fontWeight="bold"/>	
+						</s:HGroup>  
+						
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="center">
+							
+						</s:HGroup>  
+						
+						<s:HGroup width="16%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" fontSize="{sizeGrande}" text="{numMarcasCotizacion} {numMarcasCotizacion==1?'Marca':'Marcas'}" textAlign="center" maxDisplayedLines="1" fontWeight="bold"/>					
+						</s:HGroup> 
+						
+						
+						<s:HGroup width="7%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" fontSize="{sizeGrande}" text="{cantidadPiezasCotizacion} {cantidadPiezasCotizacion==1?'Pza.':'Pzas.'}" textAlign="right" maxDisplayedLines="1" fontWeight="bold" />			
+						</s:HGroup>  
+						
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" fontSize="{sizeGrande}" text="Subtotal:" textAlign="right" maxDisplayedLines="1"  />				
+						</s:HGroup>  
+						
+						<s:HGroup width="13%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeGrande}" color="#424242" text="{cotizacionActual.monedaSimbolo}{UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotalCOtizacion)}" textAlign="right" maxDisplayedLines="1" />			
+						</s:HGroup>
+						
+						
+						
+					</s:HGroup>  
+					
+					<s:Spacer height="10"/>
+					
+					<s:HGroup width="100%" height="10%" horizontalAlign="right" >
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" fontSize="{sizeGrande}" text="I.V.A.:" textAlign="right" maxDisplayedLines="1"  />				
+						</s:HGroup>  
+						
+						<s:HGroup width="13%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" color="#424242" fontSize="{sizeGrande}" text="{cotizacionActual.monedaSimbolo}{UtilsFormatosNumericos.precisionADosDecimalesConComas(ivaCotizacion)}" textAlign="right" maxDisplayedLines="1" />			
+						</s:HGroup>
+					</s:HGroup>  
+					
+					<s:Spacer height="10"/>
+					
+					<s:HGroup width="100%" height="10%" horizontalAlign="right" >
+						<s:HGroup width="10%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" color="#424242" fontSize="{sizeGrande}" text="Total:" textAlign="right" maxDisplayedLines="1"  />				
+						</s:HGroup>  
+						
+						<s:HGroup width="13%" height="100%" verticalAlign="bottom" horizontalAlign="right" gap="0">
+							<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeGrande}"  color="#4ba92b" text="{cotizacionActual.monedaSimbolo}{UtilsFormatosNumericos.precisionADosDecimalesConComas(totalDeCotizacion)}" textAlign="right" maxDisplayedLines="1" />			
+						</s:HGroup>
+					</s:HGroup>  
+				</s:VGroup>  
+				
+				
+			</s:VGroup>  
+			
+		</s:HGroup>  
+		
+	</s:VGroup>
+	
+</s:Group>

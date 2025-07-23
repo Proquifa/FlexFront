@@ -1,0 +1,279 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.clientes.comerciales.oferta
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.comerciales.oferta.EventoCatClientes_Oferta;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.FormulaPrecio;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.ObjectUtil;
+
+	public class ModeloCatClientes_Oferta extends EventDispatcher
+	{
+		public function ModeloCatClientes_Oferta(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+		
+		/**
+		 ************************************************************** LISTA PROVEEDORES Clientes  **************************************************************
+		 */ 
+		private var _proveedores:ArrayCollection;
+		public function setListaProveedores($proveedores:ArrayCollection):void{
+			this._proveedores = $proveedores;
+			dispatchEvent(new Event ("listaProveedoresModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="listaProveedoresModeloCatClientes_Oferta")]
+		public function get listaProveedores():ArrayCollection{
+			return this._proveedores;
+		}
+		
+		
+		/**
+		 ************************************************************** RECIBE LAS FAMILIAS DEL PROVEEDOR solicitado **************************************************************
+		 */ 
+		private var _familias:ArrayCollection;
+		public function setRecibeFamiliasDelProveedor($familias:ArrayCollection):void{
+			_familias = $familias;
+			dispatchEvent(new Event ("enviarFamiliasDelProveedorSeleccionadoModeloCatCliente_Oferta"));
+		}
+		
+		[Bindable(event="enviarFamiliasDelProveedorSeleccionadoModeloCatCliente_Oferta")]
+		public function get RegresaFamiliasDelProveedor():ArrayCollection{
+			return _familias;
+		}
+		
+		
+		/**
+		 ************************************************************** INFO OFERTA Clientes  **************************************************************
+		 */ 
+		private var _oferta:ArrayCollection;
+		public function sefInfoOferta($oferta:ArrayCollection):void{
+			this._oferta = $oferta;
+			dispatchEvent(new Event ("obtenerInfOfertaModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="obtenerInfOfertaModeloCatClientes_Oferta")]
+		public function get infoOferta():ArrayCollection{
+			return this._oferta;
+		}
+		
+		
+		/**
+		 ************************************************************** INFO OFERTA Clientes PRODUCTOS EXPORTAR  **************************************************************
+		 */ 
+		private var _ofertaExportar:ArrayCollection;
+		public function sefInfoOfertaExportar($oferta:ArrayCollection):void{
+			this._ofertaExportar = $oferta;
+			dispatchEvent(new Event ("obtenerInfOfertaModeloExportarCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="obtenerInfOfertaModeloExportarCatClientes_Oferta")]
+		public function get infoOfertaExportar():ArrayCollection{
+			return this._ofertaExportar;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** CARGA CONFIGURACION DE FAMILIA **************************************************************
+		 */ 
+		private var _configuracionFamilia:ArrayCollection;
+		public function setRecibeConfiguracionFamilia(datos:ArrayCollection):void{
+			this._configuracionFamilia = ObjectUtil.copy( datos ) as ArrayCollection;
+			dispatchEvent(new Event ("cargaConfiguracionFamiliaModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="cargaConfiguracionFamiliaModeloCatClientes_Oferta")]
+		public function get RecibeConfiguracionFamilia():ArrayCollection{
+			return this._configuracionFamilia;
+		}
+		
+		
+		
+		/**
+		 ************************************************************** carga configuraciones de Precio Lista **************************************************************
+		 */ 
+		private var _configuracionPrecioLista:ConfiguracionPrecioProducto;
+		public function setRecibeConfiguracionPrecioLista($dato:ConfiguracionPrecioProducto):void{
+			_configuracionPrecioLista = $dato;
+			dispatchEvent(new Event ("setRecibeConfiguracionPrecioListaModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="setRecibeConfiguracionPrecioListaModeloCatClientes_Oferta")]
+		public function get regresaConfiguracionPrecioLista():ConfiguracionPrecioProducto{
+			return _configuracionPrecioLista;
+		}
+		
+		
+		/**
+		 ************************************************************** carga configuraciones de Precio Lista **************************************************************
+		 */ 
+		private var _idfactorCliente:Number;
+		public function setUpdateFactorCliente($dato:Number):void{
+			_idfactorCliente = $dato;
+			dispatchEvent(new Event ("cargaConfiguracionPrecioListaModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="cargaConfiguracionPrecioListaModeloCatClientes_Oferta")]
+		public function get UpdateFactorCliente():Number{
+			return _idfactorCliente;
+		}
+
+		/**
+		 ************************************************************** solicitar informacion de la formula de Precio **************************************************************
+		 */ 
+		private var _infoFormula:FormulaPrecio;
+		public function setRecibeInfoDeFormulaPrecio($formulaPrecio:FormulaPrecio):void
+		{
+			_infoFormula =  $formulaPrecio;
+			dispatchEvent(new Event ("regresarInformacionFormulaPrecioModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="regresarInformacionFormulaPrecioModeloCatClientes_Oferta")]
+		public function get regresaInfoDeFormulaPrecio():FormulaPrecio{
+			return _infoFormula;
+		}
+		
+		
+		/**
+		 ************************************************************** recibe respuesta Restablecer Todo **************************************************************
+		 */ 
+		
+		private var _restablecerTodo:Boolean;
+		public function setRestablecerTodoPorNivel(datos:Boolean):void{
+			this._restablecerTodo =  datos;
+			dispatchEvent(new Event("RestablecerTodoModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="RestablecerTodoModeloCatClientes_Oferta")]
+		public function get RestablecerTodoPorNivel():Boolean{
+			return this._restablecerTodo;
+		}
+		
+		
+		
+		
+		
+		
+		
+		/**
+		 ****************** NEW ***************************************** carga configuracionesprecio NIVEL COSTO **************************************************************
+		 */ 
+		private var _configuracionesCosto:ArrayCollection;
+		public function setRecibeConfiguracionesPrecioCosto($configuraciones:ArrayCollection):void{
+			_configuracionesCosto = $configuraciones;
+			dispatchEvent(new Event ("enviaConfiguracionesPrecioCostoModeloCatCliente_Oferta"));
+		}
+		
+		[Bindable(event="enviaConfiguracionesPrecioCostoModeloCatCliente_Oferta")]
+		public function get enviaConfiguracionesPrecioCosto():ArrayCollection{
+			return this._configuracionesCosto;
+		}
+		
+		/**
+		 *****************  NEW  ************************************** recibe solicitud para actualizar todas las configuraciones **************************************************************
+		 */ 
+		private var _eventoActualizarConfiguraciones:EventoCatClientes_Oferta;
+		public function setRecibeSolicitudActualizarConfiguraciones($eve:EventoCatClientes_Oferta):void{
+			_eventoActualizarConfiguraciones = $eve;
+			dispatchEvent(new Event ("enviarSolicitudParaActualizarConfiguracionesModeloCatCliente_Oferta"));
+		}
+		
+		[Bindable(event="enviarSolicitudParaActualizarConfiguracionesModeloCatCliente_Oferta")]
+		public function get setEnviaSolicitudActualizarConfiguraciones():EventoCatClientes_Oferta{
+			return _eventoActualizarConfiguraciones;
+		}
+		
+		/**
+		 *******************  NEW    ************************************ enviar configuracion seleccionada  **************************************************************
+		 */ 
+		private var _configuracionSeleccionada:ConfiguracionPrecio;
+		public function setRecibeConfiguracionSeleccionada($configuracion:ConfiguracionPrecio):void{
+			_configuracionSeleccionada = $configuracion;
+			dispatchEvent(new Event ("enviarConfiguracionSeleccionadaParaleerSusPropiedadesModeloCatCliente_Oferta"));
+		}
+		
+		[Bindable(event="enviarConfiguracionSeleccionadaParaleerSusPropiedadesModeloCatCliente_Oferta")]
+		public function get enviaConfiguracionSeleccionada():ConfiguracionPrecio{
+			return _configuracionSeleccionada;
+			
+			
+		}
+		
+		/**
+		 ***************    NEW    *********************************************** carga configuraciones de CLASIFICACION **************************************************************
+		 */ 
+		private var _configuracionesClasificacion:ArrayCollection;
+		public function setRecibeConfiguracionesClasificacion($clasif:ArrayCollection):void{
+			_configuracionesClasificacion = $clasif;
+			dispatchEvent(new Event ("enviarConfiguracionesPrecioClasificacionModeloCliente_Oferta"));
+		}
+		
+		[Bindable(event="enviarConfiguracionesPrecioClasificacionModeloCliente_Oferta")]
+		public function get enviaConfiguracionesClasificacion():ArrayCollection{
+			return this._configuracionesClasificacion;
+		}
+		
+		/**
+		 ****************    NEW     ***************************************** Carga la configuración precio de una CLASIFICACIÓN	 **************************************************************
+		 */ 
+		private var _configuracionPrecioClasificacion:ConfiguracionPrecioProducto;
+		public function setRecibeConfiguracionClasificacion($dato:ConfiguracionPrecioProducto):void{
+			_configuracionPrecioClasificacion = $dato;
+			dispatchEvent(new Event ("cargaConfiguracionPrecioClasificacionModeloCatCliente_Oferta"));
+		}
+		
+		[Bindable(event="cargaConfiguracionPrecioClasificacionModeloCatCliente_Oferta")]
+		public function get regresaConfiguracionClasificacion():ConfiguracionPrecioProducto{
+			return _configuracionPrecioClasificacion;
+		}
+				
+		/**
+		 ***************    NEW     ************************************ Carga los costos relacionados con la clasificacion	 **************************************************************
+		 */ 
+		private var _costosDeClasificacion:ArrayCollection;
+		public function setRecibeLosCostosRelacionadosConClasificacion($dato:ArrayCollection):void{
+			_costosDeClasificacion = $dato;
+			dispatchEvent(new Event ("cargaCostosRelacionadosConLaClasifiacionModeloCatCliente_Oferta"));
+		}
+		
+		[Bindable(event="cargaCostosRelacionadosConLaClasifiacionModeloCatCliente_Oferta")]
+		public function get regresaCostosRelacionadosConLaClasificacion():ArrayCollection{
+			return _costosDeClasificacion;
+		}
+
+		
+		/**
+		 ***************    NEW     ************************************ INFORMACION PARA LA FORMULA (CLASIFICACION)	 **************************************************************
+		 */ 
+		private var _infoFormulaClasif:FormulaPrecio;
+		public function setRecibeInfoDeFormulaPrecioClasif($formulaPrecio:FormulaPrecio):void
+		{
+			_infoFormulaClasif =  $formulaPrecio;
+			dispatchEvent(new Event ("regresarInformacionFormulaPrecioClasifModeloCatClientes_Oferta"));
+		}
+		
+		[Bindable(event="regresarInformacionFormulaPrecioClasifModeloCatClientes_Oferta")]
+		public function get regresaInfoDeFormulaPrecioClasif():FormulaPrecio{
+			return _infoFormulaClasif;
+		}
+		
+		
+		
+		
+		
+		
+		/**
+		 ************************************************************** ERROR Clientes  **************************************************************
+		 */ 
+		public function error(objeto:Object):void{
+			alertaSingleton.show( objeto.toString() );
+		}
+	}
+}

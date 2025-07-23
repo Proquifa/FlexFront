@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:botonesToggle="skins.botonesToggle.*" 
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		 xmlns:pqNet1="skins.botones.pqNet.*" creationComplete="init()" xmlns:botonNegroCuadrado="skins.botones.botonNegroCuadrado.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<!--<s:Resize target="{this.botonInspector}" heightFrom="0" heightTo="50" id="muestraBtn" duration="500"/>
+		<s:Resize target="{this.botonInspector}" heightFrom="50" heightTo="0" id="ocultaBtn" duration="500"/>-->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.soliciud.EventoSolicitudGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Visita;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitud.popUP.SolicitudReferenciasPopUop;
+			import mx.events.ListEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import vista.evento.EventoEVGeneral;
+			import vista.evento.EventoEVGestionarVisitas;
+			
+			
+			[Bindable] private var _listaGridVisitas:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _arrLstContactos:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _arrTempContactos:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _arrLstVisitas:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _arrAgruparSolicitudes:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _listaReferencias:ArrayCollection;
+			[Bindable] private var _solicitudVisita:SolicitudVisita;
+			[Bindable]private var _arrButton:ArrayCollection = new ArrayCollection([{label:"Todo"},
+																					{label:"FDR", iconod: "indicadorv"},
+																					{label:"FDR", iconod: "indicador"}]);
+			private var _popUpReferencias:SolicitudReferenciasPopUop = null;
+			private var _idContacto:int = 0;
+			private var _botonActivo:Boolean = false;
+			private var _idCliente:int = 0;
+			private var _idUsuario:int;
+			private var _finalizo:Boolean = false;
+			private var clock:Timer = new Timer(3000,1); 
+			private var time:Timer = new Timer(1000,1);
+			
+			private function init():void{
+				this.addEventListener( ResizeEvent.RESIZE, acomodaPopUp );
+				grdVisitas.horizontalScrollPolicy = 'off';
+				time.removeEventListener(TimerEvent.TIMER,timerComplete)
+				time.addEventListener(TimerEvent.TIMER,timerComplete);
+				time.start();
+			}
+			
+			private function timerComplete(evet:TimerEvent):void{
+				grdVisitas.horizontalScrollPolicy = 'auto';
+			}
+			
+			public function set recibeIdUsuario($usuario:int):void{
+				_idUsuario = $usuario;	
+			}
+			
+			public function set recibeListaContactos($contactos:ArrayCollection):void{
+				if($contactos == null) return;
+				
+				_arrLstContactos = new ArrayCollection();
+				_arrTempContactos = new ArrayCollection();
+				this.grdVisitas.indexOld = -1;
+				_arrLstVisitas = ObjectUtil.copy($contactos) as ArrayCollection;
+				
+				var _numSolicitudes:int = 0;
+				var _numVisitas:int = 0;
+				var _et:int = 0;
+				var _ft:int = 0;
+				var contador:int = 0;
+				var objSolicitud:SolicitudVisita;
+				var _arrlistaTemp:ArrayCollection = ObjectUtil.copy($contactos) as ArrayCollection;
+				
+				if(_arrlistaTemp.length != 0){
+					this.cliente.text = ((_arrlistaTemp[0] as SolicitudVisita).cliente.nombre == null ? 'ND' : (_arrlistaTemp[0] as SolicitudVisita).cliente.nombre) +' · '+ ((_arrlistaTemp[0] as SolicitudVisita).cliente.nivelIngreso == null ? 'ND' : (_arrlistaTemp[0] as SolicitudVisita).cliente.nivelIngreso);
+					this.detalles.text = ((_arrlistaTemp[0] as SolicitudVisita).cliente.industria == null ? 'ND' : (_arrlistaTemp[0] as SolicitudVisita).cliente.industria ) +' · '+ ((_arrlistaTemp[0] as SolicitudVisita).cliente.rol == null ? 'ND' : (_arrlistaTemp[0] as SolicitudVisita).cliente.rol) +' · '+ ((_arrlistaTemp[0] as SolicitudVisita).cliente.sector == null ? 'ND' : (_arrlistaTemp[0] as SolicitudVisita).cliente.sector);
+				}
+				
+				for(var i:int = 0; i<_arrlistaTemp.length ; i++){
+					if((_arrlistaTemp[i] as SolicitudVisita).folioVisita == 'ND'){
+						_arrlistaTemp.removeItemAt(i);
+						i = i - 1;
+					}
+				}
+				
+				if(_arrlistaTemp.length == 0 ){
+					//this.ocultaBtn.play();
+					this.botonInspector.visible = false;
+					this.botonInspector.includeInLayout = false;
+					this.pop.enabled = false;
+					this._botonActivo = false;
+					
+					if(_finalizo == true){
+						_finalizo = false;
+						var evento:EventoEVGestionarVisitas = new EventoEVGestionarVisitas(EventoEVGestionarVisitas.CAMBIAR_VISTA);
+						dispatchEvent(evento);
+					}
+					
+				}else{  
+					//this.muestraBtn.play();
+					this.botonInspector.visible = true;
+					this.botonInspector.includeInLayout = true;
+					this.pop.enabled = true;
+					this._botonActivo = true;	
+				}   
+				
+				while(_arrlistaTemp.length > 0 ){
+					contador += 1;
+					objSolicitud = new SolicitudVisita();
+					objSolicitud = (_arrlistaTemp[0] as SolicitudVisita);	
+					
+					for(var d:int = 0; d<_arrlistaTemp.length ;  d++){
+						if(objSolicitud.folioVisita == (_arrlistaTemp[d] as SolicitudVisita).folioVisita){
+							objSolicitud.numSolicitudes += 1;
+							_numSolicitudes += 1;
+							
+							if(_arrlistaTemp[d].urgencia == 'Baja' || _arrlistaTemp[d].urgencia == 'BAJA') objSolicitud.numUrgenciaBaja += 1;
+							if(_arrlistaTemp[d].urgencia == 'Media' || _arrlistaTemp[d].urgencia == 'MEDIA') objSolicitud.numUrgenciaMedia += 1;
+							if(_arrlistaTemp[d].urgencia == 'Alta' || _arrlistaTemp[d].urgencia == 'ALTA') objSolicitud.numUrgenciaAlta += 1;
+							
+							if((_arrlistaTemp[d] as SolicitudVisita).tiempoRealizacion == 'FT' ){
+								objSolicitud.fueraDeTiempo += 1;
+								//_ft += 1;
+							}else{
+								objSolicitud.enTiempo += 1;
+								//_et += 1;
+							}
+							
+							_arrlistaTemp.removeItemAt(d);
+							d = d - 1;
+						}
+					}
+					objSolicitud.fueraDeTiempo >= 1 ? _ft += 1 : (objSolicitud.enTiempo >= 1 ? _et += 1 : _et = 0);
+					objSolicitud.numFila = contador;
+					_arrLstContactos.addItem(objSolicitud);
+					_arrTempContactos.addItem(objSolicitud);
+				}
+				
+				_numVisitas = _arrLstContactos.length;
+				var totalSolicitud:SolicitudVisita = new SolicitudVisita();
+				totalSolicitud.cliente = new Cliente();
+				totalSolicitud.visita = new Visita();
+				totalSolicitud.numSolicitudes = _arrLstContactos.length;
+				totalSolicitud.folioVisita = '';
+				totalSolicitud.urgencia = 'total';
+				_arrLstContactos.addItem(totalSolicitud);
+				
+				/* this.cliente.text = ((_arrLstContactos[0] as SolicitudVisita).cliente.nombre == null ? '' : (_arrLstContactos[0] as SolicitudVisita).cliente.nombre) +' · '+ ((_arrLstContactos[0] as SolicitudVisita).cliente.nivelIngreso == null ? '' : (_arrLstContactos[0] as SolicitudVisita).cliente.nivelIngreso);
+				this.detalles.text = ((_arrLstContactos[0] as SolicitudVisita).cliente.industria == null ? '' : (_arrLstContactos[0] as SolicitudVisita).cliente.industria ) +' · '+ ((_arrLstContactos[0] as SolicitudVisita).cliente.rol == null ? '' : (_arrLstContactos[0] as SolicitudVisita).cliente.rol) +' · '+ ((_arrLstContactos[0] as SolicitudVisita).cliente.sector == null ? '' : (_arrLstContactos[0] as SolicitudVisita).cliente.sector); */
+				this.infoConteo.text = _numVisitas +(_numVisitas == 1 ? ' Visita · ' : ' Visitas · ')+ _et + ' ET · '+ _ft +' FT'; 
+				
+				lstContactos.dataProvider = _arrLstContactos;	
+				lstContactos.selectedIndex = 0;
+				botoneraBarra.selectedIndex = 0;
+				enviaSolicitudes();
+				
+			}
+			
+			private function seleccionBotonBar(evt:Event):void{
+				var _arrContactosXTiempo:ArrayCollection = new ArrayCollection();
+				var _tiempo:String = '';
+				
+				_arrContactosXTiempo = new ArrayCollection();
+				if(botoneraBarra.selectedIndex == 0) _tiempo = ''; 
+				if(botoneraBarra.selectedIndex == 1) _tiempo = 'ET';
+				if(botoneraBarra.selectedIndex == 2) _tiempo = 'FT';
+				
+				for(var d:int = 0; d<_arrTempContactos.length ; d++){
+					if(_tiempo == ''){
+						_arrContactosXTiempo.addItem(_arrTempContactos[d]);
+					}
+					if((_arrTempContactos[d] as SolicitudVisita).tiempoRealizacion == _tiempo){
+						_arrContactosXTiempo.addItem(_arrTempContactos[d]);
+					}
+				}
+				
+				if(_arrContactosXTiempo.length == 0){
+					pop.enabled = false;
+					this.botonInspector.visible = false;
+					this.botonInspector.includeInLayout = false
+				}else{
+					pop.enabled = true;
+					this.botonInspector.visible = true;
+					this.botonInspector.includeInLayout = true;
+				}
+				
+				var totalSolicitud:SolicitudVisita = new SolicitudVisita();
+				totalSolicitud.visita = new Visita();
+				totalSolicitud.numSolicitudes = _arrContactosXTiempo.length;
+				totalSolicitud.folioVisita = '';
+				totalSolicitud.urgencia = 'total';
+				_arrContactosXTiempo.addItem(totalSolicitud);
+				
+				lstContactos.dataProvider = _arrContactosXTiempo;
+				lstContactos.selectedIndex = 0;
+				enviaSolicitudes();
+			}
+			
+			private function enviaSolicitudes(event:IndexChangeEvent = null):void{
+				var contador:int = 0;
+				var comprometido:String = '';
+				var tema:String = '';
+				var alto:String = '';
+				var medio:String = '';
+				var bajo:String = '';
+				fecha.text = '';
+				urgencias.text = '';
+				tiempo.text = '';
+				visitas.text = '';
+				infoContacto.text = '';
+				infoPuesto.text = '';
+				departamento.text = '';
+				_idContacto = 0;
+				//conteoContacto.text = '';
+				this.grdVisitas.indexOld = -1;
+				grdVisitas.dataProvider = new Object();
+				_solicitudVisita = new SolicitudVisita();
+				_listaGridVisitas = new ArrayCollection();
+				_solicitudVisita = lstContactos.selectedItem;
+				(lstContactos.selectedItem as SolicitudVisita).contacto != null ? _idContacto = (lstContactos.selectedItem as SolicitudVisita).contacto.idContacto : null;
+				for(var d:int = 0 ; d<_arrLstVisitas.length ; d++){
+					if((_arrLstVisitas[d] as SolicitudVisita).folioVisita == lstContactos.selectedItem.folioVisita){
+						contador += 1;
+						(_arrLstVisitas[d] as SolicitudVisita).numFila = contador;
+						_listaGridVisitas.addItem(_arrLstVisitas[d]);
+						
+						infoContacto.text = ((lstContactos.selectedItem as SolicitudVisita).contacto.titulo == null ? 'ND' : (lstContactos.selectedItem as SolicitudVisita).contacto.titulo) +' '+ ((lstContactos.selectedItem as SolicitudVisita).contacto.nombre == null ? 'ND' : (lstContactos.selectedItem as SolicitudVisita).contacto.nombre );
+						infoPuesto.text = ((lstContactos.selectedItem as SolicitudVisita).contacto.nivelPuesto == null ? 'ND' : (lstContactos.selectedItem as SolicitudVisita).contacto.nivelPuesto)  +' · '+ ((lstContactos.selectedItem as SolicitudVisita).contacto.departamento == null ? 'ND' : (lstContactos.selectedItem as SolicitudVisita).contacto.departamento);
+						visitas.text = (lstContactos.selectedItem as SolicitudVisita).folioVisita == 'ND' ? 'No relacionada' : (lstContactos.selectedItem as SolicitudVisita).folioVisita;
+						departamento.text = 'NIVEL DE DECISIÓN · ' + ((lstContactos.selectedItem as SolicitudVisita).contacto.nivelDecision == null ? 'ND' : (lstContactos.selectedItem as SolicitudVisita).contacto.nivelDecision); 
+						
+						(lstContactos.selectedItem as SolicitudVisita).numSolicitudes == 1 ? tema =' tema : ' : tema =' temas : ';
+						(lstContactos.selectedItem as SolicitudVisita).fueraDeTiempo == 1 ? comprometido = ' comprometido' : comprometido = ' comprometidos';
+						(lstContactos.selectedItem as SolicitudVisita).fueraDeTiempo == 0 ? tiempo.setStyle('color','0x'+catalogoColores.LABEL_VERDE) : tiempo.setStyle('color','0x'+catalogoColores.LABEL_ROJO);
+						(lstContactos.selectedItem as SolicitudVisita).numSolicitudes == 1 ? tema =' tema : ' : tema =' temas : ';  
+						(lstContactos.selectedItem as SolicitudVisita).numUrgenciaAlta == 1 ?  alto = ' alto · ' : alto = ' altos · '; 
+						(lstContactos.selectedItem as SolicitudVisita).numUrgenciaMedia == 1 ? medio = ' medio · ' : medio = ' medios · ';
+						(lstContactos.selectedItem as SolicitudVisita).numUrgenciaBaja == 1 ? bajo = ' bajo' : bajo = ' bajos';
+						
+						urgencias.text = (lstContactos.selectedItem as SolicitudVisita).numSolicitudes + tema + (lstContactos.selectedItem as SolicitudVisita).numUrgenciaAlta + alto + (lstContactos.selectedItem as SolicitudVisita).numUrgenciaMedia + medio + (lstContactos.selectedItem as SolicitudVisita).numUrgenciaBaja + bajo;
+						tiempo.text = (lstContactos.selectedItem as SolicitudVisita).numSolicitudes + tema + (lstContactos.selectedItem as SolicitudVisita).enTiempo +' a tiempo · '+ (lstContactos.selectedItem as SolicitudVisita).fueraDeTiempo + comprometido;
+						fecha.text = UtilsFecha.formatoFechaDDMMMYY((lstContactos.selectedItem as SolicitudVisita).fechaUltimaActualizacionVisita);
+						//conteoContacto.text = (lstContactos.selectedItem as SolicitudVisita).numSolicitudes + ((lstContactos.selectedItem as SolicitudVisita).numSolicitudes == 1 ? ' Visita · ' : ' Visitas · ') + (lstContactos.selectedItem as SolicitudVisita).enTiempo  +' ET · '+ (lstContactos.selectedItem as SolicitudVisita).fueraDeTiempo +' FT';
+					}
+				} 
+				grdVisitas.dataProvider = _listaGridVisitas;
+			}
+			
+			public function itemSeleccionado(renglon:ListEvent):void{
+				_arrAgruparSolicitudes = new ArrayCollection();
+				
+				if(renglon.columnIndex == 9){
+					if(renglon.currentTarget.selectedItem.existeReferencia == true){
+						if(_popUpReferencias == null){
+							_listaReferencias = new ArrayCollection();
+							_popUpReferencias = SolicitudReferenciasPopUop( PopUpManager.createPopUp( this, SolicitudReferenciasPopUop, true ) );
+							_popUpReferencias.grpPrincipal.enabled = false;
+							_popUpReferencias.addEventListener( EventoSolicitudGeneral.CERRAR_POP_UP, cerrarPopUp );
+							//_popUpReferencias.addEventListener( EventoSolicitudGeneral.ENVIA_REFERENCIAS, recibeReferencias );
+						}else{	
+							PopUpManager.addPopUp( _popUpReferencias, this, true);
+						}
+						_popUpReferencias.group1_creationCompleteHandler( _listaReferencias );
+						PopUpManager.centerPopUp( _popUpReferencias);	
+						
+						var consulta:EventoSolicitudGeneral = new EventoSolicitudGeneral(EventoSolicitudGeneral.CONSULTA_POP_REFERENCIAS);
+						consulta.vieneD = 'consulta';
+						dispatchEvent(consulta);
+						
+						var event:EventoEVGestionarVisitas = new EventoEVGestionarVisitas(EventoEVGestionarVisitas.OBTENER_LISTA_REFERENCIAS);
+						event.idSolicitudVisita = renglon.currentTarget.selectedItem.idSolicitudVisita;
+						dispatchEvent(event);
+					}
+				}	
+			}
+			
+			private function cerrarPopUp( $evt:EventoSolicitudGeneral ):void{
+				PopUpManager.removePopUp( _popUpReferencias );
+			}
+			
+			private function acomodaPopUp( evt:Event ):void{
+				if (_popUpReferencias != null ){
+					setTimeout(retraso, 600);
+				}
+			}
+			private function retraso():void{
+				PopUpManager.centerPopUp(_popUpReferencias);
+			}
+			
+			public function set confirmaFinalizado($cliente:int):void{
+				if( isNaN( $cliente ) || $cliente == 0 ){
+					return;
+				}
+				_idCliente = $cliente
+				_finalizo = true;
+				
+				var event:EventoEVGestionarVisitas = new EventoEVGestionarVisitas(EventoEVGestionarVisitas.GESTIONAR_VISITA_PRINCIPAL);
+				event.idEjecutivoVentas = _idUsuario;
+				event.vieneDe = "Solicitudes";
+				dispatchEvent(event);
+				
+				/* clock.removeEventListener(TimerEvent.TIMER,temporizador)
+				clock.addEventListener(TimerEvent.TIMER,temporizador);
+				clock.start(); */
+			}
+			
+			public function set recibeSeActualizoUniverso(temp:ArrayCollection):void
+			{
+				if(temp.length != 0 && temp!= null){
+					var evt:EventoEVGestionarVisitas = new EventoEVGestionarVisitas(EventoEVGestionarVisitas.LISTA_CONTACTOS);
+					evt.idCliente = _idCliente;
+					dispatchEvent(evt); 	
+				}
+			}
+			
+			/* private function temporizador(evet:TimerEvent):void{
+				var evt:EventoEVGestionarVisitas = new EventoEVGestionarVisitas(EventoEVGestionarVisitas.LISTA_CONTACTOS);
+				evt.idCliente = _idCliente;
+				dispatchEvent(evt); 
+			}
+ */			
+			private function inspector():void{
+				var evt:EventoEVGestionarVisitas = new EventoEVGestionarVisitas(EventoEVGestionarVisitas.MUESTRA_INSPECTOR);
+				evt.solicitudVista = _solicitudVisita;
+				dispatchEvent(evt);
+				
+				var event:EventoEVGeneral = new EventoEVGeneral(EventoEVGeneral.CARGA_ZONA_TRABAJO);
+				event.idUbicacion = 'AesorVenta_InspectorGestionarVista';
+				dispatchEvent(event);
+			}
+			
+			private function popContacto():void{
+				var evt:EventoGenerico = new EventoGenerico( EventoGenerico.MUESTRA_POPUP_INFORMACION_CONTACTOS );  
+				evt.idContacto = _idContacto
+				dispatchEvent( evt );
+				
+			}
+			
+			protected function caretChangeHandler(event:IndexChangeEvent):void
+			{
+				if(this.lstContactos.selectedIndex != -1 && this.lstContactos.selectedItem.urgencia == 'total' ){
+					if(event != null && lstContactos.dataProvider.length > 0 ){
+						if( event.newIndex != -1 ){
+							event.preventDefault();
+						}
+					}	
+				}
+			}
+			
+			protected function changingHandler(event:IndexChangeEvent):void
+			{
+				if(this.lstContactos.selectedIndex != -1 && this.lstContactos.selectedItem.urgencia == 'total' ){
+					if(event != null && lstContactos.dataProvider.length > 0 ){
+						if( event.newIndex != -1 ){
+							event.preventDefault();
+						}
+					}	
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" paddingLeft="-10">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_agrupar}"/>
+		<s:Label  text="VISITAS" fontWeight="bold" fontSize="25" height="100%" verticalAlign="middle" fontFamily="Bank Gothic"/>
+		<!--<s:Spacer width="100%"/>-->
+		<s:VGroup width="100%" height="100%" textAlign="right">
+			<s:Label text="[ PLANIFICACIÓN DE VISITA ]" color="#999999" fontWeight="bold" fontSize="25" fontFamily="Bank Gothic"  verticalAlign="middle" height="100%" width="100%" />
+		</s:VGroup> 
+	</s:HGroup>
+	
+	<otros:divisionHueca width="100%"/>
+	
+	<s:HGroup width="100%">
+		<s:VGroup width="100%">
+			<s:Label id="cliente" fontWeight="bold" fontSize="18" fontFamily="Bank Gothic"/>
+			<s:Label id="detalles" fontSize="15" color="0x{catalogoColores.LABEL_GRIS}" fontFamily="Bank Gothic"/>
+		</s:VGroup>
+		<s:Label height="100%" id="infoConteo" textAlign="center" verticalAlign="middle" fontFamily="Bank Gothic" fontWeight="bold" fontSize="18" />
+	</s:HGroup>
+	
+	<otros:divisionHueca width="100%"/>
+	
+	<s:HGroup width="100%" height="100%">
+		<s:VGroup width="30%" height="100%" paddingRight="15">
+			<s:VGroup width="100%" paddingTop="7" paddingBottom="10">
+				<s:ButtonBar width="100%" height="30" id="botoneraBarra" selectedIndex="0" 
+												dataProvider="{_arrButton}" change="seleccionBotonBar(event)" />
+				<!--<botonesToggle:ButtonBarColores width="100%" height="30" id="botoneraBarra" selectedIndex="0" 
+												dataProvider="{_arrButton}" change="seleccionBotonBar(event)" />-->
+			</s:VGroup>
+			<otros:divisionGruesa width="100%"/>
+			<s:List  id="lstContactos" itemRenderer="vista.vistas.ev_AsesorDeVentaReqMovil.itemRendererGestionarVisitas.IRendererVisitas" caretChange="caretChangeHandler(event)" changing="changingHandler(event)"
+					 width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"  selectionColor="0xeaeaea" change="enviaSolicitudes(event)" />
+		</s:VGroup>
+		
+		<otros:VDivisionHueca height="100%"/>
+		
+		<s:VGroup width="100%" height="100%" paddingLeft="15">
+			<s:HGroup width="100%" paddingTop="6" paddingBottom="6">
+				<!--<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_persona}" height="100%" click="popContacto()"/>-->
+				<botonNegroCuadrado:botonNegroCuadradoPerfecto icono="contacto" id="pop" gradientePqnet="false" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="popContacto()"/>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle">
+					<s:Label id="infoContacto" fontWeight="bold" fontSize="15" width="100%" fontFamily="Tahoma"/>
+					<s:Label id="infoPuesto" fontWeight="normal" fontSize="15" width="100%" fontFamily="Tahoma"/>
+					<s:Label id="departamento" fontWeight="normal" fontSize="15" width="100%" color="0x{catalogoColores.LABEL_VERDE_AZUL}" fontFamily="Tahoma"/>
+				</s:VGroup>
+				<s:Spacer width="100%" height="100%"/>
+				<s:VGroup width="100%" height="100%" textAlign="right" verticalAlign="middle" fontFamily="Bank Gothic">
+					<s:Label id="visitas" width="100%" fontWeight="bold" verticalAlign="bottom" fontSize="15" color="0x{catalogoColores.LABEL_VERDE_AZUL}" fontFamily="Tahoma"/>
+					<!--<s:Label id="conteoContacto" width="100%" fontWeight="bold" verticalAlign="bottom" fontSize="15" />-->
+					<s:Label id="urgencias" width="100%" fontWeight="bold" fontSize="15" fontFamily="Tahoma"/>
+					<s:Label id="tiempo" width="100%" fontSize="15" fontFamily="Tahoma"/>
+				</s:VGroup>
+			</s:HGroup>
+			
+			<otros:divisionGruesa width="100%"/>
+			<pqNet:dataGridPqNet width="100%" height="100%" id="grdVisitas" itemClick="itemSeleccionado(event)" dataProvider="{_listaGridVisitas}" horizontalScrollPolicy="auto" 
+								 rowHeight="66" variableRowHeight="true" porcentajesColumnasPq="[1,7,10,10,27,10,10,10,10,3]" verticalAlign="top" sortableColumns="false"> <!--porcentajesColumnasPq="[1,7,10,10,20,10,10,10,10,10]"-->  
+				<pqNet:columns>
+					<mx:DataGridColumn/>
+					
+					<mx:DataGridColumn headerText="#" dataField="numFila" fontSize="12" id="numFila" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:Label text="{(this.data.numFila > 0 ? this.data.numFila: this.data.numFila * -1)}"  horizontalCenter="0" verticalCenter="0" />
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="FOLIO" fontSize="12" id="folio" fontFamily="Tahoma" headerRenderer="skins.skin.datagrid.pqNet.componentes.HeaderRendererCatorce">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+											
+											import skins.catalogos.catalogoColores;
+											import skins.catalogos.catalogoIconosGrid;
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup width="100%" textAlign="center" horizontalCenter="0" verticalCenter="0">
+										<s:Label width="100%" text="{(data as SolicitudVisita).folio}" color="0x{catalogoColores.LABEL_VERDE_AZUL}" fontWeight="bold"/>
+										<s:Label width="100%" text="FDR {UtilsFecha.formatoFechaDDMMMYY((data as SolicitudVisita).fechaDeseadaRealizacion)}" color="{(data as SolicitudVisita).tiempoRealizacion == 'FT' ? uint('0xd10c0c') : uint('0x70a047')}" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Visita relacionada" fontSize="12" fontFamily="Tahoma" id="visitaRelacionada"  headerRenderer="skins.skin.datagrid.pqNet.componentes.HeaderRendererCatorce">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+											
+											import skins.catalogos.catalogoColores;
+										]]>
+									</fx:Script>
+									<s:VGroup width="100%" textAlign="center" horizontalCenter="0" verticalCenter="0">
+										<s:Label width="100%" text="{(data as SolicitudVisita).folioVisitaOrigen == 'ND' ? 'No relacionada' : (data as SolicitudVisita).folioVisitaOrigen}" color="0x{catalogoColores.LABEL_VERDE_AZUL}" horizontalCenter="0" fontWeight="bold"/>
+										<s:Label width="100%" text="FR {UtilsFecha.formatoFechaDDMMMYY((data as SolicitudVisita).visita.fechaEstimadaRealizacion)}" color="0x{catalogoColores.LABEL_GRIS}" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="TEMA A TRATAR" fontFamily="Tahoma" dataField="justificacion" id="justificacion" fontSize="12" headerRenderer="skins.skin.datagrid.pqNet.componentes.HeaderRendererCatorce" itemRenderer="skins.skin.datagrid.pqNet.componentes.VerMasRenderer"/>
+					<mx:DataGridColumn headerText="Origen" fontFamily="Tahoma" fontSize="12" id="solicita" headerRenderer="skins.skin.datagrid.pqNet.componentes.HeaderRendererCatorce">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+											
+											import skins.catalogos.catalogoColores;
+											
+										]]>
+									</fx:Script>
+									<s:VGroup width="100%" textAlign="center" horizontalCenter="0" verticalCenter="0">
+										<s:Label width="100%" text="{(data as SolicitudVisita).empleado.usuario}" fontWeight="bold"  horizontalCenter="0"/>
+										<s:Label width="100%" text="{(data as SolicitudVisita).empleado.departamento}" color="0x{catalogoColores.LABEL_GRIS}" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Urgencia" fontFamily="Tahoma" fontSize="12" id="urgencia" headerRenderer="skins.skin.datagrid.pqNet.componentes.HeaderRendererCatorce">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+											
+											import skins.catalogos.catalogoColores;
+											
+										]]>
+									</fx:Script>
+									<s:VGroup width="100%" textAlign="center" horizontalCenter="0" verticalCenter="0">
+										<s:Label width="100%" text="{(data as SolicitudVisita).urgencia.toUpperCase()}" color="{(data as SolicitudVisita).urgencia == 'Media' || (data as SolicitudVisita).urgencia == 'MEDIA' ? uint('0xe49b08') : ((data as SolicitudVisita).urgencia == 'Alta' || (data as SolicitudVisita).urgencia == 'ALTA' ? uint('0xd10c0c') : uint('0x70a047'))}" />
+										<s:HGroup width="100%" textAlign="center">
+											<s:Spacer width="100%"/>
+											<s:Ellipse width="10" height="10">
+												<s:fill>
+													<s:SolidColor id="elipse1" color="{(data as SolicitudVisita).urgencia == 'Media' || (data as SolicitudVisita).urgencia == 'MEDIA' ? uint('0xe49b08') : ((data as SolicitudVisita).urgencia == 'Alta' || (data as SolicitudVisita).urgencia == 'ALTA' ? uint('0xd10c0c') : uint('0x70a047'))}"/>
+												</s:fill>  
+											</s:Ellipse>
+											<s:Spacer width="100%"/>
+										</s:HGroup>
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="En espera desde" fontFamily="Tahoma" fontSize="12" id="enEspera" headerRenderer="skins.skin.datagrid.pqNet.componentes.HeaderRendererCatorce">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+											
+											import skins.catalogos.catalogoColores;
+											
+										]]>
+									</fx:Script>
+									<s:VGroup width="100%" textAlign="center" horizontalCenter="0" verticalCenter="0">
+										<s:Label width="100%" text="{UtilsFecha.formatoFechaDDMMMYYYYHHMM((data as SolicitudVisita).fechaSolicitud).substr(0,11)}" color="0x{catalogoColores.LABEL_MORADO_FUERTE}"  horizontalCenter="0"/>
+										<s:Label width="100%" text="{UtilsFecha.formatoFechaDDMMMYYYYHHMM((data as SolicitudVisita).fechaSolicitud).substr(12)} hrs" color="0x{catalogoColores.LABEL_MORADO}"  horizontalCenter="0"/>
+										<s:Label width="100%" text="{(data as SolicitudVisita).tiempoRealizacion}" color="{(data as SolicitudVisita).tiempoRealizacion == 'FT' ? uint('0xd10c0c') : uint('0x70a047')}"  horizontalCenter="0"/>
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Días de atraso" fontFamily="Tahoma" dataField="diasAtraso" id="diaAtraso" fontSize="12">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<s:Label text="{this.data.diasAtraso}" fontWeight="bold"  horizontalCenter="0" verticalCenter="0"/>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Clip" id="clip" >
+						<mx:headerRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoIconosGrid;
+											[Bindable] public var normalIcon:Class;
+											override public function set data(value:Object):void{
+												super.data = value;
+												this.normalIcon = catalogoIconosGrid.getInstance().render_clipsitonegro;
+											}
+										]]>
+									</fx:Script>
+									<mx:Image source="{normalIcon}" horizontalCenter="0" verticalCenter="0" />
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:headerRenderer>
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											[Bindable]
+											private var normalIcon:Class;
+											[Bindable]
+											private var hoveredIcon:Class;
+											
+											override public function set data(value:Object):void{
+												super.data = value;
+												if((data as SolicitudVisita).existeReferencia == false ){
+													this.normalIcon = catalogoIconosGrid.getInstance().render_clipsitogris;																	
+												}else{
+													this.normalIcon = catalogoIconosGrid.getInstance().render_clipsito;	
+												}	
+												this.hoveredIcon = catalogoIconosGrid.getInstance().render_clipsitoblanco;// cambiar
+											}
+										]]>
+									</fx:Script>
+									
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<mx:Image source="{normalIcon}" horizontalCenter="0" verticalCenter="0"/>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+				</pqNet:columns>	
+			</pqNet:dataGridPqNet>		
+			<otros:divisionGruesa width="100%"/>
+			
+			<s:HGroup width="100%" height="50" paddingTop="10" id="botonInspector" >
+				<s:Group width="100%" height="100%" >
+					<s:VGroup width="100%" verticalCenter="-5">
+						<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_disqueteVerdeAzul}"/>
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" horizontalCenter="35">
+						<s:Label id="fecha" fontSize="15" color="0x{catalogoColores.LABEL_AZUL_ESPECTRAL}" width="100%" height="100%" textAlign="left" verticalAlign="middle"/>
+					</s:VGroup>
+				</s:Group>
+				<pqNet1:botonPqNetLargo label="Inspector" icono="inspector" click="inspector()"/>
+			</s:HGroup>
+		</s:VGroup>	
+	</s:HGroup>
+	
+</s:VGroup>

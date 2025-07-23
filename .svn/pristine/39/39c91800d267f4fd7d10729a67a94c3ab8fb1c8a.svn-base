@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					xmlns:s="library://ns.adobe.com/flex/spark" 
+					xmlns:mx="library://ns.adobe.com/flex/mx"
+					xmlns:monitoreoCobro="vista.vistas.monitoreoCobro.*" 
+					xmlns:mapas="vista.mapas.*"
+					width="100%" height="100%"
+					creationComplete="inicio(event)" 
+					>
+	<fx:Declarations>
+		<mapas:MapaMonitoreoCobro />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;			
+			import spark.events.IndexChangeEvent;			
+			import vista.eventos.EventoMonitoreoCobro;
+			
+			private var _vistaListaCliente:AsociarFacturaMovListaCliente =  new AsociarFacturaMovListaCliente();
+			private var _asociarFactMovCta:AsociarFacturaMovimientoCuenta =  new AsociarFacturaMovimientoCuenta();			
+			public static var _lstUniverso:ArrayCollection;
+			public var _sqlCliente:Query;
+			private var _textoAbuscar:String;
+			
+			protected function inicio(event:FlexEvent):void
+			{
+				addEventListener(EventoMonitoreoCobro.LLENADO_DE_LISTA,filtrarListaCobros,false,0,true);
+				addEventListener(EventoMonitoreoCobro.LLENAR_LISTA_FACTURAS,recibeInfoFacturas,false,0,true);
+				
+				var evento: EventoMonitoreoCobro =  new EventoMonitoreoCobro(EventoMonitoreoCobro.CONSULTA_COBROS_MONITOREO);
+				evento.idEmpleado = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent(evento);		
+				
+				plantilla.agregarListaCliente( _vistaListaCliente );
+				
+				this.addEventListener(EventoMonitoreoCobro.CAMBIA_INDICE, cambiaIndexEvent);
+				plantilla.agregarEspacioTrabajo( _asociarFactMovCta );
+			}
+			
+			private function cambiaIndexEvent($evento:EventoMonitoreoCobro):void{
+				cambiaIndexMenu($evento.indice);
+			}
+			
+			private function cambiaIndexMenu( $indice:int ):void{
+				plantilla.selectedIndex =  $indice; // Cambia el indice en el MobViewStack de la plantilla
+			}
+			
+			public function set recibeListaCobros($lstCobros:ArrayCollection):void{
+				if($lstCobros == null)
+					return;
+				
+				_lstUniverso = new ArrayCollection();
+				_lstUniverso = ObjectUtil.copy($lstCobros) as ArrayCollection;
+				
+				// Se hace una copiara para no modificar el universo
+				var listaClientes:ArrayCollection = ObjectUtil.copy($lstCobros) as ArrayCollection;
+				llenarListaClientes(listaClientes);				
+			}
+			
+			public function filtrarListaCobros($evt:EventoMonitoreoCobro):void{
+				var lstClie:ArrayCollection  = new ArrayCollection();
+				lstClie = ObjectUtil.copy($evt.listaCobros) as ArrayCollection;
+				
+				llenarListaClientes(lstClie);				
+			}
+			
+			public function llenarListaClientes($lstCobros:ArrayCollection):void{
+				if($lstCobros == null)
+					return;
+				
+				_sqlCliente = new Query($lstCobros, ["nombreCliente","idCliente","factura"]);				
+				var nombres:Array = _sqlCliente.getPunteros(["nombreCliente"]);
+				
+				var lstInfoCliente:ArrayCollection =  new ArrayCollection;
+				
+				var objCobroUltimo:Cobros =  new Cobros();
+				objCobroUltimo.isUltimo =  true;
+				objCobroUltimo.partidas = nombres.length; // Total de Clientes
+				objCobroUltimo.totalFacturas = 0;
+				objCobroUltimo.montoDolares = 0;
+				
+				for (var i:int = 0; i < nombres.length; i++) 
+				{
+					var fechaMasProxima:Date = null;
+					var fechaPivote:Number = 0;
+					var objCobroTemp:Cobros = new Cobros();
+					objCobroTemp.numFila = i+1;
+					objCobroTemp.nombreCliente = nombres[i];					
+					
+					var arrCliente:Array = _sqlCliente.getPunteros([nombres[i],null,null],"","fechaEsperadaPago");
+					objCobroTemp.totalFacturas = arrCliente.length; // Setea el # total de Facturas, en Teoria el cliente se va a repetir tantas Facturas tenga
+					objCobroTemp.montoDolares = _sqlCliente.getSumarCampo("montoDolares",arrCliente);
+					
+					var arrFEP:Array = _sqlCliente.getValoresCampo("fechaEsperadaPago",arrCliente);
+					fechaMasProxima = arrFEP[0];
+					
+					if(arrFEP.length > 1){
+						fechaPivote = arrFEP[0].time;
+						
+						for (var k:int = 1; k <arrFEP.length; k++) 
+						{
+							if(fechaPivote > arrFEP[k].time){
+								fechaPivote = arrFEP[k].time;
+								fechaMasProxima = arrFEP[k];
+							}
+						}
+					}					
+					
+					objCobroTemp.fechaEsperadaPago = fechaMasProxima; // La fecha mas proxima
+					objCobroTemp.moroso = "No"; // Por defaul lo seteo como NO Moroso, en for lo evalua
+					
+					var arrDRC:Array = _sqlCliente.getValoresCampo("diasRestantesCobro",arrCliente);
+					for (var j:int = 0; j < arrDRC.length; j++) 
+					{
+						if( arrDRC[j] != null && StringUtil.trim( arrDRC[j] ) != ""  && parseInt( arrDRC[j] ) < 0 ){
+							objCobroTemp.moroso = "Sí";
+							break;
+						}
+					}
+					
+					objCobroUltimo.totalFacturas += objCobroTemp.totalFacturas;
+					objCobroUltimo.montoDolares += objCobroTemp.montoDolares;
+					
+					lstInfoCliente.addItem(objCobroTemp);
+				}
+				
+				lstInfoCliente.addItem(objCobroUltimo);
+				_vistaListaCliente.lstClientes.dataProvider = lstInfoCliente;
+				if ( _vistaListaCliente.lstClientes.dataProvider != null && _vistaListaCliente.lstClientes.dataProvider.length > 0  && (_vistaListaCliente.lstClientes.dataProvider[0] as Cobros).isUltimo == false) {
+					_vistaListaCliente.lstClientes.selectedIndex = 0;
+					_vistaListaCliente.lstClientes.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+					
+				}
+				else if ((_vistaListaCliente.lstClientes.dataProvider[0] as Cobros).isUltimo){
+					_vistaListaCliente.lstClientes.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				}					
+			}
+			
+			private function recibeInfoFacturas($evt:EventoMonitoreoCobro):void
+			{
+				_asociarFactMovCta.recibeInfoFacturas($evt.listaCobros);
+			}
+		]]>
+	</fx:Script>
+	
+	<monitoreoCobro:PlantillaAsociarFacturaMov id="plantilla" width="100%" height="100%" />
+</s:NavigatorContent>

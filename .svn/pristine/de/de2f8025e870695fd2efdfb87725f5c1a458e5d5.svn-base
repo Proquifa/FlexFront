@@ -1,0 +1,872 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								   xmlns:s="library://ns.adobe.com/flex/spark" 
+								   xmlns:mx="library://ns.adobe.com/flex/mx" 
+								   xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+								   xmlns:panelCtaGenerales="skins.skin.comun.consultas.panelCtaGenerales.*" 
+								   xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*" 
+								   xmlns:linkButton="skins.skin.linkButton.*" 
+								   xmlns:otros="skins.otros.*" 
+								   xmlns:pqNet="skins.botones.pqNet.*" 
+								   xmlns:chekbox="skins.skin.chekbox.*" 
+								   xmlns:label="skins.skin.label.*" 
+								   xmlns:dateField="skins.skin.dateField.*"
+								   width="100%" height="100%"
+								   creationComplete="consultaFacturacionMenu_creationCompleteHandler()"
+								   titulo="CONSULTA FACTURACIÓN"
+								   >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.finanzas.facturacion.comun.HelpMenuSeleccionObject;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			
+			[Bindable] private var _listaBotonesAvanzadaRapida:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1},{valor:'Rápida',llave:0}]);
+			[Bindable] private var _switchFacturaPedido:String ="FACTURA"; 
+			
+			private var isFueraDeSistema:Boolean= false;
+			private var ultimaSeleccionES:HelpMenuSeleccionObject;
+			private var nuevaSeleccionES:HelpMenuSeleccionObject;
+			private var ultimaSeleccionFS:HelpMenuSeleccionObject;
+			private var nuevaSeleccionFS:HelpMenuSeleccionObject;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private var numFiltrosModificadosFS:int;
+			private var keyModificadosFS:Object;
+			private	var _usuario:Empleado = DatosGlobales.getInstance()._usuario;
+			
+			private function consultaFacturacionMenu_creationCompleteHandler():void
+			{
+				btnGridToDetalle.addEventListener(MouseEvent.CLICK,btnRegresar_MouseEventClick,false,0,true);
+				dtpFInicio.selectedDate = new Date();
+				dtpFFin.selectedDate = new Date();
+				
+				mobViewRapidaAvanzada.selectedIndex=1;
+				
+				if( _usuario.nivel == 1 // PLozada
+					|| _usuario.nivel == 35 // Ing
+					|| _usuario.esGerente == true
+					|| _usuario.idFuncion == 37) // Master ESAC
+				{
+					mostrarCombos(true);
+				}
+				else
+				{
+					mostrarCombos(false);
+				}
+				//========================================================================
+				//Para que se ejecute la busqueda de compras del día actual automáticamente
+				realizarBusquedaInicial();				
+			}
+			
+			private function mostrarCombos($visible:Boolean):void
+			{
+				cmbCobrador.visible = cmbCobrador.includeInLayout = $visible;
+				lblCobrador.visible = lblCobrador.includeInLayout = $visible;
+				spcCobrador.visible = spcCobrador.includeInLayout = $visible;
+			}
+
+			
+			/**
+			 * muestra el pdf del pedido
+			 */ 
+			private function muestraLink(tipo:String):void
+			{
+				var _url:URLRequest = new URLRequest();
+				if (tipo =='factura')
+				{
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + factura.fpor + "/" +factura.factura + ".pdf";
+					navigateToURL(_url );
+				}
+				else if(tipo == 'referencia'){
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + factura.doctoR + ".pdf";
+					navigateToURL(_url );
+				}
+				else
+				{
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + factura.cpedido + ".pdf";
+					navigateToURL(_url );
+				}
+			}
+			
+			private function btnRegresar_MouseEventClick( e:MouseEvent):void
+			{
+				cambiaIndex( 0 );
+				var evento:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013( EventoConsultaFacturacion2013.CAMBIA_INDICE_MENU_FACTURACION);
+				evento.indiceVistas = 0;
+				dispatchEvent( evento );
+			}
+			
+			public function cambiaIndex( $indice:int ):void
+			{
+				espacioInfoGenerales.selectedIndex = $indice;
+				
+				if($indice == 1)
+					btnGridToDetalle.visible = true;
+				else
+					btnGridToDetalle.visible = false;
+			}
+			
+			
+			[Bindable] 
+			private var factura:Facturacion;
+			public function set obtenerListaEntrega($facturas:ArrayCollection):void
+			{
+				if( $facturas == null )
+				{
+					return;
+				}
+				
+				factura = $facturas.source[0];
+			}
+			
+			private function realizarBusquedaAvanzada():void
+			{
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				
+				
+				if(isFueraDeSistema)
+				{
+					//Dispatch event for invoice offline whit params
+					eventEspera.tipoEventos.push("CONSULTA_FACTURAS_FUERA_LINEA");
+					dispatchEvent(eventEspera);
+					
+					var evtfs:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013( EventoConsultaFacturacion2013.CONSULTA_FACTURAS_FUERA_LINEA);
+					evtfs.finicio = dtpFInicio.selectedDate;
+					evtfs.ffin = dtpFFin.selectedDate;
+					evtfs.idCliente = cmbCliente.selectedItem.llave;
+					evtfs.fpor = cmbFacturo.selectedItem.valor == '--TODOS--' ? "" : StringUtil.trim(cmbFacturo.selectedItem.valor).replace(" ","");
+					evtfs.estado = cmbEstado.selectedItem.valor == '--TODOS--' ? "" : cmbEstado.selectedItem.valor;
+					evtfs.idCobrador= cmbCobrador.selectedItem.valor == '--TODOS--' ? 0 : cmbCobrador.selectedItem.llave;
+					evtfs.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+					evtfs.factura="0";
+					dispatchEvent( evtfs );
+					
+					ultimaSeleccionFS.finicio = evtfs.finicio;
+					ultimaSeleccionFS.ffin =  evtfs.ffin;
+					ultimaSeleccionFS.idCliente =  evtfs.idCliente;
+					ultimaSeleccionFS.idCobrador = evtfs.idCobrador
+					ultimaSeleccionFS.facturo = evtfs.fpor;
+					ultimaSeleccionFS.estado = evtfs.estado;
+					ultimaSeleccionFS.isBusquedaAvanzada = true; 
+					
+				}
+				else
+				{
+					//Dispatch event for invoice offline whit params
+					eventEspera.tipoEventos.push("MOSTRAR_LISTA_FACTURAS_AVANZADA");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_LISTA_FACTURAS_AVANZADA);
+					evt.finicio = dtpFInicio.selectedDate;
+					evt.ffin = dtpFFin.selectedDate;
+					evt.cliente = cmbCliente.selectedItem.valor == '--TODOS--' ? cmbCliente.selectedItem.valor : (cmbCliente.selectedItem.llave as Number).toString();
+					evt.idCobrador = cmbCobrador.selectedItem.valor == '--TODOS--' ? 0 : cmbCobrador.selectedItem.llave;
+					evt.facturo = cmbFacturo.selectedItem.valor;
+					evt.cPago = cmbCPago.selectedItem.valor;
+					evt.tipo = cmbTipo.selectedItem.valor;
+					evt.estado = cmbEstado.selectedItem.valor;
+					evt.refacturada = cmbRefacturada.selectedItem.valor;
+					evt.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+					dispatchEvent( evt );
+					
+					
+					//Para verificar si los datos cambian
+					ultimaSeleccionES.finicio = evt.finicio;
+					ultimaSeleccionES.ffin = evt.ffin;
+					ultimaSeleccionES.cliente = evt.cliente;
+					ultimaSeleccionES.facturo = evt.facturo;
+					ultimaSeleccionES.cpago = evt.cPago;
+					ultimaSeleccionES.tipo =  evt.tipo;
+					ultimaSeleccionES.estado = evt.estado;
+					ultimaSeleccionES.refacturada = evt.refacturada;
+					ultimaSeleccionES.isBtnActualizarAvanzada = true;
+					ultimaSeleccionES.idCobrador = evt.idCobrador;
+				}
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros(false);
+			}
+			
+			
+			public function recibirSwitch($switchSistema:String):void
+			{
+				if($switchSistema == "FUERADESISTEMA") 
+				{
+					isFueraDeSistema = true;
+					habilitaBotonesMenu(false);
+					
+					ultimaSeleccionES.isBusquedaAvanzada = btneraAvanzadoRapida.selectedIndex == 0 ? true:false;
+					
+					btnBusqueda.CambiarToActualizarTipoBoton(ultimaSeleccionFS.isBtnActualizarAvanzada);
+					btnBusquedaRapida.CambiarToActualizarTipoBoton(ultimaSeleccionFS.isBtnActualizarRapida);
+					
+					btneraAvanzadoRapida.selectedIndex = ultimaSeleccionFS.isBusquedaAvanzada ? 0:1;
+					mobViewRapidaAvanzada.selectedIndex = ultimaSeleccionFS.isBusquedaAvanzada ? 1:0;
+					
+					checkComboFacturaPedido.selected=false;
+					checkComboFacturaPedido.enabled=false;
+					
+					cmbFacturo.cargaEmpresasFueraSistema('--TODOS--');
+					
+					dtpFInicio.selectedDate = nuevaSeleccionFS.finicio;
+					dtpFFin.selectedDate = nuevaSeleccionFS.ffin;
+					cmbCliente.selectedIndex = cmbCliente.seleccionarValorPorNumero(nuevaSeleccionFS.idCliente,"llave");
+					cmbFacturo.selectedIndex = cmbFacturo.seleccionarValor(nuevaSeleccionFS.facturo);
+					cmbEstado.selectedIndex = cmbEstado.seleccionarValor(nuevaSeleccionFS.estado);
+					cmbCPago.selectedIndex = 0;
+					cmbTipo.selectedIndex = 0;
+					cmbCobrador.selectedIndex = 0;
+					cmbRefacturada.selectedIndex = 0;
+					txtBuscaRapida.text = nuevaSeleccionFS.txtBusquedaRapida;
+				}
+				else
+				{
+					isFueraDeSistema = false;
+					habilitaBotonesMenu(true);
+					checkComboFacturaPedido.enabled=true;
+					
+					ultimaSeleccionFS.isBusquedaAvanzada = btneraAvanzadoRapida.selectedIndex == 0 ? true:false;
+					btnBusqueda.CambiarToActualizarTipoBoton(ultimaSeleccionES.isBtnActualizarAvanzada);
+					btnBusquedaRapida.CambiarToActualizarTipoBoton(ultimaSeleccionES.isBtnActualizarRapida);
+					btneraAvanzadoRapida.selectedIndex = ultimaSeleccionES.isBusquedaAvanzada ? 0:1;
+					mobViewRapidaAvanzada.selectedIndex = ultimaSeleccionES.isBusquedaAvanzada ? 1:0;
+					
+					if(ultimaSeleccionES.chkPedidoFactura == "PEDIDO")
+					{
+						checkComboFacturaPedido.selected = true;
+					}
+					else
+					{
+						checkComboFacturaPedido.selected = false;
+					}
+					
+					cmbFacturo.cargaEmpresas('--TODOS--');
+					
+					dtpFInicio.selectedDate = nuevaSeleccionES.finicio;
+					dtpFFin.selectedDate = nuevaSeleccionES.ffin;
+					if(nuevaSeleccionES.cliente == "--TODOS--" || StringUtil.trim(nuevaSeleccionES.cliente).length <= 0)
+					{
+						cmbCliente.selectedIndex = 0;
+					}
+					else
+					{
+						cmbCliente.selectedIndex = cmbCliente.seleccionarValorPorNumero(Number(nuevaSeleccionES.cliente),"llave");
+					}
+					
+					cmbFacturo.selectedIndex = cmbFacturo.seleccionarValor(nuevaSeleccionES.facturo);
+					cmbCPago.selectedIndex = cmbCPago.seleccionarValor(nuevaSeleccionES.cpago);
+					cmbTipo.selectedIndex = cmbTipo.seleccionarValor(nuevaSeleccionES.tipo);
+					cmbEstado.selectedIndex = cmbEstado.seleccionarValor(nuevaSeleccionES.estado);
+					cmbRefacturada.selectedIndex = cmbRefacturada.seleccionarValor(nuevaSeleccionES.refacturada);
+					txtBuscaRapida.text = nuevaSeleccionES.txtBusquedaRapida;
+					cmbCobrador.selectedIndex = cmbCobrador.seleccionarValorPorNumero(Number(nuevaSeleccionES.idCobrador),"llave");
+				}
+				
+			}
+			
+			private function realizarBusquedaRapidaFacturaFolio():void
+			{
+				if(isFueraDeSistema)
+				{
+					realizarBusquedaRapidaFacturaFueraDeSistema();
+				}
+				else
+				{
+					realizarBusquedaRapidaFacturaDeSistema();
+				}
+			}
+			
+			private function habilitaBotonesMenu(habilitar:Boolean):void
+			{
+				cmbCPago.enabled=cmbTipo.enabled=cmbRefacturada.enabled=habilitar;
+			}
+			
+			private function realizarBusquedaRapidaFacturaDeSistema():void
+			{
+				if (StringUtil.trim(txtBuscaRapida.text).length > 0) 
+				{
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("BUSCAR_FACTURAS_FOLIO");
+					dispatchEvent(eventEspera);
+					
+					var fol:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.BUSCAR_FACTURAS_FOLIO);
+					
+					if (nuevaSeleccionES.chkPedidoFactura == 'FACTURA')
+					{
+						fol.factura = txtBuscaRapida.text;
+						fol.folio = null;
+					}
+					else
+					{
+						fol.factura = null;
+						fol.folio = txtBuscaRapida.text;
+					}
+					fol.idUsuarioLogueado = _usuario.clave;
+					ultimaSeleccionES.txtBusquedaRapida = txtBuscaRapida.text;  
+					ultimaSeleccionES.chkPedidoFactura = nuevaSeleccionES.chkPedidoFactura; 
+					dispatchEvent( fol );
+					
+					//Para Researt filtros
+					resetControlDeCambiosEnFiltros(true);
+				}
+			}
+			
+			private function realizarBusquedaRapidaFacturaFueraDeSistema():void
+			{
+				if (StringUtil.trim(txtBuscaRapida.text).length > 0) 
+				{
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("BUSCAR_FACTURAS_FOLIO_FUERA_SISTEMA");
+					dispatchEvent(eventEspera);
+					
+					//Dispatch event for invoice offline whit params
+					var fol:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013( EventoConsultaFacturacion2013.BUSCAR_FACTURAS_FOLIO_FUERA_SISTEMA);
+					fol.fpor="";
+					fol.estado="";
+					fol.idUsuarioLogueado = _usuario.clave;
+					fol.idCobrador = cmbCobrador.selectedItem.valor == '--TODOS--' ? 0 : cmbCobrador.selectedItem.llave;
+					fol.factura = txtBuscaRapida.text;
+					dispatchEvent( fol );
+					
+					ultimaSeleccionFS.txtBusquedaRapida = txtBuscaRapida.text;
+					
+					//Para Researt filtros
+					resetControlDeCambiosEnFiltros(true);
+				}
+			}
+			
+			private function realizarBusquedaInicial():void
+			{
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("MOSTRAR_LISTA_FACTURAS_AVANZADA");
+				dispatchEvent(eventEspera);
+				
+				ultimaSeleccionES = new HelpMenuSeleccionObject;
+				nuevaSeleccionES = new HelpMenuSeleccionObject;
+				ultimaSeleccionFS = new HelpMenuSeleccionObject;
+				nuevaSeleccionFS = new HelpMenuSeleccionObject;
+				
+				ultimaSeleccionES.isBusquedaAvanzada = nuevaSeleccionES.isBusquedaAvanzada = true;
+				ultimaSeleccionFS.isBusquedaAvanzada = nuevaSeleccionFS.isBusquedaAvanzada = true;
+				
+				ultimaSeleccionES.finicio = nuevaSeleccionES.finicio = ultimaSeleccionFS.finicio = nuevaSeleccionFS.finicio = dtpFInicio.selectedDate;
+				ultimaSeleccionES.ffin = nuevaSeleccionES.ffin = ultimaSeleccionFS.ffin = nuevaSeleccionFS.ffin = dtpFFin.selectedDate;
+				ultimaSeleccionES.refacturada = nuevaSeleccionES.refacturada = ultimaSeleccionFS.refacturada = nuevaSeleccionFS.refacturada = "--TODOS--";
+				ultimaSeleccionES.cpago = nuevaSeleccionES.cpago = ultimaSeleccionFS.cpago = nuevaSeleccionFS.cpago = "--TODOS--";
+				ultimaSeleccionES.tipo = nuevaSeleccionES.tipo = ultimaSeleccionFS.tipo = nuevaSeleccionFS.tipo = "--TODOS--";
+				ultimaSeleccionES.chkPedidoFactura = nuevaSeleccionES.chkPedidoFactura = "FACTURA";
+				ultimaSeleccionES.idCobrador = nuevaSeleccionES.idCobrador = ultimaSeleccionFS.idCobrador = nuevaSeleccionFS.idCobrador = 0;
+				
+				ultimaSeleccionES.estado = nuevaSeleccionES.estado = "--TODOS--"; 
+				ultimaSeleccionFS.estado = nuevaSeleccionFS.estado = "";
+				ultimaSeleccionES.facturo = nuevaSeleccionES.facturo = "--TODOS--";
+				ultimaSeleccionFS.facturo = nuevaSeleccionFS.facturo = "";
+				ultimaSeleccionES.cliente = nuevaSeleccionES.cliente = "--TODOS--"; 
+				ultimaSeleccionFS.idCliente = nuevaSeleccionFS.idCliente = 0;
+				
+				
+				var ini:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.MOSTRAR_LISTA_FACTURAS_AVANZADA);
+				ini.finicio = dtpFInicio.selectedDate;
+				ini.ffin = dtpFFin.selectedDate;
+				ini.cliente = ultimaSeleccionES.cliente;
+				ini.facturo = ultimaSeleccionES.facturo;
+				ini.cPago = ultimaSeleccionES.cpago;
+				ini.tipo = ultimaSeleccionES.tipo; 
+				ini.estado = ultimaSeleccionES.estado;
+				ini.refacturada = ultimaSeleccionES.refacturada;
+				ini.idCobrador = ultimaSeleccionES.idCobrador;
+				
+				ini.idUsuarioLogueado = DatosGlobales.getInstance()._usuario.clave;
+				
+				dispatchEvent( ini );
+				
+				numFiltrosModificadosFS = 0;
+				keyModificadosFS = new Object();
+				numFiltrosModificados = 0;
+				keyModificados = new Object();
+				
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons"))
+				{
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar)
+								{
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar)
+								{
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							} 
+						}
+					}
+				}
+			}
+			
+			private function resetControlDeCambiosEnFiltros($esBusquedaRapida:Boolean):void
+			{
+				if(isFueraDeSistema)
+				{
+					numFiltrosModificadosFS=0;
+					keyModificadosFS = new Object();
+					
+					if($esBusquedaRapida)
+					{
+						ultimaSeleccionFS.numFiltrosModificadosRapida = 0;
+						ultimaSeleccionFS.keyModificadosRapida = new Object;
+					}
+					else
+					{
+						ultimaSeleccionFS.numFiltrosModificadosAvanzada = 0;
+						ultimaSeleccionFS.keyModificadosAvanzada = new Object;
+					}
+					
+				}
+				else
+				{
+					numFiltrosModificados = 0;
+					keyModificados = new Object();
+					
+					if($esBusquedaRapida)
+					{
+						ultimaSeleccionES.numFiltrosModificadosRapida = 0;
+						ultimaSeleccionES.keyModificadosRapida = new Object;
+					}
+					else
+					{
+						ultimaSeleccionES.numFiltrosModificadosAvanzada = 0;
+						ultimaSeleccionES.keyModificadosAvanzada = new Object;
+					}
+				}
+			}
+			
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if(isFueraDeSistema)
+				{
+					if($dato1 != $dato2)
+					{
+						if(!keyModificadosFS.hasOwnProperty($currentFiltroModif))
+						{
+							$button.CambiarToActualizarTipoBoton(false);
+							keyModificadosFS[$currentFiltroModif]=$currentFiltroModif;
+							numFiltrosModificadosFS ++;
+						}
+					}
+					else
+					{
+						if(numFiltrosModificadosFS==1)
+						{
+							$button.CambiarToActualizarTipoBoton(true);
+							numFiltrosModificadosFS =0;
+							keyModificadosFS=  new Object();
+						}
+						else if(numFiltrosModificadosFS > 0)
+						{
+							delete keyModificadosFS[$currentFiltroModif];
+							numFiltrosModificadosFS --;
+						}
+					}
+				}
+				else
+				{
+					if($dato1 != $dato2)
+					{
+						if(!keyModificados.hasOwnProperty($currentFiltroModif))
+						{
+							$button.CambiarToActualizarTipoBoton(false);
+							keyModificados[$currentFiltroModif]=$currentFiltroModif;
+							numFiltrosModificados ++;
+						}
+					}
+					else
+					{
+						if(numFiltrosModificados==1)
+						{
+							$button.CambiarToActualizarTipoBoton(true);
+							numFiltrosModificados =0;
+							keyModificados=  new Object();
+						}
+						else if(numFiltrosModificados > 0)
+						{
+							delete keyModificados[$currentFiltroModif];
+							numFiltrosModificados --;
+						}
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				if(isFueraDeSistema)
+				{
+					switch(event.currentTarget.id)
+					{
+						case "dtpFInicio":
+						{
+							nuevaSeleccionFS.finicio = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionFS.finicio.time,ultimaSeleccionFS.finicio.time,"dtpFInicio",btnBusqueda);
+							break;
+						}
+						case "dtpFFin":
+						{
+							nuevaSeleccionFS.ffin = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionFS.ffin.time,ultimaSeleccionFS.ffin.time,"dtpFFin",btnBusqueda);	
+							break;
+						}
+						case "cmbCliente":
+						{
+							nuevaSeleccionFS.idCliente = cmbCliente.selectedItem.llave; 
+							CompararYControlarBoton(nuevaSeleccionFS.idCliente,ultimaSeleccionFS.idCliente,"cmbCliente",btnBusqueda);
+							break;
+						}
+						case "cmbFacturo":
+						{
+							nuevaSeleccionFS.facturo = cmbFacturo.selectedItem.valor == "--TODOS--" ? "":cmbFacturo.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.facturo,ultimaSeleccionFS.facturo,"cmbFacturo",btnBusqueda);
+							break;
+						}
+						case "cmbCPago":
+						{
+							nuevaSeleccionFS.cpago = cmbCPago.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.cpago,ultimaSeleccionFS.cpago,"cmbCPago",btnBusqueda);
+							break;
+						}
+						case "cmbTipo":
+						{
+							nuevaSeleccionFS.tipo = cmbTipo.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.tipo,ultimaSeleccionFS.tipo,"cmbTipo",btnBusqueda);
+							break;
+						}
+						case "cmbEstado":
+						{
+							nuevaSeleccionFS.estado = cmbEstado.selectedItem.valor == "--TODOS--" ? "":cmbEstado.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionFS.estado,ultimaSeleccionFS.estado,"cmbEstado",btnBusqueda);
+							break;
+						}
+						case "cmbRefacturada":
+						{
+							nuevaSeleccionFS.refacturada = cmbRefacturada.selectedItem.valor; 
+							CompararYControlarBoton(nuevaSeleccionFS.refacturada,ultimaSeleccionFS.refacturada,"cmbRefacturada",btnBusqueda);
+							break;
+						}
+						case "txtBuscaRapida":
+						{
+							nuevaSeleccionFS.txtBusquedaRapida = txtBuscaRapida.text; 
+							CompararYControlarBoton(nuevaSeleccionFS.txtBusquedaRapida,ultimaSeleccionFS.txtBusquedaRapida,"txtBuscaRapida",btnBusquedaRapida);
+							break;
+						}
+						case "checkComboFacturaPedido":
+						{
+							nuevaSeleccionFS.chkPedidoFactura = checkComboFacturaPedido.selected ? "PEDIDO" : "FACTURA";
+							CompararYControlarBoton(nuevaSeleccionFS.chkPedidoFactura,ultimaSeleccionFS.chkPedidoFactura,"checkComboFacturaPedido",btnBusquedaRapida);
+							break;
+						}
+						case "cmbCobrador":
+						{
+							nuevaSeleccionFS.idCobrador = cmbCobrador.selectedItem.llave;
+							CompararYControlarBoton(nuevaSeleccionFS.idCobrador,ultimaSeleccionFS.idCobrador,"cmbCobrador",btnBusqueda);
+							break;
+						}
+					}
+				}
+				else
+				{
+					
+					switch(event.currentTarget.id)
+					{
+						case "dtpFInicio":
+						{
+							nuevaSeleccionES.finicio = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionES.finicio.time,ultimaSeleccionES.finicio.time,"dtpFInicio",btnBusqueda);
+							break;
+						}
+						case "dtpFFin":
+						{
+							nuevaSeleccionES.ffin = event.newDate;
+							CompararYControlarBoton(nuevaSeleccionES.ffin.time,ultimaSeleccionES.ffin.time,"dtpFFin",btnBusqueda);	
+							break;
+						}
+						case "cmbCliente":
+						{
+							nuevaSeleccionES.cliente = cmbCliente.selectedItem.valor == "--TODOS--" ? cmbCliente.selectedItem.valor:(cmbCliente.selectedItem.llave as Number).toString(); 
+							CompararYControlarBoton(nuevaSeleccionES.cliente,ultimaSeleccionES.cliente,"cmbCliente",btnBusqueda);
+							break;
+						}
+						case "cmbFacturo":
+						{
+							nuevaSeleccionES.facturo = cmbFacturo.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.facturo,ultimaSeleccionES.facturo,"cmbFacturo",btnBusqueda);
+							break;
+						}
+						case "cmbCPago":
+						{
+							nuevaSeleccionES.cpago = cmbCPago.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.cpago,ultimaSeleccionES.cpago,"cmbCPago",btnBusqueda);
+							break;
+						}
+						case "cmbTipo":
+						{
+							nuevaSeleccionES.tipo = cmbTipo.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.tipo,ultimaSeleccionES.tipo,"cmbTipo",btnBusqueda);
+							break;
+						}
+						case "cmbEstado":
+						{
+							nuevaSeleccionES.estado = cmbEstado.selectedItem.valor;
+							CompararYControlarBoton(nuevaSeleccionES.estado,ultimaSeleccionES.estado,"cmbEstado",btnBusqueda);
+							break;
+						}
+						case "cmbRefacturada":
+						{
+							nuevaSeleccionES.refacturada = cmbRefacturada.selectedItem.valor; 
+							CompararYControlarBoton(nuevaSeleccionES.refacturada,ultimaSeleccionES.refacturada,"cmbRefacturada",btnBusqueda);
+							break;
+						}
+						case "txtBuscaRapida":
+						{
+							nuevaSeleccionES.txtBusquedaRapida = txtBuscaRapida.text; 
+							CompararYControlarBoton(nuevaSeleccionES.txtBusquedaRapida,ultimaSeleccionES.txtBusquedaRapida,"txtBuscaRapida",btnBusquedaRapida);
+							break;
+						}
+						case "checkComboFacturaPedido":
+						{
+							nuevaSeleccionES.chkPedidoFactura = checkComboFacturaPedido.selected ? "PEDIDO" : "FACTURA";
+							_switchFacturaPedido = nuevaSeleccionES.chkPedidoFactura;
+							CompararYControlarBoton(nuevaSeleccionES.chkPedidoFactura,ultimaSeleccionES.chkPedidoFactura,"checkComboFacturaPedido",btnBusquedaRapida);
+							break;
+						}
+						case "cmbCobrador":
+						{
+							nuevaSeleccionES.idCobrador = cmbCobrador.selectedItem.llave;
+							CompararYControlarBoton(nuevaSeleccionES.idCobrador,ultimaSeleccionES.idCobrador,"cmbCobrador",btnBusqueda);
+							break;
+						}
+					}
+				}
+			}  
+			
+			protected function btneraAvanzadoRapida_changeHandler(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBar).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					mobViewRapidaAvanzada.selectedIndex = event.currentTarget.selectedItem.llave;
+					
+					var informarBusquedaAvanzada:EventoConsultaFacturacion2013 = new EventoConsultaFacturacion2013(EventoConsultaFacturacion2013.INFORMAR_SI_BUSQUEDA_ES_RAPIDA_O_AVANZADA);
+					if(event.currentTarget.selectedItem.llave == 1)
+					{
+						informarBusquedaAvanzada.isBusquedaAvanzada = true;
+
+						if(isFueraDeSistema)
+						{
+							ultimaSeleccionFS.isBtnActualizarRapida = btnBusquedaRapida.isCurrentButtonActualizar;
+							ultimaSeleccionFS.numFiltrosModificadosRapida = numFiltrosModificadosFS;
+							ultimaSeleccionFS.keyModificadosRapida = keyModificadosFS;
+							btnBusqueda.CambiarToActualizarTipoBoton(ultimaSeleccionFS.isBtnActualizarAvanzada);
+							numFiltrosModificadosFS = ultimaSeleccionFS.numFiltrosModificadosAvanzada;
+							keyModificadosFS = ultimaSeleccionFS.keyModificadosAvanzada;
+						}
+						else
+						{
+							ultimaSeleccionES.isBtnActualizarRapida = btnBusquedaRapida.isCurrentButtonActualizar;
+							ultimaSeleccionES.numFiltrosModificadosRapida = numFiltrosModificados;
+							ultimaSeleccionES.keyModificadosRapida = keyModificados;
+							btnBusqueda.CambiarToActualizarTipoBoton(ultimaSeleccionES.isBtnActualizarAvanzada);
+							numFiltrosModificados = ultimaSeleccionES.numFiltrosModificadosAvanzada;
+							keyModificados = ultimaSeleccionES.keyModificadosAvanzada;
+						}
+					}
+					else
+					{
+						informarBusquedaAvanzada.isBusquedaAvanzada = false;
+						
+						if(isFueraDeSistema)
+						{
+							ultimaSeleccionFS.isBtnActualizarAvanzada = btnBusqueda.isCurrentButtonActualizar;
+							ultimaSeleccionFS.numFiltrosModificadosAvanzada = numFiltrosModificadosFS;
+							ultimaSeleccionFS.keyModificadosAvanzada = keyModificadosFS;
+							btnBusquedaRapida.CambiarToActualizarTipoBoton(ultimaSeleccionFS.isBtnActualizarRapida);
+							numFiltrosModificadosFS = ultimaSeleccionFS.numFiltrosModificadosRapida;
+							keyModificadosFS = ultimaSeleccionFS.keyModificadosRapida;
+						}
+						else
+						{
+							ultimaSeleccionES.isBtnActualizarAvanzada = btnBusqueda.isCurrentButtonActualizar;
+							ultimaSeleccionES.numFiltrosModificadosAvanzada = numFiltrosModificados;
+							ultimaSeleccionES.keyModificadosAvanzada = keyModificados;
+							btnBusquedaRapida.CambiarToActualizarTipoBoton(ultimaSeleccionES.isBtnActualizarRapida);
+							numFiltrosModificados = ultimaSeleccionES.numFiltrosModificadosRapida;
+							keyModificados = ultimaSeleccionES.keyModificadosRapida;
+						}
+					}
+					dispatchEvent(informarBusquedaAvanzada);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%" id="grpGlobal">
+			<pq:MobViewStack  width="100%" height="100%" id="espacioInfoGenerales" creationPolicy="all">
+				<s:NavigatorContent width="100%" height="100%">
+					<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+						<s:VGroup width="100%" gap="0">
+							<s:Spacer height="13"/>
+							<s:ButtonBar id="btneraAvanzadoRapida" change="btneraAvanzadoRapida_changeHandler(event)" selectedIndex="0" requireSelection="true" labelField="valor" dataProvider="{this._listaBotonesAvanzadaRapida}" width="100%" />
+							<s:Spacer height="30"/>
+							<otros:divisionHueca width="100%"/>
+						</s:VGroup>
+						<pq:MobViewStack width="100%" height="37%" id="mobViewRapidaAvanzada">
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" >
+									<s:Spacer height="15"/>
+									<chekbox:CheckBoxPq id="checkComboFacturaPedido" labelLeft="Factura" labelRight="Pedido" change="filtros_changeEvent(event)"  />
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+									<s:Spacer height="15"/>
+									<label:Titulo_w100  text="{_switchFacturaPedido == 'FACTURA' ? 'Factura:' : 'Pedido Interno:'}" paddingTop="0" />
+									<s:TextInput id="txtBuscaRapida" restrict="0-9\-" enter="realizarBusquedaRapidaFacturaFolio()" width="100%" toolTip="{_switchFacturaPedido == 'FACTURA' ? '# FACTURA' : '# PEDIDO'}" fontStyle="normal" keyUp="filtros_changeEvent(event)"/>
+									<s:Spacer height="15"/>
+									<pqNet:botonPqNetLargo	id="btnBusquedaRapida" width="100%" botonRedondo="true" icono="iconoActualizarNormal" click="realizarBusquedaRapidaFacturaFolio()" isCurrentButtonActualizar="false"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" height="100%" horizontalAlign="center">
+									<s:HGroup width="100%" >
+										<s:VGroup width="50%">
+											<label:Titulo_w100  text="Del" paddingTop="0" />
+											<dateField:DatePickerSpanish id="dtpFInicio" width="130" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+										<s:Spacer width="100%"/>
+										<s:VGroup width="50%">
+											<label:Titulo_w100  text="Al" paddingTop="0" />
+											<dateField:DatePickerSpanish id="dtpFFin" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+									</s:HGroup>	
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Cliente" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCliente" creationComplete="{cmbCliente.cargaClientesUsuarioLogueado('--TODOS--',_usuario.clave)}"  change="filtros_changeEvent(event)" width="100%"/>
+									<s:Spacer id="spcCobrador" height="1"/>
+									<label:Titulo_w100 id="lblCobrador" text="Cobrador" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCobrador" creationComplete="{ cmbCobrador.cargarEmpleadosPorSoloPorTipo('Contabilidad','--TODOS--')}"  change="filtros_changeEvent(event)" width="100%"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Facturó" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbFacturo" creationComplete="{cmbFacturo.cargaEmpresas('--TODOS--')}"  labelField="valor"  width="100%" change="filtros_changeEvent(event)" />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Condiciones de Pago" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCPago" creationComplete="{cmbCPago.cargaCreditoPago('--TODOS--')}" change="filtros_changeEvent(event)" width="100%"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Tipo" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbTipo" creationComplete="{cmbTipo.cargaTipoFactura('--TODOS--')}" change="filtros_changeEvent(event)" width="100%"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Estado" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbEstado" creationComplete="{cmbEstado.cargaEstadoFactura('--TODOS--')}" change="filtros_changeEvent(event)" width="100%"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Refacturada" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbRefacturada" creationComplete="{cmbRefacturada.cargaRefacturada('--TODOS--')}" change="filtros_changeEvent(event)" width="100%"/>
+									<s:Spacer height="15"/>
+									<pqNet:botonPqNetLargo id="btnBusqueda"	width="100%" botonRedondo="true" icono="iconoActualizarNormal" click="realizarBusquedaAvanzada()"/>
+									<s:Spacer height="15"/>
+									<s:VGroup width="100%" paddingLeft="-5" paddingRight="-3">
+										<otros:divisionHueca width="100%"/>
+									</s:VGroup>
+								</s:VGroup>
+							</s:NavigatorContent>
+						</pq:MobViewStack>
+					</s:VGroup>
+				</s:NavigatorContent>
+				<s:NavigatorContent width="100%" height="100%">
+					<s:Scroller width="100%" height="100%">
+						<s:VGroup width="100%" height="100%">
+							<panelCtaGenerales:Titulo text="{factura.nombre_cliente }"/>
+							<label:Titulo_w100  text="Factura:" />
+							<linkButton:LinkButtonPQNet2 label="{factura.factura }" id="lnkIdfactura" width="100%" click="muestraLink('factura')"/>
+							<label:Titulo_w100  text="Vendió:" />
+							<label:Texto_w100 id="lblvendio" text="{factura.fpor}" /> 
+							<label:Titulo_w100  text="P. Interno:" />
+							<linkButton:LinkButtonPQNet2 label="{factura.cpedido }" id="lnkIdcpedido" width="100%" click="muestraLink('pedido')"/>
+							<label:Titulo_w100  text="Referencia de Cliente:" />
+							<linkButton:LinkButtonPQNet2 label="{factura.referencia }" id="lnkReferencia" width="100%" click="muestraLink('referencia')"/>
+							<label:Titulo_w100  text="Monto:" />
+							<label:Texto_w100 id="lblMonto" text="${UtilsFormatosNumericos.precisionADosDecimalesConComas( factura.importe )} USD" />
+							<label:Titulo_w100  text="Condiciones de Pago:" />
+							<label:Texto_w100 id="lblcPago" text="{factura.CPago}" />
+							<label:Titulo_w100  text="Medio de Pago:" />
+							<label:Texto_w100 id="lblmedioPago" text="{factura.medioPago}" />
+							<label:Titulo_w100  text="Fecha de Facturación:" />
+							<label:Fecha fecha="{factura.fecha}"/>
+							<label:Titulo_w100  text="FEP:" />
+							<label:Fecha fecha="{factura.fep}"/>
+							<label:Titulo_w100  text="Tipo:" />
+							<label:Texto_w100 id="lbltipo" text="{factura.tipo}" />
+							<label:Titulo_w100  text="Medio:" />
+							<label:Texto_w100 id="lblmedio" text="{factura.medio}" />
+							<s:Spacer height="15" />
+							<otros:divisionHueca width="100%"/>
+							<s:HGroup width="100%" horizontalAlign="right">
+							</s:HGroup>
+						</s:VGroup>
+					</s:Scroller>
+				</s:NavigatorContent>
+			</pq:MobViewStack>
+		</s:VGroup>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contenedores:VGroupConPaddingStandardPqNet 
+	xmlns:fx="http://ns.adobe.com/mxml/2009"
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:contenedores="skins.skin.contenedores.*"
+	xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:otros="skins.otros.*"
+	xmlns:botonesToggle="skins.botonesToggle.*" 
+	xmlns:label="skins.skin.label.*" 
+	xmlns:pan = "mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.*" 
+	gap="10" width="100%" height="100%"
+	>
+	
+	<fx:Script>
+
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientesContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.events.IndexChangeEvent;
+			
+			
+			private var _contactos:ArrayCollection;
+			private var _contactoSeleccioado:int = 0;
+			
+			private var isCurrentShowHabilitados:Boolean = true;
+			private var _currentCliente:Cliente;
+			private var _seHabilito:Boolean = false;
+			private var isBusy:Boolean = false;
+			
+			
+			[Bindable]
+			private var _arrHabilitadosDeshabilitados:ArrayCollection = new ArrayCollection( [  { valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+				{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }] );
+			
+			/**
+			 * recibe del mapa lista Contactos
+			 */ 
+			public function set recibeContactos( $datos:ArrayCollection ):void{
+				var ev:EventoCatClientes_General;
+				if( $datos == null || $datos.length == 0 ){
+					lstContactos.dataProvider = new  ArrayCollection;
+					isBusy = false;
+					_contactos = new ArrayCollection;
+					if (botoneraHabilitadosDeshabilitados.selectedIndex == 0)
+					{
+						ev = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_NUMERO_CONTACTOS);
+						ev.numeroContactos = 0;
+						ev.vieneDe = "Contactos";
+						dispatchEvent(ev);
+					}
+					return;
+				}
+				
+				_contactos = $datos;
+				obtenerFechaMasProxima($datos);
+				
+				if ((_contactos[0] as Contacto).habilitado)
+				{
+					ev = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_NUMERO_CONTACTOS);
+					ev.numeroContactos = Number(_contactos.length);
+					ev.vieneDe = "Contactos";
+					dispatchEvent(ev);
+				}
+				
+				//==================================================================
+				
+				this.lstContactos.dataProvider = ObjectUtil.copy(_contactos) as ArrayCollection;
+				
+				//==================================================================
+				isBusy = false;
+				
+				
+				
+			}
+			
+			private function filtroPorTexto():void{
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				var _listaPrincipal:ArrayCollection = ObjectUtil.copy( _contactos ) as ArrayCollection;
+				
+				if( this.busqueda.text  != ""){
+					_listaVisual = UtilsGrid.queryCampoXLike( _listaPrincipal, 'nombre', this.busqueda.text ); 
+				}else{
+					_listaVisual = ObjectUtil.copy( _listaPrincipal ) as ArrayCollection;  
+				} 
+				
+				obtenerFechaMasProxima(_listaVisual);
+				
+				this.lstContactos.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+			}
+			
+			[Bindable]
+			private var fechaMasProxima:Date;
+			private function obtenerFechaMasProxima($listaContactos:ArrayCollection):void
+			{
+				var keyFechasEvaluadas:Object = new Object;
+				fechaMasProxima = null;
+				
+				if($listaContactos != null && $listaContactos.length >0){
+					
+					var fechaPivote:Number = 0;
+					var current:Contacto = $listaContactos[0] as Contacto;
+					
+					if(current.fechaUltimaActualizacion != null){
+						fechaMasProxima = current.fechaUltimaActualizacion;
+						keyFechasEvaluadas[current.fechaUltimaActualizacion] = current.fechaUltimaActualizacion;
+						fechaPivote = fechaPivote = current.fechaUltimaActualizacion.time;
+					}
+					
+					if($listaContactos.length > 1){
+						
+						for (var k:int = 1; k < $listaContactos.length; k++) 
+						{
+							current = $listaContactos[k] as Contacto;
+							
+							if(current.fechaUltimaActualizacion != null){
+								
+								if(!keyFechasEvaluadas.hasOwnProperty(current.fechaUltimaActualizacion)){
+									if(fechaPivote < current.fechaUltimaActualizacion.time){
+										fechaPivote = current.fechaUltimaActualizacion.time;
+										fechaMasProxima = current.fechaUltimaActualizacion;
+									}
+									keyFechasEvaluadas[current.fechaUltimaActualizacion] = current.fechaUltimaActualizacion;
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			protected function botoneraHabilitadosDeshabilitados_clickHandler(event:IndexChangeEvent):void{
+				if(!isBusy)
+				{
+					if((event.currentTarget as ButtonBarColores).selectedItem == null){
+						event.preventDefault();
+					}else{
+						
+						isBusy = true;
+						var evt:EventoCatClientesContactos = new EventoCatClientesContactos( EventoCatClientesContactos.OBTENER_CONTACTOS_CLIENTE );
+						if((event.currentTarget as ButtonBarColores).selectedIndex == 0 )
+						{
+							isCurrentShowHabilitados = true;
+						}else{
+							isCurrentShowHabilitados = false;
+						}
+						lstContactos.isCurrentHabilitados = isCurrentShowHabilitados;
+						evt.habilitado  = isCurrentShowHabilitados == true ? 1 : 0;
+						evt.idCliente = _currentCliente.idCliente;
+						dispatchEvent( evt );
+					}
+				}
+				else
+				{
+					event.preventDefault();
+				}
+			}
+			
+			public function set recibeClienteSeleccionado($cliente:Cliente):void
+			{
+				if($cliente == null) return;
+				
+				_currentCliente = $cliente;
+				
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="bottom" >
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_contactosGris}"/>
+		<label:TituloBankGothic_30 text="CONTACTOS"/>
+		<s:Spacer width="100%"/>
+		<s:VGroup height="100%" verticalAlign="bottom" horizontalAlign="right">
+			<s:Label fontSize="13" color="0x{catalogoColores.LABEL_VERDE_AZUL}" text="Última actualización: {UtilsFecha.formatoFechaDDMMMYYYY(fechaMasProxima)}"/>
+		</s:VGroup>
+	</s:HGroup>
+	<otros:divisionGruesa width="100%"/>
+	<s:VGroup width="100%" height="100%" id="grpNormal" horizontalAlign="center" gap="10">
+		<botonesToggle:ButtonBarColores width="350" height="30" id="botoneraHabilitadosDeshabilitados" changing="botoneraHabilitadosDeshabilitados_clickHandler(event)" dataProvider="{_arrHabilitadosDeshabilitados}" selectedIndex="0" requireSelection="true"/>
+		<s:TextInput fontStyle="normal" id="busqueda" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Contacto" text="" change="filtroPorTexto()" enter="filtroPorTexto()"/>
+		<pan:ClientePanelContactosAnimado id="lstContactos" height="100%" width="100%"/>
+	</s:VGroup>
+	
+</contenedores:VGroupConPaddingStandardPqNet>	

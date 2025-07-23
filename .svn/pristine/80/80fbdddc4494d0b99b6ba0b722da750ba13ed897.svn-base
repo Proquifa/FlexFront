@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" width="100%" height="100%" 
+		 xmlns:graficas="skins.skin.graficas.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoMedioPago:ArrayCollection;
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				/**
+				 * Se realiza una copia de la info y se recibe en un Array simple, para poder aplicar funciones específicas de los mismos
+				 **/
+				var arrayTemp:Array = new Array();
+				_infoMedioPago = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				arrayTemp = (ObjectUtil.copy($infoGrafica)as ArrayCollection).source;
+				
+				arrayTemp.sortOn("medioPago");
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Medio de pago
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalMedioPago:Array = new Array();
+				arrayTotalMedioPago = arrayTemp.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la gráfica, los totales de cada Medio de Pago
+				 * */
+				
+				FormarLosMediosDePago(arrayTotalMedioPago,arrayTemp,"MEDIOS_PAGO",_infoMedioPago);
+				
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoMedioPago,null,"totalCobros");
+				
+				//Para liberar Memoria
+				arrayTotalMedioPago = new Array();
+				arrayTemp = new Array();
+			}
+			
+			private function FormarLosMediosDePago(TotalMedioPagos:Array,MedioPagosInfo:Array,etiqueta:String,infoMedioPagos:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCobros:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientes:Object;
+				
+				var currentPartidaCobros:Cobros; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalMedioPagos.length; i++){
+					j=0;
+					keysClientes = new Object();
+					totalCobros =0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCobros = MedioPagosInfo[j] as Cobros;
+					while( (TotalMedioPagos[i] as Cobros).medioPago == currentPartidaCobros.medioPago){
+						totalPartidas += currentPartidaCobros.partidas;
+						totalPiezas += currentPartidaCobros.piezas;
+						totalMonto += currentPartidaCobros.montoDolares;
+						
+						totalCobros++;
+						
+						if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+							keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+							totalClientes++;
+						}
+						
+						MedioPagosInfo.shift();
+						if(MedioPagosInfo.length >0)
+							currentPartidaCobros = MedioPagosInfo[j] as Cobros;
+						else
+							currentPartidaCobros =new Cobros();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalMedioPagos[i] as Cobros).medioPago.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalCobros = totalCobros;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoMedioPagos.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			public function quitaDuplicados(item:Cobros, id:uint, _array:Array):Boolean{
+				if (keys.hasOwnProperty(item.medioPago)) {
+					return false;
+				} else {
+					keys[item.medioPago] = item.medioPago;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" gap="0">
+		<s:Spacer width="100%" height="30%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> <!--piezasTotal-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" verticalAlign="middle" height="8%">	
+			<componentes:tituloChartTablero width="100%" text="MEDIO DE PAGO PROGRAMADO" textAlign="center" />
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

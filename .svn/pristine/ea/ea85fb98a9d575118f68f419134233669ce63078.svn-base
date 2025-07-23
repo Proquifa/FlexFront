@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.*"
+		 width="100%" height="100%"
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			
+			public var _currentType:String = "ET";
+			public function set recibirFiltroGrafico($tipo:String):void
+			{
+				if($tipo == null)
+				{
+					if(infoPagosPagadorET == null)
+					{
+						infoPagosPagadorET = new ArrayCollection;
+						infoPagosPagadorFT = new ArrayCollection;
+					}
+				}
+				
+				if($tipo != _currentType)
+				{
+					_currentType = $tipo;
+					if(_currentType =="ET")
+						chartPagadorETvsFT.recibirDataProvider = infoPagosPagadorET;
+					else if(_currentType =="FT")
+						chartPagadorETvsFT.recibirDataProvider = infoPagosPagadorFT;	
+				}
+			}
+			
+			
+			private var keys:Object;
+			private var infoPagosPagadorET:ArrayCollection;
+			private var infoPagosPagadorFT:ArrayCollection;
+			public function set obtenerListaPagos($listaPagos:ArrayCollection):void
+			{
+				if($listaPagos == null)
+				{
+					return;
+				}
+				
+				infoPagosPagadorET = new ArrayCollection;
+				infoPagosPagadorFT = new ArrayCollection;
+				chartPagadorETvsFT.recibirDataProvider = new ArrayCollection;
+				
+				var arraySource:Array = new Array;
+				arraySource = $listaPagos.source;
+				
+				/**
+				 * Se dividen todos los pagadores en Tiempo Vs los Fuera de Tiempo y se ordenan
+				 * */ 
+				
+				if($listaPagos.length > 0)
+				{
+					
+					var arrayPagadorET:Array = new Array();
+					var arrayPagadorFT:Array = new Array();
+					
+					arrayPagadorET = arraySource.filter(ObtenerTodosPagadoresET);
+					arrayPagadorFT = arraySource.filter(ObtenerTodosPagadoresFT);
+					
+					if(arrayPagadorET.length > 1)
+						arrayPagadorET.sortOn("pagador",Array.DESCENDING);
+					
+					if(arrayPagadorFT.length > 1)
+						arrayPagadorFT.sortOn("pagador",Array.DESCENDING);
+					
+					//Para liberar memoria
+					arraySource = new Array();
+					
+					/**
+					 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada cliente,
+					 * quitando los duplicados
+					 * */
+					
+					keys= new Object();
+					var arrayTotalPagadoresET:Array = new Array();
+					arrayTotalPagadoresET = arrayPagadorET.filter(quitaDuplicados);
+					
+					keys= new Object();
+					var arrayTotalPagadoresFT:Array = new Array();
+					arrayTotalPagadoresFT = arrayPagadorFT.filter(quitaDuplicados);
+					
+					
+					FormarAPagadores(arrayTotalPagadoresET,arrayPagadorET,"PAGADOR_ET",infoPagosPagadorET);
+					FormarAPagadores(arrayTotalPagadoresFT,arrayPagadorFT,"PAGADOR_FT",infoPagosPagadorFT);
+					
+					if(_currentType == "ET")
+						chartPagadorETvsFT.recibirDataProvider = infoPagosPagadorET;
+					else
+						chartPagadorETvsFT.recibirDataProvider = infoPagosPagadorFT;
+					
+					//Para liberar Memoria
+					arrayPagadorET = new Array();
+					arrayPagadorFT = new Array();
+					arrayTotalPagadoresET = new Array();
+					arrayTotalPagadoresFT = new Array();
+					keys = new Object();
+				}
+				else
+				{
+					chartPagadorETvsFT.recibirDataProvider = infoPagosPagadorET;
+				}
+			}
+			
+			
+			private function FormarAPagadores(TotalPagadores:Array,pagadoresInfo:Array,etiqueta:String,infoPagador:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPagos:int;
+				var totalMonto:Number;
+				var totalProveedores:int;
+				
+				var keysProveedores:Object= new Object();
+				var currentPartidaPago:PagoProveedor; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalPagadores.length; i++){
+					j=0;
+					keys = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPagos =0;
+					totalMonto =0;
+					totalProveedores =0;
+					currentPartidaPago = pagadoresInfo[j] as PagoProveedor;
+					
+					while( (TotalPagadores[i] as PagoProveedor).pagador == currentPartidaPago.pagador )
+					{
+						totalPartidas += currentPartidaPago.cantidad;
+						totalPiezas += currentPartidaPago.totalPiezas;
+						totalMonto += currentPartidaPago.montoDolares;
+						
+						if(!keys.hasOwnProperty(currentPartidaPago.ordenCompra)){
+							keys[currentPartidaPago.ordenCompra]= currentPartidaPago.ordenCompra;
+							totalPagos++;
+						}
+						
+						if(!keysProveedores.hasOwnProperty(currentPartidaPago.nombreProveedor)){
+							keysProveedores[currentPartidaPago.nombreProveedor] = currentPartidaPago.nombreProveedor;
+							totalProveedores++;
+						}
+						
+						pagadoresInfo.shift();
+						if(pagadoresInfo.length >0)
+							currentPartidaPago = pagadoresInfo[j] as PagoProveedor;
+						else
+							currentPartidaPago =new PagoProveedor();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					
+					if((TotalPagadores[i] as PagoProveedor).pagador)
+						itemResumenConsulta.conceptoResultado = (TotalPagadores[i] as PagoProveedor).pagador.toLocaleUpperCase();
+					else
+						itemResumenConsulta.conceptoResultado = "NULL";
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.clientes_proveedores = totalProveedores;
+					itemResumenConsulta.totalPagos = totalPagos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoPagador.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			
+			private function quitaDuplicados(item:PagoProveedor, idx:uint, _clientes:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.pagador)){
+					return false;
+				}else{
+					keys[item.pagador]= item.pagador;
+					return true;
+				}
+			}
+			
+			private function ObtenerTodosPagadoresET(item:PagoProveedor, id:uint,array:Array):Boolean
+			{
+				return item.tiempoPago == "ET" ? true : false;
+			}
+			private function ObtenerTodosPagadoresFT(item:PagoProveedor, id:uint,array:Array):Boolean
+			{
+				return item.tiempoPago == "FT" ? true : false;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:Spacer height="12%" width="100%"/>
+	<graficaPie:GraficaChartGrisTituloAbajoConsultaPagos id="chartPagadorETvsFT" tipoGrafica="pieSeriesPqNet" tituloGrafica ="Pagador"/>
+	<s:Spacer height="8%" width="100%"/>
+</s:VGroup>

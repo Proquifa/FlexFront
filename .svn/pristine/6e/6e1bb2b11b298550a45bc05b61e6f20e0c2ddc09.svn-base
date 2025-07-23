@@ -1,0 +1,566 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+									  xmlns:s="library://ns.adobe.com/flex/spark" 
+									  xmlns:mx="library://ns.adobe.com/flex/mx" 
+									  xmlns:otros="skins.otros.*"
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:pqNet1="skins.botones.pqNet.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  width="100%" height="100%"
+									  creationComplete="completeHandler()" 
+									  >
+	
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	<fx:Script >
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.despachos.EventoConsultaPermisos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PermisoImportacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_Ab_Vs_Ce;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_Clasificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_Control;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_ET_Vs_FT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_Marca;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_Proveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_Subtipo;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_TipoPermiso;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.despachos.permisosImportacion.graficas.CPermiso_Graf_TipoProducto;
+			import mx.core.IVisualElement;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			private var universoPermisos:ArrayCollection;
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			
+			private var graficas1erNivel:ContenedorGraficas = new ContenedorGraficas();
+			
+			public function set obtenerPermisos( $dato:ArrayCollection):void
+			{
+				universoPermisos = new ArrayCollection();
+				if( $dato == null )
+					return;
+				
+				for( var i:int = 0; i < $dato.length; i++ )
+				{
+					( $dato[i] as PermisoImportacion ).numFila = i+1;
+				}
+				universoPermisos = ObjectUtil.copy( $dato ) as ArrayCollection;
+				dtgPqNet.dataProvider= universoPermisos;
+				
+				if ($dato.length > 0 ){
+					headGrid.btnExportar.enabled = true;
+				}
+				else{
+					headGrid.btnExportar.enabled = false;
+				}
+			}
+			/**
+			 * recibe de vistaDefault este valor cada que se ca,bia de rapida a avanzada
+			 */
+			public function validaIndice($indice:int):void
+			{ 
+				if( $indice == 0 )
+				{
+					//avanzada
+					btnGraficaTabla.visible = true;
+				}
+				else if( $indice == 1 )
+				{
+					//rapida
+					if( vistaSelected != _TABLA_GRID )
+					{
+						realizarCambioVista();
+					}
+					btnGraficaTabla.visible = false;
+				}
+			}
+			/**
+			 * 	recibe datos de vistaDeaful que recibe de busqueda avanzada
+			 */ 
+			
+			[Bindable] private var _finicio:String;
+			[Bindable] private var _ffin:String;
+			private var _eventoConsulta:EventoConsultaPermisos;
+			public function recibeDatosTransportados( evt:EventoConsultaPermisos ):void
+			{
+				_finicio = UtilsFecha.formatoFecha_dia_mes_Anio( evt.finicio );
+				_ffin = UtilsFecha.formatoFecha_dia_mes_Anio( evt.ffin );
+				_eventoConsulta = evt;
+				actualizarVistaActual = true;
+			}
+			/**
+			 * se dispara el evento para que el vistaDefault lo cache y replique la funcion del menu para la bsuqueda de totales 
+			 * con las fechas seleccionadas
+			 */ 
+			private function encuentraTotalesXPeriodo():void
+			{
+				var event:EventoConsultaPermisos = new EventoConsultaPermisos(EventoConsultaPermisos.OBTENER_TOTALES_POR_PERIODO_PASADO); //pasado
+				event.finicio = dtpFInicioPasado.selectedDate;
+				event.ffin = dtpFFinPasado.selectedDate;
+				event.proveedor = _eventoConsulta.proveedor;
+				event.catalogo = _eventoConsulta.catalogo;
+				event.tipoPermiso = _eventoConsulta.tipoPermiso;
+				event.tipoProducto = _eventoConsulta.tipoProducto;
+				event.subTipo = _eventoConsulta.subTipo;
+				event.clasificacion =_eventoConsulta.clasificacion;
+				event.control = _eventoConsulta.control;
+				event.estado = _eventoConsulta.estado;
+				event.estCerrado = _eventoConsulta.estCerrado;
+				dispatchEvent( event );
+				
+				var eventP:EventoConsultaPermisos = new EventoConsultaPermisos(EventoConsultaPermisos.OBTENER_TOTALES_POR_PERIODO_POSTPASADO);
+				eventP.finicio = dtpFInicioPosPasado.selectedDate;
+				eventP.ffin = dtpFFinPosPasado.selectedDate;
+				eventP.proveedor = _eventoConsulta.proveedor;
+				eventP.catalogo = _eventoConsulta.catalogo;
+				eventP.tipoPermiso = _eventoConsulta.tipoPermiso;
+				eventP.tipoProducto = _eventoConsulta.tipoProducto;
+				eventP.subTipo = _eventoConsulta.subTipo;
+				eventP.clasificacion =_eventoConsulta.clasificacion;
+				eventP.control = _eventoConsulta.control;
+				eventP.estado = _eventoConsulta.estado;
+				eventP.estCerrado = _eventoConsulta.estCerrado;
+				dispatchEvent( eventP ); 
+			}
+			
+			protected function completeHandler():void
+			{
+				headGrid.btnExportar.enabled = false;
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				var graficaEncimada:ArrayCollection = new ArrayCollection();
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem( new CPermiso_Graf_Proveedores() );
+				graficas.addItem( new CPermiso_Graf_Marca() );
+				graficas.addItem( new CPermiso_Graf_TipoPermiso() );
+				graficas.addItem( new CPermiso_Graf_Clasificacion() );
+				graficas.addItem( new CPermiso_Graf_TipoProducto() );
+				graficas.addItem( new CPermiso_Graf_Control() );
+				graficas.addItem( new CPermiso_Graf_Subtipo() );
+				graficas.addItem( new CPermiso_Graf_Ab_Vs_Ce() );
+				
+				graficaEncimada.addItem(new CPermiso_Graf_ET_Vs_FT() ); 
+				
+				graficas1erNivel.insertarGraficas(graficas,graficaEncimada);
+				agregarEspacioTrabajo(graficas1erNivel);
+				
+				dtpFInicioPasado.selectedDate = new Date();
+				dtpFFinPasado.selectedDate = new Date();
+				dtpFInicioPosPasado.selectedDate = new Date();
+				dtpFFinPosPasado.selectedDate = new Date();
+				
+				dtpFInicioPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				dtpFFinPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				dtpFInicioPosPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				dtpFFinPosPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+			}
+			
+			public function agregarEspacioTrabajo( espacio:IVisualElement ):void
+			{
+				if(espacio == null)
+				{
+					return;
+				}
+				graficos.addItem(espacio);
+				if(graficos.length == 1)
+				{
+					espacioGraficas.removeAllElements();
+					espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			public var actualizarVistaActual:Boolean;
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				realizarCambioVista();
+			}
+			private var btnPresionado:Boolean;
+			private function realizarCambioVista():void
+			{
+				if(imgTab.visible)
+				{
+					compararVistas();
+					var desbloquea:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.DESBLOQUEA );
+					if( vistaSelected == _TABLA_GRID )
+					{
+						//boton true
+						desbloquea.individual = true;
+						if(actualizarVistaActual)
+						{
+							var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+							eventEspera.mensaje = "iniciarEspera";
+							eventEspera.idButtons = [];
+							eventEspera.tipoEventos = [];
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_TOTALES_POR_PERIODO");
+							eventEspera.tipoEventos.push("CONSULTA_GRAFICAS");
+							dispatchEvent(eventEspera); 
+							
+							var eventhoy:EventoConsultaPermisos = new EventoConsultaPermisos(EventoConsultaPermisos.OBTENER_TOTALES_POR_PERIODO);
+							var evt:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.CONSULTA_GRAFICAS );
+							evt.finicio = eventhoy.finicio = _eventoConsulta.finicio;
+							evt.ffin = eventhoy.ffin = _eventoConsulta.ffin;
+							evt.proveedor = eventhoy.proveedor = _eventoConsulta.proveedor;
+							evt.catalogo = eventhoy.catalogo = _eventoConsulta.catalogo;
+							evt.tipoPermiso = eventhoy.tipoPermiso = _eventoConsulta.tipoPermiso;
+							evt.tipoProducto = eventhoy.tipoProducto = _eventoConsulta.tipoProducto;
+							evt.subTipo = eventhoy.subTipo = _eventoConsulta.subTipo;
+							evt.clasificacion = eventhoy.clasificacion =_eventoConsulta.clasificacion;
+							evt.control = eventhoy.control = _eventoConsulta.control;
+							evt.estado = eventhoy.estado = _eventoConsulta.estado;
+							evt.estCerrado = eventhoy.estCerrado = _eventoConsulta.estCerrado;
+							eventhoy.individual = false;
+							dispatchEvent( eventhoy ); 
+							dispatchEvent( evt );
+							actualizarVistaActual = false;
+						}
+					}
+					else
+					{
+						//boton false
+						desbloquea.individual = false;
+						if(actualizarVistaActual)
+						{
+							actualizarVistaActual = false;						
+						}
+					}
+					dispatchEvent( desbloquea );
+				}
+			}
+			
+			
+			[Bindable] private var _piezasActual:int = 0;
+			[Bindable] private var _piezasPasado:int = 0;
+			[Bindable] private var _piezasPosPasado:int = 0;
+			[Bindable] private var _pedidoActual:int = 0;
+			[Bindable] private var _pedidoPasado:int = 0;
+			[Bindable] private var _pedidoPosPasado:int = 0;
+			[Bindable] private var _montoActual:Number = 0;
+			[Bindable] private var _montoPasado:Number = 0;
+			[Bindable] private var _montoPosPasado:Number = 0;
+			//private var completaPasado:Boolean;
+			public function set obtenerTotalesPasado( $dato:ArrayCollection ):void
+			{
+				if( $dato == null && $dato.length > 0 ) return ;
+				montoPasado.text = ($dato[0] as PermisoImportacion).costo.toString(); _montoPosPasado =  ($dato[0] as PermisoImportacion).costo;
+				numPedidosPasado.text = ($dato[0] as PermisoImportacion).noProductos.toString(); _pedidoPasado = ($dato[0] as PermisoImportacion).noProductos;
+				numPiezasPasado.text = ($dato[0] as PermisoImportacion).cantidad.toString(); _piezasPosPasado = ($dato[0] as PermisoImportacion).cantidad;
+				validarDatos();
+			}
+			//private var completaPostPasado:Boolean;
+			public function set obtenerTotalesPostPasado( $dato:ArrayCollection):void
+			{
+				if( $dato == null && $dato.length > 0 ) return ;
+				montoPosPasado.text = ($dato[0] as PermisoImportacion).costo.toString(); _montoPasado = ($dato[0] as PermisoImportacion).costo; 
+				numPedidosPosPasado.text = ($dato[0] as PermisoImportacion).noProductos.toString(); _pedidoPosPasado = ($dato[0] as PermisoImportacion).noProductos;
+				numPiezasPosPasado.text = ($dato[0] as PermisoImportacion).cantidad.toString(); _piezasPasado = ($dato[0] as PermisoImportacion).cantidad;
+				validarDatos();
+			}
+			
+			[Bindable] private var _imgPiezas:Class;
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgPedido:Class;
+			
+			private function validarDatos():void
+			{
+				var _promedioPiezas:int = (_piezasPasado + _piezasPosPasado)/2;
+				var _promedioPedidos:int = (_pedidoPasado + _pedidoPosPasado)/2;
+				var _promedioMontos:Number = (_montoPasado + _montoPosPasado)/2; 
+				
+				if(_piezasActual > _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_piezasActual < _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_piezasActual == _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_pedidoActual > _promedioPedidos) _imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_pedidoActual < _promedioPedidos) _imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_pedidoActual == _promedioPedidos) _imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_montoActual > _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_montoActual < _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_montoActual == _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			} 
+			
+			public function set obtenerTotales(totales:ArrayCollection):void
+			{
+				if(totales == null) return ;
+				
+				for(var d:int = 0 ; d<totales.length ; d++)
+				{
+					if( (totales[d] as PermisoImportacion).etiqueta == "actual")
+					{
+						monto.text = (totales[d] as PermisoImportacion).costo.toString(); _montoActual = (totales[d] as PermisoImportacion).costo; 
+						numPedidos.text = (totales[d] as PermisoImportacion).noProductos.toString(); _pedidoActual = (totales[d] as PermisoImportacion).noProductos;
+						numPiezas.text = (totales[d] as PermisoImportacion).cantidad.toString(); _piezasActual = (totales[d] as PermisoImportacion).cantidad;
+					}
+					
+					if((totales[d] as PermisoImportacion).etiqueta == "pasado")
+					{
+						if( (totales[d] as PermisoImportacion).fecha != null)
+						{
+							dtpFInicioPasado.selectedDate =  (totales[d] as PermisoImportacion).fecha;
+							dtpFFinPasado.selectedDate =  (totales[d] as PermisoImportacion).fechaFin;
+						}
+						montoPasado.text = (totales[d] as PermisoImportacion).costo.toString(); _montoPosPasado =  (totales[d] as PermisoImportacion).costo;
+						numPedidosPasado.text = (totales[d] as PermisoImportacion).noProductos.toString(); _pedidoPasado = (totales[d] as PermisoImportacion).noProductos;
+						numPiezasPasado.text = (totales[d] as PermisoImportacion).cantidad.toString(); _piezasPosPasado = (totales[d] as PermisoImportacion).cantidad;
+						dtpFInicioPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( (totales[d] as PermisoImportacion).fecha );
+						dtpFFinPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( (totales[d] as PermisoImportacion).fechaFin );
+						dtpFInicioPasado.selectedDate = (totales[d] as PermisoImportacion).fecha ;
+						dtpFFinPasado.selectedDate = (totales[d] as PermisoImportacion).fechaFin;
+					}
+					if( (totales[d] as PermisoImportacion).etiqueta == "postpasado")
+					{
+						if( (totales[d] as PermisoImportacion).fecha != null)
+						{
+							dtpFInicioPasado.selectedDate =  (totales[d] as PermisoImportacion).fecha;
+							dtpFFinPasado.selectedDate =  (totales[d] as PermisoImportacion).fechaFin;
+						}
+						montoPosPasado.text = (totales[d] as PermisoImportacion).costo.toString(); _montoPasado = (totales[d] as PermisoImportacion).costo; 
+						numPedidosPosPasado.text = (totales[d] as PermisoImportacion).noProductos.toString(); _pedidoPosPasado = (totales[d] as PermisoImportacion).noProductos;
+						numPiezasPosPasado.text = (totales[d] as PermisoImportacion).cantidad.toString(); _piezasPasado = (totales[d] as PermisoImportacion).cantidad;
+						dtpFInicioPosPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( (totales[d] as PermisoImportacion).fecha );
+						dtpFFinPosPasado.text = UtilsFecha.formatoFechaDDMMMYYYY( (totales[d] as PermisoImportacion).fechaFin );
+						dtpFInicioPosPasado.selectedDate = (totales[d] as PermisoImportacion).fecha ;
+						dtpFFinPosPasado.selectedDate = (totales[d] as PermisoImportacion).fechaFin ;
+					}   
+					
+				}
+				
+				var _promedioPiezas:int = (_piezasPasado + _piezasPosPasado)/2;
+				var _promedioPedidos:int = (_pedidoPasado + _pedidoPosPasado)/2;
+				var _promedioMontos:Number = (_montoPasado + _montoPosPasado)/2; 
+				
+				if(_piezasActual > _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_piezasActual < _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_piezasActual == _promedioPiezas) _imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_pedidoActual > _promedioPedidos) _imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_pedidoActual < _promedioPedidos) _imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_pedidoActual == _promedioPedidos) _imgPedido = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_montoActual > _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				if(_montoActual < _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				if(_montoActual == _promedioMontos) _imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons"))
+				{
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar)
+								{
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+								
+						}
+					}
+				}
+			}
+			
+			public function ordenaPorFecha( valor1:Object, valor2:Object ):int
+			{
+				return ObjectUtil.dateCompare( valor1.fecha, valor2.fecha );
+			}
+			
+			protected function cambiaBoton():void
+			{
+				btnBusqueda.CambiarToActualizarTipoBoton(false);
+			}
+			
+			protected function headGrid_clickExportarHandler(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Fecha");
+				fila[2] = hoja.addItem("Proveedor");
+				fila[3] = hoja.addItem("Catálogo");
+				fila[4] = hoja.addItem("Producto");
+				fila[5] = hoja.addItem("Tipo");
+				fila[6] = hoja.addItem("Subtipo");
+				fila[7] = hoja.addItem("Tipo Permiso");
+				fila[8] = hoja.addItem("Clasificación");
+				fila[9] = hoja.addItem("Control");
+				fila[10] = hoja.addItem("Estado Físico");
+				fila[11] = hoja.addItem("Estado");
+				
+				for(var i:int = 0; i < dtgPqNet.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = dtgPqNet.dataProvider[i].numFila;
+					fila[1] = '"' + dtgPqNet.dataProvider[i].fechaFormato + '"';
+					fila[2] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).proveedor + '"';
+					fila[3] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).codigoProducto + '"';
+					fila[4] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).nombreProducto + '"';
+					fila[5] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).tipoProducto + '"';
+					fila[6] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).subTipo + '"';
+					fila[7] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).tipoPermiso + '"';
+					fila[8] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).clasificacionProducto + '"';
+					fila[9] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).controlProducto + '"';
+					fila[10] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).estadoFisico + '"';
+					fila[11] = '"' + (dtgPqNet.dataProvider[i] as PermisoImportacion).estado + '"';
+					hoja.addItem('\r' + fila);
+				}
+				file.save(hoja,"PermisoImportacion-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" id="gridConsultaPedidos" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<consultas:HeaderParaGridConsultas id="headGrid" mostrarBtnExportar="true" clickExportar="headGrid_clickExportarHandler(event)" />
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="dtgPqNet" width="100%" height="100%" anchoColumnas="{['45','=','23%','=','23%','=','=','=','=','70','=','60','50']}" tipoDeConsulta="Permisos"
+														 disableSortableColumns="{[12]}" disableDragableColumns="{[0,12]}" disableResizableColumns="{[0,12]}" enableHeaderWordWrap="{[7,10]}"> 
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+					<mx:AdvancedDataGridColumn headerText="Fecha" dataField="fechaFormato" sortCompareFunction="{ordenaPorFecha}"/>
+					<mx:AdvancedDataGridColumn headerText="Proveedor" dataField="proveedor"/>
+					<mx:AdvancedDataGridColumn headerText="Catálogo" dataField="codigoProducto"/>
+					<mx:AdvancedDataGridColumn headerText="Producto" dataField="nombreProducto"/>
+					<mx:AdvancedDataGridColumn headerText="Tipo" dataField="tipoProducto"/>
+					<mx:AdvancedDataGridColumn headerText="Subtipo" dataField="subTipo"/>	
+					<mx:AdvancedDataGridColumn headerText="Tipo Permiso" dataField="tipoPermiso"/>
+					<mx:AdvancedDataGridColumn headerText="Clasificación" dataField="clasificacionProducto" wordWrap="true"/>
+					<mx:AdvancedDataGridColumn headerText="Control" dataField="controlProducto"/>
+					<mx:AdvancedDataGridColumn headerText="Estado Físico" dataField="estadoFisico"/>
+					<mx:AdvancedDataGridColumn headerText="Estado" dataField="estado"/>
+					<mx:AdvancedDataGridColumn >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.despachos.EventoConsultaPermisos;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PermisoImportacion;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											public function muestraDetallePermiso():void
+											{
+												var evt:EventoConsultaPermisos = new EventoConsultaPermisos( EventoConsultaPermisos.CONSULTA_PERMISO_DETALLADO );
+												evt.permiso = this.data as PermisoImportacion;
+												dispatchEvent( evt );
+											}
+										]]>
+									</fx:Script>
+									<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="muestraDetallePermiso()" horizontalCenter="0"/>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>
+	</comun:espacioA>
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" width="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas" />
+					<s:BorderContainer width="260" height="100%" backgroundColor="#363636">
+						<s:Scroller height="100%">
+							<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" >
+								<s:Label width="100%" text="TOTALES" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal" paddingTop="20" /> <!--paddingTop="60" paddingBottom="5" -->
+								<otros:divisionGruesa color="0x{catalogoColores.LABEL_BLANCO}"/>
+								<s:HGroup width="100%" paddingTop="30" paddingBottom="15">
+									<s:Image source="{this._imgMonto}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Monto USD:"  color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="monto" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="montoPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="montoPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15"> 
+									<s:Image source="{this._imgPedido}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="No. Pedidos:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numPedidos" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numPedidosPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="numPedidosPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15"> <!--paddingBottom="70"-->
+									<s:Image source="{this._imgPiezas}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Total piezas:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezas" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezasPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="numPiezasPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<otros:divisionHueca color="#{catalogoColores.LABEL_NEGRO}"/>
+								<s:Label text="{this._finicio == null ? '' : this._finicio} - {this._ffin == null ? '' : this._ffin}" width="100%" color="0x{catalogoColores.LABEL_BLANCO}" fontSize="14" paddingTop="15" paddingBottom="25" textAlign="center"/>
+								<s:HGroup paddingBottom="30">
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_AZUL_REY}"/>
+												</s:fill>		
+											</s:Ellipse>									
+											<mx:DateField id="dtpFInicioPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="cambiaBoton()"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="cambiaBoton()"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup paddingBottom="30" >
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_MORADO_FUERTE}"/>
+												</s:fill>		
+											</s:Ellipse>
+											<mx:DateField id="dtpFInicioPosPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="cambiaBoton()"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPosPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="cambiaBoton()"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<pqNet1:botonPqNetLargo	width="100%" click="encuentraTotalesXPeriodo()" botonRedondo="true" icono="ojomordor" id="btnBusqueda"/>
+							</s:VGroup>
+						</s:Scroller>
+					</s:BorderContainer>				
+				</s:HGroup>
+			</s:VGroup>	
+		</pq:MobViewStack>
+	</comun:espacioB>
+</comun:ContenedorComparacionConsultas>

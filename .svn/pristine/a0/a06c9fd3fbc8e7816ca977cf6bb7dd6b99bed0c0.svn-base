@@ -1,0 +1,1020 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.productos
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.FormulaPrecio;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.CostoFactor;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.FuncionesEstaticas;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	
+	import skins.catalogos.catalogoAlertas;
+
+	public class ModeloTableroProductos extends EventDispatcher
+	{
+		
+		/**
+		 *  ========== LLenar lista de Productos del Panel de Busqueda ========== 
+		 */
+		private var _lstProductos:ArrayCollection;
+		public function setProductos($datos:ArrayCollection):void{
+			
+			_lstProductos = new ArrayCollection;
+			if ( $datos )
+			{
+				_lstProductos = $datos;
+				
+				for (var i:int = 0; i < $datos.length; i++) 
+				{
+					$datos[i].numFila = i+1;
+					$datos[i].isCheck = false;					
+				}
+			}
+			
+			dispatchEvent(new Event("regresarlistaProductosModeloTableroProductos"));
+			
+			if (_lstProductos){
+				if (actualizarEspera && currentEnEspera ){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresarlistaProductosModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="regresarlistaProductosModeloTableroProductos")]
+		public function get listarProductos():ArrayCollection{
+			return _lstProductos;
+		}
+		
+		/**
+		 * Funcion para obtener filtros
+		 */
+		// etiqueta periodo
+		private var parametroFiltroProd:ParametrosBusquedaProducto;
+		public function setObtenerFiltros(parametros:ParametrosBusquedaProducto):void{
+			parametroFiltroProd = new ParametrosBusquedaProducto();
+			parametroFiltroProd = parametros;			
+			
+			dispatchEvent( new Event("regresaFiltrosEventoModeloTabProductos") );
+		}
+		
+		[Bindable(event="regresaFiltrosEventoModeloTabProductos")]
+		public function get obtenerFiltro():ParametrosBusquedaProducto{
+			return this.parametroFiltroProd;
+		}
+		
+		/**
+		 * Funcion para obtener info de filtros productos y Labels de algunas graficas
+		 */
+		
+		//		FILTROS GLOBALES
+		private var _event:EventoTableroProductos;
+		public function setEventoParaSacarLabelsPeriodos(evt:EventoTableroProductos):void
+		{
+			if(evt == null ) return;
+			_event = evt;
+			if(_event.parametros.aniosMultiple){
+				_event.labelPeriodo1 = _event.parametros.anioInicio + " - " + _event.parametros.anioFin;
+			}else{
+				generarLabelsPeriodo( _event.parametros.mesInicio, _event.parametros.mesFin,_event.parametros.lineal );
+				_event.labelPeriodo1 = _periodo1;
+				_event.labelPeriodo2 = _periodo2;
+				_event.labelPeriodo3 = _periodo3;
+				_event.labelPeriodo4 = _periodo4;
+				_event.labelPeriodo5 = _periodo5;
+			}
+			dispatchEvent( new Event("regresaFiltrosProductosModeloTableroProductos") );
+		}
+		[Bindable(event="regresaFiltrosProductosModeloTableroProductos")]
+		public function get eventoFiltros():EventoTableroProductos
+		{
+			return _event;
+		}
+		
+		private var _listaMensual:ArrayCollection = new ArrayCollection([
+			"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+		private var _periodo1:String = "undefined";
+		private var _periodo2:String = "undefined";
+		private var _periodo3:String = "undefined";
+		private var _periodo4:String = "undefined";
+		private var _periodo5:String = "undefined";
+		
+		protected function generarLabelsPeriodo( $minimoMeses:int, $maximoMeses:int,$lineal:Number):void{
+			if( $lineal == 0){ // periodico
+				_periodo1 = generatePeriodoStr( _event.parametros.anioInicio, ($minimoMeses - 1), ($maximoMeses - 1) ); 
+				_periodo2 = generatePeriodoStr( (_event.parametros.anioInicio - 1), ($minimoMeses - 1), ($maximoMeses - 1) );
+				_periodo3 = generatePeriodoStr( (_event.parametros.anioInicio - 2), ($minimoMeses - 1), ($maximoMeses - 1) );
+				_periodo4 = generatePeriodoStr( (_event.parametros.anioInicio - 3), ($minimoMeses - 1), ($maximoMeses - 1) );
+				_periodo5 = generatePeriodoStr( (_event.parametros.anioInicio - 4), ($minimoMeses - 1), ($maximoMeses - 1) );
+			}else{// lineal
+				var diferenciaMeses:int = (_event.parametros.mesFin - _event.parametros.mesInicio);
+				
+				var anioDos:int = _event.parametros.anioInicio;
+				var rangoDosMax:int = _event.parametros.mesInicio - 2;
+				if( rangoDosMax < 0 ){
+					rangoDosMax += 12;
+					anioDos--;
+				}
+				
+				var rangoDosMin:int = rangoDosMax - diferenciaMeses;
+				if( rangoDosMin < 0 )	rangoDosMin += 12;
+				
+				var anioTres:int = anioDos;
+				
+				var rangoTresMax:int = rangoDosMin - 1;
+				if( rangoTresMax < 0 ){
+					rangoTresMax += 12;
+					anioTres--;
+				}
+				var rangoTresMin:int = (rangoTresMax - diferenciaMeses);
+				if( rangoTresMin < 0 )	rangoTresMin += 12;
+				
+				var anioCuatro:int = anioTres;
+				var rangoCuatroMax:int = rangoTresMin - 1;
+				if( rangoCuatroMax < 0 ){
+					rangoCuatroMax += 12;
+					anioCuatro--;
+				}
+				var rangoCuatroMin:int = (rangoCuatroMax - diferenciaMeses);
+				if( rangoCuatroMin < 0 )	rangoCuatroMin += 12;
+				////////////////////////////////////////////////////////////////////////////////////////////	
+				var anioCinco:int = anioCuatro;
+				var rangoCincoMax:int = rangoCuatroMin - 1;
+				if( rangoCincoMax < 0 ){
+					rangoCincoMax += 12;
+					anioCinco--;
+				}
+				var rangoCincoMin:int = (rangoCincoMax - diferenciaMeses);
+				if( rangoCincoMin < 0 )	rangoCincoMin += 12;
+				
+				_periodo1 = generatePeriodoStr( _event.parametros.anioInicio, _event.parametros.mesInicio-1, _event.parametros.mesFin-1 );  
+				_periodo2 = generatePeriodoStr( anioDos, rangoDosMin, rangoDosMax );
+				_periodo3 = generatePeriodoStr( anioTres, rangoTresMin, rangoTresMax ); 
+				_periodo4 = generatePeriodoStr( anioCuatro, rangoCuatroMin, rangoCuatroMax ); 
+				_periodo5 = generatePeriodoStr( anioCinco, rangoCincoMin, rangoCincoMax ); 
+			} 
+		}
+		
+		protected function generatePeriodoStr( $anio:int, $minMes:int, $maxMes:int ):String{
+			var strReturn:String = "";
+			if( $minMes > -1 && $maxMes < 12 ){
+				if( $minMes < 1 && $maxMes > 10 ){
+					strReturn = 'ANUAL ' + String( $anio );
+					return strReturn.toUpperCase();
+				}else if( $minMes == $maxMes ){
+					strReturn = _listaMensual[ $minMes ] + ' ' + String( $anio );
+					return strReturn.toUpperCase();
+				}else{
+					strReturn = _listaMensual[ $minMes ] + ' - ' + _listaMensual[ $maxMes ] + ' ' + String( $anio );
+					return strReturn.toUpperCase();
+				}
+			}
+			return strReturn.toUpperCase();
+		}
+		
+		//		FILTROS ESPECIFICOS
+		
+		private var _eventFiltrosOcTransito:EventoTableroProductos;
+		private var _eventFiltrosOcRecibidas:EventoTableroProductos;
+		private var _eventFiltrosClientes:EventoTableroProductos;
+		private var _eventFiltrosOcRechazada:EventoTableroProductos;
+		private var _eventFiltrosAvisoDeCambios:EventoTableroProductos;
+		private var _eventFiltrosComprasRealizadas:EventoTableroProductos;
+		private var _eventFiltrosPagos:EventoTableroProductos;
+		private var _eventFiltrosCancelacion:EventoTableroProductos;
+		private var _eventFiltrosCotPed:EventoTableroProductos;
+		
+		
+		public function calcularLabelsIndividuales(evt:EventoTableroProductos):void
+		{
+			var evtRegresaAVista:EventoTableroProductos;
+			if(evt == null ) return;
+			evtRegresaAVista = evt;
+			generarLabelsPeriodo( evt.parametros.mesInicio, evt.parametros.mesFin,evt.parametros.lineal);
+			evtRegresaAVista.labelPeriodo1 = _periodo1;
+			evtRegresaAVista.labelPeriodo2 = _periodo2;
+			evtRegresaAVista.labelPeriodo3 = _periodo3;
+			evtRegresaAVista.labelPeriodo4 = _periodo4;
+			evtRegresaAVista.labelPeriodo5 = _periodo5;
+			
+			switch(evt.type)
+			{
+				case "buscaComparativaOcTransitoEventoTableroProductos":
+				{
+					_eventFiltrosOcTransito = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductosOCTransitoComparacion") );
+					break;
+				}
+				case "buscaComparativaOcRecibidasEventoTableroProductos":
+				{
+					_eventFiltrosOcRecibidas = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductosOCRecibidasComparacion") );
+					break;
+				}
+				case "buscaComparativaClientesEventoTableroProductos":
+				{
+					_eventFiltrosClientes = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductosClientesComparacion") );
+					break;
+				}
+				case "buscaComparativaOCRechazadaEventoTableroProductos":
+				{
+					_eventFiltrosOcRechazada = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductosRechazosComparacion") );
+					break;
+				}
+				case "buscaComparativaAvisoDeCambiosEventoTableroProductos":
+				{
+					_eventFiltrosAvisoDeCambios = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductoAvisoDeCambiosComparacion") );
+					break;
+				}
+				case "buscaComparativaComprasRealizadasEventoTableroProductos":
+				{
+					_eventFiltrosComprasRealizadas = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductoComprasRealizadasComparacion") );
+					break;
+				}
+				case "buscaComparativaPagosEventoTableroProductos":
+				{
+					_eventFiltrosPagos = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductoPagosComparacion") );
+					break;
+				}
+				case "buscaComparativaCancelacionCotTabProdEventoTableroProductos":
+				{
+					_eventFiltrosCancelacion = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductosCancelacionComparacion") );
+					break;
+				}
+				case "buscaComparativaCotPedTabProdEventoTableroProductos":
+				{
+					_eventFiltrosCotPed = evtRegresaAVista;
+					dispatchEvent( new Event("regresaFiltrosIndividualModeloTabProductos_ProductoCotPedComparacion") );
+					break;
+				}	
+				default:
+				{
+					break;
+				}
+			}
+		}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductosOCTransitoComparacion")]
+		public function get obtenerLabelsParticularProductosOCTransitoComparacion():EventoTableroProductos{ return _eventFiltrosOcTransito;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductosOCRecibidasComparacion")]
+		public function get obtenerLabelsParticularProductosOCRecibidasComparacion():EventoTableroProductos{ return _eventFiltrosOcRecibidas;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductosClientesComparacion")]
+		public function get obtenerLabelsParticularProductosClientesComparacion():EventoTableroProductos{ return _eventFiltrosClientes;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductosRechazosComparacion")]
+		public function get obtenerLabelsParticularProductosRechazosComparacion():EventoTableroProductos{ return _eventFiltrosOcRechazada;}
+
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductosCancelacionComparacion")]
+		public function get obtenerLabelsParticularCancelacionCotizacionComparacion():EventoTableroProductos{ return _eventFiltrosCancelacion;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductoAvisoDeCambiosComparacion")]
+		public function get obtenerLabelsParticularProductosAvisoDeCambiosComparacion():EventoTableroProductos{ return _eventFiltrosAvisoDeCambios;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductoComprasRealizadasComparacion")]
+		public function get obtenerLabelsParticularProductosComprasRealizadasComparacion():EventoTableroProductos{ return _eventFiltrosComprasRealizadas;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductoPagosComparacion")]
+		public function get obtenerLabelsParticularProductosPagosComparacion():EventoTableroProductos{ return _eventFiltrosPagos;}
+		
+		[Bindable(event="regresaFiltrosIndividualModeloTabProductos_ProductoCotPedComparacion")]
+		public function get obtenerLabelsParticularProductosCotPedComparacion():EventoTableroProductos{ return _eventFiltrosCotPed;}
+		
+		
+		/**
+		 * Obtener Compras Relizadas
+		 */
+		private var _compra:ArrayCollection;
+		public function setComprasRealizadas( $datos:ArrayCollection, $evento:EventoTableroProductos= null  ):void
+		{
+			_compra = $datos;
+			dispatchEvent( new Event("regresaLinealComprasModeloTabProductos") );
+			
+			if(_compra!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealComprasModeloTabProductos");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealComprasModeloTabProductos")]
+		public function get listarComprasRealizadas():ArrayCollection{
+			return _compra;
+		}
+		
+		/**
+		 * Funcion para obtener info de aviso de cambios
+		 */
+		private var _aCambios:ArrayCollection;
+		public function setComparativaAC( $datos:ArrayCollection, $evento:EventoTableroProductos= null  ):void{
+			for(var d:int = 0; d<$datos.length ; d++){
+				($datos[d] as ResumenConsulta).totalCompras = ($datos[d] as ResumenConsulta).ocompras;
+				($datos[d] as ResumenConsulta).provedorIndividual = ($datos[d] as ResumenConsulta).clientes_proveedores;
+			}
+			_aCambios = $datos;
+			dispatchEvent( new Event("regresaLinealAvisoDCambiosModeloTableroProductos") );
+			if(_aCambios!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealAvisoDCambiosModeloTableroProductos");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealAvisoDCambiosModeloTableroProductos")]
+		public function get comparativaAC():ArrayCollection{
+			return _aCambios;
+		}
+		
+		/**
+		 * Funcion para obtener AVISO DE CAMBIOS para el GRID
+		 */
+		private var _avisoCambios:ArrayCollection;
+		public function setAvisoDeCambiosGrid(avisoCambios:ArrayCollection):void{
+			for( var d:int = 0; d < avisoCambios.length; d++ ){
+				avisoCambios[d].numFila = d + 1;
+			}
+			this._avisoCambios = FuncionesEstaticas.getInstance().formatoObjetos(avisoCambios);
+			
+			dispatchEvent(new Event ("AvisoDeCambiosGraficaGridModeloTableroProductos"));
+			if(_avisoCambios!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"AvisoDeCambiosGraficaGridModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="AvisoDeCambiosGraficaGridModeloTableroProductos")]
+		public function get obtenerAvisoDeCambiosGrid():ArrayCollection{
+			return this._avisoCambios;
+		}
+		
+		/**
+		 * Funcion para obtener los rechazos del producto
+		 */
+		private var _rechazo:ArrayCollection;
+		public function setComparativaRechazo( $datos:ArrayCollection, $evento:EventoTableroProductos= null ):void{
+			if($datos != null){// Yo lo agregue para que no tronara
+				for(var d:int = 0; d<$datos.length ; d++){
+					($datos[d] as ResumenConsulta).totalCompras = ($datos[d] as ResumenConsulta).ocompras;
+				}
+			}
+			_rechazo = $datos;
+			dispatchEvent( new Event("regresaLinealRechazosModeloTableroProductos") );
+			//if(_rechazo!= null){
+			if(actualizarEspera!= null && currentEnEspera){
+				setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealRechazosModeloTableroProductos");
+			}
+			//}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		
+		[Bindable(event="regresaLinealRechazosModeloTableroProductos")]
+		public function get comparativaRechazo():ArrayCollection{
+			return _rechazo;
+		}
+		
+		/**
+		 * Funcion para obtener los RECHAZOS para el Grid
+		 */
+		private var _rechazos:ArrayCollection;
+		public function setOCRechazadasGrid(rechazos:ArrayCollection):void{
+			_rechazos = rechazos;
+			for(var d:int = 0 ; d < this._rechazos.length ; d++){
+				(this._rechazos[d] as OCTableroProducto).numFila = d + 1;
+			}
+			dispatchEvent(new Event ("obtenerRechazosModeloTableroProductos"));
+			if(_rechazos!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerRechazosModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="obtenerRechazosModeloTableroProductos")]
+		public function get ocRechazadasGrid():ArrayCollection{
+			return this._rechazos;
+		}
+		
+		/**
+		 * Funcion para obtener los PAGOS para el Grid
+		 */
+		private var _pagos:ArrayCollection;
+		public function setPagosGrid(pagos:ArrayCollection):void{
+			_pagos = pagos;
+			for(var d:int = 0 ; d < this._pagos.length ; d++)
+			{
+				(this._pagos[d] as PagoProducto).numFila = d + 1;
+			}
+			dispatchEvent(new Event ("obtenerPagosModeloTableroProductos"));
+			if(_pagos!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerPagosModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="obtenerPagosModeloTableroProductos")]
+		public function get pagosGrid():ArrayCollection{
+			return this._pagos;
+		}
+		
+		/**
+		 * Funcion para obtener Pagos del producto
+		 */
+		private var _pago:ArrayCollection;
+		public function setComparativaPagos( $datos:ArrayCollection, $evento:EventoTableroProductos= null   ):void{
+			_pago = $datos;
+			dispatchEvent( new Event("regresaLinealPagosModeloTableroProductos") );
+			if(_pago!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealPagosModeloTableroProductos");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealPagosModeloTableroProductos")]
+		public function get comparativaPagos():ArrayCollection{
+			return _pago;
+		}
+		/**
+		 * Funcion para obtener info comparativa de transito
+		 */
+		private var _transito:ArrayCollection;
+		public function setComparativaTransitoProd( $datos:ArrayCollection, $evento:EventoTableroProductos= null  ):void{
+			_transito = $datos;
+			dispatchEvent( new Event("regresaLinealTransitoModeloTabProductos") );
+			
+			if(_transito!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealTransitoModeloTabProductos");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealTransitoModeloTabProductos")]
+		public function get comparativaTransitoProd():ArrayCollection{
+			return _transito;
+		}
+		
+		/**
+		 * Funcion para obtener OCTRANSITO para el Gird
+		 */
+		private var _ocTransito:ArrayCollection;		
+		public function setOCenTransitoGrid(transito:ArrayCollection):void{ 			
+			_ocTransito = transito;
+			for(var d:int = 0 ; d < this._ocTransito.length ; d++){
+				(this._ocTransito[d] as OCTableroProducto).numFila = d + 1;
+			}
+			
+			dispatchEvent(new Event ("OrdenCompraTransitoModeloTableroProductos"));
+			if(_ocTransito!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"OrdenCompraTransitoModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="OrdenCompraTransitoModeloTableroProductos")]
+		public function get ocEnTransitoGrid():ArrayCollection{
+			return this._ocTransito;
+		}
+		
+		
+		/**
+		 * Funcion para obtener las Cotizaciones canceladas de un producto
+		 */
+		private var _linealCancelacionCot:ArrayCollection;
+		public function setLinealCancelacionCot( $datos:ArrayCollection, $evento:EventoTableroProductos= null ):void{
+			if($datos == null)
+				_linealCancelacionCot = new ArrayCollection();
+			else
+				_linealCancelacionCot = $datos;
+			
+			dispatchEvent( new Event("regresaLinealCancelacionCotModeloTableroProductos") );
+			
+			if(_linealCancelacionCot!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealCancelacionCotModeloTableroProductos");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealCancelacionCotModeloTableroProductos")]
+		public function get listaLinealCancelacionCot():ArrayCollection{
+			return _linealCancelacionCot;
+		}
+		
+		/**
+		 * Funcion para obtener CotPed para el Gird
+		 */
+		private var _cotPed:ArrayCollection;		
+		public function setCotPed(transito:ArrayCollection):void{ 			
+			_cotPed = transito;
+			for(var d:int = 0 ; d < this._cotPed.length ; d++){
+				(this._cotPed[d] as SeguimientoCotizacion).numFila = d + 1;
+			}
+			
+			dispatchEvent(new Event ("CotPedModeloTableroProductos"));
+			if(_cotPed!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"CotPedModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="CotPedModeloTableroProductos")]
+		public function get enviaCotPed():ArrayCollection{
+			return this._cotPed;
+		}
+		
+		/**
+		 * Funcion para obtener las ventas del periodo de un producto
+		 */
+		private var _linealVentasPeriodo:ArrayCollection;
+		public function setLinealVentasPeriodo( $datos:ArrayCollection, $evento:EventoTableroProductos= null):void{
+			if($datos == null){
+				$datos = new ArrayCollection();
+			}
+			for(var d:int = 0; d<$datos.length ; d++){
+				($datos[d] as ResumenConsulta).periodo = $evento.parametros.anioInicio;	
+			}
+			_linealVentasPeriodo = $datos;
+			dispatchEvent( new Event("regresaLinealVentasPeriodoModeloTableroProductos") );
+			
+			if(_linealVentasPeriodo!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealVentasPeriodoModeloTableroProductos");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				//calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealVentasPeriodoModeloTableroProductos")]
+		public function get listaLinealVentasPeriodo():ArrayCollection{
+			
+			return _linealVentasPeriodo;
+		}
+		
+		/**
+		 * Obtiene las ventas del periodo agrupadas por CLIENTES para el Analisis de Ventas del periodo
+		 */
+		public var _listClientesAgrup:ArrayCollection = new ArrayCollection();
+		public function setAgrupadosClientes($arreglo:ArrayCollection):void
+		{
+			if($arreglo == null || $arreglo.length == 0)
+				_listClientesAgrup = new ArrayCollection(); 
+			else
+				_listClientesAgrup = $arreglo; 
+			
+			dispatchEvent(new Event ("agrupadosClientesAnalisisCompra"));
+			
+			if(_listClientesAgrup!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"agrupadosClientesAnalisisCompra");
+				}
+			}
+		}
+		
+		[Bindable(event="agrupadosClientesAnalisisCompra")]
+		public function get agrupadosClientes():ArrayCollection{
+			return this._listClientesAgrup;
+		}
+		
+		/**
+		 * Obtiene las ventas del periodo agrupadas por ESAC para el Analisis de Ventas del periodo
+		 */
+		public var _listEsacAgrup:ArrayCollection = new ArrayCollection();
+		public function setAgrupadosEsac($arreglo:ArrayCollection):void
+		{
+			if($arreglo == null || $arreglo.length == 0)
+				_listEsacAgrup = new ArrayCollection(); 
+			else
+				_listEsacAgrup = $arreglo; 
+			
+			dispatchEvent(new Event ("agrupadosEsacAnalisisCompra"));
+			
+			if(_listEsacAgrup!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"agrupadosEsacAnalisisCompra");
+				}
+			}
+		}
+		
+		[Bindable(event="agrupadosEsacAnalisisCompra")]
+		public function get agrupadosEsac():ArrayCollection{
+			return this._listEsacAgrup;
+		}
+		
+		
+		/**
+		 * Obtiene las ventas del periodo agrupadas por EV para el Analisis de Ventas del periodo
+		 */
+		public var _listEVAgrup:ArrayCollection = new ArrayCollection();
+		public function setAgrupadosEV($arreglo:ArrayCollection):void
+		{
+			if($arreglo == null || $arreglo.length == 0)
+				_listEVAgrup = new ArrayCollection(); 
+			else
+				_listEVAgrup = $arreglo; 
+			
+			dispatchEvent(new Event ("agrupadosEVAnalisisCompra"));
+			
+			if(_listEVAgrup!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"agrupadosEVAnalisisCompra");
+				}
+			}
+		}
+		
+		[Bindable(event="agrupadosEVAnalisisCompra")]
+		public function get agrupadosEV():ArrayCollection{
+			return this._listEVAgrup;
+		}
+
+		/**
+		 * Funcion para obtener info comparativa de Oc recibida
+		 */
+		private var _ocRecibida:ArrayCollection;
+		public function setComparativaOCRecibidaProd( $datos:ArrayCollection, $evento:EventoTableroProductos= null   ):void{
+			_ocRecibida = $datos;
+			dispatchEvent( new Event("regresaLinealOCRecibidaModeloTabProveedores") );
+			if(_ocRecibida!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealOCRecibidaModeloTabProveedores");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				//calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealOCRecibidaModeloTabProveedores")]
+		public function get comparativaOCRecibidaProd():ArrayCollection{
+			return _ocRecibida;
+		}
+		
+		/**
+		 * Funcion para obtener OCRECIBIDAS para Grid
+		 */ 
+		private var _partidaTiempo:ArrayCollection;		
+		public function setOCRecibidasGrid(partida:ArrayCollection):void
+		{ 			
+			_partidaTiempo = partida;
+			if (partida != null)
+			{
+				for(var d:int = 0 ; d < partida.length ; d++)
+				{
+					(this._partidaTiempo[d] as OCTableroProducto).numFila = d + 1;
+				}
+				dispatchEvent(new Event ("ocRecibidasGridModeloTableroProductos"));
+			}
+			else
+			{
+				_partidaTiempo = new ArrayCollection();
+			}
+			
+			if(_partidaTiempo!= null)
+			{
+				if(actualizarEspera!= null && currentEnEspera)
+				{
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"ocRecibidasGridModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="ocRecibidasGridModeloTableroProductos")]
+		public function get ocRecibidasGrid():ArrayCollection{
+			return this._partidaTiempo
+		}
+		
+		/**
+		 * Funcion para obtener info comparativa de top Clientes
+		 */
+		private var _cliente:ArrayCollection;
+		public function setComparativaClientesProd( $datos:ArrayCollection, $evento:EventoTableroProductos= null  ):void{
+			for(var d:int = 0; d<$datos.length ; d++){
+				($datos[d] as ResumenConsulta).totalCompras = ($datos[d] as ResumenConsulta).ocompras;
+			}
+			_cliente = $datos;
+			dispatchEvent( new Event("regresaLinealClientesModeloTabProveedores") );
+			if(_cliente!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealClientesModeloTabProveedores");
+				}
+			}
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+		}
+		[Bindable(event="regresaLinealClientesModeloTabProveedores")]
+		public function get comparativaClientesProd():ArrayCollection{
+			return _cliente;
+		}
+		
+		/**
+		 * Funcion para obtener los CLIENTES de un prodcuto para el Grid 
+		 */ 
+		private var _clientes:ArrayCollection;		
+		public function setClientesGrid(clientesGrafica:ArrayCollection):void{ 
+			_clientes = clientesGrafica;
+			for(var d:int = 0 ; d < _clientes.length ; d++){
+				(_clientes[d] as ProductoTableroProducto).numFila = d + 1;
+			}
+			dispatchEvent(new Event ("clientesGridModeloTableroProductos"));
+			if(_clientes!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"clientesGridModeloTableroProductos");
+				}
+			}
+		}
+		
+		[Bindable(event="clientesGridModeloTableroProductos")]
+		public function get clientesGrid():ArrayCollection{
+			return this._clientes;
+		}	
+		
+		/**
+		 * Funcion para obtener etiqueta periodos
+		 */
+		// etiqueta periodo
+		private var _periodo:String = new String();
+		public function setObtenerEtiquetaPeriodoProd(etiqueta:String):void{
+			this._periodo = etiqueta;
+			dispatchEvent( new Event("regresaEtiquetaPeriodoModeloTabProductos") );
+		}
+		[Bindable(event="regresaEtiquetaPeriodoModeloTabProductos")]
+		public function get obtenerEtiquetaPeriodoProd():String{
+			return this._periodo;
+		}
+		
+		/**
+		 * Funcion para obtener Cotizaciones = Pedido
+		 */
+		private var _linealCotPedido:ArrayCollection;
+		public function setLinealCotPedido( $datos:ArrayCollection, $evento:EventoTableroProductos= null ):void
+		{
+			if($datos == null)
+				_linealCotPedido = new ArrayCollection();
+			else
+				_linealCotPedido = $datos;
+			
+			
+			dispatchEvent( new Event("regresaLinealCotPedidoModeloTableroProductos") );
+			
+			if(_linealCotPedido != null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaLinealCotPedidoModeloTableroProductos");
+				}
+			}
+			
+			if($evento != null && $evento.isIndividual){
+				calcularLabelsIndividuales($evento);
+			}
+			
+		}
+		
+		[Bindable(event="regresaLinealCotPedidoModeloTableroProductos")]
+		public function get listaLinealCotPedido():ArrayCollection{
+			return _linealCotPedido;
+		}
+		
+		private var _totalCotPedido:ArrayCollection;
+		public function setTotalCotPedido( $datos:ArrayCollection, $evento:EventoTableroProductos= null ):void{
+			if($datos == null)
+				_totalCotPedido = new ArrayCollection();
+			else
+				_totalCotPedido = $datos;
+			dispatchEvent( new Event("regresaTotalCotPedidoModeloTableroProductos") );
+			if(_linealCotPedido!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"regresaTotalCotPedidoModeloTableroProductos");
+				}
+			}
+		}
+		[Bindable(event="regresaTotalCotPedidoModeloTableroProductos")]
+		public function get listaTotalCotPedido():ArrayCollection{
+			return _totalCotPedido;
+		}
+		
+		public function error(objeto:Object):void{
+			alertaSingleton.showReintentar( objeto.toString() );
+		}
+		
+		/**
+		 * Funcion para obtener Cancelacion en Cotizacion GRID
+		 */
+		private var _CancelacionCotGrid:ArrayCollection;
+		public function setCancelacionCotizacionGrid( $datos:ArrayCollection):void{
+			_CancelacionCotGrid = $datos;
+			for(var d:int = 0 ; d < _CancelacionCotGrid.length ; d++){
+				(_CancelacionCotGrid[d] as SeguimientoCotizacion).numFila = d + 1; //falta
+			}
+			dispatchEvent(new Event ("cancelacionCotGridModeloTableroProductos"));
+			if(_CancelacionCotGrid!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"cancelacionCotGridModeloTableroProductos");
+				}
+			}
+		}
+		[Bindable(event="cancelacionCotGridModeloTableroProductos")]
+		public function get enviaListaCancelacionCotGrid():ArrayCollection{
+			return _CancelacionCotGrid;
+		}
+		
+		/**
+		 * Funcion para obtener la configuracion de los precios
+		 */
+		private var _configPrecios:ConfiguracionPrecioProducto;
+		public function setConfigPrecios( $datos:ConfiguracionPrecioProducto):void{
+			if($datos != null) _configPrecios = $datos;
+			else{
+				_configPrecios = new ConfiguracionPrecioProducto();
+				_configPrecios.costoProducto = 0;
+				_configPrecios.costoFactorProducto = new CostoFactor();
+			}
+			
+			dispatchEvent(new Event ("configuracionPreciosFichaTecnica"));
+			if(_configPrecios!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"configuracionPreciosFichaTecnica");
+				}
+			}
+		}
+		[Bindable(event="configuracionPreciosFichaTecnica")]
+		public function get enviarPrecios():ConfiguracionPrecioProducto{
+			return _configPrecios;
+		}
+		
+		/**
+		 * Funcion para obtener la formula de los precios por producto
+		 */
+		private var _formula:FormulaPrecio;
+		public function setInformacionFormulaPrecio( $datos:FormulaPrecio):void{
+			if($datos != null) 
+				_formula = $datos;
+			else 
+				_formula = new FormulaPrecio();
+			
+			dispatchEvent(new Event ("informacionFormulaPrecioProducto"));
+			if(_configPrecios!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"informacionFormulaPrecioProducto");
+				}
+			}
+		}
+		[Bindable(event="informacionFormulaPrecioProducto")]
+		public function get enviarFormula():FormulaPrecio{
+			return _formula;
+		}
+		
+		/**
+		 * Bloquedo/Espera
+		 */
+		/** ==========================================================================================================================================
+		 *  ==============================================                Bloquedo/Espera               ==============================================
+		    ==========================================================================================================================================*/
+		
+		private var _servicesConsultados:Object;
+		public function setServiciosConsultados($tipo:String):void
+		{
+			if(!_servicesConsultados.hasOwnProperty($tipo))
+			{
+				_servicesConsultados[$tipo] = $tipo;
+				numServices ++;
+			}
+		}
+				
+		private var currentEnEspera:Boolean;
+		private var actualizarEspera:Object = new Object;
+		private var numServices:uint;
+		private var numServicioCompletos:uint;
+		private var serviciosCompletosDifKey:Object = new Object;
+		/*private var  nextService:Boolean=false;*/
+		public function setControlDeBloqueoPantalla(mensaje:String,$tiposEvento:Array,$idCurrentBottons:Array,$errorOrWhoFinish:Object):void
+		{
+			if(mensaje == "iniciarEspera")
+			{
+				if(!currentEnEspera)
+				{
+					_servicesConsultados = new Object();
+					if(Boolean(verificarSiElExistenLosTiposDeEvento($tiposEvento)))
+					{
+						numServicioCompletos=0;
+						numServices = 0;
+						actualizarEspera = new Object();
+						serviciosCompletosDifKey = new Object();
+						
+						if($tiposEvento.length >0 && $tiposEvento[0] == "CONSULTA_PRODUCTO_TABPROD")
+						{
+							$tiposEvento.shift();
+						}
+						if($tiposEvento.length>0)
+						{
+							numServices += $tiposEvento.length;
+						}
+						currentEnEspera = true;
+						actualizarEspera.isBusy = true;
+						actualizarEspera["idCurrentButtons"] = $idCurrentBottons;
+						alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+					}
+				}
+				else
+				{
+					if(Boolean(verificarSiElExistenLosTiposDeEvento($tiposEvento)))
+						numServices += $tiposEvento.length;
+				}
+			}
+			else if (mensaje =="terminaEspera")
+			{
+				
+				/*if (numServices>10)
+				nextService = true;*/
+				
+				if(!serviciosCompletosDifKey.hasOwnProperty($errorOrWhoFinish as String))
+				{
+					numServicioCompletos++;
+					serviciosCompletosDifKey[($errorOrWhoFinish as String)] = ($errorOrWhoFinish as String);
+				}
+				
+				if(numServicioCompletos == numServices)
+				{
+					alertaSingleton.remove(true);
+					actualizarEspera.isBusy=false;
+					currentEnEspera = false;
+					numServices = 0;
+					dispatchEvent( new Event("actualizaEsperaYBloqueoModeloTableroProductos") );
+				}
+			}
+			else if(mensaje =="error")
+			{
+				alertaSingleton.remove(true);
+				currentEnEspera = false;
+				alertaSingleton.showReintentar( $errorOrWhoFinish.toString(), catalogoAlertas.TIT_ERR);
+				actualizarEspera.isBusy=false;
+				dispatchEvent( new Event("actualizaEsperaYBloqueoModeloTableroProductos") );
+			}
+			
+			
+		}
+		
+		[Bindable(event="actualizaEsperaYBloqueoModeloTableroProductos")]
+		public function get actualizarEstadoDeEsperaYBloqueo():Object
+		{
+			return actualizarEspera;
+		}
+		
+		private function verificarSiElExistenLosTiposDeEvento($tiposEventos:Array):Boolean
+		{
+			for (var i:int = 0; i < $tiposEventos.length; i++) 
+			{
+				try
+				{
+					if((EventoTableroProductos[$tiposEventos[i]])== null)
+					{
+						return false;
+					}
+					else
+					{
+						return true;
+					}
+				}
+				catch(error:Error) 
+				{
+					trace(error + "El Tipo de Evento: \""+$tiposEventos[i] + "\" No se encuentra en: EventoTableroProductos// NO SE COLOCARÁ LA PANTALLA DE BLOQUEO")
+					return false;
+				}
+			}
+			return false;
+		}
+		
+		public function ModeloTableroProductos(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+	}
+}

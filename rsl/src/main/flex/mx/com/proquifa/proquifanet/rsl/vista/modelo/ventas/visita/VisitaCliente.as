@@ -1,0 +1,820 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita
+{
+	import flash.profiler.Telemetry;
+	
+	import mx.charts.chartClasses.NumericAxis;
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.ventas.visitas.VisitaCliente")]
+	[Bindable]
+	public class VisitaCliente
+	{
+		private var _idVisitaCliente:Number;
+		private var _nombreCliente:String;
+		private var _nombreContacto:String;
+		private var _idContacto:Number;
+		private var _idCliente:Number;
+		private var _idEmpleado:Number;
+		private var _numSolicitud:int;
+		private var _numCRM:int;
+		private var _asunto:String;
+		private var _ruta:String;
+		private var _numDocumentos:int;
+		private var _nivelIngreso:String;
+		private var _fechaEstimadaVisita:Date;
+		private var _numVisitas:int;
+		private var _contacto:Contacto;
+		private var _tipo:String;
+		private var _numFila:int;
+		private var _tipoVista:String;
+		private var _estado:String;
+		private var _idSprint:Number;
+		private var _solicitudesVisita:ArrayCollection;
+		private var _empleado:Empleado;
+		private var _usuarioEV:String;
+		private var _valor:Number;
+		private var _credito:Number;
+		private var _sprint:Sprint;
+		private var _asistenciaEmpleado:Boolean;
+		
+		private var _fechaVisita:Date;
+		private var _fechaVInicioMinuto:int;
+		private var _fechaVInicioHora:int;
+		private var _fechaVFinMinuto:int;
+		private var _fechaVFinHora:int;
+		
+		private var _horaVisitaInicio:Date;
+		private var _horaVisitaFin:Date;
+		private var _fechaCheckIn:Date;
+		private var _fechaE:Date;
+		
+		private var _numFinalizadas:int;
+		private var _numNoFinalizadas:int;
+		private var _numPendientes:int;
+		private var _calificacionEV:int;
+
+		private var _justificacionCancelacion:String;
+		private var _realizacionVisita:Boolean;
+		private var _tipoCancelacion:String;
+		private var _visitaExtemporanea:Boolean;
+		
+		private var _tipoVisita:String;
+
+		private var _solicitud:SolicitudVisita;
+		
+		////////vista
+		private var _listaDocumentos:ArrayCollection;
+		private var _documentosReporte:ArrayCollection; 
+		private var _motivo:String;
+		private var _reporte:String;
+		private var _acciones:ArrayCollection;
+		private var _hallazgos:ArrayCollection;
+		private var _motivos:ArrayCollection;   
+		private var _estadoCodigo:String;
+		
+		private var _cliente:Cliente;
+		private var _idSprintAntiguo:int;
+		private var _noHallazgos:int;
+		private var _noHallazgosCompletados:int;
+
+		
+		private var _reqRealizados:int;
+		private var _totalReq:int;
+		private var _noPendientes:int;
+		private var _noHallazgosVisita:int;
+		private var _noRequisiciones:int;
+		private var _noCotizaciones:int;
+		private var _noProductos:int;
+		private var _totalProductos:Number;
+		private var _totalDocsCargados:Number;
+		private var _calificacion:int;
+		private var _noVisita:int;
+		private var _notas:String;
+		private var _observaciones:String;
+		
+		
+		
+		public function VisitaCliente()
+		{
+		}
+		
+		public function get notas():String
+		{
+			return _notas;
+		}
+
+		public function set notas(value:String):void
+		{
+			_notas = value;
+		}
+
+		public function get visitaExtemporanea():Boolean
+		{
+			return _visitaExtemporanea;
+		}
+
+		public function set visitaExtemporanea(value:Boolean):void
+		{
+			_visitaExtemporanea = value;
+		}
+
+		public function get idSprintAntiguo():int
+		{
+			return _idSprintAntiguo;
+		}
+
+		public function set idSprintAntiguo(value:int):void
+		{
+			_idSprintAntiguo = value;
+		}
+
+		public function get cliente():Cliente
+		{
+			return _cliente;
+		}
+
+		public function set cliente(value:Cliente):void
+		{
+			_cliente = value;
+		}
+
+		public function get estadoCodigo():String
+		{
+			return _estadoCodigo;
+		}
+
+		public function set estadoCodigo(value:String):void
+		{
+			_estadoCodigo = value;
+		}
+
+		public function get tipoCancelacion():String
+		{
+			return _tipoCancelacion;
+		}
+
+		public function set tipoCancelacion(value:String):void
+		{
+			_tipoCancelacion = value;
+		}
+
+		public function get realizacionVisita():Boolean
+		{
+			return _realizacionVisita;
+		}
+
+		public function set realizacionVisita(value:Boolean):void
+		{
+			_realizacionVisita = value;
+		}
+
+		public function get justificacionCancelacion():String
+		{
+			return _justificacionCancelacion;
+		}
+
+		public function set justificacionCancelacion(value:String):void
+		{
+			_justificacionCancelacion = value;
+		}
+
+		public function get motivos():ArrayCollection
+		{
+			return _motivos;
+		}
+
+		public function set motivos(value:ArrayCollection):void
+		{
+			_motivos = value;
+		}
+
+		public function get hallazgos():ArrayCollection
+		{
+			return _hallazgos;
+		}
+
+		public function set hallazgos(value:ArrayCollection):void
+		{
+			_hallazgos = value;
+		}
+
+		public function get acciones():ArrayCollection
+		{
+			return _acciones;
+		}
+
+		public function set acciones(value:ArrayCollection):void
+		{
+			_acciones = value;
+		}
+
+		public function get documentosReporte():ArrayCollection
+		{
+			return _documentosReporte;
+		}
+
+		public function set documentosReporte(value:ArrayCollection):void
+		{
+			_documentosReporte = value;
+		}
+
+		public function get asistenciaEmpleado():Boolean
+		{
+			return _asistenciaEmpleado;
+		}
+
+		public function set asistenciaEmpleado(value:Boolean):void
+		{
+			_asistenciaEmpleado = value;
+		}
+
+		public function get motivo():String
+		{
+			return _motivo;
+		}
+
+		public function set motivo(value:String):void
+		{
+			_motivo = value;
+		}
+
+		public function get listaDocumentos():ArrayCollection
+		{
+			return _listaDocumentos;
+		}
+
+		public function set listaDocumentos(value:ArrayCollection):void
+		{
+			_listaDocumentos = value;
+		}
+
+		public function get fechaCheckIn():Date
+		{
+			return _fechaCheckIn;
+		}
+
+		public function set fechaCheckIn(value:Date):void
+		{
+			_fechaCheckIn = value;
+		}
+
+		public function get horaVisitaFin():Date
+		{
+			return _horaVisitaFin;
+		}
+
+		public function set horaVisitaFin(value:Date):void
+		{
+			_horaVisitaFin = value;
+		}
+
+		public function get horaVisitaInicio():Date
+		{
+			return _horaVisitaInicio;
+		}
+
+		public function set horaVisitaInicio(value:Date):void
+		{
+			_horaVisitaInicio = value;
+		}
+
+		public function get fechaVFinHora():int
+		{
+			return _fechaVFinHora;
+		}
+
+		public function set fechaVFinHora(value:int):void
+		{
+			_fechaVFinHora = value;
+		}
+
+		public function get fechaVFinMinuto():int
+		{
+			return _fechaVFinMinuto;
+		}
+
+		public function set fechaVFinMinuto(value:int):void
+		{
+			_fechaVFinMinuto = value;
+		}
+
+		public function get fechaVInicioHora():int
+		{
+			return _fechaVInicioHora;
+		}
+
+		public function set fechaVInicioHora(value:int):void
+		{
+			_fechaVInicioHora = value;
+		}
+
+		public function get fechaVInicioMinuto():int
+		{
+			return _fechaVInicioMinuto;
+		}
+
+		public function set fechaVInicioMinuto(value:int):void
+		{
+			_fechaVInicioMinuto = value;
+		}
+
+		public function get fechaVisita():Date
+		{
+			return _fechaVisita;
+		}
+
+		public function set fechaVisita(value:Date):void
+		{
+			_fechaVisita = value;
+		}
+
+		public function get sprint():Sprint
+		{
+			return _sprint;
+		}
+
+		public function set sprint(value:Sprint):void
+		{
+			_sprint = value;
+		}
+
+		public function get credito():Number
+		{
+			return _credito;
+		}
+
+		public function set credito(value:Number):void
+		{
+			_credito = value;
+		}
+
+		public function get valor():Number
+		{
+			return _valor;
+		}
+
+		public function set valor(value:Number):void
+		{
+			_valor = value;
+		}
+
+		public function get usuarioEV():String
+		{
+			return _usuarioEV;
+		}
+
+		public function set usuarioEV(value:String):void
+		{
+			_usuarioEV = value;
+		}
+
+		public function get empleado():Empleado
+		{
+			return _empleado;
+		}
+
+		public function set empleado(value:Empleado):void
+		{
+			_empleado = value;
+			
+			if(_empleado && _empleado.usuario)
+				usuarioEV = _empleado.usuario;
+		}
+
+		public function get solicitudesVisita():ArrayCollection
+		{
+			return _solicitudesVisita;
+		}
+
+		public function set solicitudesVisita(value:ArrayCollection):void
+		{
+			_solicitudesVisita = value;
+		}
+
+		public function get idSprint():Number
+		{
+			return _idSprint;
+		}
+
+		public function set idSprint(value:Number):void
+		{
+			_idSprint = value;
+		}
+
+		public function get estado():String
+		{
+			return _estado == "Finalizada" ? "Finalizado" : _estado;
+		}
+
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+
+		public function get tipoVista():String
+		{
+			return _tipoVista;
+		}
+
+		public function set tipoVista(value:String):void
+		{
+			_tipoVista = value;
+		}
+
+		public function get numFila():int
+		{
+			return _numFila;
+		}
+
+		public function set numFila(value:int):void
+		{
+			_numFila = value;
+		}
+
+		public function get nombreContacto():String
+		{
+			return _nombreContacto;
+		}
+
+		public function set nombreContacto(value:String):void
+		{
+			_nombreContacto = value;
+		}
+
+		public function get tipo():String
+		{
+			return _tipo;
+		}
+
+		public function set tipo(value:String):void
+		{
+			_tipo = value;
+		}
+
+		public function get contacto():Contacto
+		{
+			return _contacto;
+		}
+
+		public function set contacto(value:Contacto):void
+		{
+			_contacto = value;
+		}
+
+		public function get numVisitas():int
+		{
+			return _numVisitas;
+		}
+
+		public function set numVisitas(value:int):void
+		{
+			_numVisitas = value;
+		}
+
+		public function get fechaEstimadaVisita():Date
+		{
+			return _fechaEstimadaVisita;
+		}
+
+		public function set fechaEstimadaVisita(value:Date):void
+		{
+			_fechaEstimadaVisita = value;
+		}
+
+		public function get nivelIngreso():String
+		{
+			return _nivelIngreso;
+		}
+
+		public function set nivelIngreso(value:String):void
+		{
+			_nivelIngreso = value;
+		}
+
+		public function get numDocumentos():int
+		{
+			return _numDocumentos;
+		}
+
+		public function set numDocumentos(value:int):void
+		{
+			_numDocumentos = value;
+		}
+
+		public function get ruta():String
+		{
+			return _ruta;
+		}
+
+		public function set ruta(value:String):void
+		{
+			_ruta = value;
+		}
+
+		public function get asunto():String
+		{
+			return _asunto;
+		}
+
+		public function set asunto(value:String):void
+		{
+			_asunto = value;
+		}
+
+		public function get numCRM():int
+		{
+			return _numCRM;
+		}
+
+		public function set numCRM(value:int):void
+		{
+			_numCRM = value;
+		}
+
+		public function get numSolicitud():int
+		{
+			return _numSolicitud;
+		}
+
+		public function set numSolicitud(value:int):void
+		{
+			_numSolicitud = value;
+		}
+
+		public function get idEmpleado():Number
+		{
+			return _idEmpleado;
+		}
+
+		public function set idEmpleado(value:Number):void
+		{
+			_idEmpleado = value;
+		}
+
+		public function get idCliente():Number
+		{
+			return _idCliente;
+		}
+
+		public function set idCliente(value:Number):void
+		{
+			_idCliente = value;
+		}
+
+		public function get idContacto():Number
+		{
+			return _idContacto;
+		}
+
+		public function set idContacto(value:Number):void
+		{
+			_idContacto = value;
+		}
+
+		public function get nombreCliente():String
+		{
+			return _nombreCliente;
+		}
+
+		public function set nombreCliente(value:String):void
+		{
+			_nombreCliente = value;
+		}
+
+		public function get idVisitaCliente():Number
+		{
+			return _idVisitaCliente;
+		}
+
+		public function set idVisitaCliente(value:Number):void
+		{
+			_idVisitaCliente = value;
+		}
+
+		public function get fechaE():Date
+		{
+			return _fechaE;
+		}
+
+		public function set fechaE(value:Date):void
+		{
+			_fechaE = value;
+		}
+
+		public function get numFinalizadas():int
+		{
+			return _numFinalizadas;
+		}
+
+		public function set numFinalizadas(value:int):void
+		{
+			_numFinalizadas = value;
+		}
+
+		public function get numNoFinalizadas():int
+		{
+			return _numNoFinalizadas;
+		}
+
+		public function set numNoFinalizadas(value:int):void
+		{
+			_numNoFinalizadas = value;
+		}
+
+		public function get numPendientes():int
+		{
+			return _numPendientes;
+		}
+
+		public function set numPendientes(value:int):void
+		{
+			_numPendientes = value;
+		}
+
+		public function get tipoVisita():String
+		{
+			return _tipoVisita;
+		}
+
+		public function set tipoVisita(value:String):void
+		{
+			_tipoVisita = value;
+		}
+
+		public function get calificacionEV():int
+		{
+			return _calificacionEV;
+		}
+
+		public function set calificacionEV(value:int):void
+		{
+			_calificacionEV = value;
+		}
+
+		public function get noHallazgos():int
+		{
+			return _noHallazgos;
+		}
+
+		public function set noHallazgos(value:int):void
+		{
+			_noHallazgos = value;
+		}
+
+		public function get noHallazgosCompletados():int
+		{
+			return _noHallazgosCompletados;
+		}
+
+		public function set noHallazgosCompletados(value:int):void
+		{
+			_noHallazgosCompletados = value;
+		}
+
+		public function get reporte():String
+		{
+			return _reporte;
+		}
+
+		public function set reporte(value:String):void
+		{
+			_reporte = value;
+		}
+
+		public function get reqRealizados():int
+		{
+			return _reqRealizados;
+		}
+
+		public function set reqRealizados(value:int):void
+		{
+			_reqRealizados = value;
+		}
+
+		public function get totalReq():int
+		{
+			return _totalReq;
+		}
+
+		public function set totalReq(value:int):void
+		{
+			_totalReq = value;
+		}
+
+		public function get noPendientes():int
+		{
+			return _noPendientes;
+		}
+
+		public function set noPendientes(value:int):void
+		{
+			_noPendientes = value;
+		}
+
+		public function get noHallazgosVisita():int
+		{
+			return _noHallazgosVisita;
+		}
+
+		public function set noHallazgosVisita(value:int):void
+		{
+			_noHallazgosVisita = value;
+		}
+
+		public function get noRequisiciones():int
+		{
+			return _noRequisiciones;
+		}
+
+		public function set noRequisiciones(value:int):void
+		{
+			_noRequisiciones = value;
+		}
+
+		public function get noCotizaciones():int
+		{
+			return _noCotizaciones;
+		}
+
+		public function set noCotizaciones(value:int):void
+		{
+			_noCotizaciones = value;
+		}
+
+		public function get noProductos():int
+		{
+			return _noProductos;
+		}
+
+		public function set noProductos(value:int):void
+		{
+			_noProductos = value;
+		}
+
+		public function get totalProductos():Number
+		{
+			return _totalProductos;
+		}
+
+		public function set totalProductos(value:Number):void
+		{
+			_totalProductos = value;
+		}
+
+		public function get calificacion():int
+		{
+			return _calificacion;
+		}
+
+		public function set calificacion(value:int):void
+		{
+			_calificacion = value;
+		}
+
+		public function get noVisita():int
+		{
+			return _noVisita;
+		}
+
+		public function set noVisita(value:int):void
+		{
+			_noVisita = value;
+		}
+
+		public function get solicitud():SolicitudVisita
+		{
+			return _solicitud;
+		}
+
+		public function set solicitud(value:SolicitudVisita):void
+		{
+			_solicitud = value;
+		}
+
+		public function get totalDocsCargados():Number
+		{
+			return _totalDocsCargados;
+		}
+
+		public function set totalDocsCargados(value:Number):void
+		{
+			_totalDocsCargados = value;
+		}
+
+		public function get observaciones():String
+		{
+			return _observaciones;
+		}
+
+		public function set observaciones(value:String):void
+		{
+			_observaciones = value;
+		}
+
+
+	}
+}

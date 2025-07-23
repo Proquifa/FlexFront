@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="inicia()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 xmlns:combo="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		 xmlns:formatoCol ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.comun.llamadas.EventoReporteLamadas;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			[Bindable]
+			public var _llamada:Llamada;
+			[Bindable]
+			private var _listaPartidas:ArrayCollection;
+			[Bindable]
+			private var _listaCodigo:ArrayCollection;
+			[Bindable]
+			private var _listaProductos:ArrayCollection;
+			/**
+			 * Metodo para inciar
+			 */ 
+			private function inicia():void{
+				this._listaPartidas = new ArrayCollection();
+				limpiaZonaRequisicion();
+			}
+			/**
+			 * Metodo para limpiar y poner el Combo Codigo a ninguno
+			 */ 
+			private function limpiaZonaRequisicion():void{
+				var dato:CatalogoItem = new CatalogoItem
+				this._listaCodigo = new ArrayCollection();
+				dato.valor = "--NINGUNO--";
+				dato.llave = 0;
+				this._listaCodigo.addItem( dato );
+				this.cmbCodigo.selectedIndex = 0;
+				this.txtNombreProducto.text = "";
+				this.txtCantidad.text = "";
+				this.txtComentariosPartida.text = "";
+			}
+			/**
+			 * Metodo para determinar si mostrar u ocultar si es de tipo Requisicion Telefonica
+			 */ 
+			private function transaccionTelefonica():void{
+				if( this.chkTTelefonica.selected == true){
+					this.contendorPartidas.percentHeight = 100;
+					this.contendorPartidas.visible = true;
+					this.txtComentarios.percentHeight = 30;
+				}else{
+					this.contendorPartidas.height = 0;
+					this.contendorPartidas.visible = false;
+					this.txtComentarios.percentHeight = 100;
+				}
+			}
+			/**
+			 * Metodo que carga los productos segun la Marca Seleccionada
+			 */ 
+			private function cargaProductos():void{
+				if( this.cmbMarca.selectedItem.valor == "NINGUNO"){
+					this.limpiaZonaRequisicion();
+					return;
+				}
+				var evento:EventoReporteLamadas = new EventoReporteLamadas( EventoReporteLamadas.CARGA_PRODUCTOS_POR_MARCA );
+				evento.idFabricante = this.cmbMarca.selectedItem.llave;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que recibe los productos por catalogo
+			 */
+			public function set recibeProductos( datos:ArrayCollection ):void{
+				if( datos == null ){
+					return;
+				}
+				this.limpiaZonaRequisicion();
+				this._listaProductos = datos;
+				var datosParaCombo:CatalogoItem;
+				for( var i:int = 0; i < datos.length; i++ ){
+					datosParaCombo =  new CatalogoItem();
+					datosParaCombo.llave = (datos.getItemAt( i ) as Producto).idProducto;
+					datosParaCombo.valor = (datos.getItemAt( i ) as Producto).codigo;
+					this._listaCodigo.addItem( datosParaCombo );
+				}
+			}
+			/**
+			 * Metodo para poner el nombre segun el codigo seleccionado
+			 */ 
+			private function escribeNombreProducto():void{
+				if( this.cmbCodigo.selectedItem.valor == "--NINGUNO--" ){
+					this.txtNombreProducto.text = "";
+					return;
+				}
+				for( var i:int = 0 ; i < _listaProductos.length ; i++){
+					if( this.cmbCodigo.selectedItem.valor == ( _listaProductos.getItemAt(i) as Producto).codigo ){
+						this.txtNombreProducto.text = ( _listaProductos.getItemAt(i) as Producto).descripcion;
+						return;
+					}
+				}
+			}
+			/**
+			 * Metodo para agregar partida
+			 */ 
+			private function agregaPartidaAlGrid():void{
+				if(  this.txtNombreProducto.text == "" && this.txtCantidad.text == "" ){
+					Alert.show("El concepto y la cantidad son obligatorios, Información incompleta","¡ATENCION!");
+					return;
+				}
+				var partida:PartidaCotizacion = new PartidaCotizacion();
+					if( this.cmbMarca.textInput.text == "--NINGUNO--"){
+						partida.fabrica = "ND";
+					}else{
+						partida.fabrica = this.cmbMarca.selectedItem.valor;
+					}
+					if( this.cmbCodigo.textInput.text == "--NINGUNO--"){
+						partida.codigo = "ND";
+					}else{
+						partida.codigo = this.cmbCodigo.selectedItem.valor;
+					}
+					partida.concepto = this.txtNombreProducto.text;
+					partida.cantidad = int( this.txtCantidad.text );
+					partida.comentariosRequisicion = this.txtComentariosPartida.text;
+				this._listaPartidas.addItem( partida );
+				for( var i:int = 0; i < _listaPartidas.length; i++){
+					_listaPartidas[i].numFila = i + 1;
+				}
+				//a la ultima partida agregada se le asigna la longitud (en numero) de la lista para saber q partida es
+				/* (this._listaPartidas.getItemAt( this._listaPartidas.length - 1 ) as PartidaCotizacion).partida = this._listaPartidas.length; */
+				limpiaZonaRequisicion();
+			}
+			
+			/**
+			 * Metodo para elimiar partidas agregadas a la Requisicion
+			 */ 
+			public function eliminaPartidas(datos:PartidaCotizacion):void{
+				for( var i:int = 0; i < this._listaPartidas.length; i++ ){
+					//
+					if( datos.concepto == (this._listaPartidas.getItemAt( i ) as PartidaCotizacion).concepto ){
+						this._listaPartidas.removeItemAt( i );
+					}
+					this._listaPartidas[i].numFila = i + 1;
+				}
+				
+			}
+			/**
+			 * Metodo que advierte Antes de Gerrar la Llamada
+			 */
+			private function cerrarLlamada():void{
+				Alert.buttonWidth = 150;
+				Alert.yesLabel = "Si";
+				Alert.noLabel = "NO";
+				Alert.show("Una vez cerrada la llamada no podrá ser modificada, ¿Desea continuar?","¿ATENCION!", Alert.NO|Alert.YES, this, metodoCerrar);
+			}
+			public function metodoCerrar(event:CloseEvent):void{
+				if(event.detail == Alert.YES){
+					eventoGuardar();
+				}else{
+					return;
+				}
+			}
+			/**
+			 * Metodo que genera el evento de guardado
+			 */ 
+			private function eventoGuardar():void{
+				var evento:EventoReporteLamadas = new EventoReporteLamadas( EventoReporteLamadas.CIERRA_LLAMADA );
+				evento.llamada = this._llamada;
+				if( this.txtComentarios.text == ""){
+					Alert.show("Es obligatorio escribir comentarios","Informacion incompleta");
+					return;
+				}
+				evento.llamada.comentarios = this.txtComentarios.text;
+				evento.llamada.enteradoNotificacion = true;
+				if( this._listaPartidas.length > 0 ){
+					for( var i:int = 0; i < this._listaPartidas.length; i++ ){
+						(this._listaPartidas.getItemAt( i ) as PartidaCotizacion).partida = i + 1 ;
+					}
+					evento.listaPartidas = this._listaPartidas;
+				}else{
+					evento.listaPartidas  = null;
+				}
+				dispatchEvent( evento );
+			} 
+			/**
+			 * Metodo que indica que se guardo con exito 
+			 **/
+			public function set recibeConfirmacionGuardado( folio:String ):void{
+				if( folio == null  ){
+					return;
+				}else{
+					if( folio == "NA"){
+						cerrar();
+						return;
+					}
+					//buscar documento con su folio
+					var ruta:String = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + folio + ".pdf";
+					var request:URLRequest = new URLRequest(ruta);
+					navigateToURL(request);
+					cerrar();
+				}
+			}
+			/**
+			 * Metodo para regresar a la lista de las llamadas pendientes
+			 */
+			private function cerrar():void{
+				Reset();
+				var evento:EventoReporteLamadas = new EventoReporteLamadas( EventoReporteLamadas.CAMBIA_HIJO );
+				evento.vieneDe = "cerrarLlamada";
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo para regresar al componente a su estado Origina
+			 */ 
+			private function Reset():void{ 
+				this.cmbMarca.selectedIndex = 0;
+				this.limpiaZonaRequisicion();
+				this.chkTTelefonica.selected = false;
+				transaccionTelefonica();
+				this.txtComentarios.text = "";
+				this.chkEnterado.selected = true;
+				this._listaPartidas = new ArrayCollection();
+				this._llamada = new Llamada();
+			}
+			
+		]]>
+	</fx:Script>
+	<!--<s:Label text="Reporte llamadas" fontSize="40" fontWeight="bold"/>-->
+	<label:labelTitulo_Otros text="Reporte llamadas"/>
+	<s:Spacer height="3"/>
+	<otros:division width="100%"/>
+	<!--<mx:HRule width="100%"/>-->
+	<s:Spacer height="3"/>
+	<mx:HBox width="100%">
+		<label:labelSubtitulo text="Comentarios"/>
+		<!--<s:Label text="Comentarios" fontSize="24" fontWeight="bold"/>-->
+		<s:Spacer width="100%" />
+	</mx:HBox>
+	<s:TextArea width="100%" height="100%" id="txtComentarios" text="{ this._llamada.asunto }"/>
+	<mx:HBox width="100%">
+		<s:CheckBox id="chkEnterado" label="Enterado de la notificación" enabled="false"
+					selected="true" visible="false"/>
+		<s:Spacer width="100%"/>
+		<s:CheckBox label="Requisición Telefonica" click="transaccionTelefonica()" id="chkTTelefonica"/>
+	</mx:HBox>
+	<mx:VBox width="100%" height="0" id="contendorPartidas" visible="false">
+		<mx:HRule width="100%"/>
+		<s:Spacer height="3"/>
+		<s:Label text="AGREGAR PARTIDA" fontSize="24" fontWeight="bold"/>
+		<mx:HBox width="100%">
+			<s:Label text="Marca:" fontWeight="bold"/>
+			<combo:ComboCatalogos id="cmbMarca" width="300" creationComplete="this.cmbMarca.cargarMarcas('--NINGUNO--')" change="cargaProductos()"/>
+			<s:Label text="Catálogo:" fontWeight="bold"/>
+			<s:ComboBox id="cmbCodigo" width="150" dataProvider="{ this._listaCodigo}" labelField="valor" change="escribeNombreProducto()"/>
+			<s:Label text="Concepto:" fontWeight="bold"/>
+			<s:TextInput id = "txtNombreProducto" width="350" />
+			<s:Label text="Cantidad:" fontWeight="bold"/>
+			<s:Label  fontWeight="bold" />
+			<s:TextInput width="50" restrict="0-9" id="txtCantidad"/>
+			<s:Spacer width="100%"/>
+			<s:Button styleName="botonNegroOld" label="Agregar Partida" width="120" click="agregaPartidaAlGrid()"/>
+		</mx:HBox>
+		<s:Label fontWeight="bold" text="Comentarios de la Partida:"/>
+		<s:TextArea id="txtComentariosPartida" width="100%" height="20%"/>
+		<mx:DataGrid width="100%" height="100%" dataProvider="{this._listaPartidas}">
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" width="30" dataField="numFila"/>
+				<mx:DataGridColumn headerText="MARCA" dataField= "fabrica"/>
+				<mx:DataGridColumn headerText="MARCA" dataField= "fabrica"/>
+				<mx:DataGridColumn headerText="CÓDIGO" dataField= "codigo"/>
+				<mx:DataGridColumn headerText="DESCRIPCIÓN" dataField="concepto"/>
+				<mx:DataGridColumn headerText="COMENTARIO" dataField="comentariosRequisicion" />
+				<mx:DataGridColumn headerText="ELIMINAR" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:LinkButton textDecoration="underline" label="Eliminar" color="#dbd8d8" click="this['outerDocument'].eliminaPartidas(this.data)" />
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+		<!--<s:DataGrid width="100%" height="100%" dataProvider="{this._listaPartidas}">
+			<s:columns>
+				<s:ArrayList>
+					<formatoCol:GridColumnFormato formato="numfila" headerText="#" width="30"/>
+					<s:GridColumn headerText="CANTIDAD" dataField="cantidad"/>
+					<s:GridColumn headerText="MARCA" dataField= "fabrica"/>
+					<s:GridColumn headerText="CÓDIGO" dataField= "codigo"/>
+					<s:GridColumn headerText="DESCRIPCIÓN" dataField="concepto"/>
+					<s:GridColumn headerText="COMENTARIO" dataField="comentariosRequisicion" />
+					<s:GridColumn headerText="ELIMINAR" >
+						<s:itemRenderer>
+							<fx:Component>
+								<s:GridItemRenderer>
+									<mx:LinkButton textDecoration="underline" label="Eliminar" color="#dbd8d8" click="this['outerDocument'].eliminaPartidas(this.data)" />
+								</s:GridItemRenderer>
+							</fx:Component>
+						</s:itemRenderer>
+					</s:GridColumn>
+				</s:ArrayList>
+			</s:columns>
+		</s:DataGrid>-->
+	</mx:VBox>
+	<s:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<s:Spacer height="3"/>
+	<mx:HBox width="100%" >
+		<s:Button styleName="botonNegroOld" label="Cancelar" width="80" click="cerrar()"/>
+		<s:Spacer width="100%"/>
+		<s:Button styleName="botonNegroOld" label="Guardar" id="btnGuardarRequisicion" click="cerrarLlamada()"/>
+	</mx:HBox>
+</mx:VBox>

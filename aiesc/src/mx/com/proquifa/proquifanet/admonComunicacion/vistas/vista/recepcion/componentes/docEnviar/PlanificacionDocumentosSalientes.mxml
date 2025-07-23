@@ -1,0 +1,536 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contenedores:VGroupConPaddingStandardPqNet xmlns:fx="http://ns.adobe.com/mxml/2009" 
+											xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+											xmlns:contenedores="skins.skin.contenedores.*"
+											xmlns:btnRegresa="skins.botones.flecharegresa.*"
+											xmlns:s="library://ns.adobe.com/flex/spark" 
+											xmlns:mx="library://ns.adobe.com/flex/mx" 
+											xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+											xmlns:graficas="skins.skin.graficas.*"
+											xmlns:label="skins.skin.label.*" 
+											xmlns:otros="skins.otros.*"
+											>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoDocumentosPendientesAEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.BodyMensajes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pendiente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable]
+			public var _tituloEstado:String;
+			[Bindable]
+			public var _listaUniverso:ArrayCollection;
+			[Bindable]
+			public var _listaTipo:ArrayCollection; 
+			[Bindable]
+			private var _partidasTotalesTipo:int;
+			[Bindable]
+			private var _partidasFTTipo:int;
+			[Bindable]
+			private var _partidasETTipo:int;
+			[Bindable]
+			private var _listaPartidas:ArrayCollection = null;
+			private var _yaRecibio:String;
+			public var _currentCorreo:Correo;
+			
+			[Bindable]private var _conteoCot:int;
+			[Bindable]private var _conteoCon:int;
+			[Bindable]private var _conteoSeg:int;
+			[Bindable]private var _conteoPed:int;
+			[Bindable]private var _conteoFac:int;
+			[Bindable]private var _conteoNot:int;
+			//---------------------------------CANAL BLOQUEO------------------------------------------------------
+			[Bindable]
+			private var varDataGridValidadoraPedido:ArrayCollection;
+			[Bindable]
+			private var _arregloPendientesEnUso:ArrayCollection = null;
+			public var busqueda:Boolean;
+			private var canalP:AMFChannel;
+			private var canalesP:ChannelSet;
+			
+			private var consumidorDocSalientes:Consumer = new Consumer();
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			
+			private var productorDocSalientes:Producer = new Producer();
+			private var canalRegistro:AMFChannel;
+			private var canalesRegistro:ChannelSet;
+			[Bindable]private var _arregloSeisBotones:ArrayCollection = new ArrayCollection([
+				{label:"COT",bandera:false},
+				{label:"CON",bandera:false},
+				{label:"SEG",bandera:false},
+				{label:"PED",bandera:false},
+				{label:"FAC",bandera:false},
+				{label:"NOT",bandera:false}]);
+			private var _seleccion:int;
+			
+			public function inicia():void{		
+				//						INICIAR EL GRID
+				//this.btnBarra.selectedIndex = 0;
+				recibeTipoBoton();
+				//						DEFINIR CONSUMIDOR PARA EL CANAL
+				this.consumidorDocSalientes.destination = "actualizacionService";
+				this.consumidorDocSalientes.addEventListener("fault",falloconsumidor);
+				this.consumidorDocSalientes.addEventListener(MessageEvent.MESSAGE, recibirMensajePendientes);
+				this.canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesVerificacion = new ChannelSet();
+				this.canalesVerificacion.addChannel(canalVerificacion);
+				this.consumidorDocSalientes.channelSet = this.canalesVerificacion;
+				this.consumidorDocSalientes.subscribe();
+				//						DEFINIR PRODUCTOR PARA EL CANAL
+				this.productorDocSalientes.destination = "actualizacionService";
+				this.productorDocSalientes.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalRegistro = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesRegistro = new ChannelSet();
+				this.canalesRegistro.addChannel(canalRegistro);
+				this.productorDocSalientes.channelSet = this.canalesRegistro;
+				//						MANDAR EL MENSAJE DE INICIO PARA CHECAR SI HAY PENDIENTES EN EDICION
+				/*se genera un ArrayCollection que se añadira dentro del mensaje.body para cuando se quiera validar 
+				en el consumidor y no se genere errores */
+				this._arregloPendientesEnUso = new ArrayCollection();
+				/*se genera el mensaje que sera enviado al consumidor*/
+				var contenidoMensaje:BodyMensajes = new BodyMensajes();			    		
+				contenidoMensaje.vieneDe = "usuarionuevo";
+				contenidoMensaje.usuario = DatosGlobales.getInstance()._usuario.usuario; //this.usuario;
+				var mensaje:AsyncMessage = new AsyncMessage();			
+				this._arregloPendientesEnUso.addItem( contenidoMensaje );	
+				mensaje.body = this._arregloPendientesEnUso;
+				this.productorDocSalientes.send( mensaje );
+			}
+			private function falloconsumidor(event:MessageFaultEvent):void{
+				//Alert.show("Se ha producido un error en el Consumidor","Error");
+				alertaSingleton.show(catalogoAlertas.ERR_channelConsumidor, catalogoAlertas.TIT_ERR);
+			}
+			private function falloproductor(event:MessageFaultEvent):void{
+				//Alert.show("Se ha producido un error en el Productor","Error");
+				alertaSingleton.show( catalogoAlertas.ERR_channelProductor, catalogoAlertas.TIT_ERR);
+			}
+			
+			private function recibirMensajePendientes(mensajeRecibido:MessageEvent):void{
+				var arreglotemporal:ArrayCollection = new ArrayCollection ();
+				/*Se mete el message.body en un ArrayCollection temporal*/
+				if(mensajeRecibido.message.body != "Mensaje"){//Validacion porq en LlamNew el productor manda un mensaje con la cadena Mensaje
+					arreglotemporal = mensajeRecibido.message.body as ArrayCollection;
+					/*El arreglo puede no contener objetos despues de que se le borraron registros en el Metodo 
+					borraRegistro por lo que se verifica si su longitud es mayor a cero o evitar un error por Registros vacios.*/
+					if(arreglotemporal.source.length > 0){  
+						/* Si el arreglo temporal viene de un usuario nuevo */
+						if( "usuarionuevo" ==  (arreglotemporal.getItemAt(0) as Object ).vieneDe ){
+							/*Como la variable de un usuario nuevo viene vacia se verifica que que la variable solicitada en el metodo sea diferente a la del usuario nuevo*/
+							if(DatosGlobales.getInstance()._usuario.usuario != (arreglotemporal.getItemAt(0) as Object ).usuario){
+								enviaTusVariables();
+							}
+						}else{
+							/*Si existen registros se actualiza  El ArrayColeection recibido en el Metodo  para todos los usuarios*/
+							varDataGridValidadoraPedido = mensajeRecibido.message.body as ArrayCollection;     
+							this._arregloPendientesEnUso = this.varDataGridValidadoraPedido                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+							/* Alert.show( evt.message.body.toString(), "Mensaje Recibido");*/	
+						}
+					}else{
+						/*Si el Array Collection viene sin Objetos o viene vacio solo se actualiza el Array Collection para todos los usuarios y se dejan libres todos los pendientes*/
+						varDataGridValidadoraPedido = mensajeRecibido.message.body as ArrayCollection;
+						this._arregloPendientesEnUso = this.varDataGridValidadoraPedido;
+						/* Alert.show( evt.message.body.toString(), "Mensaje Recibido");*/	
+					}
+				}
+				if(mensajeRecibido.message.body == "actualizaGridPlanificacionDocumentosSalientes"){
+					var evento:EventoDocumentosPendientesAEnviar = new EventoDocumentosPendientesAEnviar(  EventoDocumentosPendientesAEnviar.TOTAL_PENDIENTES_POR_ENVIAR ); //COTIZACIONES_POR_ENVIAR
+					evento.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent( evento );
+				}
+			}
+			/**
+			 * Funcionque recibe del mapa (MapaDocumentosPendientesPorEnviar.mxml) la Lista de las Partidas A Confirmar
+			 * RECORDAR Q HAY UNA FUNCION IGUAL EN EspacioPendientesTablasGraficas.mxml
+			 */ 
+			public function set recibeDatosConsultaCotizacion( lista:ArrayCollection ):void{ 
+				if( lista == null && lista.length == 0 ){
+					return;
+				}
+				_listaPartidas = new ArrayCollection();
+				for ( var f:int= 0; f < lista.length; f++){
+					var _correoTemporal:Correo = new Correo();
+					_correoTemporal= (lista.getItemAt(f) as Pendiente).correo;
+					_correoTemporal.numFila = f + 1;
+					_correoTemporal.tipo = (lista.getItemAt(f) as Pendiente).tipoPendiente;
+					_correoTemporal.folioNumerico = (lista.getItemAt(f) as Pendiente).folio;
+					_correoTemporal.FolioDocumento = (lista.getItemAt(f) as Pendiente).docto;
+					_correoTemporal.idPendiente = (lista.getItemAt( f ) as Pendiente).folio;
+					this._listaPartidas.addItem(_correoTemporal );
+				}
+				iniciaCargaTipoLista( ObjectUtil.copy( this._listaPartidas) as ArrayCollection );
+			}
+			public function iniciaCargaTipoLista(lista:ArrayCollection):void{
+				this._listaUniverso= new ArrayCollection();
+				this._listaTipo= new ArrayCollection();
+				this._listaUniverso = lista;
+				recibeTipoBoton();
+			}
+			private function cambiaTipoLista(dato:String):void{
+				this._partidasTotalesTipo = 0;
+				this._partidasETTipo = 0;
+				this._partidasFTTipo = 0;
+				_conteoCon = 0;
+				_conteoCot = 0;
+				_conteoFac = 0;
+				_conteoNot = 0;
+				_conteoPed = 0;
+				_conteoSeg = 0;
+				this._listaTipo = new ArrayCollection();
+				if( this._listaUniverso != null){
+					for(var f:int = 0; f < this._listaUniverso.length; f++){
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == dato){
+							this._listaTipo.addItem( this._listaUniverso[f] );
+						}
+						//				PARA EL CONTEO POR TIPO
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == "Cotizaciones por enviar") _conteoCot += 1;
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == "Confirmacion por enviar") _conteoCon += 1;
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == "Seguimiento por enviar") _conteoSeg += 1;
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == "Pedidos por enviar") _conteoPed += 1;
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == "Facturas por enviar") _conteoFac += 1;
+						if( (this._listaUniverso.getItemAt( f ) as Correo).tipo == "Notificaciones por enviar") _conteoNot += 1;
+						//
+					}
+					for ( var p:int = 0; p < this._listaTipo.length; p++){
+						this._partidasTotalesTipo = this._partidasTotalesTipo + 1;
+						this._listaTipo[p].numFila = p + 1 ;
+						this._listaTipo[p].enTiempo == "ET" ? this._partidasETTipo += 1 : this._partidasFTTipo += 1;
+					}
+					gridRealizarPendientes.dataProvider = _listaTipo;
+					_arregloSeisBotones[0].bandera = _conteoCot > 0 ? true : false;
+					_arregloSeisBotones[1].bandera = _conteoCon > 0 ? true : false;
+					_arregloSeisBotones[2].bandera = _conteoSeg > 0 ? true : false;
+					_arregloSeisBotones[3].bandera = _conteoPed > 0 ? true : false;
+					_arregloSeisBotones[4].bandera = _conteoFac > 0 ? true : false;
+					_arregloSeisBotones[5].bandera = _conteoNot > 0 ? true : false;
+				}
+				_arregloSeisBotones.refresh();
+				this.btnBarra.selectedIndex = _seleccion;
+			}
+			/**
+			 * Funcion para llamar al padre DefaulVistaAIESC.mxml y seleccionar hijo EspacionPendientesYGrafGestorAIESC
+			 * */
+			private function regresaGraficas():void{
+				var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.SELECCIONA_OPCION);
+				evento.idOpcionSeleccionada = "EspacionPendientesYGrafGestorAIESC";
+				dispatchEvent(evento);
+			}
+			/**
+			 * Funcion privada para el menu de 6 botones
+			 */ 
+			public function recibeTipoBoton():void{
+				_seleccion = this.btnBarra.selectedIndex;
+				if(this.btnBarra.selectedIndex == 0){
+					cambiaTipoLista("Cotizaciones por enviar");
+					this._tituloEstado ="Cotizaciones";
+					
+				}else if(this.btnBarra.selectedIndex == 1){
+					cambiaTipoLista("Confirmacion por enviar");
+					this._tituloEstado ="Confirmaciones";
+					
+				}else if(this.btnBarra.selectedIndex == 2){
+					cambiaTipoLista("Seguimiento por enviar");
+					this._tituloEstado ="Seguimientos";
+					
+				}else if(this.btnBarra.selectedIndex == 3){
+					cambiaTipoLista("Pedidos por enviar");
+					this._tituloEstado ="Pedidos";
+					
+				}else if(this.btnBarra.selectedIndex == 4){
+					cambiaTipoLista("Facturas por enviar");
+					this._tituloEstado ="Facturas";
+					
+				}else if(this.btnBarra.selectedIndex == 5){
+					cambiaTipoLista("Notificaciones por enviar");
+					this._tituloEstado ="Notificaciones";
+				}
+			}
+			/**
+			 * Recibe la inyeccion q trae el aviso del Correo Enviado
+			 */
+			public function set recibeCorreoEnviado ( datos:Boolean ):void{
+				if(this._yaRecibio == ""){ // esta condicion es porq hay 2 mapas apuntando a recibeCorreoEnviado y se previene q se ejecute 2 veces el bloque de abajo
+					if(datos == true ){
+						this._yaRecibio = "SI";
+						/* mandamos a llamar el servicio en el mapa MapaDocumentosPendientesPorEnviar.mxml */
+						var evento:EventoDocumentosPendientesAEnviar = new EventoDocumentosPendientesAEnviar(  EventoDocumentosPendientesAEnviar.TOTAL_PENDIENTES_POR_ENVIAR ); //COTIZACIONES_POR_ENVIAR
+						evento.usuario = DatosGlobales.getInstance()._usuario.usuario;
+						dispatchEvent( evento );
+						/* le decimos a la funcion de DefaultVistaAIESC.mxml que nos mande a la vista planificacion */
+						var evento2:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.SELECCIONA_OPCION);
+						evento2.idOpcionSeleccionada = "espacioPlanificacion";
+						dispatchEvent(evento2);
+						//Alert.show('Pendiente Terminado');
+						alertaSingleton.show(catalogoAlertas.CONF_AIESC_pendienteTerminado, catalogoAlertas.TIT_CONF_operacionExitosa);
+					}
+				}else{
+					this._yaRecibio = "";
+				}
+			}
+			private function itemClickGrid( event:EventoDataGrid):void{
+				var bandera:Boolean = new Boolean;
+				if (event.itemClick.columnIndex == 7) { 	
+					/*Variable usada para generar un valor y un id */ 
+					var contenidoMensaje:BodyMensajes = new BodyMensajes();
+					/*La variable arreglo .numeroFolio tendra el numero del folio que se esta modificando*/
+					contenidoMensaje.numeroFolio = _currentCorreo.folioNumerico.toString();
+					/*La variable contenidoMensaje .vieneDe provovca que se use un camino diferete en el consumer para evitar reenviar la variable  como usaurioa nuevo*/
+					contenidoMensaje.vieneDe = "usuarioviejo";
+					/*La variable arrglo.usuario tendra llevara el nombre del usuario*/
+					contenidoMensaje.usuario = DatosGlobales.getInstance()._usuario.usuario; //this.usuario	
+					/**
+					 * Se verifica el contenido del Arreglo para saber si el pendiente ya se estaba modificando o si es nulo inserta los valores.
+					 */
+					if(this.varDataGridValidadoraPedido == null){
+						this._arregloPendientesEnUso = new ArrayCollection();	    			
+						this._arregloPendientesEnUso.addItem( contenidoMensaje );		    		
+					}else{ /**/
+						bandera = true;
+						this._arregloPendientesEnUso = this.varDataGridValidadoraPedido;
+						for (var i:int=0; i < this._arregloPendientesEnUso.source.length; i++){
+							if( _currentCorreo.folioNumerico == (this._arregloPendientesEnUso.getItemAt( i ) ).numeroFolio){							
+								bandera = false;
+							} 
+						}		
+						if(bandera){/*Si el usuario y el pendiente a modificar no estan siendo usados se agrega al arreglo las variables y se envia el mensaje*/
+							this._arregloPendientesEnUso.addItem( contenidoMensaje );			    		
+						}else{
+							//Alert.show( "El pendiente se encuentra en modificación por otro usuario","Operación imposible" );
+							alertaSingleton.show( catalogoAlertas.ADV_AIESC_PendienteBloqueado, catalogoAlertas.TIT_ADV_operacionImposible );
+							return;
+						}
+					}
+					var mensaje:AsyncMessage = new AsyncMessage();
+					mensaje.body = this._arregloPendientesEnUso;
+					this.productorDocSalientes.send( mensaje );
+					
+					var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.SELECCIONA_OPCION );
+					evento.idOpcionSeleccionada = "VistaSalientesInspector";
+					evento.medio = _currentCorreo.medio;
+					evento.partidaSeleccionada = _currentCorreo as Object;
+					dispatchEvent(evento); 
+				} 
+			}
+			//------------------------------------------------CANAL BLOQUEO------------------------------------------------------
+			/**
+			 * Metodo usado para enviar a un Usuario Nuevo  la variable que controla los Pendietes Abiertos 
+			 **/
+			private function enviaTusVariables():void{	
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = this._arregloPendientesEnUso;
+				this.productorDocSalientes.send( mensaje );
+			}  
+			/**
+			 * Con esta funcion se elimina un registro de la variable _validaElPendienteActualizado
+			 */
+			public function  borraRegistro(evt:EventoPendientesPorEnviar):void{			 	
+				//se obtiene la posicion del Objeto a eliminar dentro del Array Collection
+				for (var i:int=0; i < this._arregloPendientesEnUso.source.length; i++){	  
+					if( (this._arregloPendientesEnUso.getItemAt( i ) ).numeroFolio ==  evt.folioPendiente){
+						this._arregloPendientesEnUso.removeItemAt( i );
+					}
+				}
+				this.varDataGridValidadoraPedido = this._arregloPendientesEnUso;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = this._arregloPendientesEnUso;
+				this.productorDocSalientes.send( mensaje ); 
+				flash.system.System.gc();		
+			} 
+			
+			public function borraDelArregloPendientes(p:BodyMensajes):void{
+				//se obtiene la posicion del Objeto a eliminar dentro del Array Collection
+				for (var i:int=0; i < this._arregloPendientesEnUso.source.length; i++){	  
+					if( (this._arregloPendientesEnUso.getItemAt( i ) ).numeroFolio ==  p.numeroFolio){
+						this._arregloPendientesEnUso.removeItemAt( i );
+					}
+				}
+				this.varDataGridValidadoraPedido = this._arregloPendientesEnUso;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = this._arregloPendientesEnUso;
+				this.productorDocSalientes.send( mensaje ); 
+				flash.system.System.gc();
+			}
+			
+			public function recibeCorreoSelected($mail:Correo):void
+			{
+				_currentCorreo = $mail;
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" paddingBottom="10" >
+		<btnRegresa:botonFlechaRegresa click="regresaGraficas()" />
+		<s:Spacer width="100%"/>
+		<s:VGroup height="100%" verticalAlign="bottom">
+			<s:ButtonBar id="btnBarra" change="recibeTipoBoton()" selectedIndex="0" 
+						 skinClass="skins.botoneras.botoneraBandera.skinBotoneraBandera" dataProvider="{_arregloSeisBotones}"/>
+		</s:VGroup>
+	</s:HGroup>
+	
+	
+	<otros:divisionHueca width="100%"/>
+	
+	<s:HGroup width="100%" verticalAlign="middle" paddingTop="10" paddingBottom="10">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_cotizaciones46}" />
+		<!--<label:labelTitulo width="100%" fontSize="28" text="{this._tituloEstado}"/>-->
+		<label:TituloBankGothic_30 width="100%" text="{this._tituloEstado}"/>
+		<s:Spacer width="100%"/>
+		<label:TituloBankGothic_24_Gris text="[Documentos a enviar]" />
+		<!--<s:Label width="438" height="24" fontFamily="Bank Gothic" fontSize="24" fontStyle="normal" fontWeight="normal"
+		text="[Documentos a enviar]" textAlign="right" color="0x777777"/>-->
+	</s:HGroup>
+	
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%" paddingTop="20">
+		<!--<s:Label text="LISTADO" fontFamily="Bank Gothic" fontSize="18" fontWeight="normal"/>-->
+		<label:TextoBankGothic_18 text="LISTADO" />
+		<s:Spacer width="100%"/>
+		<label:TextoBankGothic_18 text="{this._partidasTotalesTipo } Documentos . {this._partidasETTipo} ET . {this._partidasFTTipo} FT"/>
+		<!--<s:Label width="438" height="24" fontFamily="Bank Gothic" fontSize="18" fontWeight="normal"
+		text="{this._partidasTotalesTipo } Documentos · {this._partidasETTipo} ET · {this._partidasFTTipo} FT" textAlign="right"/>-->
+	</s:HGroup>
+	
+	<otros:divisionGruesa width="100%"/>
+	
+	
+	
+	<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridRealizarPendientes"  width="100%" height="100%" itemClickADG="itemClickGrid(event)" tipoDeConsulta="Documentos recibidos" 
+												 anchoColumnas="{['45','25%','10%','=','=','10%','=','45']}" >
+		
+		<AdvancedDataGrid:columns>
+			<mx:AdvancedDataGridColumn headerText="#" dataField="numFila" />
+			<mx:AdvancedDataGridColumn headerText="Cliente Destino" dataField="nombreDestino"/>
+			<mx:AdvancedDataGridColumn headerText="Folio" dataField="FolioDocumento" />
+			<mx:AdvancedDataGridColumn headerText="Origen" dataField="origen" />
+			<mx:AdvancedDataGridColumn headerText="Medio de Envío" dataField="medio" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoIconosGrid;
+									[Bindable]
+									private var normalIcon:Class;
+									[Bindable]
+									private var hoveredIcon:Class;
+									
+									override public function set data(value:Object):void{
+										if (value == null) return;
+										super.data = value;
+										if(data.medio == "Correo electrónico"){
+											this.normalIcon = catalogoIconosGrid.getInstance().render_mensajeazul;
+											this.hoveredIcon = catalogoIconosGrid.getInstance().render_mensajeazulhovered;
+										}else if(data.medio == "Fax"){
+											this.normalIcon = catalogoIconosGrid.getInstance().render_faxazul;
+											this.hoveredIcon = catalogoIconosGrid.getInstance().render_faxazulhovered;
+										}
+									}
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<mx:Image source="{normalIcon}"  source.hovered="{hoveredIcon}" source.selected="{hoveredIcon}" horizontalCenter="0"  />
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn headerText="En espera desde" dataField="fechaInicioFormato" />
+			<mx:AdvancedDataGridColumn headerText="Situación" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									
+									private var colorRojoTextoGrid:uint = 0xd10c0c; // Red
+									private var colorVerdeTextoGrid:uint = 0x70a047; // Verde
+									override public function set data(value:Object):void{
+										if (value == null) return;
+										super.data= value;
+										SeleccionaTextoColor();
+									}
+									private function SeleccionaTextoColor():void{
+										if(data.enTiempo == "ET"){
+											this.lblTextoColor.setStyle("color", colorVerdeTextoGrid );
+											this.lblTextoColor.text = "ET";
+										}
+										else{
+											this.lblTextoColor.setStyle("color", colorRojoTextoGrid );
+											this.lblTextoColor.text = "FT";
+										}
+									}
+								]]>
+							</fx:Script>
+							<label:Texto id="lblTextoColor" fontWeight="bold" horizontalCenter="0"/>
+							<!--<s:Label id="lblTextoColor" fontWeight="bold" horizontalCenter="0"/>-->
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+									
+									import skins.catalogos.catalogoIconosGrid;
+									[Bindable]
+									private var normalIcon:Class;
+									private var _correo:Correo;
+									
+									override public function set data(value:Object):void{
+										if (value == null) return;
+										super.data= value;
+										_correo = new Correo();
+										_correo = data as Correo;
+										normalIcon = catalogoIconosGrid.getInstance().render_inspectorazul;
+									}
+									
+									private function image1_clickHandler():void
+									{
+										outerDocument.recibeCorreoSelected(_correo);
+									}
+									
+								]]>
+							</fx:Script>
+							<s:states>
+								<s:State name="normal"/>
+								<s:State name="hovered"/>
+								<s:State name="selected"/>
+							</s:states>
+							<mx:Image source="{normalIcon}" horizontalCenter="0" click="image1_clickHandler()"/>
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+		</AdvancedDataGrid:columns>
+	</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+	
+	<otros:divisionGruesa width="100%"/>
+</contenedores:VGroupConPaddingStandardPqNet>

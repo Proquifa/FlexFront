@@ -1,0 +1,687 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*" 
+		  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+		  xmlns:dotted="mx.com.proquifa.proquifanet.rsl.vista.utils.dotted.*"
+		  xmlns:graficas="skins.skin.graficas.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*" 
+		  paddingRight="20" paddingLeft="20" 
+		  paddingTop="25" paddingBottom="15"
+		  width="100%" height="100%" xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" xmlns:linkButton="skins.skin.linkButton.*" 
+		  creationComplete="create(event)"
+		  >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+		<mx:SolidColorStroke id = "sA" color="0x3b98af" weight="6"/>
+		<s:SolidColorStroke id = "s1" color="0x000000" weight="1"/>
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.charts.series.items.ColumnSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.operativos.EventoTableroOperativos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.gestion.VistaDefaultTabOperativos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.operativos.componentes.comercializacion.reqcot.renderer.DataTipIndicadorRenderer;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.operativos.menu.TabOperativosBarraMenu;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+			import skins.skin.label.TituloHelvetica_10_Blanco;
+			
+			
+			private const MINIMO:int = 170;
+			
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = $valor.toString();
+				return strRegreso;
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				if(VistaDefaultTabOperativos.cargarDatos.Seguimiento == true)
+				{
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("buscarOperativos");
+					eventEspera.tipoEventos.push("CONSULTA_TABLERO");
+					dispatchEvent(eventEspera);
+					var eventSeg:EventoTableroOperativos = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TAB_SEGUIMIENTOS);
+					eventSeg.parametros = TabOperativosBarraMenu.parametrosBusqueda;
+					dispatchEvent(eventSeg);
+					VistaDefaultTabOperativos.cargarDatos.vistaMax = "Seguimiento";
+					VistaDefaultTabOperativos.cargarDatos.Seguimiento = false;
+					VistaDefaultTabOperativos.cargarDatos.newData = false;
+				}
+				else
+				{
+					VistaDefaultTabOperativos.cargarDatos.vistaMax = "Seguimiento";
+					VistaDefaultTabOperativos.cargarDatos.newData = false;
+				}
+			}
+			
+			public function set recibeSeguimientoETyFT( $lista:ArrayCollection):void{
+				if ($lista == null )
+					return;
+				
+				myChartETyFT.dataProvider = myChartETyFT.aplicarFormatoTableroOperativosRequisicion($lista);
+			}
+			
+			public function set recibeSeguimiento( $lista:ArrayCollection):void{
+				if ($lista == null )
+					return;
+				
+				myChart.dataProvider = builderChart(Util.agregarObjetoParaGraficaETyFT($lista,"etiqueta","FUERA DE TIEMPO", new ResumenConsulta()));
+				tool.removeAllElements();
+				crearGrupos();
+			}
+			public function set recibeSeguimientoFT( $lista:ArrayCollection):void{
+				if ($lista == null )
+					return;
+				gridFT.dataProvider = $lista;
+				/*setTimeout(asignarGridFT,500,$lista);*/
+			}
+			
+			
+			private function utilNumber($number:Number):Number{
+				if ($number > 0)
+					return $number;
+				
+				return 0;
+			}
+			
+			private function builderChart($datos:ArrayCollection):ArrayCollection{
+				
+				var meses:int = 1;
+				var objeto:Object;
+				var resumen:ResumenConsulta;
+				var cont:Number = 0;
+				var indicador:Number = 0;
+				var array:ArrayCollection = new ArrayCollection();
+				if (TabOperativosBarraMenu.parametrosBusqueda.periodo.toLowerCase() == "quincenal" ){
+					objeto = new Object();
+					objeto.numeroMes = TabOperativosBarraMenu.parametrosBusqueda.rangoMinMes;
+					objeto.mes =  Util._listaquincenal[TabOperativosBarraMenu.parametrosBusqueda.rangoMinMes].valor;
+					objeto.realizar = 0;
+					objeto.realizadas = 0;
+					objeto.porcentaje = 0;
+					
+					for (var i:int = 0; i < $datos.length; i++) 
+					{
+						resumen = $datos[i] as ResumenConsulta;
+						if (resumen.etiqueta == "POR REALIZAR" ){
+							objeto.realizar += resumen.totalFolios;
+							objeto.indicador = resumen.porcentaje;
+							indicador = resumen.porcentaje;
+						}
+						else if (resumen.etiqueta == "REALIZADAS" ){
+							objeto.realizadas += resumen.totalFolios;
+						}
+						if (objeto.realizar > 0 && objeto.realizadas > 0){
+							objeto.diferencia = Math.round(utilNumber(((objeto.realizar * resumen.porcentaje)/100) - objeto.realizadas));
+							break;
+						} 
+					}
+					objeto.tipo = "Seguimientos"
+					array.addItem(objeto);
+				}
+				else{
+					while(meses < 13){
+						if(meses >= TabOperativosBarraMenu.parametrosBusqueda.rangoMinMes && meses <= TabOperativosBarraMenu.parametrosBusqueda.rangoMaxMes)
+						{
+							objeto = new Object();
+							objeto.numeroMes = meses;
+							objeto.mes =  Util._listaMensual[meses - 1].valor;
+							objeto.realizar = 0;
+							objeto.realizadas = 0;
+							
+							for (i = 0; i < $datos.length; i++) 
+							{
+								resumen = $datos[i] as ResumenConsulta;
+								if (meses == resumen.mes ){
+									if (resumen.etiqueta == "POR REALIZAR" ){
+										objeto.realizar += resumen.totalFolios;
+										objeto.indicador = resumen.porcentaje;
+										indicador = resumen.porcentaje;
+									}
+									else if (resumen.etiqueta == "REALIZADAS" ){
+										objeto.realizadas += resumen.totalFolios;
+									}
+									
+									if (objeto.realizar > 0 && objeto.realizadas > 0){
+										objeto.diferencia = Math.round(utilNumber(((objeto.realizar * resumen.porcentaje)/100) - objeto.realizadas));
+										break;
+									} 
+								}
+							}
+							objeto.tipo = "Seguimientos";
+							array.addItem(objeto);
+						}
+						meses++;
+					}
+				}
+				return array;
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			private function minimiza():void
+			{	
+				if(VistaDefaultTabOperativos.cargarDatos.newData == true)
+				{
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("buscarOperativos");
+					eventEspera.tipoEventos.push("CONSULTA_TABLERO");
+					dispatchEvent(eventEspera);
+					var eventCom:EventoTableroOperativos = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TABLERO);
+					eventCom.parametros = TabOperativosBarraMenu.parametrosBusqueda;
+					dispatchEvent(eventCom);
+					VistaDefaultTabOperativos.cargarDatos.newData = false;
+					VistaDefaultTabOperativos.cargarDatos.vistaMax = "";
+				}
+				VistaDefaultTabOperativos.cargarDatos.vistaMax = "";
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			private const SIZE_TRIANGULO:int = 60;
+			private const wTRIANGULO:int = 40;
+			private var sizeChart:Number = 0;
+			private const SIZE_LINE:int = 1;
+			private const SPACE:int = 4;
+			private var totales:Object;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				tool.graphics.clear();
+				porcentajeAlcance.graphics.clear();
+				
+				totales = new Object;
+				
+				var cont:int = 0;
+				if (serieCET.items && serieCET.items.length > 0){
+					for each (var item:ColumnSeriesItem in serieCET.items) 
+					{
+						
+						if (item.itemRenderer )
+						{
+							crearTriangulo(item,cont,serieCET.items.length );
+							cont++;
+						} 
+					}
+				}
+				var meses:int = cont;
+				cont = 0;
+				
+				if(serieAFT.items && serieAFT.items.length > 0){
+					for each (var item2:ColumnSeriesItem in serieAFT.items) 
+					{
+						if (item2.itemRenderer )
+						{
+							crearTrianguloAlcance(item2,cont,meses);
+							cont++;
+						} 
+					}
+				}
+				
+				gridFT.invalidateDisplayList();
+			}
+			
+			
+			public function crearTriangulo(item:ColumnSeriesItem, cont:int, meses:int):void
+			{
+				
+				if (item && item.item.indicador && item.item.indicador > 0 && 
+					tool && tool.numElements > cont && tool.getElementAt(cont)){
+					var grupo:Group = ( tool.getElementAt(cont) as Group );
+					
+					totales[cont] = item.item.realizar;
+					
+					var pt:Point = new Point(item.x, item.y);
+					var xI:Number = (serieCET.automationOwner as ColumnChart).contentToLocal(pt).x;
+					var yI:Number = (serieCET.automationOwner as ColumnChart).contentToGlobal(pt).y;
+					
+					pt = new Point(item.itemRenderer.x, item.itemRenderer.y);
+					var xR:Number = (serieCET.automationOwner as ColumnChart).contentToLocal(pt).x;
+					var yR:Number = (serieCET.automationOwner as ColumnChart).contentToGlobal(pt).y;
+					
+					pt = new Point(grpComponent.x, grpComponent.y);
+					var xR2:Number = this.contentToGlobal(pt).x;
+					var yR2:Number = this.contentToGlobal(pt).y;
+					
+					var distancia:Number = yI - yR2;
+					
+					var porcentajeMinimo:Number = (100 - item.item.indicador );
+					var moverPosicion:Number = ((item.itemRenderer.height * porcentajeMinimo)  )/100;
+					
+					var ta_tria:int = SIZE_TRIANGULO;
+					var w_tria:int = wTRIANGULO;
+					
+					if(meses >= 11){
+						sizeChart = item.itemRenderer.width/2;
+						ta_tria =60;
+						w_tria = 35;
+						grupo.width = sizeChart + w_tria;
+						grupo.x = xI - (xI - xR ) + 20 + w_tria;
+					}else{
+						sizeChart = item.itemRenderer.width - 10;
+						grupo.width = sizeChart + w_tria;
+						grupo.x = xI - (xI - xR ) + w_tria + 40;
+					}
+					
+					grupo.x = xI - (xI - xR ) + 20;
+					grupo.y = moverPosicion + distancia - 20;
+					
+					grupo.graphics.clear();
+					grupo.graphics.beginFill(0x3399af);
+					
+					grupo.graphics.moveTo(8, 0);
+					grupo.graphics.lineTo(8, ta_tria);
+					grupo.graphics.lineTo(w_tria + 8, ta_tria/2);
+					grupo.graphics.lineTo(8, 0); 
+					grupo.graphics.endFill();
+					
+					var lineCont:int = 0;
+					var posicion:int = w_tria + 13; 
+					
+					grupo.graphics.beginFill(0x349ab0);
+					grupo.graphics.lineStyle(2,0x3399af);
+					grupo.graphics.moveTo(posicion, ta_tria/2);
+					
+					sizeChart = (item.itemRenderer.width * 2) - 15;
+					while ( lineCont < sizeChart - 6) 
+					{
+						grupo.graphics.lineTo(posicion,ta_tria/2);
+						grupo.graphics.lineTo((posicion += SIZE_LINE),ta_tria/2);
+						grupo.graphics.moveTo((posicion += SPACE),ta_tria/2);
+						lineCont += SIZE_LINE + SPACE;
+					}
+					
+					grupo.graphics.endFill();
+					
+					var titulo:TituloHelvetica_10_Blanco = ( grupo.getElementAt(0) as TituloHelvetica_10_Blanco);
+					
+					
+					titulo.text = UtilsFormatosNumericos.formatoADecimales(item.item.indicador) + '%';
+				}
+			}
+			
+			public function crearTrianguloAlcance(item:ColumnSeriesItem, cont:int, meses:int):void
+			{
+				
+				if (item && item.item.indicador && item.item.indicador > 0 && 
+					tool && tool.numElements > cont && tool.getElementAt(cont)){
+					var grupo:Group = ( porcentajeAlcance.getElementAt(cont) as Group );
+					
+					var txtAlcance:String;
+					
+					if(totales.hasOwnProperty(cont)){
+						txtAlcance = UtilsFormatosNumericos.precisionSinDecimales((item.item.realizadas / totales[cont]) * 100);
+					}
+					else{
+						txtAlcance = "0";
+					}
+					var pt:Point = new Point(item.x, item.y);
+					var xI:Number = (serieAFT.automationOwner as ColumnChart).contentToLocal(pt).x;
+					var yI:Number = (serieAFT.automationOwner as ColumnChart).contentToGlobal(pt).y;
+					
+					pt = new Point(item.itemRenderer.x, item.itemRenderer.y);
+					var xR:Number = (serieAFT.automationOwner as ColumnChart).contentToLocal(pt).x;
+					var yR:Number = (serieAFT.automationOwner as ColumnChart).contentToGlobal(pt).y;
+					
+					pt = new Point(grpComponent.x, grpComponent.y);
+					var xR2:Number = this.contentToGlobal(pt).x;
+					var yR2:Number = this.contentToGlobal(pt).y;
+					
+					var distancia:Number = yI - yR2;
+					
+					var ta_tria:int = SIZE_TRIANGULO;
+					var w_tria:int = wTRIANGULO;
+					
+					
+					var trianguloX:Number = grupo.width + 18;
+					var numRightTitulo:Number = 0;
+					
+					if(meses >= 11){
+						sizeChart = item.itemRenderer.width/2;
+						ta_tria =60;
+						w_tria = 35;
+						grupo.width = sizeChart + w_tria;
+						grupo.x = xI - (xI - xR ) + 25 + w_tria;
+						numRightTitulo = -14;
+					}else{
+						sizeChart = item.itemRenderer.width - 10;
+						grupo.width = sizeChart + w_tria/2;
+						grupo.x = xI - (xI - xR ) + w_tria + 40;
+						trianguloX -= 20;
+						numRightTitulo = 3;
+					}
+					
+					
+					
+					grupo.y = distancia - 20;
+					
+					grupo.graphics.clear();
+					grupo.graphics.beginFill(0x464646);
+					
+					grupo.graphics.moveTo(trianguloX , ta_tria);
+					grupo.graphics.lineTo(trianguloX - w_tria, ta_tria/2);
+					grupo.graphics.lineTo(trianguloX, 0);
+					grupo.graphics.lineTo(trianguloX , ta_tria);
+					
+					grupo.graphics.endFill();
+					
+					
+					grupo.graphics.beginFill(0x4c4c4c);
+					grupo.graphics.lineStyle(2,0x464646);
+					
+					var lineCont:int = 0;
+					var posicion:int = trianguloX - (w_tria);
+					
+					while (posicion > - (sizeChart + 12) ){
+						grupo.graphics.moveTo(posicion, ta_tria/2);
+						posicion -= SIZE_LINE;
+						grupo.graphics.lineTo(posicion,ta_tria/2);
+						posicion -= SPACE;
+					}
+					
+					grupo.graphics.endFill();
+					
+					var titulo:TituloHelvetica_10_Blanco = new TituloHelvetica_10_Blanco();
+					
+					if(meses >= 11){
+						if (txtAlcance.lastIndexOf(".") != -1){
+							titulo.setStyle("fontSize",7);
+						}else{
+							titulo.setStyle("fontSize",9);
+						}
+					}
+					
+					titulo.right = numRightTitulo;		
+					titulo.setStyle("paddingRight",0);
+					titulo.y = (ta_tria/2) - 4;
+					titulo.text = txtAlcance + '%';
+					grupo.addElement(titulo);
+					
+				}
+			}
+			
+			public function crearGrupos():void
+			{
+				for (var i:int = 0; i < 12; i++) 
+				{
+					var grupo:VGroup = new VGroup();
+					grupo.percentWidth = 100;
+					grupo.height = 60;
+					grupo.paddingLeft = 10;
+					grupo.verticalAlign = "middle";
+					var titulo:TituloHelvetica_10_Blanco = new TituloHelvetica_10_Blanco();
+					titulo.width = 45;
+					
+					grupo.addElement(titulo);
+					tool.addElement(grupo);
+				}
+				
+			}
+			public function crearGruposAlcance():void
+			{
+				for (var i:int = 0; i < 12; i++) 
+				{
+					var grupo:Group = new Group();
+					grupo.minWidth = 70;
+					grupo.height = 60;  
+					
+					/* var titulo:TituloHelvetica_10_RojoClaro = new TituloHelvetica_10_RojoClaro();
+					titulo.percentWidth = 100;
+					titulo.right = 0;
+					grupo.addElement(titulo); */
+					porcentajeAlcance.addElement(grupo);
+				}
+				
+			}
+			
+			protected function myChart_updateCompleteHandler(event:FlexEvent):void
+			{
+				tool.removeAllElements();
+				porcentajeAlcance.removeAllElements();
+				crearGrupos();
+				crearGruposAlcance();
+				invalidateDisplayList();
+			} 
+			
+			protected function contenedor_clickGridHandler(event:Event):void
+			{
+				tituloAfuera.text = "FUERA DE TIEMPO";
+			}
+			
+			protected function contenedor_clickTacheGridHandler(event:Event):void
+			{
+				tituloAfuera.text = "ET VS FT";
+			}
+			
+			private function asignarGridFT(value:ArrayCollection):void
+			{
+				gridFT.dataProvider = value;
+			}
+			
+			protected function create(event:FlexEvent):void
+			{
+				gridFT.invalidateDisplayList();
+			}
+			
+		]]>
+	</fx:Script>
+
+	<s:HGroup width="100%"  >
+		<label:Texto fontFamily="Helvetica" fontSize="14" fontWeight="bold" fontStyle="normal" text="SEGUIMIENTOS" />
+		<s:Spacer width="100%" />
+		<label:Texto fontFamily="Helvetica" fontSize="14" fontWeight="bold" fontStyle="normal" text="COMERCIALIZACIÓN" />
+	</s:HGroup>
+	
+	<s:Group width="100%" height="100%" id="grpComponent">
+	<s:VGroup width="100%" height="100%" gap="0" >
+		<s:VGroup width="100%" height="50%" gap="0" verticalAlign="middle" >
+			<mx:ColumnChart id="myChart" width="100%" height="80%"
+							updateComplete="myChart_updateCompleteHandler(event)"
+							showDataTips="true"
+							seriesFilters="[]"
+							mouseSensitivity="5" 
+							dataTipMode="single" 
+							showDataTipTargets="false"
+							dataTipRenderer="{DataTipIndicadorRenderer}"
+							paddingRight="{ width > MINIMO ? 40 : 5}"
+							paddingLeft="{ width > MINIMO ? 20 : 5}"
+							>
+				<mx:series>
+					
+					<mx:ColumnSeries id="serieCET" yField="realizar" 
+									 displayName="Abiertas" 
+									 showDataEffect="{fxInterpolateIn}" 
+									 includeInLayout="false" 
+									 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.operativos.componentes.comercializacion.reqcot.renderer.BarraReqRenderer" 
+									 />
+					<mx:ColumnSeries id="serieAFT" yField="realizadas" 
+									 displayName="Cerradas" 
+									 showDataEffect="{fxInterpolateIn}" 
+									 includeInLayout="false" 
+									 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.operativos.componentes.comercializacion.reqcot.renderer.BarraCotizaRenderer" 
+									 />
+					
+				</mx:series>
+				<mx:verticalAxis>
+					<mx:LinearAxis baseAtZero="true" id="cotReq" labelFunction="formateoEje" />
+				</mx:verticalAxis>
+				<mx:verticalAxisRenderers>
+					<mx:AxisRenderer axis="{cotReq}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"/>
+				</mx:verticalAxisRenderers>
+				<mx:horizontalAxis>
+					<mx:CategoryAxis id="nombre" categoryField="mes"/>
+				</mx:horizontalAxis>
+				<mx:horizontalAxisRenderers>
+					<mx:AxisRenderer axis="{nombre}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}" fontFamily="Helvetica" 
+									 fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction" />
+				</mx:horizontalAxisRenderers>
+				
+				<mx:backgroundElements>
+					<mx:GridLines visible="{ width > MINIMO ? true: false}">
+						<mx:horizontalStroke>
+							<s:SolidColorStroke weight="0.5" color="0xeeeeee" />
+						</mx:horizontalStroke>
+					</mx:GridLines>
+				</mx:backgroundElements>
+			</mx:ColumnChart>
+			
+		</s:VGroup>
+		<otros:Hdivision color="Gris" width="100%" />
+		<s:HGroup width="100%" height="50%" gap="0" verticalAlign="middle" horizontalAlign="center">
+			<s:Group width="100%" height="100%" >
+				<s:HGroup width="100%" height="100%" horizontalAlign="center">
+					<comun:ContenedorTableroMiniChart width="100%" height="100%"
+													  clickGrid="contenedor_clickGridHandler(event)"
+													  clickTacheGrid="contenedor_clickTacheGridHandler(event)"
+													  informacion="{catalogoInfoGraficas.SIN_INFORMACION}"
+													  mostrarMiniGrid="true"
+													  paddingMenulineas="13" sinGrafica="true"
+													  sinInfo="true">
+						
+						<graficaPie:contenido >
+							<graficas:PieChartPqGris id="myChartETyFT" width="100%" height="100%" showDataTips="false" innerRadius=".5" dataProvider="{null}"
+													 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" paddingTop="20" >
+								<graficas:series>
+									<graficas:pieSeriesVS field="monto" />
+								</graficas:series> 
+							</graficas:PieChartPqGris>
+						</graficaPie:contenido>
+						<comun:contenidoGrid>
+							<s:VGroup width="100%" height="100%" gap="0" paddingBottom="20"
+									  paddingLeft="20" paddingRight="4" paddingTop="58"
+									  verticalAlign="bottom">
+								<otros:Hdivision width="100%" height="2" color="Gris 2"/>
+								<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridFT"
+																			 width="100%"
+																			 height="100%"
+																			 anchoColumnas="{['5%','10%','20%','27%','5%','5%','5%','8%','8%','=']}"
+																			 disableDragableColumns="{[0]}"
+																			 disableResizableColumns="{[0]}"
+																			 tipoDeConsulta=""
+																			 tipoStiloGrd="estilo_2"
+																			 styleCabeceraGrid="headChico">
+									
+									<AdvancedDataGrid:columns>
+										<mx:AdvancedDataGridColumn dataField="numFila"
+																   fontSize="12" headerText="#"/>
+										<mx:AdvancedDataGridColumn dataField="clave" headerText="Cotización" >
+											<mx:itemRenderer>
+												<fx:Component>
+													<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+														<fx:Script>
+															<![CDATA[
+																import flash.net.navigateToURL;
+																
+																import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+																import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ConsultaTableroOperativoFT;																	
+																import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+																
+																public function verCompra():void{
+																	var clave:String= (data as ConsultaTableroOperativoFT).clave;
+																	var path:Object = Util.rutaNueva(clave);
+																	ver(RutasPdF.GENERAL_RUTA + RutasPdF.COTIZACIONES_RUTA + path.ruta + clave + ".pdf" );
+																}
+																public function ver($ruta:String):void{
+																	var request:URLRequest = new URLRequest(encodeURI($ruta));
+																	navigateToURL(request);
+																}
+															]]>
+														</fx:Script>
+														<s:HGroup horizontalAlign="center" width="100%" >
+															<linkButton:LinkButtonPQNet label="{(data as ConsultaTableroOperativoFT).clave}" click="verCompra()" id="lnkCompra" visible="true" includeInLayout="true" />
+														</s:HGroup>										
+													</s:MXAdvancedDataGridItemRenderer>
+												</fx:Component>	
+											</mx:itemRenderer>
+										</mx:AdvancedDataGridColumn>
+										<mx:AdvancedDataGridColumn dataField="cliente" headerText="Cliente" >
+											<mx:itemRenderer>
+												<fx:Component>
+													<s:MXAdvancedDataGridItemRenderer width="100%"
+																					  autoDrawBackground="false">
+														<label:Titulo_12_Morado_pTop10 width="100%"
+																					   maxDisplayedLines="4"
+																					   paddingTop="0"
+																					   text="{data.cliente}"
+																					   textAlign="center"/>
+													</s:MXAdvancedDataGridItemRenderer>
+												</fx:Component>
+											</mx:itemRenderer>
+										</mx:AdvancedDataGridColumn>
+										<mx:AdvancedDataGridColumn dataField="producto" headerText="Producto" />
+										<mx:AdvancedDataGridColumn dataField="monto_Signo" headerText="Precion U." />
+										<mx:AdvancedDataGridColumn dataField="piezas" headerText="Piezas" />
+										<mx:AdvancedDataGridColumn dataField="montoDlld_Signo" headerText="Monto"/>
+										<mx:AdvancedDataGridColumn dataField="fechaFin_Formato" headerText="FER" />
+										<mx:AdvancedDataGridColumn dataField="fechaInicio_Formato" headerText="FR" />
+										<mx:AdvancedDataGridColumn dataField="vendedor" headerText="ESAC" />
+										<!--<mx:AdvancedDataGridColumn dataField="vendedor"
+										headerText="ESAC">
+										<mx:itemRenderer>
+										<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer width="100%"
+										autoDrawBackground="false">
+										<label:Titulo_12_VerdeAzul_SinTop width="100%"
+										paddingTop="0"
+										text="{data.vendedor}"
+										textAlign="center"/>
+										</s:MXAdvancedDataGridItemRenderer>
+										</fx:Component>
+										</mx:itemRenderer>
+										</mx:AdvancedDataGridColumn>-->
+										
+									</AdvancedDataGrid:columns>
+									
+								</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+							</s:VGroup>  
+						</comun:contenidoGrid>
+					</comun:ContenedorTableroMiniChart>
+				</s:HGroup>
+				<componentes:tituloChartTablero id="tituloAfuera" width="80%" fontSize="14" paddingLeft="0" paddingTop="23" text="ET VS FT"/>
+			</s:Group>
+		</s:HGroup>
+		
+		<otros:divisionHueca width="100%" />
+		<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+			<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+		<s:Group id="porcentajeAlcance" width="100%" height="100%" depth="65" />
+		<s:Group id="tool" width="100%" height="100%" depth="65" />
+	</s:Group> 
+</s:VGroup>

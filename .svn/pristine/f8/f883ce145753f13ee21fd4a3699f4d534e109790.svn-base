@@ -1,0 +1,473 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" horizontalAlign="center"
+		 creationComplete="init()" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark">
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAdministrador;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAnalisisincidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteDecision;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			public var _gestion:Gestion;
+			public var _incidente:Incidente;
+			public var _empleado:Empleado;
+			private var _dirigidoA:String;
+			private var _estadoVentana:String = "";
+			private var _cmbSeleccionador:seleccionador = null;
+			[Bindable]
+			private var _listaDeReferencias:ArrayCollection = null;
+			
+			private var productorRegistro:Producer = new Producer();
+			private var canalRegistro:AMFChannel;
+			private var canalesRegistro:ChannelSet;
+			
+			private function init():void{
+				this.productorRegistro.destination = "actualizacionService";
+				this.productorRegistro.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalRegistro = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesRegistro = new ChannelSet();
+				this.canalesRegistro.addChannel(canalRegistro);
+				this.productorRegistro.channelSet = this.canalesRegistro;
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de registro","Error");
+			}
+			/**
+			 * Metodo que inicia 
+			 */ 
+			public function inicia():void{
+				if( this._gestion.justificacion != null){
+					this.txtJustificacion.text = this._gestion.justificacion;
+				}
+				if( this._listaDeReferencias == null){
+					this._listaDeReferencias = new ArrayCollection();
+					this._listaDeReferencias = _gestion.referencias;
+				}
+				this.lblIdIncidente.text = this._incidente.folio;
+				this.lblFecha.text = UtilsFecha.formatoFechaDDMMMYYYY( this._incidente.fecha );
+				this.lblNombreGerenteIncidente.text = this._empleado.usuario;
+				if( this._gestion.seleccionado == false){
+					this.chkAceptado.selected  = false;
+					this.chkRechazado.selected = false;
+					this._gestion.aceptadoString = "nulo";
+				}else{
+					if( this._gestion.aceptado == true ){
+						this.chkAceptado.selected = true;
+						this.chkRechazado.selected = false;
+						this._gestion.aceptadoString = "verdadero";
+					}else{
+						this.chkAceptado.selected = false;
+						this.chkRechazado.selected = true;
+						this.btnFinalizarAccion.label = "Finalizar";
+						this._gestion.aceptadoString = "falso";
+					}
+				}
+				if(this._gestion.decision == true ){
+					deshabilitaComponentes();	
+					this._estadoVentana = "lectura";				
+				}
+				cargarComboNavegacion();
+			}	
+			/**
+			 * Funcion para actualizar las referencias al cargar desde un flujo continuo del Analisis
+			 */ 
+			public function actualizaReferencias():void{
+				buscarGestionPorIdIncidente();
+			}
+			/**
+			 * Metodo que deshabilita componentes
+			 */ 
+			private function deshabilitaComponentes():void{
+				this.chkAceptado.enabled = false;
+				this.chkRechazado.enabled = false;
+				this.txtJustificacion.editable = false;
+				this.btnFinalizarAccion.enabled = true;
+				this.btnGuardar.enabled = false;
+			}
+			/**
+			 * Metodo para habilitar componentes
+			 */ 		
+			private function habilitaComponentes():void{
+				this.chkAceptado.enabled = true;
+				this.chkRechazado.enabled = true
+				this.txtJustificacion.editable = true;
+				this.btnFinalizarAccion.enabled = false;
+				this.btnGuardar.enabled = true;
+			}
+			/**
+			 * Metodo para seleccionar el check de Avanzar
+			 */ 			
+			private function clickAcepatdo():void{
+				if(this.chkAceptado.selected == true ){
+					this.btnFinalizarAccion.label = "Acción";
+					this.chkRechazado.selected = false;					
+				}
+			}
+			/**
+			 * Metodo para seleccionar el check de Rechazar
+			 */ 
+			private function clickRechazar():void{
+				if( this.chkRechazado.selected == true ){
+					this.btnFinalizarAccion.label = "Finalizar";
+					this.chkAceptado.selected = false;
+				}
+			}
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				if( this._listaDeReferencias.source.length > 0 ){
+					for( var i:int=0 ; i < this._listaDeReferencias.source.length ; i++ ){
+						( this._listaDeReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._listaDeReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaDeReferencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaDeReferencias ) as ArrayCollection;
+				}
+				this._cmbSeleccionador.fechaIncidnete = this.lblFecha.text;
+				this._cmbSeleccionador.empleadoLogueado = this._empleado;
+				this._cmbSeleccionador.idIncidente = this._incidente.idIncidente;
+				this._cmbSeleccionador.folioIncidente = this._incidente.folio;
+				this._cmbSeleccionador.vieneDe = "tomarDecision";
+				this._cmbSeleccionador.origen =  "decision";
+				this.parent.stage.addEventListener(  EventoAnalisisincidente.REGRESA_LISTA_REFERENCIAS_DECISION, recibeListaDeReferencias );
+				this.contenedorCombo.addChild( this._cmbSeleccionador );
+			}
+			/**
+			 * Metodo que recibe las Lsita de la Referencias del PopUp. 
+			 */
+			private function recibeListaDeReferencias(evento:EventoAnalisisincidente):void{
+				//this.parent.stage.removeEventListener( EventoAnalisisincidente.REGRESA_LISTA_REFERENCIAS_DECISION, recibeListaDeReferencias );
+				this._listaDeReferencias = evento.listaReferencias;
+				//if( this._listaDeReferencias.source.length > 0 ){
+				for( var i:int=0 ; i < this._listaDeReferencias.source.length ; i++ ){
+					( this._listaDeReferencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+					( this._listaDeReferencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._listaDeReferencias.getItemAt( i ) as Referencia ).folio;
+				}
+				if(this._cmbSeleccionador != null ){
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._listaDeReferencias ) as ArrayCollection;
+				}
+				//}					
+			}
+			/**
+			 * Metodo que guarda y valida la informacion para activar el boton Finalizar/Accion 
+			 */ 
+			private function guardaValida():void{
+				if( valida() ){
+					this.btnFinalizarAccion.enabled == true;
+					deshabilitaComponentes();
+				}else{
+					habilitaComponentes(); 
+				}
+				guardar();
+			}
+			/**
+			 * Metodo que avisa que se avanzara a la ACCION del Icidenete, se decide si se Avanza a Accion y se guardan los cambios o No y se queda en la misma ventana sin guardar.
+			 */
+			private function advertencia():void{
+				if( this._estadoVentana == "lectura" ){
+					avanzaAAccion();
+					return;
+				}
+				Alert.buttonWidth = 100;
+				Alert.yesLabel= "Si";
+				Alert.noLabel = "NO";
+				Alert.show("Una vez confirmada su 'DECISIÓN' no podrá modificarla posteriormente, ¿Desea continuar?", "¡Atención!", Alert.NO|Alert.YES, this, ejecutaAccionAdvertencia );
+				this._dirigidoA = "accion";
+			}
+			/**
+			 * Metodo que ejecuta la decision seleccionada en la Advertencia
+			 */   
+			private function ejecutaAccionAdvertencia( event:CloseEvent ):void{
+				if(event.detail == Alert.YES){
+					guardar();		
+				}else{
+					return;
+				}
+			} 
+			/**
+			 * Metodo que avisa si se desea Guardar o No los Avances de la Descion tomada para el Incidente. De cualquier forma se regresa al Listado.
+			 */
+			private function advertenciaListado():void{				
+				Alert.buttonWidth = 100;
+				Alert.yesLabel= "SI";
+				Alert.noLabel = "NO";
+				Alert.show("Está por abandonar la VISTA INCIDENTE GESTIÓN, ¿desea guardar los cambios antes de salir?", "¡Atención!", Alert.NO|Alert.YES, this, ejecutaAccion );
+				this._dirigidoA = "listado";
+			}
+			/**
+			 * Metodo que ejecuta la decision seleccionada en la Advertencia
+			 */   
+			private function ejecutaAccion(event:CloseEvent):void{
+				if(event.detail == Alert.YES){
+					guardar();		
+				}else{
+					regresaListado();
+				}
+			} 
+			/**
+			 * Metodo que guarda. Dispara el evento que es cahcado por el Mapa y regresa un dato en el Metodo recibeConfirmacion();
+			 */ 
+			private function guardar():void{
+				var evento:EventoIncidenteDecision = new EventoIncidenteDecision( EventoIncidenteDecision.GUARDA_DECISION );
+				this._gestion.incidente = this._incidente.idIncidente;
+				this._gestion.referencias = this._listaDeReferencias;
+				evento.nueva = new Gestion();
+				evento.nueva = this._gestion;
+				evento.nueva.analisis = true;
+				for( var i:int = 0; i < evento.nueva.referencias.length ; i++ ){
+					(evento.nueva.referencias.getItemAt(i) as Referencia).idIncidente = this._incidente.idIncidente;
+					if( (evento.nueva.referencias.getItemAt( i ) as Referencia).origen == "Registro" ){
+						evento.nueva.referencias.removeItemAt( i );
+					}
+				}
+				evento.nueva.justificacion = this.txtJustificacion.text;
+				if( this.chkAceptado.selected == true ){
+					evento.nueva.aceptado = true;
+					evento.nueva.aceptadoString = "verdadero";
+					this._gestion.aceptadoString = "verdadero";
+				}else if ( this.chkRechazado.selected == true ){
+					evento.nueva.aceptado = false;
+					evento.nueva.aceptadoString = "falso";
+					this._gestion.aceptadoString = "falso";
+				}else{
+					evento.nueva.aceptadoString = "nulo";
+					this._gestion.aceptadoString = "nulo";
+				}
+				if( _dirigidoA == "accion" ){
+					evento.nueva.decision = true;
+					evento.nueva.enviarCorreo = "enviar";
+					if( this.btnFinalizarAccion.label == "Finalizar" ){
+						evento.nueva.idPendiente = this._incidente.idPendiente;
+					}
+				}else{
+					evento.nueva.enviarCorreo = "";
+				}
+				dispatchEvent( evento );
+				var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.INICIA_ESPERA );
+				dispatchEvent( eventoAnimacion );
+			}
+			/**
+			 * Metodo que recibe la confirmacion del Mapa que el guardado fue exitoso. 
+			 */ 
+			public function set recibeConfirmacion( dato:Number ):void{
+				if( dato.toString() == "NaN" || dato == 0 ){
+					return
+				}
+				if(this._dirigidoA == "accion"){
+					avanzaAAccion();
+				}else if( this._dirigidoA == "listado" ){
+					this.btnGuardar.enabled = true;
+					regresaListado();
+				}else{ //si es un guardado Parcial se busca la gestion para actualizar las referencias
+					actualizaReferenciasGuardadas();
+				}
+				if( valida() ){
+					this.deshabilitaComponentes();
+					this.btnFinalizarAccion.enabled = true;
+					Alert.show("Se guardó la decisión","Operación exitosa");
+				}
+				var eventoAnimacion:EventoEsperar = new EventoEsperar( EventoEsperar.TERMINA_ESPERA );
+				dispatchEvent( eventoAnimacion );
+			}	
+			/**
+			 * Metodo para actualizar las referencias envia su solicitud al MapaAnalisisIncidente las regresa al metodo recibeReferenciasActualizadas()
+			 */ 
+			private function actualizaReferenciasGuardadas():void{
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_GESTION_EN_DECISION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que recibe del mapa la gestion para actualizar las Referencias
+			 */ 
+			public function set recibeReferenciasActualizadas( datos:Gestion ):void{
+				if( datos == null ){
+					return;
+				}
+				this._gestion.referencias = datos.referencias;
+				this._listaDeReferencias = this._gestion.referencias;
+			}
+			/**
+			 * Metodo que valida la informacion a guardar
+			 */ 		
+			private function valida():Boolean{
+				var validado:Boolean = false;
+				if(this.txtJustificacion.text != ""){
+					if( this.chkAceptado.selected == true || this.chkRechazado.selected == true ){
+						validado = true;
+					}	
+				} 
+				return validado;
+			}
+			//////////////////////////////////////////////////////////// funciones para Salir //////////////////////////////////////////////////////////////////////			
+			/**
+			 * Metodo que hace el Reset de los valores  necesarios para cuando se regresa al Listado de Incidentes o se Avanza a Accion
+			 */ 
+			private function reset():void{
+				this.chkAceptado.selected = false;
+				this.chkRechazado.selected = false;
+				this.txtJustificacion.text = "";
+				this._dirigidoA = "";
+				this._gestion = new Gestion();
+				this._empleado = new Empleado();
+				this._estadoVentana = "";
+				this._incidente = new Incidente();
+				this._listaDeReferencias = null; 
+				habilitaComponentes();
+				this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+			}
+			/**
+			 * Metodo para regresar a el Listado 
+			 */ 
+			private function regresaListado():void{
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje = new AsyncMessage();
+				mensaje.headers["Destino"] = "gridRechazado";
+				mensaje.body = "Mensaje";
+				this.productorRegistro.send(mensaje);
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.REGRESA_A_LISTADO_INCIDENTES );
+				dispatchEvent( evento );
+				reset();
+			} 
+			/**
+			 * Metodo para avanzar a Accion
+			 */ 
+			private function avanzaAAccion():void{
+				if( this.btnFinalizarAccion.label == "Finalizar" ){
+					regresaListado();
+					return;
+				}
+				var evento:EventoIncidenteDecision = new EventoIncidenteDecision( EventoIncidenteDecision.AVANZA_A_ACCION );
+				evento.incidente = this._incidente;
+				evento.empleado = this._empleado;
+				evento.gestion = this._gestion;
+				dispatchEvent( evento );
+				reset();
+			}
+			//////////////////////////////////////////////////////////// funciones para Iniciar el Modo Lectura //////////////////////////////////////////////////////////////////////				
+			/**
+			 * Metodo para iniciar el modo lectura cuando se viene del Combo de Navegción
+			 */ 
+			public function iniciaModoLectura( datos:Object ):void{
+				this._empleado = datos.empleadoLogueado;
+				if( this._incidente == null){
+					this._incidente = new Incidente();
+				}
+				this._incidente.idIncidente = datos.idIncidente;
+				this._incidente.folio = datos.folioIncidente;
+				this.lblIdIncidente.text = datos.folioIncidente;
+				this.lblFecha.text = datos.fechaIncidente;
+				this._empleado = datos.empleadoLogueado;
+				deshabilitaComponentes();
+				buscarGestionPorIdIncidente();
+				this.hbxBotonesNormales.height = 0;
+				this.hbxBotonesNavegacion.height = 23;
+			}
+			/**
+			 * Metodo que busca la gestion por su idIncidente. Regeresa los datos en la funcion obtenGestion().
+			 */
+			private function buscarGestionPorIdIncidente():void{
+				var evento:EventoAnalisisincidente = new EventoAnalisisincidente( EventoAnalisisincidente.CARGA_GESTION_EN_DECISION );
+				evento.idIncidente = this._incidente.idIncidente;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo que recibe del mapa la Gestion
+			 */
+			public function set obtenGestion( datos:Gestion ):void{
+				if( datos == null ){
+					return;
+				}
+				this._gestion = datos;
+				this._incidente.fecha = this._gestion.fecha;
+				this._listaDeReferencias = new ArrayCollection();
+				this._listaDeReferencias = this._gestion.referencias;
+				inicia();
+			}
+			/**
+			 * Metodo que permitira regresar  a la ventana donde nos encontrabamos.  
+			 */ 
+			private function regresarAIndexOriginal():void{
+				reset();
+				this.hbxBotonesNormales.height = 23;
+				this.hbxBotonesNavegacion.height = 0;
+				var evento:EventoAdministrador = new EventoAdministrador( EventoAdministrador.REGRESA_ORIGEN );
+				dispatchEvent( evento );
+				this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+			}
+		]]>
+	</mx:Script>
+	<mx:HBox width="100%">
+		<!--<mx:Label text="Decisión" fontSize="40" fontWeight="bold"/>--> 
+		<label:labelTitulo_Otros text="Decisión"/>
+		<mx:Spacer width="100%"/>
+		<mx:Label id="lblIdIncidente" fontSize="40" color="red" visible="false"/>
+		<mx:HBox id="contenedorCombo"/>	
+	</mx:HBox>
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<!--<mx:Label fontWeight="bold" fontSize="24" width="100%" text="Datos Generales"/>-->
+	<label:labelSubtitulo width="100%" text="Datos Generales"/>
+	<mx:Spacer height="3"/>
+	<mx:Form width="100%">
+		<mx:FormItem width="100%" fontWeight="bold" label="Fecha: ">
+			<mx:Label id="lblFecha" fontWeight="normal"/>
+		</mx:FormItem>
+		<mx:FormItem width="100%" fontWeight="bold" label="Gestión: ">
+			<mx:Label id="lblNombreGerenteIncidente" fontWeight="normal"/>
+		</mx:FormItem>
+	</mx:Form>
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<!--<mx:Label width="100%" fontSize="24" fontWeight="bold" text="Estatus" />-->
+	<label:labelSubtitulo width="100%"  text="Estatus"/>
+	<mx:Spacer height="3"/>
+	<mx:HBox width="100%">
+		<s:CheckBox label="ACEPTADO" id="chkAceptado" click="clickAcepatdo()"/>
+		<s:CheckBox label="RECHAZADO" id="chkRechazado" click="clickRechazar()"/>
+	</mx:HBox>
+	<mx:Spacer height="3"/>
+	<mx:Label text="Justificación:" fontWeight="bold" fontSize="13" width="100%"/>
+	<mx:TextArea width="100%" height="100%" id="txtJustificacion"/>
+	<mx:Spacer height="3"/>
+	<!--<mx:HRule width="100%"/>-->
+	<otros:division width="100%"/>
+	<mx:Spacer height="3"/>
+	<mx:VBox width="100%" verticalGap="0">
+		<mx:HBox width="100%" height="23" id="hbxBotonesNormales">
+			<mx:Button width="80" click="advertenciaListado()" label="SALIR" />
+			<mx:Spacer width="100%"/>
+			<mx:Button width="80" label="Guardar" click="guardaValida()" id="btnGuardar"/>
+			<mx:Spacer width="100%"/>
+			<mx:Button width="80" enabled="false" id="btnFinalizarAccion" click="advertencia()" label="Acción"/>		
+		</mx:HBox>
+		<mx:HBox width="100%" height="0" id="hbxBotonesNavegacion">
+			<mx:Button width="80" label="SALIR" visible="false"/>
+			<mx:Spacer width="100%"/>
+			<mx:Button width="80" click="regresarAIndexOriginal()" label="Regresar"/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:VBox>

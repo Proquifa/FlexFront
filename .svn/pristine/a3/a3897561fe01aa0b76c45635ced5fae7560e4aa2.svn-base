@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:busqueda="mx.com.proquifa.vista.vistas.skin.busqueda.*"
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%" xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*" 
+		 initialize="ini(event)"
+		 resize="group1_resizeHandler(event)"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.modelo.gestorCompras.ModeloGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.VistaDefaultGestorDeCompras;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			private var _dataProvider:ArrayCollection;
+			[Bindable]private var sizeWidth:Number; 
+			[Bindable]public static var sizeFactura:Number; 
+			[Bindable]private var sizeFont:Number; 
+			[Bindable]private var widthBuscador:Number; 
+			[Bindable]private var heightBuscador:Number; 
+			[Bindable]public static var rowHeight:Number; 
+			public static var signoMoneda:String;
+			
+			
+			public var iva:Number = 0;
+			
+			public function get dataProvider():ArrayCollection
+			{
+				return _dataProvider;
+			}
+			
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				_dataProvider = ObjectUtil.copy(value) as ArrayCollection;
+				lstOrdenCompra.dataProvider = value;
+				vgpAsociar.gridPartidas.dataProvider = new ArrayCollection();
+				vgpAsociar.gridPartidasAsociadas.dataProvider = new ArrayCollection();
+				lstOrdenCompra.selectedIndex = 0;
+				lstOrdenCompra.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				lblTotal.text = value.length.toString();
+				lblTotal.text += value.length == 1 ? ' Orden de Compra' : ' Ordenes de Compra';
+				
+				vgpAsociar.totalesA = new Object();
+				vgpAsociar.totalesA.cantidad = 0;
+				vgpAsociar.totalesA.monto = 0;
+				vgpAsociar.totalesA.importe = 0;
+				vgpAsociar.totalesA.partidas = 0;
+				
+				vgpAsociar.lblMontoA.text = "$ 0";
+				vgpAsociar.lblImporteA.text = "$ 0";
+				vgpAsociar.lblPartidasA.text = "0";
+				vgpAsociar.lblCantidadA.text = "0";
+				
+				vgpDetallePartidas.totales = new Object();
+				vgpDetallePartidas.totales.monto = 0;
+				vgpDetallePartidas.totales.iva = iva;
+			}
+			
+			public function limpiar():void
+			{
+				vgpAsociar.lblMontoA.text =signoMoneda + " 0";
+				vgpAsociar.lblImporteA.text = signoMoneda + " 0";
+				vgpAsociar.lblPartidasA.text = "0";
+				vgpAsociar.lblCantidadA.text = "0";
+			}
+			
+			protected function lstOrdenCompra_changingHandler(event:IndexChangeEvent):void
+			{
+				if (vgpAsociar.gridPartidasAsociadas.dataProvider.length > 0)
+				{
+					event.preventDefault();
+					alertaSingleton.show("No es posible seleccionar otra orden de compra cuando se han agregado partidas a una factura",catalogoAlertas.TIT_ADV_atencion);
+					return;
+				}
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_PARTIDAS_POR_OC);
+				evento.compra = lstOrdenCompra.selectedItem as Compra;
+				vgpDetallePartidas.compra.clave = lstOrdenCompra.selectedItem.clave;
+				
+				if(lstOrdenCompra.selectedItem.numFila==1)
+				{
+					lineaSuperior.visible=false;
+				}
+				else
+				{
+					lineaSuperior.visible=true;
+				}
+				
+				
+				dispatchEvent(evento);
+				
+				lblOrdenCompra.text = "OC-" + lstOrdenCompra.selectedItem.clave;
+				
+			}
+			
+			public function set partidasPorOC(data:ArrayCollection):void
+			{
+				for(var i:Number = 0;i<data.length;i++){
+					(data[i] as PartidaCompra).object = "agregarCargaFactura";
+					(data[i] as PartidaCompra).monedaString = signoMoneda;
+				}
+				vgpAsociar.gridPartidas.dataProvider = data;
+				/*vgpAsociar.indiceRetorno = ModeloGestorCompras.finPartidasAgregables;*/
+				vgpAsociar.universo = ObjectUtil.copy(data) as ArrayCollection;
+				vgpAsociar.universoCopiaArriba = ObjectUtil.copy(data) as ArrayCollection;
+				/*if(data.length < 0){
+				vgpAsociar.gridPartidas.height = 0;
+				vgpAsociar.lblSeleccionNoOrden.visible = vgpAsociar.lblSeleccionNoOrden.includeInLayout = true;
+				}
+				else{
+				vgpAsociar.gridPartidas.percentHeight = 100;
+				vgpAsociar.lblSeleccionNoOrden.visible = vgpAsociar.lblSeleccionNoOrden.includeInLayout = false;
+				}*/
+				//vgpAsociar.quitarLosAgregadosDelGrid();
+			}
+			
+			protected function busquedagestorcompras1_changeHandler(event:TextOperationEvent):void
+			{
+				lstOrdenCompra.dataProvider = UtilsGrid.queryCampoXLike(dataProvider,"clave",txtBuscador.text);
+			}
+			
+			protected function vgpAsociar_quitarPartidasHandler(event:EventoGestorCompras):void
+			{
+				var subTotal:Number = vgpAsociar.totalesA.importe;
+				var IGI:Number = vgpAsociar.IGI;
+				var DTA:Number = vgpAsociar.DTA;
+				vgpDetallePartidas.eliminarAsociarPartidasGrid(event,subTotal,IGI,DTA);
+			}
+			
+			protected function vgpAsociar_asociarPartidasHandler(event:EventoGestorCompras):void
+			{
+				vgpAsociar.recibirFlete(vgpDetallePartidas.retornarFlete());
+				var subTotal:Number = vgpAsociar.totalesA.importe;
+				var IGI:Number = vgpAsociar.IGI;
+				var DTA:Number = vgpAsociar.DTA;
+				vgpDetallePartidas.asociarPartidasGrid(event,subTotal,IGI,DTA);
+				
+			}
+			
+			protected function vgpAsociar_mandarIGIyDTA(event:EventoGestorCompras):void
+			{
+				vgpAsociar.calcularImpuestosICIyDTA();
+				var subTotal:Number = vgpAsociar.totalesA.importe;
+				var IGI:Number = vgpAsociar.IGI;
+				var DTA:Number = vgpAsociar.DTA;
+				/*vgpDetallePartidas.recibeIGIyDTA(IGI,DTA);*/
+				
+			}
+			
+			protected function generarFactura(event:Event):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.GENERAR_FACTURA);
+				evento.listaPartidas = vgpAsociar.gridPartidasAsociadas.dataProvider as ArrayCollection;
+				evento.docPdf = vgpDetallePartidas.filepdf.data;
+				evento.docXml = vgpDetallePartidas.filexml.data;
+				evento.docOtro = vgpDetallePartidas.fileotro.data;
+				evento.pagoProveedor = new PagoProveedor();
+				evento.pagoProveedor.idProveedor = vgpDetallePartidas.compra.proveedor;
+				evento.pagoProveedor.nombreProveedor = vgpDetallePartidas.compra.nombreProveedor;
+				evento.pagoProveedor.ordenCompra = vgpDetallePartidas.compra.clave;
+				evento.pagoProveedor.fecha = vgpDetallePartidas.dtpRecepcion.selectedDate;
+				evento.pagoProveedor.fechaFacturacion = vgpDetallePartidas.dtpFacturacion.selectedDate;
+				evento.pagoProveedor.noFactura =  vgpDetallePartidas.lblNoFactura.text;
+				evento.pagoProveedor.comentarios = vgpDetallePartidas.txtComentarios.text;
+				evento.pagoProveedor.medioPago = vgpDetallePartidas.compra.medioPago;
+				evento.pagoProveedor.empresa = vgpDetallePartidas.compra.empresa;
+				evento.pagoProveedor.flete = Number(vgpDetallePartidas.lblImporteFlete.text);
+				dispatchEvent(evento);
+				
+			}
+			
+			public function set respuestaCargarFactura(data:int):void
+			{
+				if (data == 1 )
+				{
+					vgpAsociar.partidasAEliminar(null);
+					isEmptyDataProviderGridPartidasAGuardar();
+				}
+				else if (data == -1)
+				{
+					alertaSingleton.show("Por el momento se esta realizando otra transacción, por favor  intente generar nuevamente.",catalogoAlertas.TIT_ADV_atencion);
+				}
+			}
+			
+			private function isEmptyDataProviderGridPartidasAGuardar():void
+			{
+				if (vgpAsociar.dataProvider.length <= 0 )
+				{
+					vgpDetallePartidas.limpiar();
+					VistaDefaultGestorDeCompras.accionCargarFactura = "update";
+					lstOrdenCompra.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+					var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.OBTENER_COMPRAS_POR_PAGAR);
+					evento.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(evento);
+				}
+				else
+				{
+					isEmptyDataProviderGridPartidasAGuardar();
+				}
+			}
+			
+			public function set recibirCreditoDisponible(credito:Number):void
+			{
+				if(credito<0)
+				{
+					var value:String = credito.toString().replace("-" , "");
+					var valor:Number = parseFloat(value);
+					vgpDetallePartidas.lblCreditoDisponible.text = "( " + signoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(valor) + " )";
+					vgpDetallePartidas.lblCreditoDisponible.setStyle("color","#bf0411");
+				}
+				else
+				{
+					vgpDetallePartidas.lblCreditoDisponible.setStyle("color","#008893");
+					vgpDetallePartidas.lblCreditoDisponible.text = signoMoneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(credito);
+				}
+			}
+			
+			
+			protected function group1_resizeHandler(event:ResizeEvent):void
+			{
+				sizeWidth = (390/2005) * (unscaledWidth);
+				sizeFactura = (410/2005) * (unscaledWidth);
+				widthBuscador = (330/2005) * (unscaledWidth);
+				heightBuscador = (30/1250) * (unscaledHeight);
+				rowHeight= (90/1250) * (unscaledHeight);
+				
+			}
+			
+			
+			[Bindable] private var font18:Number;
+			[Bindable] private var font20:Number;
+			[Bindable] private var font32:Number;
+			[Bindable] private var pad:Number;
+			[Bindable] private var padF:Number;
+			[Bindable] private var btnW:Number;
+			[Bindable] private var btnH:Number;
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				
+				super.updateDisplayList($width,$height);
+				
+				font18 = (18 / 2005) * ($width);
+				font20 = (20 / 2005) * ($width);
+				font32 = (32 / 2005) * ($width);
+				pad = (10 / 1250) * ($height);
+				padF = (30 / 1250) * ($height);
+				btnW = (190 / 2005) * ($width);
+				btnH = (25 / 1250) * ($height);
+				font18 = font18 > 18 ? 18:font18;
+				font20 = font20 > 20 ? 20:font20;
+				font32 = font32 > 32 ? 32:font32;
+				padF = padF <17  ? 17:padF;
+				
+			}
+			
+			protected function mostrarArchivoPDF(event:MouseEvent):void
+			{
+				var request:URLRequest = new URLRequest(RutasPdF.GENERAL_RUTA + RutasPdF.COMPRAS_RUTA + lstOrdenCompra.selectedItem.clave + "-P.pdf");
+				navigateToURL(request);
+			}
+			
+			protected function btnOrdenCompra_mouseOverHandler(event:MouseEvent):void
+			{
+				btnColor.color = 0x008894;
+				lblOrdenCompra.setStyle("color", "0xFFFFFF");
+			}
+			
+			protected function btnOrdenCompra_mouseOutHandler(event:MouseEvent):void
+			{
+				btnColor.color = 0xFFFFFF;
+				lblOrdenCompra.setStyle("color", "0x008894");
+			}
+			
+			protected function ini(event:FlexEvent):void
+			{
+				
+				vgpDetallePartidas.addEventListener("obtenerValores",obtenerValoresDTAeIGI);
+			}
+			protected function obtenerValoresDTAeIGI(event:Event):void
+			{
+				vgpAsociar.recibirFlete(vgpDetallePartidas.retornarFlete());
+				vgpDetallePartidas.IGIaux = vgpAsociar.IGI;
+				vgpDetallePartidas.DTAaux = vgpAsociar.DTA;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:Scroller width="100%" height="100%" >
+		
+		<s:VGroup width="100%" height="100%" paddingTop="20" gap="{pad}" paddingLeft="10">
+			<label:Titulo_32_Novecento_VerdeAzul id="lblProveedor" width="100%" textAlign="center" fontSize="{font32}"/>
+			<s:HGroup width="100%" paddingLeft="-10">
+				<otros:division color="#424242" width="100%" height="2"/>
+			</s:HGroup>
+			
+			<s:HGroup width="100%" height="100%" paddingTop="0">
+				<s:VGroup id="vgpOrdenCompra" width="{sizeWidth}" height="100%" maxWidth="390" paddingRight="20">
+					<!--<s:VGroup width="100%" height="30" verticalAlign="middle" horizontalAlign="center" gap="10">
+					<label:Titulo_15_BnkGothic text="ORDENES DE COMPRA" fontSize="{font20}"/> 
+					<otros:divisionDegradado width="50%" />
+					</s:VGroup>-->
+					
+					<s:HGroup width="100%" horizontalAlign="center" paddingTop="30" paddingBottom="15" paddingRight="20">
+						
+						<s:TextInput id="txtBuscador" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="busquedagestorcompras1_changeHandler(event)" paddingRight="20" prompt="Ordenes de compra"/>
+						
+						<!--<busqueda:BusquedaGestorCompras id="txtBuscador" icono="buscador2" height="{heightBuscador}"  width="{widthBuscador}" maxWidth="330" paddingLeft="10" paddingRight="10" change="busquedagestorcompras1_changeHandler(event)"/>-->
+					</s:HGroup>  
+				
+					<s:VGroup width="100%" height="100%" maxWidth="350" gap="0" paddingBottom="20">
+						<!--<s:Spacer height="100%" maxHeight="17" width="100%"/>-->
+						<otros:LineaDivision id="lineaSuperior" width="100%" height="1" color="#404040" bottom="0" />
+						<s:List width="100%" height="100%" maxWidth="350" borderVisible="false" horizontalScrollPolicy="off"
+								selectedIndex="0" id="lstOrdenCompra" contentBackgroundAlpha="0"
+								itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.OrdenesCompra_IR"
+								changing="lstOrdenCompra_changingHandler(event)"
+								/>
+						<otros:LineaDivision width="100%" maxWidth="350" height="2" color="#404040" />
+						<label:Texto_14_Helvetica width="100%" id="lblTotal" textAlign="center" fontSize="{font18}" paddingTop="10" autoSize="true" sizeAdjust="390"/>
+					</s:VGroup>  
+					
+				</s:VGroup> 
+				<s:HGroup height="100%" verticalAlign="middle" paddingLeft="-32" paddingRight="5">
+					<otros:divisionDegradadoVertical height="90%" /> 
+				</s:HGroup>
+				<s:VGroup id="vgpPartidas" width="60%" height="100%"><!--minWidth="960"-->
+					<s:VGroup id="OC" width="100%"  verticalAlign="middle" horizontalAlign="right" paddingRight="15" paddingTop="4">
+						<s:HGroup width="{btnW}" paddingBottom="-6">
+							
+							<s:Group id="btnOrdenCompra" width="{btnW}" height="{btnH}" click="mostrarArchivoPDF(event)" mouseOver="btnOrdenCompra_mouseOverHandler(event)" mouseOut="btnOrdenCompra_mouseOutHandler(event)">
+								<s:Rect width="100%" height="100%">
+									<s:fill>
+										<s:SolidColor id="btnColor" color="#FFFFFF" />
+									</s:fill>
+								</s:Rect>
+								
+								<label:Titulo_20_Novecento_VerdeAzul id="lblOrdenCompra" width="{btnW}" height="{btnH}" fontSize="{font20}" verticalAlign="middle" textAlign="center"/>
+							</s:Group>
+						</s:HGroup>
+					</s:VGroup>
+					<componentes:GridPartidasGestorCompras id="vgpAsociar" width="100%" height="100%" quitarPartidas="vgpAsociar_quitarPartidasHandler(event)" asociarPartidas="vgpAsociar_asociarPartidasHandler(event)"  />
+				</s:VGroup>  
+				<s:VGroup id="vgpDetalle" width="{sizeFactura}" height="100%" horizontalAlign="center" paddingRight="0" paddingLeft="5" paddingTop="-10" paddingBottom="30"><!--minWidth="410"-->
+					<s:Group width="100%" height="100%">
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#edeef0" />
+							</s:fill>
+						</s:Rect>
+						
+						<componentes:FacturaPorPagarGestorCompra horizontalCenter="0" id="vgpDetallePartidas" width="50%" height="100%" generarFactura="generarFactura(event)"  />
+					</s:Group>
+					
+				</s:VGroup>  
+				
+			</s:HGroup>  
+			
+		</s:VGroup>  
+	</s:Scroller>
+	
+</s:Group>

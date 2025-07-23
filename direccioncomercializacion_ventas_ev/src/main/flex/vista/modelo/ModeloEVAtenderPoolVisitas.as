@@ -1,0 +1,222 @@
+package vista.modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.SolicitudVisita;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.controls.Alert;
+	import mx.utils.ObjectUtil;
+
+	public class ModeloEVAtenderPoolVisitas extends EventDispatcher
+	{
+		/**
+		 ***************************************************** SOLICITUDES PARA POOL VISITAS *************************************************************
+		 */
+		private var solicitudesPoolVisitas:ArrayCollection;
+		private var graficaTipoVisitas:ArrayCollection;
+		private var graficaClientes:ArrayCollection;
+		private var universoSolicitudes:ArrayCollection;
+		public var _sql:Query;
+		public function setObtenerSolicitudesPoolVisitas( data:ArrayCollection ):void{
+			if( data == null ){
+				solicitudesPoolVisitas = new ArrayCollection();
+				/*return;*/
+			}
+			solicitudesPoolVisitas = new ArrayCollection();
+			graficaTipoVisitas = new ArrayCollection();
+			graficaClientes = new ArrayCollection();
+			
+			for each (var tempSV:SolicitudVisita in data) 
+			{
+				if(tempSV.tipoSolicitud == "solicitud")
+					tempSV.subtipoSolicitud = "solicitud";
+				else if(tempSV.tipoSolicitud == "crm"){
+					if(tempSV.contacto.idContacto > 0)
+						tempSV.subtipoSolicitud = "crmConContacto";
+					else 
+						tempSV.subtipoSolicitud = "crmSinContacto";
+				}
+			}
+			
+			
+			universoSolicitudes = ObjectUtil.copy(data) as ArrayCollection;
+			var punterosCliente:Array;
+			_sql = new Query(data,["nombreCliente","tipoSolicitud"],false);
+			
+			punterosCliente = _sql.getPunteros(["nombreCliente"],"nombreCliente");
+			
+			/////////////////////////	AGRUPAR CLIENTES
+			for each (var cliente:String in punterosCliente) 
+			{
+				var punterosTemp:Array = _sql.getPunteros([cliente]);
+				var clienteTemp:SolicitudVisita = ObjectUtil.copy(_sql.universo.getItemAt(punterosTemp[0])) as SolicitudVisita;
+				clienteTemp.numVisitas = punterosTemp.length;
+				clienteTemp.numTipoSolicitud = _sql.getPunteros([cliente,"solicitud"]).length;
+				clienteTemp.numTipoCRM = _sql.getPunteros([cliente,"crm"]).length;
+				clienteTemp.numDocumentos = _sql.getSumarCampo('numDocumentos',punterosTemp);
+				
+				solicitudesPoolVisitas.addItem(clienteTemp);
+				
+				/////////////////////////	GRAFICA CLIENTES
+				var sumaClientes:ResumenConsulta = new ResumenConsulta;
+				sumaClientes.etiqueta = cliente;
+				sumaClientes.totalClientes = 1;
+				sumaClientes.totalVisita = punterosTemp.length;
+				sumaClientes.totalSolicitudes = _sql.getPunteros([cliente,"solicitud"]).length;
+				sumaClientes.totalCRM = _sql.getPunteros([cliente,"crm"]).length;
+				graficaClientes.addItem(sumaClientes);
+				
+			}
+			
+			/////////////////////////	GRAFICA TIPO VISITAS
+			var totalTipoVisitaSolicitud:Object = new Object;
+			var totalTipoVisitaCRM:Object = new Object;
+			
+			totalTipoVisitaSolicitud.solicitud = 0;
+			totalTipoVisitaSolicitud.crm = 0;
+			totalTipoVisitaSolicitud.visita = 0;
+			
+			totalTipoVisitaCRM.solicitud = 0;
+			totalTipoVisitaCRM.crm = 0;
+			totalTipoVisitaCRM.visita = 0;
+			for (var i:int = 0; i < data.length; i++) 
+			{
+				if((data[i] as SolicitudVisita).tipoSolicitud == "solicitud" ){
+					totalTipoVisitaSolicitud.solicitud += 1;
+					totalTipoVisitaSolicitud.visita += 1;
+				}else if((data[i] as SolicitudVisita).tipoSolicitud == "crm" ){
+					totalTipoVisitaCRM.solicitud += 1;
+					totalTipoVisitaCRM.visita += 1;
+					totalTipoVisitaCRM.crm += 1;
+				}
+			
+			}
+			
+			var sumatoriaTipoVisitas:ResumenConsulta = new ResumenConsulta;
+			sumatoriaTipoVisitas.etiqueta = "SOLICITUDES";
+			sumatoriaTipoVisitas.totalSolicitudes = totalTipoVisitaSolicitud.solicitud;
+			sumatoriaTipoVisitas.totalCRM = totalTipoVisitaSolicitud.crm;
+			sumatoriaTipoVisitas.totalVisita = totalTipoVisitaSolicitud.visita;
+			graficaTipoVisitas.addItem(sumatoriaTipoVisitas);
+			
+			sumatoriaTipoVisitas = new ResumenConsulta;
+			sumatoriaTipoVisitas.etiqueta = "CRM";
+			sumatoriaTipoVisitas.totalSolicitudes = totalTipoVisitaCRM.solicitud;
+			sumatoriaTipoVisitas.totalCRM = totalTipoVisitaCRM.crm;
+			sumatoriaTipoVisitas.totalVisita = totalTipoVisitaCRM.visita;
+			graficaTipoVisitas.addItem(sumatoriaTipoVisitas);
+			
+			
+			dispatchEvent( new Event("obtenerSolicitudesPoolVisitasModeloEVAtenderPoolVisitas") );
+			dispatchEvent( new Event("obtenerUniversoSolicitudesPoolVisitasModeloEVAtenderPoolVisitas") );
+			dispatchEvent( new Event("enviarGraficaTipoVisitaPoolVisitasModeloEVAtenderPoolVisitas") );
+			dispatchEvent( new Event("enviarGraficaClientesPoolVisitasModeloEVAtenderPoolVisitas") );
+		}
+		[Bindable(event="obtenerSolicitudesPoolVisitasModeloEVAtenderPoolVisitas")]
+		public function get enviarSolicitudesPoolVisitas():ArrayCollection{
+			return solicitudesPoolVisitas;
+		}
+		
+		[Bindable(event="obtenerUniversoSolicitudesPoolVisitasModeloEVAtenderPoolVisitas")]
+		public function get enviarUniversoSolicitudesPoolVisitas():ArrayCollection{
+			return universoSolicitudes;
+		}
+		
+		[Bindable(event="enviarGraficaTipoVisitaPoolVisitasModeloEVAtenderPoolVisitas")]
+		public function get enviarGraficaTipoVisitaPoolVisitas():ArrayCollection{
+			return graficaTipoVisitas;
+		}
+		
+		[Bindable(event="enviarGraficaClientesPoolVisitasModeloEVAtenderPoolVisitas")]
+		public function get enviarGraficaClientesPoolVisitas():ArrayCollection{
+			return graficaClientes;
+		}
+		
+		
+		/**
+		 ***************************************************** RESPUESTA SOLICITUDES AGRUPADAS *************************************************************
+		 */
+		private var respuestaAgrupadas:Boolean;
+		public function setObtenerRespuestaSolicitudesAgrupadas( data:Boolean ):void{
+			respuestaAgrupadas = data;
+			dispatchEvent( new Event("enviarRespuestaSolicitudesAgrupadasModeloEVAtenderPoolVisitas") );
+		}
+		[Bindable(event="enviarRespuestaSolicitudesAgrupadasModeloEVAtenderPoolVisitas")]
+		public function get enviarRespuestaSolicitudesAgrupadas():Boolean{
+			return respuestaAgrupadas;
+		}
+		
+		/**
+		 ***************************************************** PENDIENTES VISITA A CLIENTE *************************************************************
+		 */
+		private var pendientes:ArrayCollection;
+		public function setObtenerPendientesVisitaCliente( data:ArrayCollection ):void{
+			pendientes = new ArrayCollection;
+			for each (var cadena:String in data) 
+			{
+				var array:Array = cadena.split('/');
+				if(array.length == 2){
+					var object:Object = new Object;
+					object.pendiente = array[0];
+					object.valor = array[1];
+					pendientes.addItem(object);
+				}
+			}
+			
+			dispatchEvent( new Event("enviarPendienteVisitaClientesModeloEVAtenderPoolVisitas") );
+		}
+		[Bindable(event="enviarPendienteVisitaClientesModeloEVAtenderPoolVisitas")]
+		public function get enviarPendientesVisitaCliente():ArrayCollection{
+			return pendientes;
+		}
+		
+		/**
+		 ***************************************************** TODOS CONTACTOS DE CLIENTE *************************************************************
+		 */
+		private var contacosCliente:ArrayCollection;
+		public function setListaContactosCliente( datos:ArrayCollection ):void{
+			
+			var contInicio:Contacto = new Contacto();
+			contInicio.nombre = "Seleccione un contacto";
+			contacosCliente = new ArrayCollection();
+			contacosCliente.addItem(contInicio);
+			
+			if(datos.length > 0){
+				this.contacosCliente.addAll(datos);
+			}
+			dispatchEvent( new Event("enviarContactosClienteModeloEVAtenderPoolVisitas") );
+		}
+		[Bindable(event="enviarContactosClienteModeloEVAtenderPoolVisitas")]
+		public function get enviarListaContactosCliente():ArrayCollection{
+			return contacosCliente;
+		}
+		
+		/**
+		 ***************************************************** ACTUALIZAR CONTACTOS DE SOLICITUD *************************************************************
+		 */
+		private var actualizacionExitosa:Boolean;
+		public function setActualizarContactoClienteRespuesta( value:Boolean ):void{
+			actualizacionExitosa = value;
+			dispatchEvent( new Event("enviarContactosClienteModeloEVAtenderPoolVisitas") );
+			actualizacionExitosa = false;
+		}
+		[Bindable(event="enviarContactosClienteModeloEVAtenderPoolVisitas")]
+		public function get enviarActualizarContactoClienteRespuesta():Boolean{
+			return actualizacionExitosa;
+		}
+		
+		public function ModeloEVAtenderPoolVisitas(target:IEventDispatcher=null)
+		{
+			super(target)
+		}
+		
+		public function errorAtenderPoolVisitas(objeto:Object):void{
+			Alert.show( objeto.toString() );
+		}
+	}
+}

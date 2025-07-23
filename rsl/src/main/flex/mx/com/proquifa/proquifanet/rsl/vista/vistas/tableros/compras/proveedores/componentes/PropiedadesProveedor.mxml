@@ -1,0 +1,928 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas 
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:comboCata="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+	xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+	xmlns:botonera="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.*"
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx" 
+	xmlns:otros="skins.otros.*"
+	xmlns:chekbox="skins.skin.chekbox.*" 
+	xmlns:pqNet="skins.botones.pqNet.*"
+	xmlns:label="skins.skin.label.*"
+	xmlns:layoutToggle="skins.botonesToggle.btnToggleEstados.*"
+	titulo="TABLERO PROVEEDORES"
+	width="100%" height="100%" 
+	creationComplete="iniciaComponente()" 
+	>
+	
+	<fx:Declarations>
+		<s:Resize id="fxResize" target="{cmbPerioMeses}" effectEnd="{cmbPerioMeses.percentWidth = 100}" duration="400"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.proveedor.ParametrosBusquedaProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.condicionesDePago.CondicionesDePagoComparacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.lineaDeProductos.LineaDeProductosMax;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]	private var _proveedor:Proveedor = null;
+			
+			[Bindable]	private var _listaPeriodo:ArrayCollection = new ArrayCollection
+				(["Anual","Semestral","Trimestral","Mensual"]);
+			
+			[Bindable]	private var _listaSemestre:ArrayCollection = new ArrayCollection
+				([	"Enero - Junio","Julio - Diciembre"	]);
+			
+			[Bindable]	private var _listaTrimestre:ArrayCollection = new ArrayCollection
+				([	"Enero - Marzo","Abril - Junio","Julio - Septiembre","Octubre - Diciembre"	]);
+			
+			[Bindable]	private var _listaMensual:ArrayCollection = new ArrayCollection
+				([	"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			[Bindable] private var _listaAnio:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _listaAnioFiscal:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _cadenaBusqueda:String = '';
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection
+				([	{ icono: "globalBar"},
+					{ icono: "tProductoBar"},
+					{ icono: "estrategicoBar"},
+					{ icono: "aAduanalBar"},
+					{ icono: "compradorBar"}	]);
+			
+			private var _usuario:Empleado = DatosGlobales.getInstance()._usuario;
+			private var _idUsuario:Number; // id para parametro del servicio
+			private var _tipoConsulta:String;
+			private var _fecha:Date = new Date();
+			private var _parametrosIniciales:String;
+			private var _universoAgentes:ArrayCollection;
+			public  var _datos:EventoTabProveedores;
+			public  var _labelPeriodo:String;
+			private var fam_global:int = 0;
+			private var fam_estrategico:int = 0;
+			public static var nuevoDato:Object = new Object;
+			public var activarCondicionCM:Boolean;
+			
+			protected function CompleteHandler(event:FlexEvent):void
+			{
+				for(var n:int = 0; (_fecha.getFullYear() - n) > 2008; n++)
+				{
+					_listaAnio.addItem(_fecha.getFullYear() - n);
+				}
+				
+				for(var anio:String in _listaAnio)
+				{
+					_listaAnioFiscal.addItem({valor:"Julio "+_listaAnio[anio]+" - Junio "+(Number(_listaAnio[anio])+1).toString(),llave: anio});
+				}
+				
+				cmbAnio.selectedIndex = 0;
+				if( cmbPerioMeses.selectedIndex == 1) cmbPerioMeses.dataProvider = _listaSemestre;
+				if( cmbPerioMeses.selectedIndex == 2) cmbPerioMeses.dataProvider = _listaTrimestre;
+				if( cmbPerioMeses.selectedIndex == 3) cmbPerioMeses.dataProvider = _listaMensual;
+				cmbPerioMeses.selectedIndex = 0;
+				
+				///////////////////// evaluar director, gerente ev, gerente esac, y usuario normal para desaparecer boton colaborador
+				if( _usuario.nivelGeneral == 'Directivo')
+				{ //|| _usuario.idFuncion == 2  || _usuario.ni == 35 || _usuario.idFuncion == 24 || _usuario.usuario == "GGamaliel"){// Director general, Director de operaciones, director comercializacion, ernesto
+					_cadenaBusqueda = '';
+					_idUsuario = 0;
+				}
+				else if( _usuario.nivelGeneral == 'Gerente' )
+				{// gerentes 
+					_cadenaBusqueda = '';
+					_idUsuario = 0;
+				}
+				else
+				{// los demas vatos
+					_cadenaBusqueda = _usuario.idEmpleado.toString();
+					_idUsuario = _usuario.idEmpleado;
+					_arrButton.removeItemAt(2); 
+				}
+				selectedButtonBar();
+			}
+			
+			private var _anima:Boolean = true;
+			protected function cmbPerioodo_changeHandler(indice:int = 0):void
+			{
+				_anima = cmbPerioMeses.visible;
+				if(indice == 0){
+					fxResize.heightTo = 0;
+					cmbPerioMeses.visible = false;
+				}else{
+					fxResize.heightTo = 28;
+					cmbPerioMeses.visible = true;
+				}
+				if( _anima != cmbPerioMeses.visible){
+					fxResize.play();
+				}
+				if( indice == 1) cmbPerioMeses.dataProvider = _listaSemestre;
+				if( indice == 2) cmbPerioMeses.dataProvider = _listaTrimestre;
+				if( indice == 3) cmbPerioMeses.dataProvider = _listaMensual;
+				cmbPerioMeses.selectedIndex = 0;
+				
+				var tempTipoPeriodo:Number = cmbPerioodo.selectedIndex == 3 || cmbPerioodo.selectedIndex == 0 ? 0 : cmbPerioMeses.selectedIndex + 1;
+				var tempMesPeriodo:Number = cmbPerioodo.selectedIndex == 3 ? cmbPerioMeses.selectedIndex + 1: 0;
+			}
+			
+			private function iniciaComponente():void
+			{
+				nuevoDato.vista = "principal";
+				addEventListener(EventoTabProveedores.INICIALIZA_COMPONENTE,cargaInfo);
+				btnBarra.selectedIndex = 2;
+				grpEstrategicos.selectIndex = 0;
+				activarCondicionCM = false;
+				
+				for(var n:int = 0; (_fecha.getFullYear() - n) > 2008; n++){
+					_listaAnio.addItem(_fecha.getFullYear() - n);
+				}
+				
+				for(var anio:String in _listaAnio)
+				{
+					_listaAnioFiscal.addItem({valor:"Julio "+_listaAnio[anio]+" - Junio "+(Number(_listaAnio[anio])+1).toString(),llave: anio});
+				}
+				
+				cmbAnio.selectedIndex = 0;
+				
+				if( cmbPerioMeses.selectedIndex == 1) cmbPerioMeses.dataProvider = _listaSemestre;
+				if( cmbPerioMeses.selectedIndex == 2) cmbPerioMeses.dataProvider = _listaTrimestre;
+				if( cmbPerioMeses.selectedIndex == 3) cmbPerioMeses.dataProvider = _listaMensual;
+				
+				cmbPerioMeses.selectedIndex = 0;
+				
+				///////////////////// evaluar director, gerente ev, gerente esac, y usuario normal para desaparecer boton colaborador
+				if( _usuario.nivelGeneral == 'Directivo')
+				{ //|| _usuario.idFuncion == 2  || _usuario.ni == 35 || _usuario.idFuncion == 24 || _usuario.usuario == "GGamaliel"){// Director general, Director de operaciones, director comercializacion, ernesto
+					_cadenaBusqueda = '';
+					_idUsuario = 0;
+				}
+				else if( _usuario.nivelGeneral == 'Gerente' )
+				{// gerentes 
+					_cadenaBusqueda = '';
+					_idUsuario = 0;
+				}
+				else
+				{// los demas vatos
+					
+					for (var r:int = 0; r < _usuario.roles.length; r++) 
+					{
+						if(_usuario.roles[r] == "Comprador_Master")
+						{
+						  activarCondicionCM = true;	
+						}
+							
+					}
+					if(activarCondicionCM){
+						_cadenaBusqueda = '';
+						_idUsuario = 0;
+					}
+					else{
+						_cadenaBusqueda = _usuario.idEmpleado.toString();
+						_idUsuario = _usuario.idEmpleado;
+						_arrButton.removeItemAt(2); 
+						
+					}
+					
+				}
+				selectedButtonBar();
+				
+				
+			}
+			
+			private function cargaInfo(evt:EventoTabProveedores):void
+			{
+				acumulado();
+				removeEventListener(EventoTabProveedores.INICIALIZA_COMPONENTE,cargaInfo);
+			}
+			
+			public function acumulado():void
+			{
+				if (cmbProveedor.selectedIndex > -1)
+				{
+					//configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("consultaProveedor");
+					eventEspera.tipoEventos.push("BUSCAR_MONTO_ACUMULADO");
+					eventEspera.tipoEventos.push("BUSCAR_DATOS_GENERALES_PROVEEDORES");
+					eventEspera.tipoEventos.push("BUSCA_COMPARATIVA_GENERAL_PROVEEDORES");
+					
+					
+					var monto:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCAR_MONTO_ACUMULADO);
+					var parMontos:ParametrosBusquedaProveedor = new ParametrosBusquedaProveedor();
+					
+					if (_tipoConsulta == "GLOBAL" && cmbProveedor.selectedIndex != 0)
+					{
+						eventEspera.tipoEventos.push("BUSCAR_INFO_GENERAL_PROVEEDOR");
+						parMontos.idProveedor =  cmbProveedor.selectedItem.llave;
+					}
+					else
+					{
+						parMontos.idProveedor = 0;
+					}
+					dispatchEvent(eventEspera);
+					
+					parMontos.anio = cmbAnio.selectedItem;
+					monto.parametros = parMontos;
+					_datos = monto;
+					dispatchEvent(monto);
+				}
+				consultarProveedor();
+			}
+			
+			public static  var parametrosBus:ParametrosBusquedaProveedor = new ParametrosBusquedaProveedor();
+			private var eventoGrid:EventoTabProveedores;
+			protected function consultarProveedor():void
+			{
+				var evt:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCAR_DATOS_GENERALES_PROVEEDORES);
+				var infoGraficas:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCA_COMPARATIVA_GENERAL_PROVEEDORES);
+				var enviarFiltros:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.ENVIAR_DATOS_FILTROS);
+				var montosObjetivos:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.OBTENER_MONTOS_OBJETIVOS_COMPRAS);
+				
+				parametrosBus = generaParametrosBusqueda();
+				
+				if(LineaDeProductosMax.vistaGrid==true)
+				{
+					var eventGrid:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCA_COMPARATIVA_LINEA_PRODUCTOS);
+					eventGrid.parametros = parametrosBus;
+					eventGrid.parametros.comparativas = true;
+					dispatchEvent(eventGrid);
+					
+				}
+				
+				
+				if (_tipoConsulta == "GLOBAL" && cmbProveedor.selectedIndex != 0)
+				{
+					var infoProveedor:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCAR_INFO_GENERAL_PROVEEDOR);
+					infoProveedor.idProveedor = cmbProveedor.selectedItem.llave;
+					infoProveedor.anioInt = 0;
+					infoProveedor.periodo = "";
+					infoProveedor.tipoPeriodo = 0;
+					infoProveedor.mes = 0;
+					dispatchEvent(infoProveedor);
+				}
+				
+				infoGraficas.parametros = enviarFiltros.parametros = evt.parametros = montosObjetivos.parametros = new ParametrosBusquedaProveedor();
+				infoGraficas.parametros = enviarFiltros.parametros = evt.parametros = montosObjetivos.parametros = ObjectUtil.copy(parametrosBus) as ParametrosBusquedaProveedor;
+				evt.mesInicioFiscal = this.mesInicio+1;
+				evt.mesFinFiscal = this.mesFin+1;
+				/*montosObjetivos.parametros.mesInicio = this.mesInicio+1;
+				montosObjetivos.parametros.mesFin = this.mesFin+1;*/
+				
+				_parametrosIniciales = infoGraficas.keyConsulta;
+				
+				if(nuevoDato.vista == "transito")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_OCTRANSITO);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.recibida = true;
+					nuevoDato.transito = false;
+					nuevoDato.top10productos = true;
+					nuevoDato.top10clientes = true;
+					nuevoDato.pagos = true;
+					nuevoDato.rechazos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				if(nuevoDato.vista == "recibida")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_OCRECIBIDAS);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.transito = true;
+					nuevoDato.recibida = false;
+					nuevoDato.top10productos = true;
+					nuevoDato.top10clientes = true;
+					nuevoDato.pagos = true;
+					nuevoDato.rechazos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				if(nuevoDato.vista == "top10productos")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_OCRECIBIDAS);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.recibida = true;
+					nuevoDato.transito = true;
+					nuevoDato.top10productos = false;
+					nuevoDato.top10clientes = true;
+					nuevoDato.pagos = true;
+					nuevoDato.rechazos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				if(nuevoDato.vista == "top10clientes")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_OCRECIBIDAS);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.recibida = true;
+					nuevoDato.transito = true;
+					nuevoDato.top10productos = true;
+					nuevoDato.top10clientes = false;
+					nuevoDato.pagos = true;
+					nuevoDato.rechazos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				if(nuevoDato.vista == "pagos")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_PAGOS);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.recibida = true;
+					nuevoDato.transito = true;
+					nuevoDato.top10productos = true;
+					nuevoDato.top10clientes = true;
+					nuevoDato.pagos = false;
+					nuevoDato.rechazos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				if(nuevoDato.vista == "rechazos")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_PAGOS);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.recibida = true;
+					nuevoDato.transito = true;
+					nuevoDato.top10productos = true;
+					nuevoDato.top10clientes = true;
+					nuevoDato.rechazos = false;
+					nuevoDato.pagos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				if(nuevoDato.vista == "avisoCambios")
+				{
+					eventoGrid = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_PAGOS);
+					eventoGrid.parametros = parametrosBus;
+					dispatchEvent(eventoGrid);
+					nuevoDato.recibida = true;
+					nuevoDato.transito = true;
+					nuevoDato.top10productos = true;
+					nuevoDato.top10clientes = true;
+					nuevoDato.avisoCambios = false;
+					nuevoDato.rechazos = true;
+					nuevoDato.pagos = true;
+				}
+				if(nuevoDato.vista == "principal")
+				{
+					nuevoDato.top10productos = true;
+					nuevoDato.rechazos = true;
+					nuevoDato.transito = true;
+					nuevoDato.recibida = true;
+					nuevoDato.top10clientes = true;
+					nuevoDato.pagos = true;
+					nuevoDato.avisoCambios = true;
+				}
+				nuevoDato.vista = "principal";
+				dispatchEvent(montosObjetivos);
+				dispatchEvent(enviarFiltros);
+				dispatchEvent(evt);
+				dispatchEvent(infoGraficas);
+				
+				var evtCopiar:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.PASAR_EVENTO_GENERAL_Y_PARA_LABELS);
+				evtCopiar.copiaEvento = evt;
+				dispatchEvent(evtCopiar);
+				
+				var evento:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.ETIQUETA_PERIODO);
+				evento.periodo = _labelPeriodo.toUpperCase();
+				dispatchEvent(evento);
+			}
+			
+			
+			private function generaParametrosBusqueda():ParametrosBusquedaProveedor
+			{
+				var status:String = DatosGlobales.getInstance().statusTablero; 
+				var par:ParametrosBusquedaProveedor = new ParametrosBusquedaProveedor();
+				
+				switch(_tipoConsulta)
+				{
+					case "GLOBAL":
+					{
+						par.idProveedor = cmbProveedor.selectedItem.llave;
+						fam_global = cmbProveedor.selectedItem.llave;
+						par.familia = cmbFamilias.selectedItem.valor;
+						_idUsuario == 0 ? par.idUsuario = 0 : par.idUsuario = _idUsuario;
+						par.valorAdicional = "GLOBAL";
+						break;
+					}
+					case "PRODUCTOS":
+					{
+						par.tipoProducto = cmbProductos.selectedItem.valor;
+						_idUsuario == 0 ? par.idUsuario = 0 : par.idUsuario = _idUsuario;
+						par.valorAdicional = "PRODUCTOS";
+						break;
+					}
+					case "ESTRATEGICOS":
+					{
+						par.idProveedor = grpEstrategicos.idProveedor;
+						fam_estrategico = grpEstrategicos.idProveedor;
+						par.familia = cmbFamilias.dataProvider == null ? "": cmbFamilias.selectedItem.valor;
+						par.valorAdicional = "ESTRATEGICOS";
+						par.estrategicos = grpEstrategicos.todos;
+						break;
+					}
+					case "AGENTE":
+					{
+						par.idAgenteAduanal = cmbAgente.selectedItem.llave;
+						par.valorAdicional = "AGENTE";
+						break;
+					}
+					case "COLABORADOR":
+					{
+						//par.idProveedor = 0;
+						par.idUsuario = cmbColaborador.selectedItem.llave; 
+						par.valorAdicional = "COLABORADOR"; 
+						break;
+					}
+				}
+				
+				if(!checkFiscal.selected)
+				{
+					par.anio = cmbAnio.selectedItem;
+					par.periodo = cmbPerioodo.selectedItem;
+					par.tipoPeriodo = cmbPerioodo.selectedIndex == 3 || cmbPerioodo.selectedIndex == 0 ? 0 : cmbPerioMeses.selectedIndex + 1;
+					par.mes = cmbPerioodo.selectedIndex == 3 ? cmbPerioMeses.selectedIndex + 1: 0;
+				}
+				else
+				{
+					par.anio = _listaAnio[cmbAnio.selectedIndex];
+					par.periodo = "anualProveedor";
+					par.tipoPeriodo = 0;
+				}
+				
+				par.tipoConsulta = _tipoConsulta;
+				par = settearPeriodos(par);
+				if (DatosGlobales.getInstance().statusTablero == "comparacion")
+					par.comparativas = true;
+				else
+					par.comparativas = false;
+				
+				return par;
+			}
+			
+			private function obtenerIdEstrategico():Number
+			{
+				return 1;
+			}
+			
+			private function settearPeriodos($info:ParametrosBusquedaProveedor):ParametrosBusquedaProveedor
+			{
+				if(cmbPerioodo.selectedIndex == 0 )
+				{
+					if(!checkFiscal.selected){
+						
+						$info.mesInicio = 1;
+						$info.mesFin  = 12;
+						$info.rangoMinMes = 1;
+						$info.rangoMaxMes = 12;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Anual";
+					}
+					else{
+						
+						$info.mesInicio = this.mesInicio+1;
+						$info.mesFin  = this.mesFin+1;
+						$info.rangoMinMes = 1;
+						$info.rangoMaxMes = 12;
+						$info.anioFiscal=true;
+						_labelPeriodo = "Anual";
+					}
+				}
+				else if(cmbPerioodo.selectedIndex == 1 )
+				{
+					if(cmbPerioMeses.selectedIndex == 0)
+					{
+						$info.mesInicio = 1;
+						$info.mesFin = 6;
+						$info.rangoMinMes = 1;
+						$info.rangoMaxMes = 6;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Enero / Junio";
+					}
+					else if(cmbPerioMeses.selectedIndex == 1)
+					{
+						$info.mesInicio = 7;
+						$info.mesFin = 12;
+						$info.rangoMinMes = 7;
+						$info.rangoMaxMes = 12;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Julio / Diciembre";
+					}
+				}
+				else if(cmbPerioodo.selectedIndex == 2)
+				{
+					if(cmbPerioMeses.selectedIndex == 0)
+					{
+						$info.mesInicio = 1;
+						$info.mesFin = 3;	
+						$info.rangoMinMes = 1;
+						$info.rangoMaxMes = 3;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Enero / Marzo";
+					}
+					else if(cmbPerioMeses.selectedIndex == 1)
+					{
+						$info.mesInicio = 4;
+						$info.mesFin = 6;	
+						$info.rangoMinMes = 4;
+						$info.rangoMaxMes = 6;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Abril / Junio";
+					}
+					else if(cmbPerioMeses.selectedIndex == 2)
+					{
+						$info.mesInicio = 7;
+						$info.mesFin = 9;	
+						$info.rangoMinMes = 7;
+						$info.rangoMaxMes = 9;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Julio / Septiembre";
+					}
+					else if(cmbPerioMeses.selectedIndex == 3)
+					{
+						$info.mesInicio = 10;
+						$info.mesFin = 12;	
+						$info.rangoMinMes = 10;
+						$info.rangoMaxMes = 12;
+						$info.anioFiscal = false;
+						_labelPeriodo = "Octubre / Diciembre";
+					}
+				}
+				else if(cmbPerioodo.selectedIndex == 3)
+				{
+					$info.mesInicio = cmbPerioMeses.selectedIndex+1;
+					$info.mesFin = cmbPerioMeses.selectedIndex+1;
+					_labelPeriodo = _listaMensual[cmbPerioMeses.selectedIndex];
+				}
+				return $info;
+			}
+			
+			
+			public function set propiedadesProveedor($proveedor:Proveedor):void
+			{
+				if($proveedor == null)
+					return;
+				
+				infoProveedor.visible = infoProveedor.includeInLayout = cmbProveedor.selectedIndex == 0 ? false:true;
+				_proveedor = new Proveedor();
+				_proveedor = $proveedor;
+				
+				if(_proveedor.adeudosConocidos == 0)
+				{
+					adeudoConocido.text = "Ninguno";
+				}
+				else if(_proveedor.adeudosConocidos == 1)
+				{
+					adeudoConocido.text = _proveedor.adeudosConocidos + "  Factura";
+				}
+				else
+				{
+					adeudoConocido.text = _proveedor.adeudosConocidos + "  Facturas";
+				}
+				
+				if(_proveedor.transferencia == "true")
+				{
+					medioDPago.text = "Transferencia";
+				}
+				else if(_proveedor.deposito == "true")
+				{
+					medioDPago.text = "Deposito";
+				}
+				else if(_proveedor.cheque == 'true')
+				{
+					medioDPago.text = "Cheque";
+				}
+				else
+				{
+					medioDPago.text = "ND";
+				}
+			}
+			
+			private  function selectedButtonBar():void
+			{
+				var enviarFiltroSeleccionado:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.SETTEAR_FILTRO_DEL_MENU_EN_OTRAS_VISTAS);
+				
+				switch(btnBarra.selectedItem.icono)
+				{
+					case "globalBar":
+					{
+						tipoConsulta("GLOBAL");
+						enviarFiltroSeleccionado.currentFiltro ="GLOBAL"; 
+						break;
+					}
+					case "tProductoBar":
+					{
+						tipoConsulta("PRODUCTOS");
+						enviarFiltroSeleccionado.currentFiltro = "PRODUCTOS"; 
+						break;
+					}
+					case "estrategicoBar":
+					{
+						tipoConsulta("ESTRATEGICOS"); 
+						enviarFiltroSeleccionado.currentFiltro ="ESTRATEGICOS"; 
+						break;
+					}
+					case "aAduanalBar":
+					{
+						tipoConsulta("AGENTE"); 
+						enviarFiltroSeleccionado.currentFiltro ="AGENTE"; 
+						break;
+					}
+					case "compradorBar":
+					{
+						tipoConsulta("COLABORADOR"); 
+						enviarFiltroSeleccionado.currentFiltro ="COLABORADOR"; 
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+				dispatchEvent(enviarFiltroSeleccionado); 
+			}
+			
+			private  function selectedButton_CLICK(evt:IndexChangeEvent):void
+			{
+				if((evt.currentTarget as ButtonBar).selectedItem == null)
+				{
+					evt.preventDefault();
+				}
+				else
+				{
+					selectedButtonBar();
+				}
+			}
+			
+			private function tipoConsulta( value:String ):void
+			{
+				_tipoConsulta = value;
+				
+				var envio1:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.ENVIAR_DATOS_FILTROS);
+				envio1.valorAdicional = _tipoConsulta;
+				dispatchEvent(envio1);
+				
+				infoProveedor.visible = infoProveedor.includeInLayout = false;
+				lblColaborador.visible = lblColaborador.includeInLayout = false;
+				cmbColaborador.visible = cmbColaborador.includeInLayout = false;
+				lblProveedor.visible = lblProveedor.includeInLayout = false;
+				cmbProveedor.visible = cmbProveedor.includeInLayout = false;
+				lblFamilias.visible = lblFamilias.includeInLayout = false;
+				cmbFamilias.visible = cmbFamilias.includeInLayout = false;
+				lblProductos.visible = lblProductos.includeInLayout = false;
+				cmbProductos.visible = cmbProductos.includeInLayout = false;
+				lblAgente.visible = lblAgente.includeInLayout = false;
+				cmbAgente.visible = cmbAgente.includeInLayout = false;
+				grpEstrategicos.visible = grpEstrategicos.includeInLayout = false;
+				
+				if( value == "GLOBAL" )
+				{
+					infoProveedor.visible = infoProveedor.includeInLayout = cmbProveedor.selectedIndex == 0 ? false:true;
+					lblProveedor.visible = lblProveedor.includeInLayout = true;
+					cmbProveedor.visible = cmbProveedor.includeInLayout = true;
+					lblFamilias.visible = lblFamilias.includeInLayout = true;
+					cmbFamilias.visible = cmbFamilias.includeInLayout = true;
+					cmbFamilias.cargaFamilias(fam_global,-1,-1,"--TODOS--");
+				}
+				if( value == "PRODUCTOS" )
+				{
+					lblProductos.visible = lblProductos.includeInLayout = true;
+					cmbProductos.visible = cmbProductos.includeInLayout = true;
+				}
+				if( value == "ESTRATEGICOS" )
+				{
+					grpEstrategicos.visible = grpEstrategicos.includeInLayout = true;
+					lblFamilias.visible = lblFamilias.includeInLayout = true;
+					cmbFamilias.visible = cmbFamilias.includeInLayout = true;
+					cmbFamilias.cargaFamilias(fam_estrategico,-1,-1,"--TODOS--");
+					
+				}
+				if( value == "AGENTE" )
+				{
+					lblAgente.visible = lblAgente.includeInLayout = true;
+					cmbAgente.visible = cmbAgente.includeInLayout = true;
+				}
+				if( value == "COLABORADOR" )
+				{
+					lblColaborador.visible = lblColaborador.includeInLayout = true;
+					cmbColaborador.visible = cmbColaborador.includeInLayout = true;
+				} 
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "consultaProveedor":
+							{
+								if(consultaProveedor.isCurrentButtonActualizar){
+									consultaProveedor.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									consultaProveedor.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			
+			protected function filtros_changeEvent(event:*):void
+			{	
+				var _parametrosTemp:EventoTabProveedores = new EventoTabProveedores("prueba");
+				_parametrosTemp.parametros =	generaParametrosBusqueda();
+				
+				if(_parametrosTemp.keyConsulta != _parametrosIniciales)
+				{
+					consultaProveedor.CambiarToActualizarTipoBoton(false);
+				}
+				else
+				{
+					consultaProveedor.CambiarToActualizarTipoBoton(true);
+				}
+				if(event.currentTarget is ComboCatalogos && event.currentTarget.id == "cmbProveedor")
+				{
+					cmbFamilias.cargaFamilias(cmbProveedor.selectedItem.llave,-1,-1,"--TODOS--");//valor debe ser -1 para requisito de servicio
+					cargarAnioFiscal(cmbProveedor.selectedItem.llave);
+				}
+				if(event.currentTarget is tabProveedores_Estrategicos)
+				{
+					cmbFamilias.cargaFamilias(grpEstrategicos.idProveedor,-1,-1,"--TODOS--");
+					cargarAnioFiscal(grpEstrategicos.idProveedor);
+				}
+			}
+			
+			public function set recibeUniversoAgentes($datos:ArrayCollection):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				
+				_universoAgentes = ObjectUtil.copy($datos) as ArrayCollection;
+				var arraTemp:Array = new Array();
+				for(var y:int=0; y<$datos.length; y++)
+				{
+					arraTemp.push(($datos[y] as AgenteAduanal).nombreComercial);
+				}
+			}
+			
+			protected function btnBarra_changingHandler(event:IndexChangeEvent):void
+			{
+				selectedButton_CLICK(event);
+				filtros_changeEvent(event)
+			}
+			
+			protected function verificarCheck(event:MouseEvent):void
+			{
+				if(checkFiscal.selected)
+				{
+					cmbPerioodo.enabled = false;
+					cmbPerioodo.textInput.enabled = false;
+					cmbPerioodo.selectedIndex = 0;
+					cmbPerioMeses.selectedIndex = 0;
+					cmbAnio.dataProvider = _listaAnioFiscal;
+					cmbPerioodo_changeHandler();
+				}
+				else
+				{
+					cmbPerioodo.enabled = true;
+					cmbPerioodo.textInput.enabled = true;
+					cmbAnio.dataProvider = _listaAnio;
+				}
+				cmbAnio.selectedIndex = 0;
+			}
+			
+			private var mesInicio:Number=0;
+			private var mesFin:Number;
+			public function set recibirAnioFiscal($prov:ArrayCollection):void
+			{
+				_listaAnioFiscal = new ArrayCollection();
+				
+				if($prov.length > 0)
+					mesInicio = ($prov[0] as Proveedor).mesInicioFiscal;
+				
+				if(mesInicio == 0)
+				{
+					mesInicio = 6;
+					mesFin = 5;
+				}
+				else
+				{
+					mesInicio--;
+					if(mesInicio == 0) mesFin = 11;
+					else mesFin=mesInicio-1; 
+				}
+				
+				for(var anio:String in _listaAnio)
+				{
+					_listaAnioFiscal.addItem({valor:_listaMensual[mesInicio]+" "+_listaAnio[anio]+" - "+_listaMensual[mesFin]+" "+(Number(_listaAnio[anio])+1).toString(),llave: anio});
+				}
+				
+				if(checkFiscal.selected)
+					cmbAnio.dataProvider = _listaAnioFiscal;
+				
+			}
+			
+			public function cargarAnioFiscal($prov:Number):void
+			{
+				var anioFiscal:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.BUSCAR_ANIOFISCAL);
+				var bp:ParametrosBusquedaProveedor = new ParametrosBusquedaProveedor();
+				bp.idProveedor = $prov;
+				anioFiscal.parametros = bp;
+				dispatchEvent(anioFiscal);
+			}
+			
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup id="grpPrincipal" width="100%" height="100%" minWidth="282">
+			<s:VGroup width="100%" gap="0" paddingBottom="15">
+				<s:ButtonBar id="btnBarra" width="100%" height="30" dataProvider="{_arrButton}" selectedIndex="0" changing="btnBarra_changingHandler(event)" requireSelection="true"/>
+			</s:VGroup>  
+			<otros:divisionHueca width="100%"/>	
+			
+			<botonera:tabProveedores_Estrategicos id="grpEstrategicos" width="100%"  click="filtros_changeEvent(event)"/>
+			
+			<label:Titulo text="Proveedor" fontSize="10" id="lblProveedor"/>
+			<comboCata:ComboCatalogos id="cmbProveedor" width="100%" creationComplete="{cmbProveedor.cargaProveedores(_cadenaBusqueda,'--TODOS--' )}" selectedIndex="0" change="filtros_changeEvent(event)"/>
+			
+			<label:Titulo text="Tipo productos" fontSize="10" id="lblProductos"/>
+			<comboCata:ComboCatalogos id="cmbProductos" width="100%" creationComplete="{cmbProductos.cargaTipoProductos();}" change="filtros_changeEvent(event)"/>
+			
+			<label:Titulo text="Colaborador" fontSize="10" id="lblColaborador"/>
+			<comboCata:ComboCatalogos id="cmbColaborador" width="100%" creationComplete="{cmbColaborador.obtenerEmpleadosXTipoTablero('comprador','');}" selectedIndex="0" change="filtros_changeEvent(event)"/>
+			
+			<label:Titulo text="Agente aduanal" fontSize="10" id="lblAgente"/>
+			<comboCata:ComboCatalogos id="cmbAgente" width="100%" creationComplete="{cmbAgente.cargaAgenteAduanal();}" selectedIndex="0" change="filtros_changeEvent(event)"/>
+			
+			<label:Titulo text="Familias" fontSize="10" id="lblFamilias"/>
+			<comboCata:ComboCatalogos id="cmbFamilias" width="100%"  selectedIndex="0" change="filtros_changeEvent(event)"/>
+			
+			<s:VGroup paddingTop="10" gap="0">
+				<chekbox:CheckRadioDefaultPQNet id="checkFiscal" label="Año fiscal" nombreStiloFuente="default10" tipoCheck="cuadrado" click="verificarCheck(event)"/>
+				<label:Titulo text="Año" fontSize="10" />
+			</s:VGroup>
+			
+			
+			<comboCata:ComboCatalogos id="cmbAnio" width="100%" dataProvider="{_listaAnio}" selectedIndex="0" change="filtros_changeEvent(event)"  height="28" fontSize="14" focusColor="0x257d92"/>
+			<label:Titulo text="Periodo" fontSize="10"/>
+			<s:ComboBox id="cmbPerioodo" width="100%" dataProvider="{_listaPeriodo}" change="cmbPerioodo_changeHandler(cmbPerioodo.selectedIndex);filtros_changeEvent(event)" selectedIndex="0"  height="28" fontSize="14" focusColor="0x257d92"/>
+			<s:ComboBox id="cmbPerioMeses" width="100%" height="0" visible="false" selectedIndex="0" change="filtros_changeEvent(event)"  fontSize="14" focusColor="0x257d92"/>
+			
+			<s:Spacer height="10"/>
+			<pqNet:botonPqNetLargo id="consultaProveedor"  width="100%" click="acumulado()" icono="iconoActualizarNormal" botonRedondo="true" />
+			<s:Spacer height="10"/>
+			
+			<s:VGroup width="100%" height="100%" id="infoProveedor" visible="false" includeInLayout="false">
+				<otros:divisionHueca width="100%"/>
+				<label:Titulo_14_VerdeAzul_pTop10 text="DATOS GENERALES" />
+				<label:Titulo_12 text="Proveedor:"  paddingTop="11"/>
+				<label:Texto_12 text="{_proveedor.nombre}" />
+				<label:Titulo_12 text="ID:" paddingTop="11"/>
+				<label:Texto_12 text="{_proveedor.idProveedor}" />
+				<label:Titulo_12 text="# de Cliente:" paddingTop="11"/>
+				<label:Texto_12 text="{_proveedor.observa}" />
+				<label:Titulo_12 text="País:" paddingTop="11"/>
+				<label:Texto_12 text="{_proveedor.pais}" />
+				<label:Titulo_12 text="Dirección:" paddingTop="11"/>
+				<label:Texto text="{_proveedor.RSCalle}" maxDisplayedLines="2" width="100%" />
+				<otros:divisionHueca width="100%" />
+				<label:Titulo_14_VerdeAzul_pTop10 text="DATOS ECONOMICOS" />
+				<label:Titulo_12 text="Compra:" paddingTop="11"/>
+				<label:Texto_12 text="{ _proveedor.moneda}" />
+				<label:Titulo_12 text="Condiciones de pago:" paddingTop="11"/>
+				<label:Texto_12 text="{_proveedor.CPago}"/>
+				<label:Titulo_12 text="Medio de Pago:"  paddingTop="11"/>
+				<label:Texto_12 id="medioDPago"/>
+				<label:Titulo_12 text="Stock:" paddingTop="11"/>
+				<label:Texto_12 text="( {_proveedor.piezasStock} )" />
+				<label:Titulo_12 text="Adeudos Conocidos:" paddingTop="11"/>
+				<label:Texto_12 id="adeudoConocido"/>
+				<label:Titulo_12 text="Morosidad:" paddingTop="11"/>
+				<label:Texto_12 text="{_proveedor.morosidad} %" />
+			</s:VGroup>
+			
+			
+			
+		</s:VGroup>
+	</vistas:contenido>	
+</vistas:PanelPropiedadesPlantillas>

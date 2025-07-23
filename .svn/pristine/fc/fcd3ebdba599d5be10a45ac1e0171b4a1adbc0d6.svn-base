@@ -1,0 +1,77 @@
+package modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.utils.ObjectUtil;
+
+	public class ModeloVisitasEjecucion extends EventDispatcher
+	{
+		
+		private var visitasAgrupadas:ArrayCollection;
+		private var visitasRealizadas:ArrayCollection;
+		private var _sql:Query;
+		public function recibirVisitasConFechaRealizada(data:ArrayCollection):void{
+			
+			visitasRealizadas = new ArrayCollection;
+			visitasAgrupadas = new ArrayCollection;
+			
+			if(data){
+				for each (var temp:VisitaCliente in data) 
+				{
+					temp.nombreContacto = temp.contacto.nombre;
+				}
+				
+				_sql= new Query(data,["nombreCliente","nombreContacto"],false);
+				var arrayCliente:Array = _sql.getPunteros(["nombreCliente"]);
+				
+				//TRAER TODOS LOS CONTACTOS
+				for each (var cliente:String in arrayCliente) 
+				{
+					var array:Array = _sql.getPunteros([cliente]);
+					var visitaCliente:VisitaCliente = ObjectUtil.copy(_sql.universo.getItemAt(array[0])) as VisitaCliente;
+					visitaCliente.numVisitas = _sql.getPunteros([cliente]).length;
+					visitasAgrupadas.addItem(visitaCliente);
+				}
+				
+			}
+			visitasRealizadas = data;
+			dispatchEvent( new Event("enviarVisitasConFechaRealizadaModeloVisitasEjecucion") );
+		}
+		
+		[Bindable (event="enviarVisitasConFechaRealizadaModeloVisitasEjecucion")]
+		public function get regresarVisitasConFechaRealizada():ArrayCollection{
+			return visitasRealizadas;
+		}
+		
+		[Bindable (event="enviarVisitasConFechaRealizadaModeloVisitasEjecucion")]
+		public function get regresarVisitasAgrupadas():ArrayCollection{
+			return visitasAgrupadas;
+		}
+		
+		
+		
+		private var realizacionExitosa:int
+		public function recibirRespuestaActualizacion(value:int):void{
+			realizacionExitosa = value;
+			dispatchEvent( new Event("enviarRespuestaRealizacionModeloVisitasEjecucion") );
+			realizacionExitosa = 0;
+		}
+		
+		[Bindable (event="enviarRespuestaRealizacionModeloVisitasEjecucion")]
+		public function get regresarRespuestaActualizacion():int{
+			return realizacionExitosa;
+		}
+		
+		public function faultVisitasEjecucion(error:Object):void{
+			trace(error.toString());
+		}
+		
+		public function ModeloVisitasEjecucion()
+		{
+		}
+	}
+}

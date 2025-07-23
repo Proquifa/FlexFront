@@ -1,0 +1,139 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos
+{
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.compras.gestorimportaciones.FacturaPendiente")]
+	[Bindable]
+	public class FacturaPendiente
+	{
+		
+		private var _folio:String;
+		private var _idFacturaPagar:String;
+		private var _costo:Number;
+		private var _idPcompra:Number;
+		private var _compra:String;
+		private var _noFactura:int;
+		private var _idProveedor:int;
+		private var _proveedor:String;
+		private var _monto:Number;
+		private var _noPartidas:int;
+		private var _simboloMoneda:String;
+		
+		
+		
+		public function FacturaPendiente()
+		{
+		}
+
+		public function get simboloMoneda():String
+		{
+			return _simboloMoneda;
+		}
+
+		public function set simboloMoneda(value:String):void
+		{
+			_simboloMoneda = value;
+		}
+
+		public function get noPartidas():int
+		{
+			return _noPartidas;
+		}
+
+		public function set noPartidas(value:int):void
+		{
+			_noPartidas = value;
+		}
+
+		public function get monto():Number
+		{
+			return _monto;
+		}
+
+		public function set monto(value:Number):void
+		{
+			_monto = value;
+		}
+
+		public function get proveedor():String
+		{
+			return _proveedor;
+		}
+
+		public function set proveedor(value:String):void
+		{
+			_proveedor = value;
+		}
+
+		public function get idProveedor():int
+		{
+			return _idProveedor;
+		}
+
+		public function set idProveedor(value:int):void
+		{
+			_idProveedor = value;
+		}
+
+		public function get noFactura():int
+		{
+			return _noFactura;
+		}
+
+		public function set noFactura(value:int):void
+		{
+			_noFactura = value;
+		}
+
+		public function get folio():String
+		{
+			return _folio;
+		}
+
+		public function set folio(value:String):void
+		{
+			_folio = value;
+		}
+
+		public function get idFacturaPagar():String
+		{
+			return _idFacturaPagar;
+		}
+
+		public function set idFacturaPagar(value:String):void
+		{
+			_idFacturaPagar = value;
+		}
+
+		public function get costo():Number
+		{
+			return _costo;
+		}
+
+		public function set costo(value:Number):void
+		{
+			_costo = value;
+		}
+
+		public function get idPcompra():Number
+		{
+			return _idPcompra;
+		}
+
+		public function set idPcompra(value:Number):void
+		{
+			_idPcompra = value;
+		}
+
+		public function get compra():String
+		{
+			return _compra;
+		}
+
+		public function set compra(value:String):void
+		{
+			_compra = value;
+		}
+
+
+	}
+}

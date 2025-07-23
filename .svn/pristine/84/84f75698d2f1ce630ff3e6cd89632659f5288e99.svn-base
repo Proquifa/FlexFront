@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:registrarVisita="mx.com.proquifa.vista.vistas.registrarVisita.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.registrarVisita.componentes.*"
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*"
+		 width="100%" height="100%"
+		 creationComplete="init(event)" 
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGuardiaSeguridad;
+			import mx.com.proquifa.vista.vistas.registrarVisita.componentes.PopUpRegistrarVisitaExito;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			public var universo:ArrayCollection;
+			[Bindable]public var tipo:String;
+			public var idFleteraModificada:int = -1;
+			private var popupRegistrar:PopUpRegistrarVisitaExito;
+			protected function init(event:FlexEvent):void
+			{
+				cmpGridProveedores.addEventListener("agerVisitaNoProgramada",agreagarVisita)
+				cmpGridProveedores.addEventListener("asignarTipoVista",tipoVista)
+				cmpGridProveedores.addEventListener(EventoGuardiaSeguridad.CAMBIO_LISTA_TIPO_FLETERA,fleteraSeleccionada);
+				cmpGridProveedores.addEventListener(EventoGuardiaSeguridad.CAMBIO_LISTA_TIPO_AGENTE_ADUANAL,agenteAduanalSeleccionada);
+				addEventListener(EventoGuardiaSeguridad.ABRIR_POPUP_REGISTRAR_VISITANTE,abrirPopUp);
+				cargarPlantilla();
+			}
+			private function agreagarVisita(event:Event):void
+			{
+				cmpOperacion.registrarFormulario.infoMensajero.currentState = "editar";
+				cmpOperacion.currentState = "programado";
+			}
+			private function tipoVista(event:Event):void
+			{
+				if(cmpGridProveedores != null)
+					tipo = cmpGridProveedores.botoneraGuardia.tipoSelect;
+				
+				if(tipo == "fleteras"){
+					if(cmpGridProveedores.gridOrdenes.selectedItem != null)
+						seleccionarFletera(cmpGridProveedores.gridOrdenes.selectedItem.fletera,"fletera")
+				}
+				else if(tipo == "agente"){
+					if(cmpGridProveedores.gridOrdenes.selectedItem != null)
+						seleccionarFletera(cmpGridProveedores.gridOrdenes.selectedItem.nombreAgenteAduanal,"agenteAduanal")
+				}
+			}
+			
+			protected function vistaAnterior(event:EventoGuardiaSeguridad):void
+			{
+				
+			}
+			
+			public function set obtenerOrdenesPendientes($value:ArrayCollection):void
+			{
+				universo = $value;
+				cmpGridProveedores.universo = universo;
+				
+					//QUITAR DESPUES
+					/*var odLista:ArrayCollection = new ArrayCollection();
+					var todos:Boolean;
+					var punteros:Array;
+					var query:Query;
+					var orden:OrdenDespacho;
+					query = new Query(universo,["fletera"],true);
+					punteros = query.getPunteros(['fletera'],'fletera');
+					orden = new OrdenDespacho();
+					var i:int = 1;
+					for each (var fletera:String in punteros) 
+					{
+						punteros = query.getPunteros([fletera]);
+						
+						orden = ObjectUtil.copy(query.universo.getItemAt(punteros[0])) as OrdenDespacho;
+						orden.numFila = i;
+						orden.tipoVista = "FL";
+						odLista.addItem(orden);
+						i++;
+					}
+					cmpGridProveedores.gridOrdenes.dataProvider = ObjectUtil.copy(odLista) as ArrayCollection;
+					
+				if(cmpGridProveedores.gridOrdenes.dataProvider.length > 0){
+					cmpGridProveedores.gridOrdenes.selectedIndex = 0;
+					EventoGuardiaSeguridad.idFletera = cmpGridProveedores.gridOrdenes.dataProvider[0].idFletera;
+					cmpOperacion.currentOrden = cmpGridProveedores.gridOrdenes.selectedItem;
+
+					seleccionarFletera(cmpGridProveedores.gridOrdenes.dataProvider[0].fletera,"fletera");
+				}*/
+				seleccionarPrimero();
+				cmpGridProveedores.cambiarTipoLista(new EventoGuardiaSeguridad(EventoGuardiaSeguridad.CARGAR_NUMERO_PENDIENTES_MENU));
+				var query:Query;
+				query = new Query(universo,["nombreAgenteAduanal","fletera"],true);
+				
+				cmpGridProveedores.botoneraGuardia.visitas_todos = universo.length;
+				/*cmpGridProveedores.botoneraGuardia.visitas_fleteras = query.getPunteros([null,"fletera"],"fletera").length;*/
+				var arrayTemp:Array = query.getPunteros([null,"fletera"],"fletera");
+				for each (var i:int in arrayTemp) 
+				{
+					if(arrayTemp[i] == "")
+						arrayTemp.splice(i,1);
+				}
+				cmpGridProveedores.botoneraGuardia.visitas_fleteras = arrayTemp.length;
+				cmpGridProveedores.botoneraGuardia.visitas_agente = query.getPunteros(["nombreAgenteAduanal"],"nombreAgenteAduanal").length;
+				cmpGridProveedores.botoneraGuardia.visitas_programadas = query.getPunteros(["pr"]).length;//Modificar
+				cmpGridProveedores.totalVisita = universo.length;
+			}
+			private function fleteraSeleccionada(event:EventoGuardiaSeguridad):void
+			{
+				seleccionarFletera(event.fletera,"fletera");
+			}
+			private function agenteAduanalSeleccionada(event:EventoGuardiaSeguridad):void
+			{
+				seleccionarFletera(event.agenteAduanal,"agenteAduanal");
+			}
+			public function seleccionarFletera(campo:String,tipo:String):void
+			{
+				var punteros:Array;
+				var query:Query;
+				var orden:OrdenDespacho;
+				var listaOrdenesFletera:ArrayCollection = new ArrayCollection();
+				punteros = new Array();
+				if(tipo == "fletera")
+					query = new Query(universo,["fletera"],true);
+				else if(tipo == "agenteAduanal")
+					query = new Query(universo,["nombreAgenteAduanal"],true);
+					
+				
+				if(campo != null)
+					punteros = query.getPunteros([campo.toLowerCase()]);
+				
+				for(var i:int=0;i<punteros.length;i++){
+					orden = ObjectUtil.copy(query.universo.getItemAt(punteros[i])) as OrdenDespacho;
+					orden.numFila = i+1;
+					listaOrdenesFletera.addItem(orden);
+				}
+				cmpOperacion.resetFletera();
+				/*for each (var fletera:String in punteros) 
+				{
+				punteros = query.getPunteros([fletera]);
+				
+				orden = ObjectUtil.copy(query.universo.getItemAt(punteros[0])) as OrdenDespacho;
+				orden.numFila = i;
+				odLista.addItem(orden);
+				i++;
+				}*/
+				if(cmpOperacion != null && cmpOperacion.guiaFormulario != null && cmpOperacion.guiaFormulario.gridProveedores != null){
+					cmpOperacion.guiaFormulario.dataProvider = listaOrdenesFletera;
+					cmpOperacion.numGuias = listaOrdenesFletera.length;
+					cmpOperacion.currentOrden = cmpGridProveedores.gridOrdenes.selectedItem;
+				}
+			}
+			
+			public function set recibeRespuestaContactoNuevo($resp:int):void
+			{
+				if($resp > 0){
+					idFleteraModificada = $resp;
+					cmpGridProveedores.cargarContactosFletera(true);
+				}
+			}
+			
+			public function set recibeContactosCombo(datos:ArrayCollection):void
+			{
+				var indiceCargar:int = -1;
+				if(!datos)
+					return;
+				
+				var prim:Contacto = new Contacto();
+				prim.numFila = 0;
+				prim.nombre= " ";
+				prim.EMail= " ";
+				
+				datos.addItemAt(prim,0);
+				
+				for (var i:int = 0; i < datos.length; i++) 
+				{
+					(datos[i] as Contacto).numFila = i
+					if(idFleteraModificada > -1){
+						if(idFleteraModificada == (datos[i] as Contacto).idContacto)
+							indiceCargar = i;
+					}
+				}
+				
+				/*_datos = new ArrayCollection();
+				_datos = datos;*/
+				
+				cmpOperacion.registrarFormulario.infoMensajero.cmbVisitante.dataProvider = datos;
+				cmpOperacion.registrarFormulario.infoMensajero.esperarData(indiceCargar);
+				/*cmpOperacion.registrarFormulario.infoMensajero.cmbVisitante.selectedIndex = indiceCargar;*/
+				
+				if(indiceCargar > -1){
+					cmpOperacion.registrarFormulario.infoMensajero.currentContacto = cmpOperacion.registrarFormulario.infoMensajero.cmbVisitante.dataProvider[indiceCargar];
+					cmpOperacion.registrarFormulario.infoMensajero.currentState = "conInfo";
+					idFleteraModificada = -1;
+					cmpOperacion.registrarFormulario.infoMensajero.nuevoMensajero = false;
+				}
+			}
+			protected function abrirPopUp(event:EventoGuardiaSeguridad):void
+			{
+				if( popupRegistrar == null ){
+					popupRegistrar = PopUpRegistrarVisitaExito(PopUpManager.createPopUp( this, PopUpRegistrarVisitaExito, true ) );
+					popupRegistrar.setVisitanteFolio(event.visitantes);
+					PopUpManager.centerPopUp( popupRegistrar );
+					popupRegistrar.addEventListener("aceptarPopUP",cerrarPopUp);
+				}
+				else{
+					PopUpManager.addPopUp( popupRegistrar , this, true );
+				}
+			}
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popupRegistrar );
+				popupRegistrar = null;
+			}
+			public function set recibeRespuestaRegistrarVisita($resp:Boolean):void
+			{
+				if($resp){
+					var evento:EventoGuardiaSeguridad = new EventoGuardiaSeguridad(EventoGuardiaSeguridad.ABRIR_POPUP_REGISTRAR_VISITANTE);
+					evento.visitantes = cmpOperacion.vistaLeerCodigo.txtVisitante.text;
+					dispatchEvent(evento);
+					
+					cmpOperacion.resetFletera();
+					cmpOperacion.vistaLeerCodigo.resetAll();
+					cmpOperacion.guiaFormulario.cargaImagenes.reset();
+					
+					var event:EventoGuardiaSeguridad = new EventoGuardiaSeguridad(EventoGuardiaSeguridad.OBTENER_ORDENES_PENDIENTES_GUARDIA_SEGURIDAD);
+					event.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(event);
+				}
+				/*else{
+					alertaSingleton.show( "Hubo un error al registrar la visita", catalogoAlertas.TIT_ERR);					
+				}*/
+			}
+			private function cargarPlantilla():void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpLista);
+				plantilla.cargarGraficas(cmpOperacion);
+				plantilla.colorFondoGrafica = 0xFFFFFF;
+				plantilla.sinLeyenda();
+			}
+			
+			private function seleccionarPrimero():void
+			{
+				var odLista:ArrayCollection = new ArrayCollection();
+				var todos:Boolean;
+				var punteros:Array;
+				var query:Query;
+				var orden:OrdenDespacho;
+				query = new Query(universo,["fletera"],true);
+				punteros = query.getPunteros(['fletera'],'fletera');
+				orden = new OrdenDespacho();
+				var i:int = 1;
+				for each (var fletera:String in punteros) 
+				{
+					punteros = query.getPunteros([fletera]);
+					
+					orden = ObjectUtil.copy(query.universo.getItemAt(punteros[0])) as OrdenDespacho;
+					orden.numFila = i;
+					orden.tipoVista = "FL";
+					odLista.addItem(orden);
+					i++;
+				}
+				cmpGridProveedores.gridOrdenes.dataProvider = ObjectUtil.copy(odLista) as ArrayCollection;
+				
+				if(cmpGridProveedores.gridOrdenes.dataProvider.length > 0){
+					cmpGridProveedores.gridOrdenes.selectedIndex = 0;
+					EventoGuardiaSeguridad.idFletera = cmpGridProveedores.gridOrdenes.dataProvider[0].idFletera;
+					cmpOperacion.currentOrden = cmpGridProveedores.gridOrdenes.selectedItem;
+					
+					seleccionarFletera(cmpGridProveedores.gridOrdenes.dataProvider[0].fletera,"fletera");
+				}
+				cmpOperacion.registrarFormulario.infoMensajero
+				cmpGridProveedores.cargarContactosFletera(true);
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" gap="0" visible="false" includeInLayout="false">
+		
+		<componentes:HeaderGuardiaSeguridad id="cmpTitulo" width="100%" titulo="REGISTRAR VISITA" vistaAnterior="vistaAnterior(event)" />
+		
+		<s:HGroup id="vgpListado" width="100%" height="100%" gap="0" verticalAlign="middle">
+			<s:HGroup width="100%" height="100%" maxWidth="695" gap="0" id="cmpLista" verticalAlign="middle">
+				<registrarVisita:RegistrarVisita_Lista id="cmpGridProveedores" width="100%" height="100%" maxWidth="695"/>
+				<otros:divisionDegradadoVertical height="85%"/>
+			</s:HGroup>  
+			<registrarVisita:RegistrarVisita_Operacion id="cmpOperacion" tipoVista="{tipo}" width="100%" height="100%" />
+		</s:HGroup> 
+	</s:VGroup>  
+		<plantilla:Plantilla_VistaInicial id="plantilla" width="100%" height="100%" />
+</s:Group>

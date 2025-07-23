@@ -1,0 +1,536 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:Componentes="vista.AsignarSprintGV.Componentes.*"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%"
+		 resize="calc(event)" 
+		 creationComplete="init(event)" xmlns:componentes="vista.juntaDeCierre.componentes.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Sprint;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import vista.evento.EventoCierreSprintGV;
+			import vista.juntaDeCierre.componentes.PopUpAgregarObservacionesCierre;
+			import vista.juntaDeCierre.componentes.PopUpDetallesVisistaCierreSprint;
+			
+			[Bindable]private var sizeFontLittle:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]private var sizeFontBoton:Number;
+			[Bindable] public var widthLogo:Number;
+			[Bindable] public var heightLogo:Number;
+			[Bindable] public var visitas:Number;
+			[Bindable] public var sprint:Sprint;
+			public var fechaSprint:String;
+			public var _sql:Query;
+			public var currentEV:VisitaCliente;
+			public var observacionesEV:String;
+			public var uniAc:ArrayCollection;
+			
+			[Bindable]public var cargadasSolicitudes:int; [Bindable]public var cargadasCRM:int;
+			
+			[Bindable]private var colorContadorSolicitudes:uint = 0xde0017;
+			[Bindable]private var colorContadorCRM:uint = 0xde0017;
+			[Bindable]private var colorContadorTodos:uint = 0xde0017;
+			[Bindable]private var colorPlanificar:uint;
+			
+			[Bindable]public var indiceSeleccionado:int = 0;
+			private var universo:ArrayCollection = new ArrayCollection;
+			
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontLittle = (12/2005) * (unscaledWidth);
+				sizeFontLittle = sizeFontLittle > 12 ? 12:sizeFontLittle;
+				sizeFontLittle = sizeFontLittle < 7 ? 7:sizeFontLittle;
+				
+				sizeFontProvee = (30/2005) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 30 ? 30:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 15 ? 15:sizeFontProvee;
+				
+				sizeFontBoton = (22/2005) * (unscaledWidth);
+				sizeFontBoton = sizeFontBoton > 22 ? 22:sizeFontBoton;
+				sizeFontBoton = sizeFontBoton < 15 ? 15:sizeFontBoton;
+				
+				widthLogo = (15 / 2005) * (unscaledWidth);
+				widthLogo = widthLogo > 15 ? 15:widthLogo;
+				widthLogo = widthLogo < 10 ? 10:widthLogo;
+				
+				heightLogo = (15 / 1266) * (unscaledHeight);
+				heightLogo = heightLogo > 15 ? 15:heightLogo;
+				heightLogo = heightLogo < 10 ? 10:heightLogo;
+				
+				
+			}
+			
+			public function setInfoLista(value:ArrayCollection):void
+			{
+				gridVisita.dataProvider = value;
+				if(gridVisita.dataProvider.length > 0){
+					gridVisita.selectedIndex = indiceSeleccionado;
+					currentEV = gridVisita.dataProvider[indiceSeleccionado];
+					sprint = value[0].sprint;
+				}
+				if(value.length > 0)
+					listaActividades.dataProvider = obtenerVisitaPlanificasEV(value[indiceSeleccionado].usuarioEV);
+				
+				visitas = 0;
+				for each (var i:VisitaCliente in gridVisita.dataProvider) 
+				{
+					visitas = i.numVisitas;
+				}
+				
+				setTimeout(totalVisitas,300);
+				recalcularValorCredito(new Event("recalcularCredito"));
+			}
+			
+			/*protected function completarSprint(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("completarSprint"));
+			}*/
+			
+			protected function init(event:FlexEvent):void
+			{
+				
+				addEventListener("recalcularCredito",recalcularValorCredito);
+				
+				botoneraHead.addEventListener(EventoCierreSprintGV.CLIC_BOTONERA_CIERRE_DE_SPRINT,filtrarBotonera)
+				addEventListener(EventoCierreSprintGV.MOSTRAR_POPUP_INFORMACION_VISITA_CIERRE_SPRINT,mostrarPopUpDetalleVisita);
+				addEventListener(EventoCierreSprintGV.ASIGNAR_CREDITOS_UNIVERSO,recalcularCreditos);
+				
+				botoneraHead.selectIndex = 0;
+				
+				colorPlanificar = 0xeaeaea;
+				
+			}
+			
+			private function calcularResize():void
+			{
+				
+			}
+			
+			////////////////////////////       POPUP DETALLE DE VISITA Y CLIENTE
+			private var popUpDetalle:PopUpDetallesVisistaCierreSprint;
+			private function mostrarPopUpDetalleVisita(event:EventoCierreSprintGV):void
+			{
+				if( popUpDetalle == null ){
+					popUpDetalle = PopUpDetallesVisistaCierreSprint(PopUpManager.createPopUp( this, PopUpDetallesVisistaCierreSprint, true ) );
+					PopUpManager.centerPopUp( popUpDetalle );
+					popUpDetalle.setDetallesVisita(event.visitaCliente);
+					popUpDetalle.addEventListener("cerrarPop",cerrarPopUp);
+				}else{
+					PopUpManager.addPopUp( popUpDetalle , this, true );
+				}
+			}
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpDetalle );
+				popUpDetalle = null;
+			}
+			
+			
+			private function filtrarBotonera(event:EventoCierreSprintGV):void
+			{
+				var tipoVista:String = "";
+				if(event.tipoBoton== "todas"){
+					listaActividades.dataProvider = ObjectUtil.copy(uniAc) as ArrayCollection;
+					
+				}else if(event.tipoBoton == "pendiente"){
+					listaActividades.dataProvider = UtilsGrid.queryCampoXLike(uniAc,"estado",'Pendiente');
+					
+				}else if(event.tipoBoton == "finalizada"){
+					listaActividades.dataProvider = UtilsGrid.queryCampoXLike(uniAc,"estado",'Finalizado');
+					
+				}
+				else if(event.tipoBoton == "noFinalizadas"){
+					listaActividades.dataProvider = UtilsGrid.queryCampoXLike(uniAc,"estado",'No finalizada');
+					
+				}
+				recalcularValorCredito(new Event("recalcularCredito"));
+
+				
+				var lista:ArrayCollection = gridVisita.dataProvider as ArrayCollection;
+				for each (var solicitud:VisitaCliente in lista) 
+				{
+					solicitud.tipoVista = tipoVista;
+				}
+			}
+			
+			private function obtenerVisitaPlanificasEV(usuarioEV:String):ArrayCollection
+			{
+				var universoActual:ArrayCollection = new ArrayCollection;
+				var punterosCliente:Array;
+				punterosCliente = _sql.getPunteros([usuarioEV]);
+				for (var i:int = 0; i < punterosCliente.length; i++) 
+				{
+					var temp:VisitaCliente = ObjectUtil.copy(_sql.universo.getItemAt(punterosCliente[i])) as VisitaCliente;
+					temp.numVisitas = _sql.getPunteros([usuarioEV]).length;
+					universoActual.addItem( temp );
+				}
+				uniAc = universoActual;
+				return universoActual;
+			}
+			public function setUniverso(value:Query):void
+			{
+				if(value)
+				{
+					_sql = value;
+					universo = ObjectUtil.copy(value.universo) as ArrayCollection;
+					
+				}
+					
+				
+			}
+			
+			[Bindable]public var creditoTotal:Number;
+			private function recalcularValorCredito(event:Event):void
+			{
+				if(!listaActividades || !listaActividades.dataProvider)
+					return ;
+				var valor:Number
+				valor = 100/listaActividades.dataProvider.length;
+				creditoTotal = 0;
+				for each (var temp:VisitaCliente in listaActividades.dataProvider) 
+				{
+					creditoTotal += temp.credito;
+					temp.valor = Number (UtilsFormatosNumericos.precisionADosDecimales(valor) );
+				}
+			}
+			
+			private function totalVisitas():void
+			{
+				cargadasSolicitudes = 0;
+				cargadasCRM = 0;
+				var todos:int = 0;
+				for each (var temp:VisitaCliente in listaActividades.dataProvider) 
+				{
+					if(temp.tipo == 'solicitud')
+						cargadasSolicitudes += 1;
+					else if(temp.tipo == 'crm')
+						cargadasCRM += 1;
+				}
+				
+				todos = cargadasSolicitudes + cargadasCRM;
+				
+				if(cargadasSolicitudes == 0)
+					colorContadorSolicitudes = 0xde0017;
+				else if(cargadasSolicitudes < 15)
+					colorContadorSolicitudes = 0xf09500;
+				else if(cargadasSolicitudes == 15)
+					colorContadorSolicitudes = 0x4fa834;
+				
+				
+				if(cargadasCRM == 0)
+					colorContadorCRM = 0xde0017;
+				else if(cargadasCRM < 15)
+					colorContadorCRM = 0xf09500;
+				else if(cargadasCRM == 15)
+					colorContadorCRM = 0x4fa834;
+				
+				if(todos == 0)
+					colorContadorTodos = 0xde0017;
+				else if(todos < 30)
+					colorContadorTodos = 0xf09500;
+				else if(todos == 30)
+					colorContadorTodos = 0x4fa834;
+			}
+			
+			protected function asignarCurrentEV(event:IndexChangeEvent):void
+			{
+				currentEV = gridVisita.selectedItem;
+				
+				var arrayEV:Array = _sql.getPunteros([currentEV.usuarioEV],"usuarioEV");
+				
+				listaActividades.dataProvider = obtenerVisitaPlanificasEV(currentEV.usuarioEV);
+				
+				visitas = 0;
+				for each (var i:VisitaCliente in gridVisita.dataProvider) 
+				{
+					visitas = i.numVisitas;
+				}
+				
+				observacionesEV = "";
+				setTimeout(totalVisitas,300);
+				recalcularValorCredito(new Event("recalcularCredito"));
+				
+			}
+			
+			private function obtenerCadenaFecha(fechaInicio:Date,fechaFin:Date):String
+			{
+				var fecha:String;
+				if(fechaInicio && fechaFin){
+					fecha = fechaInicio.getDate()+" - "+ fechaFin.getDate() +" / "+UtilsFecha.regresaNombreMesPrimeraMayuscula(fechaFin.getMonth())+" / "+fechaFin.getFullYear();
+				}else
+					fecha = "ND";
+				
+				fechaSprint = fecha;
+				return fecha;
+			}
+			
+		
+			
+			
+			protected function finalizarSprint(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("AbrirPopUpParaFinalizarSprint"));
+			}
+			
+			public function asignarVisitasSprint():void
+			{
+				var visitas:ArrayCollection = ObjectUtil.copy( listaActividades.dataProvider ) as ArrayCollection;
+				for each (var temp:VisitaCliente in visitas) 
+				{
+					if(temp.credito == 0){
+						temp.credito = 1;
+					}
+				}
+				
+				if(listaActividades && listaActividades.dataProvider && listaActividades.dataProvider.length > 0){
+					var eventCierre:EventoCierreSprintGV = new  EventoCierreSprintGV(EventoCierreSprintGV.MANDAR_INFORMACION_PARA_CIERRE_DE_SPRINT);
+					eventCierre.visitasEmpleado = visitas;
+					
+					eventCierre.idEmpleado = visitas[0].idEmpleado;
+					eventCierre.idSprint = visitas[0].sprint.idSprint 
+					eventCierre.observaciones = observacionesEV
+				    dispatchEvent(eventCierre);
+				}
+			}
+			
+			
+			
+			
+			
+	    	private var popUpObservaciones:PopUpAgregarObservacionesCierre;
+			private function redactar_observaciones(event:MouseEvent):void
+			{
+				if( popUpObservaciones == null ){
+					popUpObservaciones = PopUpAgregarObservacionesCierre(PopUpManager.createPopUp( this, PopUpAgregarObservacionesCierre, true ) );
+					PopUpManager.centerPopUp( popUpObservaciones );
+					popUpObservaciones.reVisitaActual(gridVisita.dataProvider[gridVisita.selectedIndex]); 
+					popUpObservaciones.fechaSprint = fechaSprint;
+					if(observacionesEV != "")
+						popUpObservaciones.recibirObservaciones(observacionesEV);
+					popUpObservaciones.addEventListener("cerrarPopUp",cerrarPopUpobservaciones);
+					popUpObservaciones.addEventListener("aceptarPopUp",aceptarPopUpObservaciones);
+				}else{
+					PopUpManager.addPopUp( popUpObservaciones , this, true );
+				}
+			}
+			
+			private function aceptarPopUpObservaciones(event:Event):void{
+				observacionesEV = popUpObservaciones.getObservacion();
+				validarBotonFinalizar();
+				PopUpManager.removePopUp( popUpObservaciones );
+				popUpObservaciones = null;
+			}
+			private function cerrarPopUpobservaciones(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpObservaciones );
+				popUpObservaciones = null;
+			}
+			
+			private function validarBotonFinalizar():void{
+				
+				if(observacionesEV == "")
+				{
+					colorPlanificar = 0xeaeaea;
+					botonRegistrar.removeEventListener(MouseEvent.CLICK,finalizarSprint);
+					botonRegistrar.buttonMode = false;
+				}
+				else{
+					colorPlanificar = 0x5FB404;
+					botonRegistrar.addEventListener(MouseEvent.CLICK,finalizarSprint);
+					botonRegistrar.buttonMode = true;
+				}
+			}
+			
+			private function recalcularCreditos(event:EventoCierreSprintGV):void
+			{
+				if(!listaActividades || !listaActividades.dataProvider)
+					return ;
+				creditoTotal = 0;
+				for each (var temp:VisitaCliente in listaActividades.dataProvider) 
+				{
+					creditoTotal += temp.credito;
+				}
+				
+				for each (var temp:VisitaCliente in uniAc) 
+				{
+					if(event.idVisitaCliente == temp.idVisitaCliente){
+						temp.credito = event.credito;
+						break;
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" height="100%" gap="0" paddingRight="20" paddingLeft="6">
+		<s:VGroup width="30%" height="100%" gap="0" paddingTop="20">
+			<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="EJECUTIVOS DE VENTAS" width="100%" textAlign="left" color="#424242" id="lblTitulo"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer1"/>
+		
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer2"/>
+			<otros:division width="100%" grueso="1" visible="{gridVisita.selectedIndex == 0 ? false:true}" id="division"/>
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="gridVisita" contentBackgroundAlpha="0"  change="asignarCurrentEV(event)"
+					itemRenderer="vista.juntaDeCierre.IR.IR_ListaEjecutivosCierreDeSprint"
+					/>
+			<otros:division width="100%" grueso="1"/>
+			<s:VGroup width="100%" height="55" verticalAlign="middle" paddingTop="20" paddingLeft="20" paddingRight="20">
+				<s:HGroup width="100%" height="100%" verticalAlign="middle">
+					<s:HGroup width="100%" height="100%" horizontalAlign="center">
+						<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontLittle+3}" text="#{gridVisita.dataProvider.length} EC" 
+								 color="#424242" />
+						<s:Spacer width="100%" />
+						<s:HGroup >
+							<s:Rect width="10" height="10">
+								<s:fill>
+									<s:SolidColor color="0x008894" />
+								</s:fill>
+							</s:Rect>
+							
+							<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontLittle+3}" text="{visitas} Visita{visitas==1?'':'s'}" 
+									 color="#008894" />
+						</s:HGroup>  
+						
+					</s:HGroup>
+				</s:HGroup>  
+				
+			</s:VGroup>
+		</s:VGroup>    
+		
+		<s:Spacer width="20" />
+		<otros:divisionDegradadoVertical height="100%" width="2" />
+		<s:Spacer width="20" />
+		
+		<s:VGroup width="100%" height="100%" gap="0">
+			<s:HGroup width="100%" height="{sizeFontProvee + 40}" verticalAlign="middle" gap="0">
+				<s:HGroup width="20%" height="100%" >
+					<s:Label text="SPRINT #{sprint.numeroSprint} " height="100%" textAlign="center" verticalAlign="middle" color="#404040" 
+							 fontFamily="Novecento" fontSize="{sizeFontBoton}" fontWeight="bold" id="txtSprint" visible="false"/>
+					<s:Spacer width="10" />
+					<s:Label text="({obtenerCadenaFecha(sprint.fechaInicio,sprint.fechaFin)})" height="100%" textAlign="center" verticalAlign="middle" color="#5f5f5f" 
+							 fontFamily="Novecento" fontSize="{sizeFontLittle}" paddingTop="5" visible="false"/>
+				</s:HGroup>  
+				
+				<s:HGroup width="10%" height="100%" >
+					
+				</s:HGroup>  
+				
+				
+				<s:VGroup width="70%" height="100%" buttonMode="true" verticalAlign="middle">
+					
+					<componentes:BotoneraCierreDeSprint height="100%" width="100%" maxHeight="30" id="botoneraHead"/>
+				
+				</s:VGroup>
+			</s:HGroup>  
+			
+			<s:VGroup width="100%" height="100%" >
+				<s:Group width="100%" height="100%" >
+					
+					<s:Rect width="100%" height="100%">
+						<s:stroke>
+							<s:SolidColorStroke color="#008894" weight="1"/>
+						</s:stroke>
+					</s:Rect>
+					<s:List id="listaActividades" width="100%" height="100%" itemRenderer="vista.juntaDeCierre.IR.TarjetaInformacionCierreDeSprint"
+							horizontalScrollPolicy="off" borderVisible="false" top="1" bottom="1" right="1" left="1" >
+						<s:layout>
+							<s:TileLayout verticalGap="0" horizontalGap="0" id="layoutLista" columnAlign="justifyUsingWidth">
+								
+							</s:TileLayout>
+						</s:layout>
+						
+					</s:List>
+				</s:Group>  
+				
+				
+			</s:VGroup>
+			
+			<s:HGroup width="100%" verticalAlign="middle" paddingTop="20" paddingBottom="20">
+				<s:HGroup width="9%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="CRM" fontSize="{sizeFontLittle}" color="{colorContadorCRM}"/>
+					<s:Spacer width="5%" />
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="{cargadasCRM}/15" fontSize="{sizeFontLittle}" color="{colorContadorCRM}"/>
+				</s:HGroup>
+				<s:HGroup width="12.5%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="SOLICITUDES" fontSize="{sizeFontLittle}" color="{colorContadorSolicitudes}"/>
+					<s:Spacer width="5%" />
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="{cargadasSolicitudes}/15" fontSize="{sizeFontLittle}" color="{colorContadorSolicitudes}" id="contadorSolicitudes"/>
+				</s:HGroup>
+				<s:HGroup width="13%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="VISITAS CARGADAS" fontSize="{sizeFontLittle}" color="{colorContadorTodos}"/>
+					<s:Spacer width="5%" />
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="{cargadasCRM+cargadasSolicitudes}/30" fontSize="{sizeFontLittle}" color="{colorContadorTodos}"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().creditos_icono}" width="{widthLogo+5}" height="{widthLogo+5}"/>
+					<s:Label fontFamily="Helvetica" text="{creditoTotal+' Créditos'}" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle+2}" color="0xcf0354"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().valor_icono}" width="{widthLogo+5}" height="{widthLogo+5}"/>
+					<s:Label fontFamily="Helvetica" text="100% Valor" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle+2}" color="0x009fdc"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().visita_pendiente}" width="{widthLogo}" height="{heightLogo}" />
+					<s:Label fontFamily="Helvetica" text="Visita pendiente" width="58%" maxDisplayedLines="2" fontSize="{sizeFontLittle}"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().reporte_pendiente}" width="{widthLogo}" height="{heightLogo}" />
+					<s:Label fontFamily="Helvetica" text="Reporte pendiente" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle}"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().documento_azul}" width="{widthLogo}" height="{heightLogo}" />
+					<s:Label fontFamily="Helvetica" text="Archivos cargados" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle}"/>
+				</s:HGroup>
+				
+				<s:HGroup width="30%" height="35" buttonMode="true" click="redactar_observaciones(event)">
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#008894" />
+							</s:fill>
+						</s:Rect>
+						<s:Label fontFamily="Novecento" fontWeight="bold" text="AGREGAR OBSERVACIONES" width="100%" height="100%" fontSize="{sizeFontBoton}"
+								 textAlign="center" verticalAlign="middle" color="#FFFFFF"/>						
+					</s:Group>  
+				</s:HGroup>  
+				<s:HGroup width="16%" height="35"  id="botonRegistrar"  >
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="{colorPlanificar}" />
+							</s:fill>
+						</s:Rect>
+						<s:Label fontFamily="Novecento" fontWeight="bold" text="FINALIZAR" width="100%" height="100%" fontSize="{sizeFontBoton}"
+								 textAlign="center" verticalAlign="middle" color="#FFFFFF"/>						
+					</s:Group>
+				</s:HGroup>  
+				
+				
+			</s:HGroup>  
+			
+		</s:VGroup>  
+	</s:HGroup>  
+	
+</s:Group>

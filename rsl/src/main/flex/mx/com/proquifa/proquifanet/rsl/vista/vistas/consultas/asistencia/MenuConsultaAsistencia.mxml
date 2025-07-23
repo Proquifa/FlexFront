@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		xmlns:mx="library://ns.adobe.com/flex/mx"  
+		xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+		xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+		xmlns:label="skins.skin.label.*"
+		xmlns:otros="skins.otros.*" 
+		xmlns:pqNet="skins.botones.pqNet.*" 
+		xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+		xmlns:dateField="skins.skin.dateField.*"
+		titulo="CONSULTA ASISTENCIA"
+		width="100%" height="100%"
+		creationComplete="inicia()" 
+		>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.asistencia.EventoConsultaAsistencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.admon.objetos.Funcion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var _listaBotones:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1}, {valor:'Rápida',llave:0}] );
+			
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentCategoria:String;
+			private var currentColaborador:Number;
+			private var currentDepartamento:String;
+			private var currentArea:String;
+			private var currentTipoIncidencia:String;
+			private var currentTipoChecada:String;
+			private var currentLocalidad:String;
+			private var numFiltrosModificados:int;
+			private var currentColaboradorRapida:String; 
+			private var keyModificados:Object;
+			
+			
+			private function inicia():void
+			{
+				setTimeout(cargaronCombos,300);
+				this.dtpFInicio.text  = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				this.dtpFInicio.selectedDate = new Date();
+				this.dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				this.dtpFFin.selectedDate = new Date();
+				
+				this.vstBusqueda.selectedIndex = 1;
+				//realizarBusquedaInicial();
+			}
+			
+			/*Se valida que el combo de trabajador cargue para poder hacer la consulta inicial, de lo contrario no trea datos la consulta*/
+			private function cargaronCombos():void
+			{
+				if(this.cmbColaborador.dataProvider != null && this.cmbColaborador.dataProvider.length >0)
+					realizarBusquedaInicial();
+				else
+					setTimeout(cargaronCombos,300); //Espera hasta que cmbColaborador este cargado
+			}
+			
+			public function cambiaIndices( $indice:int ):void
+			{
+				cambiaIndex( $indice );
+				var evento:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.CAMBIA_INDICE);
+				evento.indiceVista = $indice;
+				dispatchEvent(evento);
+			}
+			
+			public function cambiaIndex( $indice:int ):void
+			{
+				this.espacioInfoGenerales.selectedIndex = $indice;
+			}
+			
+			private function seleccionaBoton(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBar).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					this.vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.OBTENER_BUSQUEDA_LISTA_ASISTENCIA);
+					if(((event.currentTarget as ButtonBar).selectedItem as Object).valor == 'Rápida')
+					{
+						evt.categoria = "rapida";
+					}
+					else
+					{
+						evt.categoria = "avanzada";
+						realizarBusqueda();
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				var tempCategoria:String;
+				var tempColaborador:String;
+				var tempArea:String;
+				var tempDepartamento:String;
+				var temptipoIncidencia:String;
+				var tempTipoChecada:String;
+				var tempLocalidad:String;
+				
+				this.cmbCategoria.selectedItem.valor == "--TODOS--" ? tempCategoria = "" : tempCategoria = this.cmbCategoria.selectedItem.llave;
+				this.cmbColaborador.selectedItem.valor == "--TODOS--" ?tempColaborador = "" : tempColaborador = this.cmbColaborador.selectedItem.llave;
+				this.cmbDepartamento.selectedItem.valor == "--TODOS--" ? tempDepartamento = "": tempDepartamento = this.cmbDepartamento.selectedItem.llave;
+				this.cmbArea.selectedItem.valor == "--TODOS--" ? tempArea = "" : tempArea = this.cmbArea.selectedItem.llave;
+				this.cmbTipoChecada.selectedItem.valor == "--TODOS--" ?tempTipoChecada = "" : tempTipoChecada = this.cmbTipoChecada.selectedItem.valor;
+				this.cmbTipoIncidencia.selectedItem.valor == "--TODOS--" ? temptipoIncidencia = "": temptipoIncidencia = this.cmbTipoIncidencia.selectedItem.llave;
+				this.cmbLocalidad.selectedItem.valor == "--TODOS--" ? tempLocalidad = "" : tempLocalidad = this.cmbLocalidad.selectedItem.llave;
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicio":{CompararYControlarBoton(event.newDate.time,currentFInicio.time,"dtpFInicio",btnBusqueda);break;}
+					case "dtpFFin":{CompararYControlarBoton(event.newDate.time,currentFFin.time,"dtpFFin",btnBusqueda);	break;}
+					case "cmbCategoria":{CompararYControlarBoton(tempCategoria,currentCategoria,"cmbCategoria",btnBusqueda);break;}
+					case "cmbColaborador":{CompararYControlarBoton(tempColaborador,currentColaborador,"cmbColaborador",btnBusqueda);break;}
+					case "cmbDepartamento":{CompararYControlarBoton(tempDepartamento,currentDepartamento,"cmbDepartamento",btnBusqueda);break;}
+					case "cmbArea":{CompararYControlarBoton(tempArea,currentArea,"cmbArea",btnBusqueda);break;}
+					case "cmbTipoChecada":{CompararYControlarBoton(tempTipoChecada,currentTipoChecada,"cmbTipoChecada",btnBusqueda);break;}
+					case "cmbTipoIncidencia":{CompararYControlarBoton(temptipoIncidencia,currentTipoIncidencia,"cmbTipoIncidencia",btnBusqueda);break;}
+					case "cmbLocalidad":{CompararYControlarBoton(tempLocalidad,currentLocalidad,"cmbLocalidad",btnBusqueda);break;}
+				}
+			}
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2)
+				{
+					if(!keyModificados.hasOwnProperty($currentFiltroModif))
+					{
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}
+				else
+				{
+					if(numFiltrosModificados==1)
+					{
+						if(keyModificados.hasOwnProperty($currentFiltroModif))
+						{
+							numFiltrosModificados =0;
+							keyModificados=  new Object();
+						}
+					}
+					else
+					{
+						if(keyModificados.hasOwnProperty($currentFiltroModif))
+						{
+							delete keyModificados[$currentFiltroModif];
+							numFiltrosModificados --;
+						}
+					}
+				}
+				
+				if(numFiltrosModificados>=1)
+				{
+					$button.CambiarToActualizarTipoBoton(false);
+				}
+				else
+				{
+					$button.CambiarToActualizarTipoBoton(true);
+				}
+			}
+			
+			
+			public function realizarBusquedaInicial():void
+			{
+				
+				var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEsperar.mensaje = "iniciarEspera";
+				eventEsperar.idButtons = [];
+				eventEsperar.tipoEventos = [];
+				eventEsperar.idButtons.push("btnBusqueda");
+				eventEsperar.tipoEventos.push("BUSCAR_ASISTENCIAS_COLABORADOR");
+				dispatchEvent(eventEsperar);
+				
+				var event:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.BUSCAR_ASISTENCIAS_COLABORADOR);
+				event.finicio = this.dtpFInicio.selectedDate;
+				event.ffin = this.dtpFFin.selectedDate;
+				event.colaborador = 0;
+				event.area = event.categoria = event.localidad = "";
+				event.departamento = event.tipoChecada = event.tipoIncidencia = "" ;
+				event.trabajador = "";
+				dispatchEvent(event);
+				btnBusqueda.CambiarToActualizarTipoBoton(true);
+				
+				//Para verificar si los datos cambian
+				currentFInicio = event.finicio;
+				currentFFin = event.ffin;
+				currentCategoria = event.categoria;
+				currentColaborador = event.colaborador;
+				currentDepartamento = event.departamento;
+				currentArea = event.area;
+				currentTipoChecada = event.tipoChecada;
+				currentTipoIncidencia = event.tipoIncidencia;
+				currentLocalidad = event.localidad;
+					
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			
+			public function realizarBusqueda():void
+			{
+				var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEsperar.mensaje = "iniciarEspera";
+				eventEsperar.idButtons = [];
+				eventEsperar.tipoEventos = [];
+				eventEsperar.idButtons.push("btnBusqueda");
+				eventEsperar.tipoEventos.push("BUSCAR_ASISTENCIAS_COLABORADOR");
+				dispatchEvent(eventEsperar);
+				
+				var event:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.BUSCAR_ASISTENCIAS_COLABORADOR);
+				event.finicio = this.dtpFInicio.selectedDate;
+				event.ffin = this.dtpFFin.selectedDate;
+				this.cmbColaborador.selectedItem.valor == "--TODOS--" ? event.colaborador = 0 : event.colaborador = cmbColaborador.selectedItem.llave;
+				this.cmbColaborador.selectedItem.valor == "--TODOS--" ? event.trabajador = "" : event.trabajador = cmbColaborador.selectedItem.valor;
+				this.cmbArea.selectedItem.valor == "--TODOS--" ? event.area = "" : event.area = this.cmbArea.selectedItem.llave;
+				this.cmbCategoria.selectedItem.valor == "--TODOS--" ? event.categoria = "" : event.categoria = this.cmbCategoria.selectedItem.llave;
+				this.cmbDepartamento.selectedItem.valor == "--TODOS--" ? event.departamento = "" : event.departamento = this.cmbDepartamento.selectedItem.llave;
+				this.cmbTipoChecada.selectedItem.valor == "--TODOS--" ? event.tipoChecada = "" : event.tipoChecada = this.cmbTipoChecada.selectedItem.valor;
+				this.cmbTipoIncidencia.selectedItem.valor == "--TODOS--" ? event.tipoIncidencia = "" : event.tipoIncidencia = this.cmbTipoIncidencia.selectedItem.llave;
+				this.cmbLocalidad.selectedItem.valor == "--TODOS--" ? event.localidad = "" : event.localidad = this.cmbLocalidad.selectedItem.llave;
+				dispatchEvent(event);
+				//Para verificar si los datos cambian
+				currentFInicio = event.finicio;
+				currentFFin = event.ffin;
+				currentCategoria = event.categoria;
+				currentColaborador = event.colaborador;
+				currentDepartamento = event.departamento;
+				currentArea = event.area;
+				currentTipoChecada = event.tipoChecada;
+				currentTipoIncidencia = event.tipoIncidencia;
+				currentLocalidad = event.localidad;
+				btnBusqueda.CambiarToActualizarTipoBoton(true);
+			}
+			
+			private function realizarBusquedaRapida():void
+			{
+				var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEsperar.mensaje = "iniciarEspera";
+				eventEsperar.idButtons = [];
+				eventEsperar.tipoEventos = [];
+				eventEsperar.idButtons.push("btnBusquedaRapida");
+				eventEsperar.tipoEventos.push("BUSCAR_RAPIDO_ASISTENCIAS_COLABORADOR");
+				dispatchEvent(eventEsperar);
+				
+				var event:EventoConsultaAsistencia = new EventoConsultaAsistencia(EventoConsultaAsistencia.BUSCAR_RAPIDO_ASISTENCIAS_COLABORADOR);
+				event.trabajador = txtColaborador.text;
+				event.colaborador = 0;
+				event.departamento = event.area = event.categoria = "";
+				event.tipoChecada = event.tipoIncidencia = event.localidad = "" ;
+				event.ffin = event.finicio = null;
+				currentColaboradorRapida = txtColaborador.text;
+				dispatchEvent(event);
+				btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+			}
+			
+			protected function txtBuscaRapida_keyUpHandler(event:KeyboardEvent):void
+			{
+				var tempFolio:String = StringUtil.trim(txtColaborador.text);
+				if(tempFolio.length >0)
+				{
+					if(tempFolio != currentColaboradorRapida)
+					{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(false);
+					}
+					else
+					{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+					}
+				}
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons"))
+				{
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar)
+								{
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar)
+								{
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%" >
+			<pq:MobViewStack width="100%" height="100%" id="espacioInfoGenerales" creationPolicy="all" >
+				<s:NavigatorContent width="100%" height="100%">
+					
+					<s:VGroup width="100%" height="100%" horizontalAlign="center"  gap="10">
+						<s:VGroup width="100%" gap="0" visible="false" includeInLayout="false">
+							<s:Spacer height="13"/>
+							<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" requireSelection="true" enabled="false" />
+							<s:Spacer height="30"/>
+							<s:VGroup width="100%">
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+							<s:Spacer height="10"/>
+						</s:VGroup>
+						
+						<!--BusquedaRapida-->
+						<pq:MobViewStack width="100%" height="37%" id="vstBusqueda">
+							<s:NavigatorContent >
+								<s:VGroup width="100%"  verticalAlign="middle">
+									<label:Titulo_w100  text="Colaborador:" paddingTop="0"/>
+									<s:Spacer height="5"/>
+									<s:HGroup width="100%"  >
+										<s:TextInput id="txtColaborador" width="100%" fontStyle="normal" toolTip="Colaborador" keyUp="txtBuscaRapida_keyUpHandler(event)" enter="realizarBusquedaRapida()"  />
+									</s:HGroup>
+									<s:Spacer height="5%"/>
+									<pqNet:botonPqNetLargo id="btnBusquedaRapida" click="realizarBusquedaRapida()" width="100%" botonRedondo="true" icono="ojomordor" />
+									<s:Spacer height="15"/>
+									<s:VGroup width="100%">
+										<otros:divisionHueca width="100%"/>
+									</s:VGroup>	
+								</s:VGroup>
+							</s:NavigatorContent>
+							
+							<!--BusquedaAvanzada-->
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" height="100%" horizontalAlign="center">
+									<s:HGroup width="100%" >
+										<s:VGroup width="50%">
+											<label:Titulo_w100 text="Del" paddingTop="0"/>
+											<dateField:DatePickerSpanish id="dtpFInicio"  width="130" textAlign="center" fontStyle="normal" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+										<s:Spacer width="100%"/>
+										<s:VGroup width="50%">
+											<label:Titulo_w100 text="Al" paddingTop="0"/>
+											<dateField:DatePickerSpanish id="dtpFFin" width="130" textAlign="center" fontStyle="normal" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+									</s:HGroup>	
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Colaborador" paddingTop="0"/>
+									<comboPqNet:ComboCatalogos creationComplete="cmbColaborador.cargarTrabajador('--TODOS--')" id="cmbColaborador"  width="100%" selectedIndex="0" change="filtros_changeEvent(event)"  />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Tipo checada" paddingTop="0"/>
+									<comboPqNet:ComboCatalogos creationComplete="cmbTipoChecada.cargarTipoChecada('--TODOS--')" id="cmbTipoChecada"  width="100%" change="filtros_changeEvent(event)"  />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Tipo incidencia" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbTipoIncidencia"  creationComplete="cmbTipoIncidencia.cargarTipoIncidencia('--TODOS--')"  width="100%" change="filtros_changeEvent(event)" />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Empresa" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbLocalidad"  creationComplete="cmbLocalidad.cargarLocalidad('--TODOS--')"  width="100%" change="filtros_changeEvent(event)" />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Área" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbArea" creationComplete="cmbArea.cargarArea('--TODOS--')"   width="100%" change="filtros_changeEvent(event)" />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Departamento" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbDepartamento"  creationComplete="cmbDepartamento.cargarDepartamento('--TODOS--')"  width="100%" change="filtros_changeEvent(event)"  />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100 text="Categoría" paddingTop="0" />
+									<comboPqNet:ComboCatalogos id="cmbCategoria" creationComplete="cmbCategoria.cargarCategoria('--TODOS--')" change="filtros_changeEvent(event)"  width="100%"  />
+									<s:Spacer height="15"/>
+									<pqNet:botonPqNetLargo click="realizarBusqueda()" id="btnBusqueda" width="100%" botonRedondo="true" icono="iconoActualizarNormal"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+						</pq:MobViewStack>
+					</s:VGroup>	
+				</s:NavigatorContent>
+			</pq:MobViewStack>
+		</s:VGroup>
+	</vistas:contenido>	
+	
+</vistas:PanelPropiedadesPlantillas>

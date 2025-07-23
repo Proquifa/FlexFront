@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		   xmlns:ns1="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.Componentes.*"
+		   xmlns:maps="mx.com.proquifa.proquifanet.admonComunicacion.vistas.mapas.*" initialize= "init()" xmlns:label="skins.skin.label.*" >
+		<!--xmlns:ns1="Componentes.*"-->
+<mx:Script>
+	<![CDATA[
+		import mx.charts.HitData;
+		import mx.collections.ArrayCollection;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.PopUps.Fax;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.PopUps.Mail;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.BodyMensajes;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+		import mx.controls.Alert;
+		import mx.core.Application;
+		import mx.core.FlexGlobals;
+		import mx.events.ListEvent;
+		import mx.managers.PopUpManager;
+		import mx.messaging.ChannelSet;
+		import mx.messaging.channels.AMFChannel;
+		import mx.messaging.events.MessageEvent;
+		import mx.messaging.messages.AsyncMessage;
+		import mx.utils.ObjectUtil;
+
+		 public var busqueda:Boolean;
+		 private var tipoBusqueda:String = new String;
+		 
+		 [Bindable]
+		 private var _pedidosPorEnviar:ArrayCollection = new ArrayCollection();
+		 
+		[Bindable]
+		private var varDataGridValidadoraPedido:ArrayCollection;
+		[Bindable]
+		private var _validaElPendientePedidoActualizado:ArrayCollection = null;
+		
+		[Bindable]	
+		private var indice:int = 0;
+		[Bindable]	
+		private var indice2:int = 0;
+		[Bindable]	
+		private var totalPendientes:int = 0;
+		[Bindable]
+		private var contadorGraficoEnTiempo:Number = 0;
+		[Bindable]
+		private var contadorGraficoFueraTiempo:Number = 0;
+		
+		[Bindable]
+		private var estadoTiempo:ArrayCollection;
+		
+		
+		[Bindable]
+		private var usuario:String= "usuario2Ped";
+		
+		private var canalP:AMFChannel;
+		private var canalesP:ChannelSet;
+		
+		
+	    private var enviar:Mail;
+	    private var fax:Fax;
+		
+		/**
+		 * Con este Metodo se reciben los Pendientes (Pedidos por enviar) que se mostraran en el Grid y se reinician las variables del contador para el numero de filas a cero 
+		 */   
+		 public function set obtenerPedidosPorEnviar( datos:ArrayCollection):void{
+			if(datos.source.length == 0){
+					this.realizarPendientes.dataProvider = datos;
+					this.realizarPendientes.percentHeight = 100
+					this.pnlGrafico.height = 0
+					this.pnlGrafico.visible = false;
+					return;
+				}						
+			this.indice = 0;
+			this.indice2 = 0;
+			this._pedidosPorEnviar = datos;			
+			
+			var fechaHoy:Date = new Date 		
+			this.contadorGraficoEnTiempo = 0;
+			this.contadorGraficoFueraTiempo = 0;
+			var fechaTextoHoy:String = formatDate2.format( fechaHoy );	
+			for(var i:int = 0; i < this._pedidosPorEnviar.source.length; i++){
+				(this._pedidosPorEnviar.getItemAt( i ) as Correo).numFila = i + 1;
+				var fechaRecibidaInicial:Date = (this._pedidosPorEnviar.getItemAt( i ) as Correo).fechaInicio;
+				var fechaTextoRecibida:String = formatDate2.format( fechaRecibidaInicial );								
+				var fechaRecibida:Date = new Date( formatDate2.format( fechaTextoRecibida ) );
+				var fechaDeHoy:Date = new Date( formatDate2.format( fechaTextoHoy ) );			
+				if(ObjectUtil.compare( fechaRecibida , fechaDeHoy ) == 0){ //verde estan en tiempo
+					contadorGraficoEnTiempo ++;	
+				}else if (ObjectUtil.compare( fechaDeHoy, fechaRecibida ) > -1){ //rojo
+					contadorGraficoFueraTiempo ++;
+				}
+			}			
+			this.estadoTiempo = new ArrayCollection([
+		        {estado:"En Tiempo", Monto:contadorGraficoEnTiempo , EtiquetaMonto: "Total de Pendientes En Tiempo ( "+ contadorGraficoEnTiempo + " )"},
+		        {estado:"Fuera de Tiempo", Monto:contadorGraficoFueraTiempo, EtiquetaMonto: "Total de Pendientes Fuera de Tiempo ( "+ contadorGraficoFueraTiempo + " )" }				        
+	        ]);	
+	        this.totalPendientes = contadorGraficoEnTiempo + contadorGraficoFueraTiempo;
+	        this.realizarPendientes.percentHeight = 50;
+	        this.pnlGrafico.visible = true;
+	        this.pnlGrafico.percentHeight = 50;
+		 } 
+		  
+		 private function init():void{
+		 	busqueda = new Boolean;
+		 	busqueda = false;
+		 	//id y url definidas en el services-config.xml, mismo que esta en web-inf/flex/services-config.xml
+	 		canalP = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA); 
+			//instanciamos el conjunto canalees
+			canalesP = new ChannelSet();
+			//agregamos el canal
+			canalesP.addChannel( canalP );				
+			productorPedidosPorEnviar.channelSet = canalesP;				
+			consumidorPedidosPorEnviar.channelSet = canalesP;			
+			this.consumidorPedidosPorEnviar.subscribe();
+			 	
+			/*se genera un ArrayCollection que se añadira dentro del mensaje.body para cuando se quiera validar 
+			en el consumidor y no se genere errores */
+			this._validaElPendientePedidoActualizado = new ArrayCollection();	 
+			/*se genera el mensaje que sera enviado al consumidor*/
+			var contenidoMensaje:BodyMensajes = new BodyMensajes();			    		
+    		contenidoMensaje.vieneDe = "usuarionuevo";
+    		contenidoMensaje.usuario = this.usuario;
+			var mensaje:AsyncMessage = new AsyncMessage();			
+			this._validaElPendientePedidoActualizado.addItem( contenidoMensaje );	
+	    	mensaje.body = this._validaElPendientePedidoActualizado;
+			this.productorPedidosPorEnviar.send( mensaje );
+		 }
+		
+		public function LimpiarBusqueda():void{
+        	if (tipoBusqueda == "RAPIDA"){
+        		this.brpedidos1.LimpiarCampo();
+        	}else if (tipoBusqueda == "AVANZADA"){
+        		this.brpedidos2.LimpiarCampos();
+        	}
+        }
+        
+        private function itemClickEvent(event:ListEvent):void{	 
+        	var bandera:Boolean = new Boolean;
+	    	if (event.columnIndex == 6) { 	
+	    		/*Variable usada para generar un valor y un id */ 
+	    		var contenidoMensaje:BodyMensajes = new BodyMensajes();
+	    		/*La variable arreglo .numeroFolio tendra el numero del folio que se esta modificando*/
+	    		contenidoMensaje.numeroFolio = this.realizarPendientes.selectedItem.folioNumerico
+	    		/*La variable contenidoMensaje .vieneDe provovca que se use un camino diferete en el consumer para evitar reenviar la variable  como usaurioa nuevo*/
+	    		contenidoMensaje.vieneDe = "usuarioviejo";
+	    		/*La variable arrglo.usuario tendra llevara el nombre del usuario*/
+	    		contenidoMensaje.usuario = this.usuario	
+	    		  		
+	    		/**
+	    		 * Se verifica el contenido del Arreglo para saber si el pendiente ya se estaba modificando o si es nulo inserta los valores.
+	    		 */
+	    		if(this.varDataGridValidadoraPedido == null){
+	    			this._validaElPendientePedidoActualizado = new ArrayCollection();	    			
+	    			this._validaElPendientePedidoActualizado.addItem( contenidoMensaje );		    		
+	    		}else{ /**/
+	    			bandera = true;
+	    			this._validaElPendientePedidoActualizado = this.varDataGridValidadoraPedido;
+	    			for (var i:int=0; i < this._validaElPendientePedidoActualizado.source.length; i++){
+						if( this.realizarPendientes.selectedItem.folioNumerico == (this._validaElPendientePedidoActualizado.getItemAt( i ) ).numeroFolio){							
+							bandera = false;
+						}
+					}		
+					if(bandera){/*Si el usuario y el pendiente a modificar no estan siendo usados se agrega al arreglo las variables y se envia el mensaje*/
+						this._validaElPendientePedidoActualizado.addItem( contenidoMensaje );			    		
+		    		}else{
+		    			Alert.show( "El pendiente se encuentra en modificación por otro usuario","Operación imposible" );
+						return;
+		    		}
+	    		}	   
+	    		if( this.realizarPendientes.selectedItem.medio == "Fax" ){ //Se abre el popUp del fax
+	    			if( fax == null ){
+	    				fax = Fax(PopUpManager.createPopUp( this, Fax, true ));	    
+	    				datosFax();
+	    			}else{
+	    				datosFax();
+	    				PopUpManager.addPopUp(fax,this,true);
+	    				fax.init();
+	    			}					
+	    				
+	    		}else{	//Se abre el PopUp para enviar el Correo		
+	    			if( enviar == null ){		
+	    				enviar = Mail(PopUpManager.createPopUp(this, Mail, true)); 					
+						datosCorreo();
+					}else{						
+						datosCorreo();			
+						PopUpManager.addPopUp(enviar,this,true);    		
+			    		enviar.init();			    		
+					}		
+	    		}    		
+	    		var mensaje:AsyncMessage = new AsyncMessage();
+	    		mensaje.body = this._validaElPendientePedidoActualizado;
+				this.productorPedidosPorEnviar.send( mensaje );
+	  		} 
+	    }
+	    
+	    /**
+	     * Metodo para obtener los datos del correo 
+	     */ 
+	    private function datosCorreo():void{
+	    	enviar.doctoFolio = this.realizarPendientes.selectedItem.FolioDocumento;	
+    		enviar.correoPara = this.realizarPendientes.selectedItem.correo;
+    		/* enviar.correoAsunto = "Pedido " + this.realizarPendientes.selectedItem.FolioDocumento; */
+			enviar.correoAsunto = this.realizarPendientes.selectedItem.asunto;
+    		/* enviar.origen = this.realizarPendientes.selectedItem.origen; */
+    		enviar.origen = "ventas";
+    		enviar.idCorreo = this.realizarPendientes.selectedItem.idCorreo;
+    		enviar.tipoDoc = "Pedidos";		    		
+    		enviar.correoCuerpo  = this.realizarPendientes.selectedItem.cuerpoCorreo;
+    		enviar.ComentariosEntrega = this.realizarPendientes.selectedItem.comentariosAdicionales;
+    		enviar.folios = this.realizarPendientes.selectedItem.archivoAdjunto;
+    		enviar.medioEnvio = this.realizarPendientes.selectedItem.medio;
+    		enviar.folioPendiente = this.realizarPendientes.selectedItem.folioNumerico;
+    		enviar.addEventListener( EventoPendientesPorEnviar.BORRA_REGISTRO, borraRegistro );	
+	    }
+	    
+	    /**
+	     * Metodo para obtener los datos del correo 
+	     */ 
+	    private function datosFax():void{
+	    	fax.doctoFolio = this.realizarPendientes.selectedItem.FolioDocumento;	
+    		fax.correoPara = this.realizarPendientes.selectedItem.correo;
+    		/* fax.correoAsunto = this.realizarPendientes.selectedItem.FolioDocumento; */
+			fax.correoAsunto = this.realizarPendientes.selectedItem.asunto;
+    		fax.tipoDoc = "Pedidos";
+    		/* fax.origen = this.realizarPendientes.selectedItem.origen; */
+    		fax.origen = "ventas";
+    		fax.idCorreo = this.realizarPendientes.selectedItem.idCorreo;
+    		fax.correoCuerpo  = this.realizarPendientes.selectedItem.cuerpoCorreo;
+    		fax.ComentariosEntrega = this.realizarPendientes.selectedItem.comentariosAdicionales;
+    		fax.folios = this.realizarPendientes.selectedItem.archivoAdjunto;
+    		fax.medioEnvio = this.realizarPendientes.selectedItem.medio;
+    		fax.idContacto = this.realizarPendientes.selectedItem.idContacto;
+    		fax.nombreCliente = this.realizarPendientes.selectedItem.nombreDestino;
+    		fax.folioPendiente = this.realizarPendientes.selectedItem.folioNumerico;
+    		fax.addEventListener( EventoPendientesPorEnviar.BORRA_REGISTRO, borraRegistro );
+		}
+	    
+	    /**
+		 * Con esta funcion mostramos el idCliente en el Grid
+		 */
+		private function agrgarIndice(objeto:Object, renglon:DataGridColumn):Number{
+			if (indice2 == 0){
+				if(indice == 0){
+					indice = -1;
+					indice2++;
+				}
+			}
+			indice++;
+			return indice;					
+		}	
+		
+		 /**
+		  * Metodo usado como Consumidor para actualizar la variable de tipo Array Collection  a todos los Usuarios suscritos en el canal. 
+		  */ 
+		 private function recibePendienteP(evt:MessageEvent):void{
+		 		var arreglotemporal:ArrayCollection = new ArrayCollection ();
+		 		/*Se mete el message.body en un ArrayCollection temporal*/
+		 		arreglotemporal = evt.message.body as ArrayCollection;
+		 		/*El arreglo puede no contener objetos despues de que se le borraron registros en el Metodo 
+		 		 borraRegistro por lo que se verifica si su longitud es mayor a cero o evitar un error por Registros vacios.*/
+		 		if(arreglotemporal.source.length > 0){  
+		 			/* Si el arreglo temporal viene de un usuario nuevo */
+			 		if( "usuarionuevo" ==  (arreglotemporal.getItemAt(0) as Object ).vieneDe ){
+			 			/*Como la variable de un usuario nuevo viene vacia se verifica que que la variable solicitada en el metodo sea diferente a la del usuario nuevo*/
+		 				if(this.usuario != (arreglotemporal.getItemAt(0) as Object ).usuario){
+				 			enviaTusVariables();
+				 		}
+			 		}else{
+			 			/*Si existen registros se actualiza  El ArrayColeection recibido en el Metodo  para todos los usuarios*/
+		 				varDataGridValidadoraPedido = evt.message.body as ArrayCollection;     
+			 			this._validaElPendientePedidoActualizado = this.varDataGridValidadoraPedido                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+			 			/* Alert.show( evt.message.body.toString(), "Mensaje Recibido");*/	
+		 			}
+		 		}else{
+		 			/*Si el Array Collection viene sin Objetos o viene vacio solo se actualiza el Array Collection para todos los usuarios y se dejan libres todos los pendientes*/
+	 				varDataGridValidadoraPedido = evt.message.body as ArrayCollection;     
+		 			this._validaElPendientePedidoActualizado = this.varDataGridValidadoraPedido                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+		 			/* Alert.show( evt.message.body.toString(), "Mensaje Recibido");*/	
+	 			}	
+		 }
+		 
+		 /**
+		  * Metodo usado para enviar a un Usuario Nuevo  la variable que controla los Pendietes Abiertos 
+		  **/
+		 private function enviaTusVariables():void{	
+		 	/**/	 	
+		 	var mensaje:AsyncMessage = new AsyncMessage();
+	    	mensaje.body = this._validaElPendientePedidoActualizado;
+			this.productorPedidosPorEnviar.send( mensaje );
+		 }
+		 
+		 /**
+		 * Con esta funcion se elimina un registro de la variable _validaElPendienteActualizado
+		 */
+		 public function  borraRegistro(evt:EventoPendientesPorEnviar):void{			 	
+		 	/* se obtiene la posicion del Objeto a eliminar dentro del Array Collection */
+		 	for (var i:int=0; i < this._validaElPendientePedidoActualizado.source.length; i++){	  
+	    		if( (this._validaElPendientePedidoActualizado.getItemAt( i ) ).numeroFolio ==  evt.folioPendiente){
+					this._validaElPendientePedidoActualizado.removeItemAt( i );
+				}
+			}
+		 	this.varDataGridValidadoraPedido = this._validaElPendientePedidoActualizado;
+		 	var mensaje:AsyncMessage = new AsyncMessage();
+    		mensaje.body = this._validaElPendientePedidoActualizado;
+			this.productorPedidosPorEnviar.send( mensaje );		
+			//momento en que se borran los eventListeners del PopUp Mail y Fax ademas se remueve del popUp Manager
+			if( evt.origen == "fax" ){
+				this.fax.removeEventListener( EventoPendientesPorEnviar.BORRA_REGISTRO, borraRegistro );
+				PopUpManager.removePopUp( fax );
+			}else if( evt.origen == "correo" ){
+				this.enviar.removeEventListener( EventoPendientesPorEnviar.BORRA_REGISTRO, borraRegistro );
+				PopUpManager.removePopUp( enviar );		
+			}						
+			flash.system.System.gc();		
+		 } 		
+         
+         /**
+		  * Con esta funcion le damos formato a las fechas del grid
+		  */
+		 private function mostrarFormatoDeFecha(objeto:Object, columna:DataGridColumn):String{
+				var fechaDeCorreo:Correo = objeto as Correo;
+				var formatoFecha:String = new String;
+				formatoFecha = formatDate.format( fechaDeCorreo.fechaInicio );				
+				return formatoFecha;				
+		}
+        /**
+		 * Con este metodo le agrgamos una P  a los Pedidos del Grid
+		 */
+		 private function mostrarP(objeto:Object, columna:DataGridColumn):String{
+				var folioDocumentoDelCorreo:Correo = objeto as Correo;
+				var folio:String = new String;
+				folio = "P-" + folioDocumentoDelCorreo.FolioDocumento;		
+				return folio;				
+		}
+		private function cambiaEstadoResetearIndices():void{
+			this.indice = 0;
+			this.indice2 = 1;
+			if(this.lnkBusquedaRapida.label == "Búsqueda avanzada"){
+				this.currentState='BPedidos'
+			}else{
+				this.currentState=''
+			}
+			
+		}	
+		
+		/**
+		 * Recibe la inyeccion q trae el aviso del Correo Enviado
+		 */
+		public function set recibeCorreoEnviado ( datos:Boolean ):void{
+			if(datos == false){
+				return;
+			}
+			if(datos == true){
+				//Alert.show("El correo del Pedido se a enviado", "Aviso");
+				if( this.lnkBusquedaRapida.label == "Búsqueda avanzada"  ){
+					this.brpedidos1.buscaPendientesPorEnviar();
+				}else{
+					this.brpedidos2.buscaPendientesPorEnviar();
+				}
+				/* Application.application.renovarContadoresMenu(); */
+				FlexGlobals.topLevelApplication.renovarContadoresMenu();
+			}
+		}	 
+		
+		/**
+		 * Metodo usado para darle formato a los DATATIPS del la grafica del Pie (en tiempo y fuera de tiempo)
+		 */
+		public function dtFunc(hd:HitData):String {
+			var porcentaje:Number = new Number;
+			porcentaje = (hd.item.Monto * 100 ) /this.totalPendientes;
+    		return 	"<B>" + hd.item.estado + ":</B> "+ formatoDecimales.format( porcentaje ) + "<B>%</B>" + "<BR>" +
+    				"<B>No. de pendientes:</B> "+ hd.item.Monto + "<BR>" ;
+       	}
+	]]>
+</mx:Script>
+	
+	<mx:NumberFormatter id="formatoDecimales" precision="2" />
+
+	<mx:DateFormatter id="formatDate2" formatString="MM/DD/YYYY" />
+	
+	<mx:SolidColor id="sc1" color="0x32CD32"/>
+    <mx:SolidColor id="scPorCobrar" color="0xFF0000"/>
+    
+	<mx:DateFormatter id="formatDate" formatString="DD-MMM-YYYY" />
+	
+	<mx:Producer id="productorPedidosPorEnviar" destination="pedidosPorEnviar" fault="Alert.show(event.faultDetail, 'Error')"/>	
+	
+	<mx:Consumer id="consumidorPedidosPorEnviar" destination="pedidosPorEnviar" message="recibePendienteP( event )"  fault="Alert.show(event.faultDetail, 'Error')"/>
+	
+	<mx:states>
+		<mx:State name="BPedidos">
+			<mx:SetEventHandler target="{lnkBusquedaRapida}" name="click" handler="this.cambiaEstadoResetearIndices()"/>
+			<mx:RemoveChild target="{brpedidos1}"/>
+			<mx:AddChild relativeTo="{realizarPendientes}" position="before">
+				<ns1:BAPedidos id="brpedidos2"> 
+				</ns1:BAPedidos>
+			</mx:AddChild>
+			<mx:SetProperty target="{lnkBusquedaRapida}" name="label" value="Búsqueda rápida"/>
+		</mx:State>
+	</mx:states>
+	<mx:HBox height="100%" width="100%">
+		<mx:VBox width="100%" height="100%">
+			<mx:HBox width="100%" horizontalAlign="right">
+				<mx:LinkButton label="Búsqueda avanzada" id="lnkBusquedaRapida"  click="this.cambiaEstadoResetearIndices()"/>
+			</mx:HBox>
+			<ns1:BRPedidos id="brpedidos1" >
+			<!--busquedaRapida="llenarGridRapido()"-->
+			</ns1:BRPedidos>
+			<mx:DataGrid width="100%" height="100%" id="realizarPendientes" itemClick="itemClickEvent(event)" 
+						 dataProvider="{this._pedidosPorEnviar}" textAlign="center">
+				<mx:columns>
+					<mx:DataGridColumn dataField="numFila"  headerText="#" width="0.03"/>
+					<mx:DataGridColumn labelFunction="mostrarFormatoDeFecha" headerText="Pendiente desde" width="0.15"/>
+					<mx:DataGridColumn dataField="origen" headerText="Origen" width="0.15"/>
+					<mx:DataGridColumn dataField="nombreDestino" headerText="Destino" width="0.18"/>
+					<mx:DataGridColumn dataField="medio" headerText="Medio de envío" width="0.15"/>
+					<mx:DataGridColumn labelFunction="mostrarP" headerText="Folio" width="0.25"/>
+					<mx:DataGridColumn headerText="Enviar" width="0.08">
+						<mx:itemRenderer>
+								<mx:Component>									
+									<mx:LinkButton label="Enviar" color="white" textDecoration="underline" toolTip="Enviar correo">
+									<mx:DateFormatter id="formatDate" formatString="MM/DD/YYYY" />
+									<mx:Script>
+									<![CDATA[
+										import mx.utils.ObjectUtil;
+										import mx.controls.Label;
+										import mx.controls.Text;
+										private var fechaHoy:Date = new Date();
+										import mx.controls.Alert;
+										override public function set data(value:Object):void
+										{
+											super.data = value;
+											super.invalidateDisplayList();		
+										}
+										
+										override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+										{
+											super.updateDisplayList(unscaledWidth, unscaledHeight);var t:Text; var g:Graphics = graphics;
+											g.clear();
+											var fechaTexto:String = formatDate.format( fechaHoy );
+											var fechaDelGrid:Date = new Date( formatDate.format( data.fechaInicio ) );
+											var fechaDeHoy:Date = new Date( formatDate.format(fechaTexto) );
+											if(ObjectUtil.compare( fechaDelGrid, fechaDeHoy ) == 0){ //verde
+												g.beginFill(0x32CD32);
+											}else if (ObjectUtil.compare( fechaDeHoy, fechaDelGrid ) > -1){ //rojo
+												g.beginFill(0xFF0000);
+											}	
+											g.drawRect(0, 0, unscaledWidth, unscaledHeight);
+											g.endFill();
+										}
+									]]>
+									</mx:Script>
+									</mx:LinkButton>
+								</mx:Component>
+							</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn dataField="archivoAdjunto" headerText="ArchivoAdjunto" visible="false" />
+					<mx:DataGridColumn dataField="idCorreo" headerText="idCorreo" visible="false"/>
+					<mx:DataGridColumn dataField="folioNumerico" headerText="FolioPendiete" visible="false" />
+					<mx:DataGridColumn dataField="asunto" headerText="Asunto" visible="false"/>
+				</mx:columns>
+			</mx:DataGrid>
+			<mx:VBox borderStyle="solid" id="pnlGrafico" height="0" width="100%" visible="false">				
+				<!--<mx:Label text="Tasa de espera" fontSize="20" fontWeight="normal" width="100%" textAlign="left" paddingLeft="10" paddingTop="5"/>-->
+				<label:labelSubtitulo text="Tasa de espera"  width="100%" textAlign="left" paddingLeft="10" paddingTop="5"/>
+				<mx:PieChart id="graficoPie"  showDataTips="true" width="100%" height="100%" dataProvider="{estadoTiempo}" dataTipFunction="dtFunc">	
+					<mx:series>
+						<!--<mx:PieSeries field="Monto" nameField="facturado"  displayName="Monto Facturado"-->
+						<mx:PieSeries id="pieSeriesId" 
+									  field="Monto" 
+									  nameField="estado"  
+									  labelField= "EtiquetaMonto"
+									  labelPosition="callout"   
+									  explodeRadius=".1" fills="{[sc1, scPorCobrar]}"/>
+					</mx:series>								
+				</mx:PieChart>
+			</mx:VBox>
+		</mx:VBox>
+	</mx:HBox>
+</mx:Canvas>

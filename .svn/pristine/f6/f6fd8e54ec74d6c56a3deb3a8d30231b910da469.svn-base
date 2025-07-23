@@ -1,0 +1,1132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:contenedores="skins.skin.contenedores.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:botonesToggle="skins.botonesToggle.*"
+		  xmlns:catalogos="skins.skin.comun.catalogos.*"
+		  xmlns:grafica="skins.botones.grafica.*"
+		  xmlns:textinput="skins.skin.textinput.*"  
+		  width="100%" height="100%" 
+		  creationComplete="inicia(event)"
+		  >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Corporativo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Industria;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.corporativo.popup.CorporativopopUp_Vendedores;
+			import mx.core.FlexGlobals;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.skin.chekbox.radioDefaultPQNet;
+			
+			private var _arregloSinImagenes:ArrayCollection;
+			private var _habilitados:ArrayCollection;
+			private var _deshabilitados:ArrayCollection;
+			private var _universoClientes:ArrayCollection;
+			private var _currentItem:Cliente;
+			private var findOneImagen:Boolean = false;
+			private var arrayKeyConImagenes:Object;
+			private var _estaBuscando:Boolean;
+			private var _idCorporativo:Number;
+			private var listaAFiltrar:ArrayCollection = new ArrayCollection(); 
+			private var _listaHab:ArrayCollection;
+			private var contador:Number=-1;
+			private var current:Corporativo;
+			private var _validarTexto:Boolean = false;
+			private var _popUpAgregarVendedores:CorporativopopUp_Vendedores;
+			private var _numeroCambios:Number=0;
+			private var _numerollegadas:Number=0;
+			private var _industrias:ArrayCollection;
+			private var _nombresIndustrias:ArrayCollection;
+			private var _espacio:Number;
+			private var _seAgrega:Boolean = false;
+			private var _respaldoEV:String;
+			private var _respaldoCobrador:String;
+			private var _respaldoVendedor:String;
+			private var _respaldoCorp:Corporativo;
+			private var _industriasCorp:ArrayCollection;
+			private var _nombresLlegada:Array;
+			private var _nombresSalida:Array;
+			private var _corpOriginal:Corporativo;
+			private var _corpSalida:Corporativo;
+			private var _vieneDe:String;
+			
+			private var cambioColaborador:Boolean;
+			private var cambioESAC:Boolean;
+			
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection( [  { valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+				{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }] );
+			
+			
+			//public function recibeConcepto($concepto:String,$industrias:ArrayCollection):void
+			public function recibeConcepto():void
+			{
+				_industrias = new ArrayCollection();
+				//textCorporativo.text = $concepto;
+				//_industrias = $industrias;
+				//selectCheckIndustrias(_industrias);
+				grpEdicion.visible = grpEdicion.includeInLayout = true;  	 	 // FALSE
+				divGrpEdicion.visible = divGrpEdicion.includeInLayout = true;   //  FALSE
+				_respaldoEV = "";
+				_respaldoCobrador = "";
+				_respaldoVendedor = "";
+				_respaldoCorp = null;
+				_industriasCorp = null;
+				_seAgrega = true;
+				mostrarBotonEliminar();
+				
+			}
+			protected function inicia(event:FlexEvent):void
+			{
+				lstClientes.addEventListener("eliminarCliente",eliminarCliente,false,0,true);
+				_espacio = (grpEdicion.measuredWidth / 3) - 60;
+			}
+			
+			public function eliminarCliente(evt:Event):void
+			{
+				var sort:Sort = new Sort();
+				sort.fields = [new SortField('nombre', true)];
+				
+				if (_estaBuscando)
+				{
+					_habilitados.addItem( lstClientes.selectedItem );
+					_listaHab.addItem( lstClientes.selectedItem );
+					lstClientes.dataProvider.removeItemAt(lstClientes.selectedIndex);
+					_listaHab.sort = sort;
+					_listaHab.refresh();
+					lstHabilitados.dataProvider = _listaHab;
+					lstHabilitados.dataProvider.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = lstHabilitados.dataProvider.length + ' Clientes';
+				}
+				else
+				{
+					_habilitados.addItem( lstClientes.selectedItem );
+					lstClientes.dataProvider.removeItemAt(lstClientes.selectedIndex);
+					_habilitados.sort = sort;
+					_habilitados.refresh();
+					lstHabilitados.dataProvider = _habilitados;
+					lstHabilitados.dataProvider.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = lstHabilitados.dataProvider.length + ' Clientes';
+				}
+				
+				
+				/* if (lstClientes.dataProvider.length == 0 && !isNaN(_idCorporativo) )
+				{
+				btnElimCorp.includeInLayout = btnElimCorp.visible = true;
+				}
+				else
+				{
+				btnElimCorp.includeInLayout = btnElimCorp.visible = false;
+				} */
+			}
+			
+			/**
+			 * al crearse el componente se solicitan todos los proveedores
+			 */ 
+			
+			public function iniciarVistaTodosLosClientes():void
+			{
+				_arregloSinImagenes = null;
+				_habilitados = null;
+				_deshabilitados = null;
+				_universoClientes = null;
+				_currentItem = null;
+				findOneImagen = false;
+				arrayKeyConImagenes = null;
+				
+				dispatchEvent( new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES_DISPONIBLES));
+			}
+			/**
+			 * al recibirse los proveedores, se solicitan las imagenes
+			 */ 
+			public function set recibeClientes($datos:ArrayCollection):void{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				var _lista:ArrayCollection = ObjectUtil.copy( $datos ) as ArrayCollection;
+				_habilitados = _lista;
+				lstHabilitados.dataProvider = _lista;
+				_lista.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = _lista.length + ' Clientes';
+				
+			}
+			
+			///////////////////////////////////////////////////////////  		MODIFICACIONES PARA LA IMAGEN       ///////////////////////////////////////////////////////////
+			
+			/**
+			 *permitira iniciar y/o continuar la solicitud de imagenes
+			 */ 
+			private function solicitaImagenes():void{
+				
+				for( var i:int = 0 ; i < _arregloSinImagenes.length; i++ ){
+					_currentItem = ObjectUtil.copy( _arregloSinImagenes[ i ] ) as Cliente;
+					if( _currentItem.imagen != null && _currentItem.imagen != '' ){ //se evalua si al proveedor se le a insertado un aimegn o no para evitar la solictud y disminuir el tiempo el proceso
+						findOneImagen = true;
+						
+						var variables:URLLoader = new URLLoader();
+						var request:URLRequest = new URLRequest();
+						variables.dataFormat = URLLoaderDataFormat.BINARY;
+						
+						request = new URLRequest("http://" + Destinos.ipUsandose+'/logoClientes/' + _currentItem.idCliente +'.' + _currentItem.imagen ); //ip oscar
+						
+						request.idleTimeout = 1*1000;
+						
+						variables.addEventListener(Event.COMPLETE, completeHandler,false,0,true);
+						variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandlerError,false,0,true);
+						try{
+							variables.load(request);
+						} 
+						catch (error:Error){
+							trace( "Unable to load URL: " + error );
+						}
+						_arregloSinImagenes.length > 0 ? _arregloSinImagenes.removeItemAt( i ) : null;
+						i = _arregloSinImagenes.length;
+					}
+				}
+				if (!findOneImagen){
+					divideTipoAgente();
+					findOneImagen=false;
+				}
+			}
+			/**
+			 * recibe sel request la imagen, se valida si existe la 
+			 */ 
+			private function completeHandlerError(event:Event):void
+			{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				bytes = null;
+				
+				remueveDatos();
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = loader.data;
+				}catch (error:*){
+					bytes = null;
+				}
+				
+				if(arrayKeyConImagenes.hasOwnProperty(_currentItem.idCliente)){
+					var posicionCliente:uint = arrayKeyConImagenes[_currentItem.idCliente] as Number;
+					(_universoClientes[posicionCliente] as Cliente).bytes = bytes;
+				}
+				
+				remueveDatos();
+			}
+			
+			
+			private function quitarProveedoresSinImagen($item:Cliente, $id:uint,$array:Array):Boolean
+			{
+				if($item.imagen == null || StringUtil.trim($item.imagen).length <= 0)
+				{
+					return false;
+				}
+				else
+				{
+					arrayKeyConImagenes[$item.idCliente] = $id;
+					return true;
+				}
+			}
+			
+			private function remueveDatos():void{
+				if( _arregloSinImagenes.length > 0 )
+				{  //si aun existen datos se continuan solicitando las imagenes
+					solicitaImagenes();
+				}
+				else
+				{	//si ya no existen mas datos se continua generarndo la vista
+					divideTipoAgente();
+				}
+			}
+			
+			
+			///////////////////////////////////////////////////////////  		MODIFICACIONES PARA LA IMAGEN       ///////////////////////////////////////////////////////////
+			
+			
+			
+			
+			
+			private function divideTipoAgente():void{
+				_habilitados = new ArrayCollection();
+				for( var i:int = 0; i < 10 ; i++ ){
+					if( (_universoClientes[i] as Cliente).habilitado )
+					{  
+						_habilitados.addItem( _universoClientes[i] );
+					}
+				}	
+				generaRenglones( _habilitados, 'habilitados', 1 );
+				generaRenglones( _deshabilitados, 'deshabilitados', 1 );
+			}
+			
+			private function generaRenglones( $listas:ArrayCollection, $tipo:String, $elementosPorRenglon:int = 7 ):void{
+				var contador:int = 0;
+				var arregloTemp:ArrayCollection = new ArrayCollection();
+				var $lista:ArrayCollection = new ArrayCollection();
+				
+				if($listas != null)
+				{
+					$lista = ObjectUtil.copy( $listas ) as ArrayCollection;
+					for( var i:int = 0; i <= $lista.length; i++  ){
+						var renglon:ArrayCollection = new ArrayCollection;;
+						for( var c: int = 0; c < $elementosPorRenglon ; c++ ){
+							if( $lista.length > 0 ){
+								contador++;
+								renglon.addItem( $lista[0] );
+								$lista.length > 0 ? $lista.removeItemAt(0) : null;
+							}
+						}
+						arregloTemp.addItem( renglon );
+					}
+					if( $tipo == 'habilitados' ){
+						lstHabilitados.dataProvider = new ArrayCollection();
+						lstHabilitados.dataProvider = ObjectUtil.copy( arregloTemp ) as ArrayCollection;
+						$listas.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = $listas.length + ' Clientes';
+					}
+				}
+			}
+			
+			
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private function filtroPorTexto():void{
+				
+				_listaHab = new ArrayCollection();
+				
+				listaAFiltrar = ObjectUtil.copy( _habilitados ) as ArrayCollection;
+				if( this.busquedaHabilitados.text  != "")
+				{
+					contador++;
+					_listaHab = UtilsGrid.queryCampoXLike( listaAFiltrar, 'nombre', this.busquedaHabilitados.text );
+					_estaBuscando = true;
+					
+					lstHabilitados.dataProvider = _listaHab;
+					_listaHab.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = _listaHab.length + ' Clientes';
+				}
+				else
+				{
+					_listaHab = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection; 
+					_estaBuscando = false;
+					contador = -1;
+					lstHabilitados.dataProvider = _habilitados;
+					_habilitados.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = _habilitados.length + ' Clientes';
+				}
+			}
+			
+			
+			
+			public function set actualizaClienteOferta($datos:ArrayCollection ):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+			}
+			
+			
+			protected function lnkCancelar_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("cambiaVistaPrincipalCorporativo"));
+			}
+			
+			
+			protected function lstClientes_dragDropHandler(event:DragEvent):void
+			{
+				//btnElimCorp.includeInLayout = btnElimCorp.visible = false;
+				
+				if (_estaBuscando)
+				{
+					var current:Cliente = lstHabilitados.selectedItem as Cliente;
+					for (var n:Number=0; n<_habilitados.length; n++)
+					{
+						if (current.idCliente == (_habilitados[n] as Cliente).idCliente )
+						{
+							_habilitados.removeItemAt(n);
+							return;
+						}
+					}
+				}
+				
+			}
+			
+			private function validarText():void
+			{
+				if (textCorporativo.text == '' || textCorporativo.text.length == 0)
+				{
+					textCorporativo.errorString = "Es necesario que indique el nombre del corporativo.";
+					_validarTexto = false;
+				}
+				else
+				{
+					textCorporativo.errorString = '';
+					_validarTexto = true;
+				}
+			}
+			
+			private function perteneceACartera():void
+			{
+				var valor:Boolean;
+				for (var n:int=0; n < lstClientes.dataProvider.length; n++)
+				{
+					var tmpClie:Cliente = lstClientes.dataProvider[n] as Cliente;
+					if (tmpClie.idcartera > 0)
+					{
+						alertaSingleton.show("Uno de los clientes, pertenece a una Cartera que esta Aplicada, \n ¿Desea continuar y sacarlo de esa Cartera?.",catalogoAlertas.TIT_ADV_atencion,"clienteEnCartera","","","SI","NO");
+						valor= true;
+						unaLlegada = true;
+						break;
+					}
+					/*else
+					{
+						valor= false;
+					}*/
+				}
+				//return valor;
+				
+			}
+			
+			private var unaLlegada:Boolean;
+			public function set recibeDelAlert( $dato:ResultAlert):void
+			{
+				if( $dato == null || $dato.vieneD == null )
+					return;
+				
+				if( $dato.vieneD == "clienteEnCartera" && unaLlegada)
+				{
+					unaLlegada=false;
+					if( $dato.botonSeleccionado == "SI")
+					{
+						carClient = true;
+						
+						if(_seAgrega)
+							enviarCompararCorporativos("nuevo");
+							//	guardarNuevo_dos();	
+						else
+							enviarCompararCorporativos("edicion");
+					}
+					else
+					{
+						carClient = false;
+					}
+				}
+			}
+			
+			private function guardarNuevo_dos():void
+			{
+				if(validaCombos() && validaChecks())
+				{
+					var esac:String = cmbEsac.selectedItem.valor;
+					var ev:String = cmbEV.selectedItem.valor;
+					var cobrador:String = cmbCombrador.selectedItem.valor;
+					
+					modificarVendedorCobradorEV(esac,cobrador,ev,true);
+				}
+			}
+			
+			private function guardarNuevo():void
+			{
+				var listaTemp:ArrayCollection = ObjectUtil.copy( lstClientes.dataProvider ) as ArrayCollection;
+				var vendedores:Array = new Array();
+				var cobradores:Array = new Array();
+				var ev:Array = new Array();
+				for (var i:int=0; i < listaTemp.length; i++)
+				{
+					var _currentCliente:Cliente = listaTemp[i] as Cliente;
+					
+					if(i==0)
+					{
+						var first:String = _currentCliente.vendedor;
+						vendedores.push(_currentCliente.vendedor);
+						cobradores.push(_currentCliente.cobrador);
+						ev.push(_currentCliente.ejecutivoVenta);
+					}
+					else
+					{
+						if (first != _currentCliente.vendedor)
+						{
+							vendedores.push(_currentCliente.vendedor);
+						}
+						if (first != _currentCliente.idCobrador.toString())
+						{
+							cobradores.push(_currentCliente.cobrador);
+						}
+						if (first != _currentCliente.idEjecutivoVenta.toString())
+						{
+							ev.push(_currentCliente.ejecutivoVenta);
+						}
+					}
+				}
+				var singlesVendedores:Array = removeDuplicates(vendedores);
+				var singlesCobradores:Array = removeDuplicates(cobradores);
+				var singlesEV:Array = removeDuplicates(ev);
+				
+				if (singlesVendedores.length > 1 || singlesCobradores.length > 1 || singlesEV.length > 1)
+				{
+					var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+					if(_popUpAgregarVendedores == null)
+					{
+						_popUpAgregarVendedores = CorporativopopUp_Vendedores( PopUpManager.createPopUp(app, CorporativopopUp_Vendedores,true));
+						_popUpAgregarVendedores.addEventListener("cerrandoPopUp_vendedorCorporativo",cerrarPopUp_Vendedor,false,0,true);
+						_popUpAgregarVendedores.addEventListener(EventoCatClientes_General.VENDEDOR_A_MODIFICAR_CORPORATIVO,cambiarValores,false,0,true);
+						PopUpManager.centerPopUp(_popUpAgregarVendedores);
+					}
+					else
+					{
+						PopUpManager.addPopUp( _popUpAgregarVendedores, app, true);
+					}
+					_popUpAgregarVendedores.recibeVendedores(singlesVendedores);
+					_popUpAgregarVendedores.recibeCobradores(singlesCobradores);
+					_popUpAgregarVendedores.recibeEV(singlesEV);
+					_popUpAgregarVendedores.linea();
+				}
+				else
+				{
+					guardarCorporativo();
+				}
+			}
+			
+			private function guardarEdicion():void
+			{
+				var cambios:Boolean = false;
+				var esac:String = _respaldoVendedor;
+				var cobrador:String = _respaldoCobrador;
+				var ev:String = _respaldoEV;
+				cambioColaborador = false;
+				cambioESAC = false;
+				
+				/* 
+				_nombresSalida = obtenerNombresClientes( ObjectUtil.copy(lstClientes.dataProvider) as ArrayCollection);
+				if(ObjectUtil.compare(_nombresLlegada,_nombresSalida) != 0)
+				cambios = true; 
+				*/
+				
+				if (_respaldoCobrador != cmbCombrador.selectedItem.valor)
+				{
+					cobrador = cmbCombrador.selectedItem.valor;
+					cambios = true;
+					cambioColaborador = true;
+				}
+				if (_respaldoVendedor != cmbEsac.selectedItem.valor)
+				{
+					esac = cmbEsac.selectedItem.valor;
+					cambios = true;
+					cambioColaborador = true;
+					cambioESAC = true;
+				}
+				if (_respaldoEV != cmbEV.selectedItem.valor)
+				{
+					ev = cmbEV.selectedItem.valor;
+					cambios = true;
+					cambioColaborador = true;
+				}
+				
+				if (cambios)
+				{
+					modificarVendedorCobradorEV(esac,cobrador,ev);
+				}
+				else
+				{
+					guardarCorporativo();
+				} 
+			}
+			
+			private function getCorpSalida():void
+			{
+				_corpSalida = new Corporativo();
+				_corpSalida.idcobrador = cmbCombrador.selectedItem.llave;
+				_corpSalida.idEsac = cmbEsac.selectedItem.llave;
+				_corpSalida.idEV = cmbEV.selectedItem.llave;
+				_corpSalida.clientes = ObjectUtil.copy( lstClientes.dataProvider ) as ArrayCollection;
+				_corpSalida.nombre = textCorporativo.text;
+				_corpSalida.industrias = obtieneIndustriasSeleccionadas();
+				_corpSalida.idCorporativo = _idCorporativo;
+			}
+			
+			private function enviarCompararCorporativos($vieneDe:String):void
+			{
+				_vieneDe = $vieneDe;
+				if(validaCombos() && validaChecks())
+				{
+					var envio:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_CORPORATIVOS_A_COMPARAR);
+					if(_vieneDe == "eliminar")
+					{
+						envio.corp_Incial = null;
+						envio.corp_Final = null;
+						envio.idUsuario = DatosGlobales.getInstance()._usuario.clave;
+						envio.llamadoPor = "Corporativo_" + $vieneDe.toUpperCase();
+						envio.idCorporativo = _idCorporativo;
+						dispatchEvent(envio);
+					}
+					else if(_vieneDe == "nuevo")
+					{
+						getCorpSalida();
+						envio.corp_Incial = null;
+						envio.corp_Final = _corpSalida;
+						envio.idUsuario = DatosGlobales.getInstance()._usuario.clave;
+						envio.llamadoPor = "Corporativo_" + $vieneDe.toUpperCase();
+						envio.idCorporativo = _idCorporativo;
+						dispatchEvent(envio);
+					}
+					else
+					{
+						getCorpSalida();
+						envio.corp_Incial = _corpOriginal;
+						envio.corp_Final = _corpSalida;
+						envio.idUsuario = DatosGlobales.getInstance()._usuario.clave;
+						envio.llamadoPor = "Corporativo_" + $vieneDe.toUpperCase();
+						envio.idCorporativo = _idCorporativo;
+						dispatchEvent(envio);
+					}
+				}
+			}
+			
+			public function set recibeConfirmacionCompararCorp($resp:Boolean):void
+			{
+				if($resp)
+				{
+					if(_vieneDe == "edicion")
+						guardarEdicion();
+					
+					if(_vieneDe == "nuevo")
+						guardarNuevo_dos();
+					
+					if(_vieneDe == "eliminar")
+						eliminarCorporativo();
+				}
+				else
+				{
+					return;
+				}
+			}
+			
+			private function validaCombos():Boolean
+			{
+				var resp:Boolean = true;
+				if(cmbCombrador.selectedIndex == 0)
+					resp = false;
+				else if(cmbEsac.selectedIndex == 0)
+					resp = false;
+				else if(cmbEV.selectedIndex == 0)
+					resp = false;
+				
+				if(!resp)
+					alertaSingleton.show("Es necesario que indique el nombre del ESAC, EV y Cobrador.",catalogoAlertas.TIT_ADV_operacionImposible);
+				
+				return resp
+			}
+			
+			private function validaChecks():Boolean
+			{
+				var select:Boolean = false;
+				for(var f:int=0; f<_nombresIndustrias.length; f++)
+				{
+					var radio:radioDefaultPQNet = radioDefaultPQNet( chekIndustria.getElementAt(f));
+					if(radio.selected)
+						select= true;
+				}
+				
+				if (!select)
+					alertaSingleton.show("Es necesario que seleccione una industria.",catalogoAlertas.TIT_ADV_operacionImposible);
+				
+				return select;
+			}
+			
+			protected function cerrarPopUp_Vendedor(eve:Event = null):void
+			{
+				PopUpManager.removePopUp(_popUpAgregarVendedores );
+				_popUpAgregarVendedores = null;
+			}
+			
+			protected function cambiarValores($evt:EventoCatClientes_General):void
+			{
+				_popUpAgregarVendedores.cerrarPop();
+				modificarVendedorCobradorEV($evt.esacSeleccionado,$evt.cobradorSeleccionado, $evt.evSeleccionado);
+			}
+			
+			protected function modificarVendedorCobradorEV($esac:String, $cobrador:String, $EV:String,$guadado2:Boolean = false):void
+			{
+				var arrayTemp:ArrayCollection = lstClientes.dataProvider as ArrayCollection;
+				_numeroCambios = 0;
+				_numerollegadas = 0;
+				var i:int;
+				
+				for (i=0; i<arrayTemp.length; i++)
+				{
+					var cliTemp:Cliente = arrayTemp[i] as Cliente;
+					var modif:Boolean = false;
+					var ventana:String ="";
+					
+					var evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.MODIFICAR_ESAC_CLIENTE );
+					
+					////////////////////// ESAC  //////////////////////
+					if (cliTemp.vendedor != $esac && $esac !="" )
+					{
+						ventana += ", ESAC_Antiguo:"+cliTemp.vendedor+", ESAC_Modificado:"+$esac;
+						cliTemp.vendedor = $esac;
+						modif = true;
+					}
+					
+					////////////////////// COBRADOR  //////////////////////
+x					if($cobrador != cliTemp.cobrador && $cobrador != "")
+					{
+						var idCobrador:Number;
+						if(_seAgrega)
+						{
+							
+							/*var listaTemp:ArrayCollection = ObjectUtil.copy( lstClientes.dataProvider ) as ArrayCollection;
+							for (var k:int=0; k < listaTemp.length; k++)
+							{
+							var _currentCliente:Cliente = listaTemp[k] as Cliente;
+							if (_currentCliente.cobrador == $cobrador)
+							{
+							idCobrador = _currentCliente.idCobrador;
+							break;
+							}
+							}*/
+							idCobrador = Number(cmbCombrador.selectedItem.llave);
+						}
+						else
+						{
+							idCobrador = Number(cmbCombrador.selectedItem.llave);
+						}
+						ventana += ", Cobrador_Antiguo:"+cliTemp.idCobrador+", Cobrador_Modificado:"+$cobrador;
+						cliTemp.idCobrador = _seAgrega ? idCobrador:cmbCombrador.selectedItem.llave; 
+						modif = true;
+					}
+					
+					////////////////////// EV  //////////////////////
+					if (cliTemp.ejecutivoVenta != $EV && $EV !="" )
+					{
+						var idEV:Number;
+						if(_seAgrega)
+						{
+							
+							/*var listaTempEV:ArrayCollection = ObjectUtil.copy( lstClientes.dataProvider ) as ArrayCollection;
+							for (var t:int=0; t < listaTempEV.length; t++)
+							{
+							var _currentClienteEV:Cliente = listaTempEV[t] as Cliente;
+							if (_currentClienteEV.ejecutivoVenta == $EV)
+							{
+							idEV = _currentClienteEV.idEjecutivoVenta;
+							break;
+							}
+							}*/
+							idEV = Number(cmbEV.selectedItem.llave);
+						}
+						else
+						{
+							idEV = Number(cmbEV.selectedItem.llave);
+						}
+						ventana += ", EV_Antiguo:"+cliTemp.ejecutivoVenta+", EV_Modificado:"+$EV;
+						cliTemp.idEjecutivoVenta = _seAgrega ? idEV:cmbEV.selectedItem.llave;
+						modif = true;
+					}
+					
+					
+					if(modif)
+					{
+						_numeroCambios++;
+						evt.ventana = "CatClientes_Corporativo ( idCliente:"+cliTemp.idCliente+ventana+")";
+						evt.clienteSeleccionado = cliTemp;
+						dispatchEvent(evt);
+					}
+				}
+				if($guadado2)
+					guardarCorporativo();
+			}
+			
+			public function set confirmaGuardado(confirmaGuardado:Boolean):void
+			{
+				if (confirmaGuardado == true)
+				{
+					_numerollegadas++;
+					if (_numeroCambios == _numerollegadas )
+					{
+						guardarCorporativo();
+					}
+				}
+			}
+			
+			private function removeDuplicates(arr:Array):Array
+			{
+				var currentValue:String = "";
+				var tempArray:Array = new Array();
+				arr.sort(Array.CASEINSENSITIVE);
+				arr.forEach(
+					function(item:*, index:uint, array:Array):void {
+						if (currentValue != item) {
+							tempArray.push(item);
+							currentValue= item;
+						}
+					}
+				);
+				return tempArray.sort(Array.CASEINSENSITIVE);
+			}
+			protected function validarGuardado():void
+			{
+				var arrayTemp:ArrayCollection = new ArrayCollection();
+				arrayTemp = lstClientes.dataProvider as ArrayCollection;
+				if (arrayTemp.length < 2)
+				{
+					alertaSingleton.show("Es necesario agregar mas de dos clientes.",catalogoAlertas.TIT_ADV_operacionImposible);
+					return;	
+				}
+				else
+				{
+					validarText();
+					perteneceACartera();
+					/*if(!perteneceACartera())
+					{
+						if(_seAgrega)
+							enviarCompararCorporativos("nuevo");
+							//	guardarNuevo_dos();	
+						else
+							enviarCompararCorporativos("edicion");
+					}*/
+				}
+			}
+			
+			private var carClient:Boolean;
+			protected function guardarCorporativo($vieneDe:String = "normal"):void
+			{	
+				var arrayTemp:ArrayCollection = new ArrayCollection();
+				arrayTemp = lstClientes.dataProvider as ArrayCollection;
+				
+				if(!_validarTexto)
+				{
+					alertaSingleton.show("Es necesario que indique el nombre del corporativo.",catalogoAlertas.TIT_ADV_operacionImposible);
+					return;
+				}
+				
+				var tmpIndustrias:ArrayCollection = obtieneIndustriasSeleccionadas();
+				
+				var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.INSERTAR_CORPORATIVO_NUEVO);
+				var corp:Corporativo = new Corporativo();
+				corp.nombre = textCorporativo.text;
+				corp.clientes = arrayTemp;
+				corp.idCorporativo = _idCorporativo;
+				corp.industrias = tmpIndustrias;
+				corp.cart_updateESAC = cambioESAC;
+				corp.cart_updateResponsables = cambioColaborador;
+				evt.corporativo = corp;
+				evt.idUsuario = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent( evt );
+				_idCorporativo = NaN;
+			}
+			
+			private function cruzarIndustrias($ind:ArrayCollection):ArrayCollection
+			{
+				var arregloFinal:ArrayCollection = new ArrayCollection();
+				
+				for(var t:int=0; t<$ind.length; t++)
+				{
+					var entro:Boolean = false;
+					var indSelect:Industria = $ind[t];
+					for(var n:int=0; n<_industriasCorp.length; n++)
+					{
+						var indOriginal:Industria = _industriasCorp[n] as Industria;
+						if(indOriginal.idIndustria == indSelect.idIndustria)
+						{
+							indOriginal.activo = indSelect.activo;
+							arregloFinal.addItem(indOriginal);
+							entro = true;
+						}
+						
+					}
+					if(!entro && indSelect.activo)
+					{
+						arregloFinal.addItem(indSelect);
+					}
+				}
+				
+				return arregloFinal;
+			}
+			
+			private function obtieneIndustriasSeleccionadas():ArrayCollection
+			{
+				var tmp:ArrayCollection = new ArrayCollection();
+				for (var i:int=0; i< _nombresIndustrias.length; i++)
+				{
+					var radio:radioDefaultPQNet = radioDefaultPQNet( chekIndustria.getElementAt(i));
+					var current:Industria = new Industria();
+					current.nombre = radio.label;
+					current.activo = radio.selected;
+					current.idIndustria = Number(radio.id);	
+					if (_respaldoCorp)
+						current.idCorporativo = _respaldoCorp.idCorporativo;
+					tmp.addItem(current);
+				}
+				if (_industriasCorp)
+					return cruzarIndustrias(tmp);
+				else
+					return tmp;
+			}
+			
+			public function recibeCorporativo($corp:Corporativo):void
+			{
+				limpiarFormulario();
+				dispatchEvent( new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES_DISPONIBLES));
+				grpEdicion.visible = grpEdicion.includeInLayout = true;
+				divGrpEdicion.visible = divGrpEdicion.includeInLayout = true;
+				_respaldoCorp = new Corporativo();
+				_industriasCorp = new ArrayCollection();
+				_nombresLlegada = new Array();
+				current = new Corporativo();
+				current = ObjectUtil.copy( $corp ) as Corporativo;
+				
+				textCorporativo.text = current.nombre;
+				lstClientes.dataProvider = new ArrayCollection();
+				lstClientes.dataProvider = current.clientes;
+				_nombresLlegada = obtenerNombresClientes(current.clientes);
+				_idCorporativo = current.idCorporativo;
+				selectCheckIndustrias(current.industrias);
+				
+				cargaESAC(current.clientes[0] as Cliente);
+				cargaCombrador(current.clientes[0] as Cliente);
+				cargaEV(current.clientes[0] as Cliente);
+				
+				_corpOriginal = ObjectUtil.copy( $corp ) as Corporativo;
+				_corpOriginal.idcobrador = cmbCombrador.selectedItem.llave;
+				_corpOriginal.idEsac = cmbEsac.selectedItem.llave;
+				_corpOriginal.idEV = cmbEV.selectedItem.llave;
+				
+				_respaldoEV = cmbEV.selectedItem.valor;
+				_respaldoCobrador = cmbCombrador.selectedItem.valor;
+				_respaldoVendedor = (current.clientes[0] as Cliente).vendedor;
+				_respaldoCorp = ObjectUtil.copy( $corp ) as Corporativo;
+				_seAgrega = false;
+				mostrarBotonEliminar();
+				
+				if (current.industrias.length > 0)
+					_industriasCorp = current.industrias;
+				else
+					_industriasCorp = null
+				
+				var sendFua:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_FUA_A_LA_VISTA_DEFAULT_DE_CONFIGURACION);
+				sendFua.fua = current.fua;
+				dispatchEvent( sendFua );
+			}
+			
+			private function obtenerNombresClientes($cli:ArrayCollection):Array
+			{
+				var arrtemp:Array = new Array();
+				for( var cv:int=0; cv<$cli.length; cv++)
+				{
+					arrtemp.push(($cli[cv] as Cliente).nombre);
+				}
+				return arrtemp;
+			}
+			public function limpiarFormulario():void
+			{
+				textCorporativo.text = "";
+				textCorporativo.errorString = "";
+				busquedaHabilitados.text="";
+				lstClientes.dataProvider = new ArrayCollection();
+				current = new Corporativo();
+				limpiarCheks();
+				textCorporativo.setFocus();
+				cmbCombrador.selectedIndex = 0;
+				cmbEsac.selectedIndex = 0;
+				cmbEV.selectedIndex = 0;
+				_idCorporativo = NaN;
+				var sendFua:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_FUA_A_LA_VISTA_DEFAULT_DE_CONFIGURACION);
+				sendFua.fua = null;
+				dispatchEvent( sendFua );
+			}
+			
+			private function limpiarCheks():void
+			{
+				for (var j:int=0; j < _nombresIndustrias.length; j++)
+				{
+					var tmpRadio:radioDefaultPQNet = new radioDefaultPQNet();
+					tmpRadio = radioDefaultPQNet( chekIndustria.getElementAt(j));
+					tmpRadio.selected = false;
+					chekIndustria.setElementIndex(tmpRadio,j);
+				}
+			}
+			
+			protected function eliminarCorporativo():void
+			{
+				var elm:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ELIMINAR_CORPORATIVO);
+				elm.idCorporativo = _idCorporativo;
+				elm.idUsuario = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent( elm );
+			}
+			
+			protected function lstHabilitados_dragCompleteHandler(event:DragEvent):void
+			{
+				var num:Number = (lstHabilitados.dataProvider.length - 1);
+				lstHabilitados.dataProvider.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = num + ' Clientes';
+			}
+			
+			public function recibeIndustrias($arreglo:ArrayCollection):void
+			{
+				_nombresIndustrias = new ArrayCollection();
+				_nombresIndustrias = $arreglo;
+				chekIndustria.removeAllElements();
+				chekIndustria.gap = _espacio;
+				for (var i:int=0; i< _nombresIndustrias.length; i++)
+				{
+					var radio:radioDefaultPQNet = new radioDefaultPQNet();
+					radio.label = (_nombresIndustrias[i] as CatalogoItem).valor;
+					radio.id = (_nombresIndustrias[i] as CatalogoItem).llave.toString();
+					radio.tipoCheck = "cuadradoRadio";
+					chekIndustria.addElement(radio);
+				}
+			}
+			
+			private function selectCheckIndustrias($industrias:ArrayCollection):void
+			{
+				for (var m:int=0; m< $industrias.length; m++)
+				{
+					var tmpIndustria:Industria = ($industrias[m] as Industria);
+					for (var j:int=0; j < _nombresIndustrias.length; j++)
+					{
+						var tmpRadio:radioDefaultPQNet = new radioDefaultPQNet();
+						tmpRadio = radioDefaultPQNet( chekIndustria.getElementAt(j));
+						if (tmpRadio.id == tmpIndustria.idIndustria.toString() )
+						{
+							tmpRadio.selected = true;
+							chekIndustria.setElementIndex(tmpRadio,j);
+						} 
+					}
+				}
+			}
+			
+			private function cargaESAC($cliente:Cliente):void
+			{
+				if( cmbEsac.dataProvider != null && cmbEsac.dataProvider.length > 0 ){
+					cmbEsac.selectedIndex = cmbEsac.seleccionarValor($cliente.vendedor);
+				}else{
+					setTimeout( cargaESAC, 500 );
+				}
+			}
+			
+			private function cargaCombrador($cliente:Cliente):void
+			{
+				if( cmbCombrador.dataProvider != null && cmbCombrador.dataProvider.length > 0 ){
+					cmbCombrador.selectedIndex = cmbCombrador.seleccionarValor($cliente.idCobrador.toString(),'llave');
+				}else{
+					setTimeout( cargaCombrador, 500 );
+				}
+			}
+			
+			private function cargaEV($cliente:Cliente):void
+			{
+				if( cmbEV.dataProvider != null && cmbEV.dataProvider.length > 0 ){
+					cmbEV.selectedIndex = cmbEV.seleccionarValor($cliente.ejecutivoVenta);
+				}else{
+					setTimeout( cargaEV, 500 );
+				}
+			}
+			
+			private function mostrarBotonEliminar():void
+			{
+				if(_seAgrega)
+					lnkdeleteCorp.visible = lnkdeleteCorp.includeInLayout = false;
+				else
+					lnkdeleteCorp.visible = lnkdeleteCorp.includeInLayout = true;
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%">
+		<s:Spacer width="20%"/>
+		<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpClientes"  gap="10">
+			<label:TituloBankGothic_34 width="100%" text="Generales" textAlign="right"/>
+			<otros:division width="100%"/>
+			<s:VGroup width="100%" height="50%">
+				<label:Titulo text="Identificador" />
+				<textinput:txtInputBlancoDefaultPQNet id="textCorporativo" width="100%" focusOut="{validarText()}" />
+				<s:HGroup id="grpEdicion" width="100%" paddingBottom="20" >
+					<s:VGroup height="100%">
+						<label:Titulo text="ESAC:" />			 						
+						<cmbCat:ComboCatalogos fontSize="14" width="220" height="28" id="cmbEsac" creationComplete="{ cmbEsac.cargaEmpleadosPorFunciones([5,37],'--NINGUNO--') }"/>
+					</s:VGroup>
+					<s:Spacer width="12%"/>
+					<s:VGroup height="100%">
+						<label:Titulo text="EV:" />
+						<cmbCat:ComboCatalogos fontSize="14" width="220" height="28" id="cmbEV" creationComplete="{ cmbEV.cargarEmpleadosXTipoTablero( 'ev','--NINGUNO--' )  }"/>
+					</s:VGroup>
+					<s:Spacer width="12%"/>
+					<s:VGroup height="100%">
+						<label:Titulo text="Cobrador:" />
+						<cmbCat:ComboCatalogos fontSize="14" width="220" height="28" id="cmbCombrador" creationComplete="{ cmbCombrador.cargarEmpleadosPorSoloPorTipo('Contabilidad','--NINGUNO--') }"/>
+					</s:VGroup>
+					<s:Spacer width="12%"/>
+					<s:VGroup  id="ckecks" height="100%" width="100%" >
+						<label:Titulo text="Tipo de industria:" />
+						<s:HGroup id="chekIndustria" />
+					</s:VGroup>
+				</s:HGroup>
+				<otros:division id="divGrpEdicion" width="100%" />
+				<s:List id="lstClientes" width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" dropEnabled="true" 
+						dragDrop="lstClientes_dragDropHandler(event)" 
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.corporativo.itemRenderer.IRClientesCorporativo_ClienteTacha" >
+					<s:layout>
+						<s:TileLayout columnAlign="justifyUsingWidth" columnWidth="230" />
+					</s:layout>
+				</s:List>
+				<s:VGroup id="btnElimCorp" width="100%" horizontalAlign="center" >
+					<pqNet:botonPqNetLargo label="Eliminar Corporativo"  id="lnkdeleteCorp" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" icono="tache" click="enviarCompararCorporativos('eliminar')" />
+				</s:VGroup>
+			</s:VGroup>
+			<s:VGroup width="100%" height="50%" gap="10" horizontalAlign="center" >
+				
+				<s:VGroup id="grpHabilitados" width="100%" height="100%" horizontalAlign="center" >
+					<label:TituloBankGothic_24 width="100%" text="Clientes" textAlign="right"/>
+					<otros:division width="100%"/>
+					<s:TextInput fontStyle="normal" id="busquedaHabilitados" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Busqueda cliente" text="" change="filtroPorTexto()" enter="filtroPorTexto()" />
+					<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstHabilitados" dragEnabled="true" dragMoveEnabled="true"
+							dragComplete="lstHabilitados_dragCompleteHandler(event)"
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.corporativo.itemRenderer.IRClientesCorporativo_Clientes">
+						<s:layout>
+							<s:TileLayout columnAlign="justifyUsingWidth" columnWidth="230" />
+						</s:layout>
+					</s:List>
+					<s:VGroup width="100%" horizontalAlign="center" gap="10">
+						<label:TituloGris  id="lblHabilitados" paddingTop="0"/>
+						<label:TituloGris text="TOTAL" paddingTop="0"/>
+					</s:VGroup>
+				</s:VGroup>
+				
+			</s:VGroup>  
+			<otros:division width="100%" />
+			<s:HGroup width="100%" id="grpGuardarCancelar" gap="-1" >
+				<s:Spacer width="100%"/>
+				<pqNet:botonPqNetLargo label="Guardar"  id="lnkGuardar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL }" click="validarGuardado()" icono="guardar"/>
+				<pqNet:botonPqNetLargo label="Cancelar" id="lnkCancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" click="lnkCancelar_clickHandler(event)" icono="tache"/>
+				<s:Spacer width="100%"/>
+			</s:HGroup>
+		</contenedores:VGroupConPaddingStandardPqNet>  
+		<s:Spacer width="20%"/>
+		
+	</s:HGroup>
+</s:VGroup>

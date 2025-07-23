@@ -1,0 +1,602 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:input="skins.skin.textinput.*" 
+		 xmlns:textarea="skins.skin.textarea.*"
+		 width="100%" height="100%"
+		 creationComplete="group1_creationCompleteHandler(event)"
+		 xmlns:dateField="skins.skin.dateField.*"
+		 horizontalCenter="0" xmlns:boton="mx.com.proquifa.vista.vistas.skin.boton.*"
+		 resize="reajustar_resizeHandler(event)"
+		 xmlns:agregarDocumento="mx.com.proquifa.vista.vistas.skin.agregarDocumento.*"
+		 >
+	
+	<fx:Metadata>
+		[Event(name="generarFactura",type="flash.events.Event")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			import flash.utils.setTimeout;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			
+			import spark.events.TextOperationEvent;
+			
+			import flashx.textLayout.formats.Float;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosBotones;
+			
+			public var totales:Object = new Object();
+			[Bindable] public var compra:Compra = new Compra();
+			[Bindable] public var moneda:String;
+			private var subtotalAux:Number=0;
+			public var ivaAux:Number=0.0;
+			public var fleteAux:Number=0.0;
+			private var _IGIaux:Number=0.0;
+			private var _DTAaux:Number=0.0;
+			private var VCInterno:Number;
+			public var nacional:Boolean;
+
+			public function get DTAaux():Number
+			{
+				return _DTAaux;
+			}
+
+			public function set DTAaux(value:Number):void
+			{
+				_DTAaux = value;
+			}
+
+			public function get IGIaux():Number
+			{
+				return _IGIaux;
+			}
+
+			public function set IGIaux(value:Number):void
+			{
+				_IGIaux = value;
+			}
+
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				
+				limpiar();
+			}
+			
+			public function limpiar():void
+			{
+				lblSubTotal.text = moneda + ' 0.0';
+				lblTotal.text = moneda + ' 0.0';
+				lblFlete.text = moneda + ' 0.0';
+				lblIVA.text = moneda + ' 0.0';
+				lblIGI.text = moneda + ' 0.0';
+				lblDTA.text = moneda + ' 0.0';
+				SubVCF.text = moneda + ' 0.0';
+
+				lblNoFactura.text = "";
+				btnPdf.label = ".pdf";
+				btnXml.label = ".xml";
+				
+			//	btnOtro.label = ".pdf";
+				dtpFacturacion.selectedDate = new Date();
+				dtpRecepcion.selectedDate = new Date();
+				txtComentarios.text = "";
+				lblImporteFlete.text ="";
+				lblCreditoDisponible.text = moneda + " 0.0";
+				filepdf = null;
+				filexml = new File();
+				fileotro = new File();
+				pdfVerde.visible = pdfVerde.includeInLayout = false;
+				pdfGris.visible = pdfGris.includeInLayout = true;
+				xmlVerde.visible = pdfVerde.includeInLayout = false;
+				xmlGris.visible = pdfGris.includeInLayout = true;
+				
+				genFacG.visible = genFacG.includeInLayout = true;
+				genFacV.visible = genFacV.includeInLayout = false;
+				subtotalAux = 0;
+			//	otroVerde.visible = pdfVerde.includeInLayout = false;
+				//otroGris.visible = pdfGris.includeInLayout = true;
+			}
+			
+			public function asociarPartidasGrid(evt:EventoGestorCompras,subtotal:Number,IGI:Number,DTA:Number):void
+			{
+				if(evt.partida != null){
+					totales.cantidad += evt.partida.cantidadCompra;
+				}
+				//SE CAMBIO PARA GUARDAR EL SUBTOTAL
+				/*totales.monto += evt.partida.precioUnitario;*/
+				totales.monto = subtotal;
+				
+				
+				lblSubTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotal);
+				//var totalX:Number = subtotal + (subtotal * compra.iva);
+				var totalX:Number = subtotal;
+				var fleteX:Number = Number(lblImporteFlete.text);
+				lblIVA.text = moneda+ " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotal * compra.iva);
+				
+				if(nacional)
+					lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX +(subtotal * compra.iva));
+				else
+					lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX + IGI + DTA +(subtotal * compra.iva));
+				
+				subtotalAux = subtotal;
+				
+				//Calculo de IGI y	 DTA	
+				lblIGI.text = moneda+ " " +UtilsFormatosNumericos.precisionADosDecimalesConComas(IGI);
+				lblDTA.text = moneda+ " " +UtilsFormatosNumericos.precisionADosDecimalesConComas(DTA);
+				IGIaux=IGI;
+				DTAaux=DTA;
+				SubVCF.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalX + fleteX);
+				
+			}
+			
+			public function retornarFlete():Number
+			{
+				return Number(lblImporteFlete.text);
+			}
+			
+			public function eliminarAsociarPartidasGrid(evt:EventoGestorCompras, subtotal:Number,IGI:Number,DTA:Number):void
+			{
+				//SE CAMBIO PARA GUARDAR EL SUBTOTAL
+				/*totales.monto -= evt.partida.precioUnitario;*/
+				totales.monto = subtotal;
+				
+				lblSubTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotal);
+			/*	lblTotal.text =  moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotal + (subtotal * totales.iva));*/
+				//var totalX:Number = subtotal + (subtotal * compra.iva);
+				var totalX:Number = subtotal;
+				var fleteX:Number=Number(lblImporteFlete.text);
+				lblIVA.text=moneda+ " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotal * compra.iva);
+				
+				if(nacional)
+					lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX +(subtotal * compra.iva));
+				else
+					lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX + IGI + DTA +(subtotal * compra.iva));
+				subtotalAux=subtotal;
+				
+				//Calculo de IGI y DTA	
+				lblIGI.text = moneda+ " " +UtilsFormatosNumericos.precisionADosDecimalesConComas(IGI);
+				lblDTA.text = moneda+ " " +UtilsFormatosNumericos.precisionADosDecimalesConComas(DTA);
+				IGIaux=IGI;
+				DTAaux=DTA;
+				
+				SubVCF.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalX + fleteX);
+			}
+			
+			private var pdfByteArray:ByteArray = null;
+			private var _rutaDoc:String;
+			private var _rutaDocXML:String;
+			private var _rutaDocOtro:String;
+			public var file:File = new File();
+			public var filepdf:File = new File();
+			public var filexml:File = new File();
+			public var fileotro:File = new File();
+			private var archivo:String="";
+			protected function agregardocumento1_clickHandler(valor:String):void
+			{
+				browseFileSystem(valor);
+			}
+			
+			public function browseFileSystem(valor:String):void{
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				
+				var docFilter:FileFilter;
+				if (valor == 'pdf')
+				{
+					docFilter = new FileFilter("Documents", "*.pdf");
+					file.addEventListener(Event.COMPLETE,completeHandlerPDF);
+				}
+				else if (valor == 'xml')
+				{
+					docFilter = new FileFilter("Documents", "*.xml");
+					file.addEventListener(Event.COMPLETE,completeHandler);
+				}
+				file.browse([docFilter]); 
+			}
+			
+			private function selectHandler(event:Event):void 
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void 
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void 
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandlerPDF(event:Event):void 
+			{
+				trace("completeHandler: " + event);
+				pdfByteArray = this.file.data;
+				_rutaDoc = file.nativePath;
+				btnPdf.label = file.name;
+				filepdf = file;
+				pdfVerde.visible = pdfVerde.includeInLayout = true;
+				pdfGris.visible = pdfGris.includeInLayout = false;
+				/*if(vgpXml.visible==true && filexml != null)
+				{
+					genFacG.visible = genFacG.includeInLayout = false;
+					genFacV.visible = genFacV.includeInLayout = true;
+				}*/
+				genFacG.visible = genFacG.includeInLayout = false;
+				genFacV.visible = genFacV.includeInLayout = true;
+				validarFuncionGenerar();
+				
+			}
+			
+			private function completeHandler(event:Event):void 
+			{
+				trace("completeHandler: " + event);
+				pdfByteArray = this.file.data;
+				_rutaDocXML = file.nativePath;
+				btnXml.label = file.name;
+				filexml = file;
+				xmlVerde.visible = xmlVerde.includeInLayout = true;
+				xmlGris.visible = xmlGris.includeInLayout = false;
+			}
+			
+			
+	/*		private function completeHandlerOtro(event:Event):void 
+			{
+				trace("completeHandler: " + event);
+				pdfByteArray = this.file.data;
+				_rutaDocOtro = file.nativePath;
+				btnOtro.label = file.name;
+				fileotro = file;
+				otroVerde.visible = otroVerde.includeInLayout = true;
+				otroGris.visible = otroGris.includeInLayout = false;
+			}*/
+			
+			protected function validarGenerarFactura(event:MouseEvent):void
+			{
+				var validar:Boolean = true;
+				if (compra)
+				{
+					validar = false;
+					if (btnPdf.label == "" || btnPdf.label == ".pdf")
+					{
+						validar = true;
+						alertaSingleton.show("Falta cargar el pdf",catalogoAlertas.TIT_ADV_atencion);
+						return;
+					}
+					if (compra.paisProveedor && compra.paisProveedor.toUpperCase() == "MEXICO" && (btnXml.label == "" || btnXml.label == ".xml"))
+					{
+						validar = true;
+						alertaSingleton.show("Falta cargar el xml",catalogoAlertas.TIT_ADV_atencion);
+						return;
+					}
+					if (totales.monto <= 0 )
+					{
+						validar = true;
+						alertaSingleton.show("No hay partidas a facturar",catalogoAlertas.TIT_ADV_atencion);
+						return;
+					}
+					if (lblNoFactura.text == "")
+					{
+						validar = true;
+						alertaSingleton.show("Falta el no. de factura",catalogoAlertas.TIT_ADV_atencion);
+						return;
+					}
+				}
+				
+				if(!validar){
+					dispatchEvent(new Event("generarFactura"));
+					recargarPendientes();
+				}
+				
+			}
+			
+			private function recargarPendientes():void
+			{
+				dispatchEvent( new Event("recargarPendientes",true));
+			}
+			
+			[Bindable] private var font30:Number = 30;
+			[Bindable] private var font26:Number;
+			[Bindable] private var font22:Number;
+			[Bindable] private var font20:Number;
+			[Bindable] private var font18:Number;
+			[Bindable] private var font17:Number;
+			[Bindable] private var font14:Number;
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				
+				super.updateDisplayList($width,$height);
+				
+				font14 = (14 / 410) * ($width);
+				font18 = (18 / 410) * ($width);
+				font17 = (17 / 410) * ($width);
+				font20 = (20 / 410) * ($width);
+				font22 = (22 / 410) * ($width);
+				font26 = (26 / 410) * ($width);
+				font30 = (30 / 410) * ($width);
+				if(font30==0)
+				{
+					font30 = 30;
+				}
+				
+				font14 = font14 > 14 ? 14:font14;
+				font18 = font18 > 18 ? 18:font18;
+				font17 = font17 > 17 ? 17:font17;
+				font20 = font20 > 20 ? 20:font20;
+				font22 = font22 > 22 ? 22:font22;
+				font26 = font26 > 26 ? 26:font26;
+				font30 = font30 > 30 ? 30:font30;
+				
+				
+			}
+			
+			protected function visualizarPDF_clickHandler(event:MouseEvent,valor:String):void
+			{
+				var request:URLRequest;
+				if(valor=="pdf")
+				{					
+					request = new URLRequest("file://"+  encodeURI(_rutaDoc));
+					navigateToURL(request);
+				}
+				if(valor=="xml")
+				{					
+					request = new URLRequest("file://"+  encodeURI(_rutaDocXML));
+					navigateToURL(request);
+				}
+				if(valor=="otro")
+				{					
+					request = new URLRequest("file://"+  encodeURI(_rutaDocOtro));
+					navigateToURL(request);
+				}
+			}
+			
+			[Bindable] private var widthLbl:Number;
+			[Bindable] private var widthGF:Number;
+			[Bindable] private var heightGF:Number;
+			[Bindable] private var widthNF:Number;
+			[Bindable] private var heightNF:Number;
+			[Bindable] private var widthCom:Number;
+			[Bindable] private var heightCom:Number;
+			[Bindable] public static var widthBtnPDF:Number;
+			[Bindable] public static var heightBtnPDF:Number = 30;
+			[Bindable] private var widthBtnVer:Number;
+			[Bindable] private var pad:Number;
+			[Bindable] private var gap:Number;
+			[Bindable] private var gap2:Number;
+			protected function reajustar_resizeHandler(event:ResizeEvent):void
+			{
+				widthLbl = (300/410) * (unscaledWidth);
+				
+				widthGF = (220/410) * (unscaledWidth);
+				heightGF = (30/1190) * (unscaledHeight);
+				
+				widthNF = (280/410) * (unscaledWidth);
+				heightNF = (50/1190) * (unscaledHeight);
+				
+				widthCom = (380/410) * (unscaledWidth);
+				heightCom = (180/1190) * (unscaledHeight);
+				widthCom = widthCom > 380 ? 380:widthCom;
+				widthCom = widthCom < 154 ? 154:widthCom;
+				heightCom = heightCom > 180 ? 180:heightCom;
+				heightCom = heightCom < 110 ? 76:heightCom;
+				
+				widthBtnPDF = (240/410) * (unscaledWidth);
+				heightBtnPDF = (30/1190) * (unscaledHeight);
+				
+				widthBtnVer = (50/410) * (unscaledWidth);
+				
+				pad = (25/410) * (unscaledWidth);
+				gap2 = (40/410) * (unscaledWidth);
+				
+				gap = (25/1175) * (unscaledHeight);
+				gap = gap > 25 ? 25:gap;
+				gap = gap < 15 ? 15:gap;
+			}
+			
+			public function mandarIGIyDTA(IGI:Number,DTA:Number):void{
+				IGIaux=IGI;
+				DTAaux=DTA;
+			}
+			protected function lblImporteFlete_changingHandler():void
+			{
+				dispatchEvent(new Event("obtenerValores"));
+				lblFlete.text=	moneda + ' '  +UtilsFormatosNumericos.precisionADosDecimalesConComas(Number(lblImporteFlete.text)); 
+				setTimeout( lblImporteFlete_changingHandler, 250 );
+				/*var totalX:Number=Number(UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotalAux + (subtotalAux * totales.iva)));*/
+				var totalX:Number = subtotalAux;
+				var fleteX:Number=Number(lblImporteFlete.text);	
+				lblIVA.text=moneda+ " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subtotalAux * compra.iva);
+				
+				if(nacional)
+					lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX +(subtotalAux * compra.iva));
+				else
+					lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX + IGIaux + DTAaux +(subtotalAux * compra.iva));
+				
+				/*lblTotal.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas( totalX + fleteX + IGIaux + DTAaux);*/	
+				//Calculo de IGI y DTA	
+				lblIGI.text = moneda+ " " +UtilsFormatosNumericos.precisionADosDecimalesConComas(IGIaux);
+				lblDTA.text = moneda+ " " +UtilsFormatosNumericos.precisionADosDecimalesConComas(DTAaux);
+				
+				SubVCF.text = moneda + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totalX + fleteX);
+				
+			}
+			public function validarFuncionGenerar():void
+			{
+				var val:Boolean = false;
+				if(lblNoFactura.text == "")
+					val = false;
+				else if(pdfByteArray == null)
+					val = false;
+				else
+					val = true;
+				
+				if(val){
+					genFacG.visible = genFacG.includeInLayout = false;
+					genFacV.visible = genFacV.includeInLayout = true;
+				}else{
+					genFacG.visible = genFacG.includeInLayout = true;
+					genFacV.visible = genFacV.includeInLayout = false;
+				}
+			}
+			
+			protected function valdidarFactura(event:TextOperationEvent):void
+			{
+				validarFuncionGenerar();
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="{AsociarPartidasOCGestorCompra.sizeFactura}" height="100%" horizontalAlign="center" gap="{gap2}" paddingTop="20" paddingLeft="20" paddingRight="20" >
+		
+		<s:VGroup width="100%" horizontalAlign="center" gap="{gap}" paddingLeft="0" paddingRight="0">
+			<label:TituloNovecento_18 text="DATOS GENERALES" fontSize="{font18}"/>
+			<!--<otros:LineaDivision width="100%" height="1" color="#c7c7c7" />-->
+			
+			<s:VGroup width="100%"  gap="5" horizontalAlign="center">
+				<label:Texto_16_Helvetica text="Importe de Flete" fontSize="{font17}" color="#c7c7c7" />
+				<input:TxtInputBlanco id="lblImporteFlete" textAlign="center" width="{widthNF}"  fontFamily="Helvetica" fontSize="{font30}" color="#008893" changing="lblImporteFlete_changingHandler()"/>
+				<!--<s:TextInput id="lblNoFactura" textAlign="center" contentBackgroundColor="white" color="0x000000" height="{heightNF}" width="{widthNF}" />-->
+			</s:VGroup>
+			
+			<s:VGroup width="100%"  gap="5" horizontalAlign="center">
+				<label:Texto_16_Helvetica text="No. de factura" fontSize="{font17}" color="#c7c7c7" />
+				<input:TxtInputBlanco id="lblNoFactura" textAlign="center" width="{widthNF}" height="{heightNF}" fontFamily="Helvetica" fontSize="{font30}" color="#008893" change="valdidarFactura(event)"/>
+				<!--<s:TextInput id="lblNoFactura" textAlign="center" contentBackgroundColor="white" color="0x000000" height="{heightNF}" width="{widthNF}" />-->
+			</s:VGroup>
+			
+			<s:VGroup width="100%"  gap="5" horizontalAlign="center">
+				<label:Texto_16_Helvetica text="Fecha de facturación" fontSize="{font17}" color="#c7c7c7" />
+				<!--<dateField:DatePickerSpanish styleName="dateFieldStyle" id="dtpFacturacion"  width="130" textAlign="center" fontStyle="normal" selectedDate="{new Date()}" />-->
+				<!--<dateField:DatePickerSpanish_flecha styleName="dateFieldStyleFlecha" id="dtpFacturacion"  width="130" textAlign="center" fontStyle="normal" selectedDate="{new Date()}" />-->
+				<dateField:DatePickerDefault bordeRedondo="false" colorBorde="0x98969c" grosorBorde="1" id="dtpFacturacion" fontWeightTextInput="bold" heightLabelDatePicker="24"
+											 verticalAlignTextInput="top" height="100%" maxHeight="24" selectedDate="{new Date()}"
+											 />
+			</s:VGroup>  
+			
+			<s:VGroup width="100%"  gap="5" horizontalAlign="center">
+				<label:Texto_16_Helvetica text="Fecha de recepción de factura" fontSize="{font17}" color="#c7c7c7" />  
+				<!--<dateField:DatePickerSpanish styleName="dateFieldStyle" id="dtpRecepcion"  width="130" textAlign="center" fontStyle="normal" selectedDate="{new Date()}" />-->
+				<!--<dateField:DatePickerSpanish_flecha styleName="dateFieldStyleFlecha" id="dtpRecepcion"  width="130" textAlign="center" fontStyle="normal" selectedDate="{new Date()}" />-->
+				<dateField:DatePickerDefault bordeRedondo="false" colorBorde="0x98969c" grosorBorde="1" id="dtpRecepcion"  fontWeightTextInput="bold" heightLabelDatePicker="24"
+											 verticalAlignTextInput="top" height="100%" maxHeight="24" selectedDate="{new Date()}"
+											 />
+			</s:VGroup>
+			
+			<!--<s:VGroup width="100%"  gap="10" >
+			<label:Texto_16_Helvetica fontSize="{font17}" text="Cargar PDF:" color="#c7c7c7" />
+			<s:HGroup width="100%" gap="10" verticalAlign="middle"  >					
+			<boton:AgregarDocumento  id="btnPdf" label=".pdf" click="agregardocumento1_clickHandler('pdf')"  />
+			<mx:Image   height="22" source="{catalogoIconosBotones.getInstance().ver}" verticalAlign="middle"  horizontalAlign="left" click="visualizarPDF_clickHandler(event,'pdf')"/>
+			</s:HGroup>
+			</s:VGroup>-->
+			
+			<s:VGroup width="100%"  gap="5" horizontalAlign="center" >
+				<label:Texto_16_Helvetica width="{widthLbl}" fontSize="{font17}" text="Cargar PDF:" color="#c7c7c7" textAlign="left" paddingLeft="10"/>
+				<s:HGroup width="100%" gap="5" verticalAlign="middle" horizontalAlign="center" >					
+					<agregarDocumento:AgregarDoc width="{widthBtnPDF}" height="100%" sizeHeight="{heightBtnPDF}"  id="btnPdf" label=".pdf" click="agregardocumento1_clickHandler('pdf')"  />
+					<mx:Image id="pdfVerde" height="{heightBtnPDF}"  source="{catalogoIconosBotones.getInstance().vista_previa}" verticalAlign="middle"  horizontalAlign="left" click="visualizarPDF_clickHandler(event,'pdf')" visible="false" includeInLayout="false"/>
+					<mx:Image id="pdfGris" height="{heightBtnPDF}"  source="{catalogoIconosBotones.getInstance().vista_previa_gris}" verticalAlign="middle"  horizontalAlign="left" />
+				</s:HGroup>
+			</s:VGroup>
+			
+			<s:VGroup width="100%"  gap="5" id="vgpXml" horizontalAlign="center">
+				<label:Texto_16_Helvetica width="{widthLbl}" fontSize="{font17}" text="Cargar XML:" color="#c7c7c7" textAlign="left" />
+				<s:HGroup width="100%" gap="5" verticalAlign="middle" horizontalAlign="center" >
+					<agregarDocumento:AgregarDoc width="{widthBtnPDF}" height="100%" sizeHeight="{heightBtnPDF}"  id="btnXml" label=".xml" click="agregardocumento1_clickHandler('xml')" />
+					<mx:Image id="xmlVerde" height="{heightBtnPDF}" source="{catalogoIconosBotones.getInstance().vista_previa}" verticalAlign="middle" horizontalAlign="left" click="visualizarPDF_clickHandler(event,'xml')" visible="false" includeInLayout="false"/>
+					<mx:Image id="xmlGris" height="{heightBtnPDF}" source="{catalogoIconosBotones.getInstance().vista_previa_gris}" verticalAlign="middle" horizontalAlign="left" click="visualizarPDF_clickHandler(event,'xml')"/>
+				</s:HGroup>
+			</s:VGroup>
+			
+		<!--	<s:VGroup width="100%"  gap="10" horizontalAlign="center">
+				<label:Texto_16_Helvetica width="{widthLbl}" fontSize="{font17}" text="Cargar Otro:" color="#c7c7c7" />
+				<s:HGroup width="100%" gap="10" verticalAlign="middle" horizontalAlign="center">					
+					<agregarDocumento:AgregarDoc  id="btnOtro" width="{widthBtnPDF}" height="100%" sizeHeight="{heightBtnPDF}" label=".pdf" click="agregardocumento1_clickHandler('otro')"  />  
+					<mx:Image id="otroVerde" height="{heightBtnPDF}" source="{catalogoIconosBotones.getInstance().vista_previa}" verticalAlign="middle" horizontalAlign="left" click="visualizarPDF_clickHandler(event,'otro')" visible="false" includeInLayout="false"/>
+					<mx:Image id="otroGris"  height="{heightBtnPDF}"  source="{catalogoIconosBotones.getInstance().vista_previa_gris}" verticalAlign="middle" horizontalAlign="left" click="visualizarPDF_clickHandler(event,'otro')"/>
+				</s:HGroup>
+			</s:VGroup>-->
+			
+			<s:VGroup width="100%" horizontalAlign="center" gap="10">
+				<label:TituloNovecento_18 text="DATOS DEL PROVEEDOR"  fontSize="{font18}"/>
+				<!--	<otros:LineaDivision width="100%" height="1" color="#c7c7c7" />-->
+				
+				<label:Texto_16_Helvetica fontSize="{font18}" text="Moneda" color="#c7c7c7" paddingTop="10" />
+				<label:Texto_16_Helvetica id="tipoMoneda" fontSize="{font22}"  color="#008893" />
+				
+				<label:Texto_16_Helvetica fontSize="{font18}" text="Crédito disponible" color="#c7c7c7" paddingTop="10" />
+				<label:Texto_16_Helvetica id="lblCreditoDisponible" fontSize="{font26}" color="#de0209" />
+			</s:VGroup>  
+			
+			<s:VGroup width="100%" horizontalAlign="center" paddingTop="5">
+				<label:TituloNovecento_18 id="lblDescripcion" text="MONTO IMPORTACIÓN"  fontSize="{font18}"/>
+				<s:Spacer height="10"/>
+				<!--<otros:LineaDivision width="100%" height="1" color="#c7c7c7" />-->
+				<s:VGroup width="100%" height="100%" gap="10" >
+					<s:HGroup width="100%">
+						<label:Texto_16_Helvetica id="etiquetaSubtotal" text="VAC" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="lblSubTotal" width="40%" textAlign="right" fontSize="{font17}" color="#008893" paddingLeft="20" />
+					</s:HGroup>
+					<s:HGroup id="grupoFTE" width="100%" horizontalAlign="center">
+						<label:Texto_16_Helvetica text="FTE" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="lblFlete"  width="40%" fontSize="{font17}" textAlign="right" color="#008893" paddingLeft="20" />
+					</s:HGroup>
+					<s:HGroup width="100%" horizontalAlign="center">
+						<label:Texto_16_Helvetica  text="Subtotal" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="SubVCF" width="40%" textAlign="right" fontSize="{font17}" color="#008893" paddingLeft="20" fontWeight="bold" />
+					</s:HGroup>
+					<s:HGroup id="grupoDTA" width="100%" horizontalAlign="center" >
+						<label:Texto_16_Helvetica text="DTA" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="lblDTA"  width="40%" fontSize="{font17}" textAlign="right" color="#008893" paddingLeft="20" />
+					</s:HGroup>
+					<s:HGroup id="grupoIva" width="100%" horizontalAlign="center" >
+						<label:Texto_16_Helvetica text="IVA" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="lblIVA"  width="40%" fontSize="{font17}" textAlign="right" color="#008893" paddingLeft="20" />
+					</s:HGroup>
+					<s:HGroup id="grupoIGI" width="100%" horizontalAlign="center" >
+						<label:Texto_16_Helvetica text="IGI" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="lblIGI"  width="40%" fontSize="{font17}" textAlign="right" color="#008893" paddingLeft="20" />
+					</s:HGroup>
+					<s:HGroup width="100%" horizontalAlign="center">
+						<label:Texto_16_Helvetica id="etiquetaTotal" text="Valor aduanal estimado" width="60%" textAlign="left" fontSize="{font17}" paddingRight="{pad}"/>
+						<label:Texto_16_Helvetica id="lblTotal" width="40%" textAlign="right" fontSize="{font17}" color="#008893" paddingLeft="20" fontWeight="bold" />
+					</s:HGroup>
+				</s:VGroup>  
+			</s:VGroup>  
+			
+			<s:VGroup width="100%"  gap="10" height="90%">
+				<label:Texto_16_Helvetica fontSize="{font17}" text="Comentarios adicionales:" color="#c7c7c7" />
+				<s:VGroup width="100%" height="100%" horizontalAlign="center">
+					<mx:TextArea id="txtComentarios" width="{widthCom}" height="{heightCom}" fontFamily="Helvetica" fontSize="{font14}" color="#008893" borderColor="#c7c7c7"/>
+				</s:VGroup>
+			</s:VGroup> 
+			<!--<textarea:txtAreaBlancoDefaultPQNet id="txtComentarios" width="{widthCom}" height="{heightCom}" colorFondo="blanco"/>-->
+			
+		</s:VGroup>
+		<s:VGroup width="100%" height="80%" horizontalAlign="center" paddingBottom="10">
+			<mx:Image id="genFacV" width="{widthGF}" height="{heightGF}" source="{catalogoIconosBotones.getInstance().boton_generarLA}" click="validarGenerarFactura(event)"  horizontalAlign="center" visible="false" includeInLayout="false"/>
+			<mx:Image id="genFacG" width="{widthGF}" height="{heightGF}" source="{catalogoIconosBotones.getInstance().boton_generarLA_gris}"  horizontalAlign="center" />
+		</s:VGroup>
+		
+	</s:VGroup>
+	
+	
+</s:Group>

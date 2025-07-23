@@ -1,0 +1,62 @@
+package vista.modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.mysuite.RequestTransactionResponse;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.controls.Alert;
+	
+	public class ModeloFacturacion extends EventDispatcher
+	{
+		/**
+		 ***************************************************** se envia la lista de folios *************************************************************
+		 */
+		private var _listaFacturas:ArrayCollection;
+		public function setObtenFacturas( $lista:ArrayCollection ):void{
+			_listaFacturas = new ArrayCollection();
+			_listaFacturas = $lista;
+			dispatchEvent( new Event("evnviaListaFacturasModeloFacturacion") );
+		}
+		[Bindable(Event="evnviaListaFacturasModeloFacturacion")]
+		public function get ObtenFacturas():ArrayCollection{
+			return this._listaFacturas;
+		}
+		
+		/**
+		 ***************************************************** se confirma la cancelacion de la factura *************************************************************
+		 */
+		private var _confirmacionFactura:RequestTransactionResponse;
+		public function setCancelaFactura( $dato:RequestTransactionResponse ):void{
+			_confirmacionFactura = $dato;
+			dispatchEvent( new Event("cancelaFacturaModeloFacturacion") );
+		}
+		[Bindable(Event="cancelaFacturaModeloFacturacion")]
+		public function get CancelaFactura():RequestTransactionResponse{
+			return this._confirmacionFactura;
+		}
+		/**
+		 ***************************************************** se genera error en la cancelacion de la factura *************************************************************
+		 */
+		private var _errorCancelar:Boolean;
+		public function setErrorCancelarFactura(objeto:Object):void{
+			_errorCancelar = true;
+			dispatchEvent( new Event("errorCancelaFacturaModeloFacturacion") );
+		}
+		[Bindable(Event="errorCancelaFacturaModeloFacturacion")]
+		public function get ErrorCancelarFactura():Boolean{
+			return this._errorCancelar;
+		}
+		
+		public function error(objeto:Object):void{
+			Alert.show( objeto.toString() );
+		}
+		
+		public function ModeloFacturacion(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+	}
+}

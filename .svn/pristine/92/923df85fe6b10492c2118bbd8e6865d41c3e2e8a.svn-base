@@ -1,0 +1,1390 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:botoneraTramitarCompra="mx.com.proquifa.vista.vistas.skin.botoneraTramitarCompra.*" 
+		 xmlns:combos="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.comboEmpresa.*"
+		 xmlns:coverflow="mx.com.proquifa.proquifanet.rsl.vista.vistas.comun.coverflowpqnet.*"
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*"
+		 xmlns:operacion="mx.com.proquifa.vista.vistas.tramitarCompra.operacion.*"
+		 xmlns:cover="mx.com.proquifa.vista.vistas.skin.cover.*" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*"  
+		 width="100%" height="100%"
+		 creationComplete="init(event)" 
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.ListaProductos_clase;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaPedido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.tramitarCompra.EventoTramitarComprarMateriales;
+			import mx.com.proquifa.vista.eventos.tramitarCompra.EventoTramitarComprarPublicaciones;
+			import mx.com.proquifa.vista.modelo.gestorCompras.ModeloGestorCompras;
+			import mx.com.proquifa.vista.vistas.registrarConfirmacion.componentes.PopUpRegistrarConfirmacion;
+			import mx.com.proquifa.vista.vistas.registrarConfirmacion.componentes.ToolTipColoresCR;
+			import mx.com.proquifa.vista.vistas.tramitarCompra.operacion.popUp.VistaTramitar_popUpExitoOC;
+			import mx.com.proquifa.vista.vistas.tramitarCompra.operacion.popUp.VistaTramitar_popUpGenerarOC;
+			import mx.com.proquifa.vista.vistas.tramitarCompra.operacion.popUp.VistaTramitar_popUpPartidasProducto;
+			import mx.core.DragSource;
+			import mx.events.CollectionEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.IndexChangedEvent;
+			import mx.events.ToolTipEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosBotones;
+			
+			/* ESTA VARIABLE SE USA PARA SABER SI SON PUBLICACIONES O MATERIALES */
+			private var _publicaciones:Boolean;
+			private var _currentPartida:PartidaPedido;
+			private var listaPartidas:ArrayCollection; 
+			private var sql:Query;
+			private var popUpVista:VistaTramitar_popUpPartidasProducto = new VistaTramitar_popUpPartidasProducto();
+			private var popUpOC:VistaTramitar_popUpGenerarOC = new VistaTramitar_popUpGenerarOC();
+			private static const VALOR_IVA:Number = .16;
+			[Bindable] private var monedaSimbolo:String = "$";
+			[Bindable] private var monedaTexto:String = "$";
+			public var proveedor:String;
+			public var idProveedor:int;
+			
+			
+			protected function init(event:FlexEvent):void
+			{
+				cmpCoverflow.addEventListener(EventoTramitarComprarMateriales.CAMBIA_NIVEL_VISTA_COVERFLOW,cambiarNivel);
+				addEventListener("removerItem",removerItem,false,0,true);
+				addEventListener("agregarItem",agregarItem,false,0,true);
+				addEventListener("mostrarPopUp",listaClic,false,0,true);
+				popUpExito.addEventListener("cerrarPopUpExito",cerrarPopUpexito);
+				
+				listaFinal.dataProvider = new ArrayCollection();
+				listaFinal.dataProvider.addEventListener(CollectionEvent.COLLECTION_CHANGE,cambioListaFinal,false,0,true);
+			}
+			
+			public function get publicaciones():Boolean
+			{
+				return _publicaciones;
+			}
+			
+			public function set publicaciones(value:Boolean):void
+			{
+				_publicaciones = value;
+			}
+			
+			[Bindable]
+			public function get currentPartida():PartidaPedido
+			{
+				return _currentPartida;
+			}
+			
+			public function set currentPartida(value:PartidaPedido):void
+			{
+				_currentPartida = value;
+				
+				cmbCompra.cargarEmpresas(value.proveedor);
+				cmbEmbarque.cargarEmpresaEmbarque(value.proveedor);
+			}
+			
+			
+			
+			
+			/**
+			 * ESTA FUNCION LIMPIA TODA LA VISTA, Y ES LA ENCARGADA
+			 * DE HACER EL DISPARO PARA CAMBIAR A LA VISTA "ANTERIOR" (PADRE)
+			 */
+			private function limpiar():void
+			{
+				listaProductos.dataProvider = new ArrayCollection();
+				listaFinal.dataProvider = new ArrayCollection();
+				botonera.selectIndex = 0;
+				botonera.resetAll();
+				cmpCoverflow.recibeFamilias(new ArrayCollection());
+				txtBuscador.text ="";
+				imgBoton.source = catalogoIconosBotoneras.getInstance().generar_inactivo;
+				generarTotales();
+			}
+			
+			
+			
+			
+			/**
+			 * ESTE METODO RECIBE LAS FAMILIAS PARA EL COVERFLOW
+			 */
+			public function set recibeFamilias($familias:ArrayCollection):void
+			{
+				if(!$familias || $familias.length == 0)
+					return;
+				
+				cmpCoverflow.recibeFamilias($familias);
+				cmbCompra.selectedIndex = 0;
+				cmbEmbarque.selectedIndex = 0;
+				validarBotonOC();
+			}
+			
+			
+			
+			
+			
+			/**
+			 * ESTA FUNCION VIENE DE UN LISENER QUE TIENE EL COVERFLOW POR "CLIC", AUNQUE
+			 * TAMBIEN SERA INVOCADA CON LA EXECEPCION DE LA PRIMERA VEZ, PARA QUE
+			 * SEA CONSULTADA LA PRIMERA FAMILIA CON LA QUE NACE
+			 **/
+			private var familiaSelect:String = null;
+			private var arregloNuevo:ArrayCollection;
+			private function cambiarNivel(evt:EventoTramitarComprarMateriales):void
+			{
+				familiaSelect = evt.familiaSelect.toLowerCase();
+				listaProductos.dataProvider = new ArrayCollection();
+				botonera.selectIndex = 0;
+				arregloNuevo = new ArrayCollection();
+				traficoSelect = null;
+				botonera.resetAll();
+				
+				if(_currentPartida)
+				{
+					if(!publicaciones){
+						var ert:EventoTramitarComprarMateriales = new EventoTramitarComprarMateriales(EventoTramitarComprarMateriales.OBTENER_UNIVERSO_PRODUCTOS);
+						ert.internacional = true;
+						ert.publicaciones = false;
+						ert.idProveedor = _currentPartida.proveedor;
+						ert.configuracionSelect = evt.configuracionSelect;
+						dispatchEvent(ert);
+					}else{
+						var ertP:EventoTramitarComprarPublicaciones = new EventoTramitarComprarPublicaciones(EventoTramitarComprarPublicaciones.OBTENER_UNIVERSO_PRODUCTOS_PUB);
+						ertP.internacional = true;
+						ertP.publicaciones = true;
+						ertP.idProveedor = _currentPartida.proveedor;
+						ertP.configuracionSelect = evt.configuracionSelect;
+						dispatchEvent(ertP);
+					}
+				}
+				comboOrdenar.selectedIndex = 0;
+			}
+			
+			
+			
+			
+			
+			/**
+			 * ESTA FUNCION ES LA QUE SE ENCARGA DE RECIBIR EL UNIVERSO DE
+			 * PRODUCTOS QUE TIENE CADA FAMILIA, CADA VEZ QUE SE CAMBIE UNA FAMILIA
+			 * SERA SETTEADO EN ESTA FUNCION
+			 */
+			private var punterosTodos:Array;
+			/*private var punterosTodosPharma:Array;*/
+			public function set recibeUniversoProductos($universo:ArrayCollection):void
+			{
+				if($universo == null || currentPartida == null)
+					return;
+				$universo = asignarPunterosAProgramados(ObjectUtil.copy($universo) as ArrayCollection);
+				//REASIGNADA PARA TOMAR TODOS "FALSE" Y ASI TRABAJAR CON TODO EL UNIVERSO
+				/*sql = new Query($universo,['trafico','familia','stock','reasignada','concepto','codigo','nombreProveedor','vendedorEsPharma','nombreVendedor'],true);*/ 
+				sql = new Query($universo,['trafico','familia','stock','reasignada','concepto','codigo','nombreVendedor','control'],true); 
+				botonera.resetAll();
+				traficoSelect = null;
+				punterosTodos = new Array();
+				if($universo.length > 0)
+					monedaSimbolo = $universo[0].monedaSimbolo;
+				else
+					monedaSimbolo = '$';
+				
+				if($universo.length > 0){
+					if( $universo[0].monedaAbreviatura.toLowerCase() == "Dls".toLowerCase()){
+						monedaTexto = "usd".toUpperCase();
+					}else if( $universo[0].monedaAbreviatura.toLowerCase() == "EUR".toLowerCase() ){
+						monedaTexto = "eur".toUpperCase();
+					}else if($universo[0].monedaAbreviatura.toLowerCase() == "Lbs".toLowerCase()){
+						monedaTexto = "Lbs".toUpperCase();
+					}else if( $universo[0].monedaAbreviatura.toLowerCase() == "yns".toLowerCase()){
+						monedaTexto = "yns".toUpperCase();
+					}else if( $universo[0].monedaAbreviatura.toLowerCase() == "M.N.".toLowerCase()){
+						monedaTexto = "m.n.".toUpperCase();
+					}else
+						monedaTexto = "dls"; 
+				}else{
+					monedaTexto = "dls"; 
+				}
+				
+				punterosTodos = sql.getPunteros([null,familiaSelect]);
+				/*punterosTodos = sql.getPunteros([null,familiaSelect,null,null,null,null,null,'false']);*/
+				/*punterosTodosPharma = sql.getPunteros([null,familiaSelect,null,null,null,null,null,'true']);*/
+				armarListaProductos(punterosTodos);
+				generarTotalesListaFinal();
+			}
+			
+			
+			/**
+			 * ESTA FUNCION ENTRA EN ACCION CUANDO SE PASA O SE AGREGA 
+			 * UN PRODUCTO A LA LISTA FINAL, LA IDEA ES HACER QUE SE VUELVA A LLENAR 
+			 */
+			private function flujoDeDatos():void
+			{
+				
+			}
+			
+			
+			
+			
+			/**
+			 * ESTA FUNCION ES LA ENCARGADA DE GENERAR Y AGRUPAR LOS ELEMENTOS QUE VIENEN
+			 * DE LA CLASE "partidaPedido" A "ListaProductos_clase", UNA CLASE QUE SOLO ES DE VISTA
+			 * PARA TENER UN MEJOR MANEJO DE LA INFORMACION, ESTA LISTA AGRUPADA SE ENVIA A LA LISTA PRINCIPAL
+			 */
+			private var sqlBusqueda:Query;
+			private var new_sql:Query;
+			
+			[Bindable]
+			protected static var arregloFin:ArrayCollection;
+			private function armarListaProductos($punteros:Array):void
+			{
+				var $universo:ArrayCollection = sql.armarLista($punteros);
+				var codigos:Array = new Array();
+				
+				var listaFiltrada:ArrayCollection = new ArrayCollection();
+				var listaProgramados:ArrayCollection = new ArrayCollection();
+				for (var i:int = 0; i < $universo.length; i++) 
+				{
+					//SOLO SE FILTRATAN LAS PARTIDAS DIFERENTES A PROGRAMADO
+					/*|| $universo[i].nombreVendedor.toLowerCase() != "proveedora")*/
+					/*if($universo[i].trafico != "Programado" 
+					&& ($universo[i].control || $universo[i].control.toLowerCase() == "normal" )){*/
+					if($universo[i].trafico != "Programado"){
+						if($universo[i].control){
+							if ( $universo[i].control.toLowerCase() == "normal" )
+								listaFiltrada.addItem($universo[i]);
+							else
+								listaProgramados.addItem($universo[i]);
+						}else
+							listaProgramados.addItem($universo[i]);
+					}
+					else
+						listaProgramados.addItem($universo[i]);
+				}
+				/**
+				 * $universo[i].control.toLowerCase() != "normal"    no se debe agrupar
+				 * $universo[i].trafico == "Programado" no se debe agrupar
+				 */
+				
+				listaProgramados = convertirAListaProducto(ObjectUtil.copy(listaProgramados) as ArrayCollection);
+				
+				var vendedorPharma:ArrayCollection = new ArrayCollection;
+				var vendedorOtros:ArrayCollection = new ArrayCollection;
+				//SEPARAR A LAS PARTIDAS CON COMPRADOR PHARMA
+				for (var j:int = 0; j < listaFiltrada.length; j++) 
+				{
+					if(listaFiltrada[j].nombreVendedor && listaFiltrada[j].nombreVendedor != "Pharma")
+						vendedorOtros.addItem(listaFiltrada[j]);
+					else
+						vendedorPharma.addItem(listaFiltrada[j]);
+					
+				}
+				
+				if(vendedorPharma.length > 0)
+					vendedorPharma = agruparPorCodigo(ObjectUtil.copy(vendedorPharma) as ArrayCollection,true);
+				if(vendedorOtros.length > 0)
+				vendedorOtros = agruparPorCodigo(ObjectUtil.copy(vendedorOtros) as ArrayCollection,false);
+				
+				arregloFin = new ArrayCollection();
+				arregloFin.addAll(vendedorPharma);
+				arregloFin.addAll(vendedorOtros);
+				if(arregloFin.length <= 0){
+					listaProductos.dataProvider = new ArrayCollection();
+				}
+				traficoSelect = "todos";
+				/*var punteros:Array = new Array(); 
+				new_sql = new Query(ObjectUtil.copy( listaFiltrada ) as ArrayCollection,['codigo','nombreCliente','trafico'],true);
+				codigos = new_sql.getPunteros(['codigo']);
+				traficoSelect = "todos";*/
+				
+				/*arregloFin = new ArrayCollection();
+				if(codigos.length > 0)
+				{
+					
+					for (var r:int = 0; r < codigos.length; r++) 
+					{
+						var tmpProd:ListaProductos_clase = new ListaProductos_clase();
+						punteros = new_sql.getPunteros([codigos[r]]);
+						var control:String = new_sql.getValoresCampo('control',punteros)[0].toLowerCase();
+						var piezas:Number = new_sql.getSumarCampo('cant_productos',punteros);
+						
+						tmpProd.numFila = r + 1;
+						tmpProd.puntero = r;
+						tmpProd.monedaSimbolo = new_sql.getValoresCampo('monedaSimbolo',punteros)[0];
+						tmpProd.codigo = new_sql.getValoresCampo('codigo',punteros)[0];
+						tmpProd.concepto = new_sql.getValoresCampo('concepto',punteros)[0];
+						tmpProd.trafico = new_sql.getValoresCampo('trafico',punteros)[0];
+						tmpProd.totalClientes = new_sql.getPunteros([codigos[r]],'nombreCliente').length;
+						tmpProd.montoUnitario = new_sql.getValoresCampo('costo',punteros)[0];
+						tmpProd.totalPiezas = piezas;
+						tmpProd.montoTotal =  tmpProd.montoUnitario * piezas;
+						tmpProd.fee = new_sql.getValoresCampo('FEntrega',punteros)[0];
+						tmpProd.posicionesSql = sql.getPunteros([tmpProd.trafico.toLowerCase(),null,null,null,null,codigos[r],null,control]);
+						tmpProd.familia = new_sql.getValoresCampo('familia',punteros)[0];
+						tmpProd.control = new_sql.getValoresCampo('control',punteros)[0];
+						arregloFin.addItem(tmpProd);
+					}
+					actualizarLista();
+				}
+				else
+				{
+					listaProductos.dataProvider = new ArrayCollection();
+				}*/
+				arregloFin.addAll(listaProgramados);
+				for (var k:int = 0; k < arregloFin.length; k++) 
+				{
+					arregloFin[k].puntero = k;
+				}
+				
+				/*arregloFin = asignarPunterosAProgramados(arregloFin);*/
+				arregloFin = revisarCoincidenciaEnPartidas(ObjectUtil.copy(arregloFin) as ArrayCollection);
+				actualizarLista();
+				generarTotales();
+			}
+			
+			
+			
+			private function actualizarLista():void
+			{
+				var punteros:Array = new Array();
+				sqlBusqueda = new Query(arregloFin,['todos','concepto','codigo','trafico'],true);
+				ponerBanderines();
+				
+				if(traficoSelect == "todos")
+				{
+					punteros = sqlBusqueda.getPunteros([false]);
+					listaProductos.dataProvider = UtilsGrid.numerarArreglo( sqlBusqueda.armarLista(punteros));
+				}
+				else
+				{
+					punteros = sqlBusqueda.getPunteros([null,null,null,botonera.tipoSelect]);
+					listaProductos.dataProvider = UtilsGrid.numerarArreglo( sqlBusqueda.armarLista(punteros));
+				}
+				
+				if(comboOrdenar.selectedIndex > 0){
+					if(comboOrdenar.selectedItem != '--NINGUNA--'){
+						cambiarOrden(new IndexChangeEvent(IndexChangedEvent.CHANGE));
+					}
+				}
+			}
+			
+			
+			
+			/**
+			 * ESTA FUNCION SE INVOCA UNA SOLA VEZ, Y ES CUANDO SE INYECTA EL SERVICIO
+			 * QUE VIENE DE LA CONSULTA POR FAMILIA
+			 */
+			private var consultaTmp:Query; 
+			private function ponerBanderines():void
+			{
+				var arreglo:Array = sqlBusqueda.getPunteros([null,null,null,'trafico']);
+				
+				botonera.programado = false;
+				botonera.regular = false;
+				botonera.stock = false;
+				botonera.flete = false;
+				
+				for (var i:int = 0; i < arreglo.length; i++) 
+				{
+					switch(arreglo[i])
+					{
+						case "programado": {botonera.programado = true; break; }
+						case "regular": {botonera.regular = true; break; }
+						case "stock": {botonera.stock = true; break; }
+						case "flete express": {botonera.flete = true; break; }
+					}
+				}
+			}
+			
+			
+			
+			
+			
+			/**
+			 * FUNCION QUE SE DISPARA CUANDO SE HACE EL CAMBIO DE ITEM SELECCCIONADO
+			 * EN LA BOTONERA, SE BUSCA EL "TRANSITO" EN EL SQL PRINCIPAL, Y LOS PUNTEROS
+			 * SE MANDAN A "ARMAR" EN OTRA LA FUNCION "armarListaProductos"
+			 */
+			private var traficoSelect:String = null;
+			protected function clicBotonera(event:EventoTramitarComprarMateriales):void
+			{
+				txtBuscador.text = "";
+				traficoSelect = botonera.tipoSelect;
+				actualizarLista();
+				generarTotales();
+			}
+			
+			
+			
+			
+			/**
+			 * GENERA LOS TOTALES QUE VAN EN EL FOOTER, CON RESPESTO AL 
+			 * SQL PRINCIPAL, QUE SE LLENA DE SERVICIO QUE SE DEVUELVE DESPUES
+			 * DE HABER CONSULTADO POR LA FAMILIA
+			 */
+			private var totales:Query;
+			private function generarTotales():void
+			{
+				var arregloTotal:ArrayCollection = ObjectUtil.copy(listaProductos.dataProvider) as ArrayCollection;
+				if(arregloTotal)
+				{
+					totales = new Query(arregloTotal,['todos','concepto','codigo']);
+					var punteros:Array = totales.getPunteros([false]);
+					
+					if(punteros.length == 0)
+					{
+						lblTotal.text = "#0"; 
+						lblPiezas.text = "0 Piezas"; 
+						lblMonto.text = "Monto Total: "+monedaSimbolo+" 0.00"; 
+						lblClientes.text = "0 Clientes";
+					}
+					else
+					{
+						lblTotal.text = "#"+arregloTotal.length.toString(); 
+						lblClientes.text = totales.getSumarCampo('totalClientes',punteros).toString() + " Clientes";
+						lblPiezas.text = totales.getSumarCampo('totalPiezas',punteros).toString() +" Piezas";
+						lblMonto.text = "Monto Total: "+monedaSimbolo+" " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.getSumarCampo('montoTotal',punteros));
+					}
+				}
+			}
+			
+			
+			/**
+			 * GENERA LOS TOTALES QUE VAN EN EL FOOTER DE LA LISTA FINAL
+			 */
+			private	var subTotalMonto:Number;
+			private var totalesFinal:Query;
+			private function generarTotalesListaFinal():void
+			{
+				var nuevoArreglo:ArrayCollection = ObjectUtil.copy(listaFinal.dataProvider) as ArrayCollection;
+				totalesFinal = new Query(nuevoArreglo,['todos','concepto','codigo']);
+				var punterosFinal:Array = totalesFinal.getPunteros([false]);
+				
+				subTotalMonto = 0;
+				var imp:Number = 0;
+				if(punterosFinal.length == 0)
+				{
+					lblTotal2.text = "#0"; 
+					lblPiezas2.text = "0 Piezas"; 
+					lblMonto2.text = "Monto Total: "+monedaSimbolo+" 0.00"; 
+					lblProductos.text = "0 Productos";
+					
+					lblSubtotal.text = monedaSimbolo+" 0.00";
+					lblImpuestos.text = monedaSimbolo+" 0.00";
+					lblGranTotal.text = monedaSimbolo+" 0.00";
+				}
+				else
+				{
+					subTotalMonto = totalesFinal.getSumarCampo('montoTotal',punterosFinal);
+					lblTotal2.text = "#"+nuevoArreglo.length.toString(); 
+					lblProductos.text = totalesFinal.getPunteros([null,null,'codigo']).length.toString() + " Productos";
+					lblPiezas2.text = totalesFinal.getSumarCampo('totalPiezas',punterosFinal).toString() +" Piezas";
+					lblMonto2.text = "Monto Total: "+monedaSimbolo+" " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subTotalMonto);
+					
+					/**
+					 * ESTE IF SE USARA CUANDO SEAN NACIONALES
+					 * EL IVA APLICA SOLAMENTE EN MATERIALES
+					 * 
+					 * if (!publicaciones)
+					 imp = totalMonto * VALOR_IVA;
+					 */
+					
+					lblSubtotal.text = monedaSimbolo+" " + UtilsFormatosNumericos.precisionADosDecimalesConComas(subTotalMonto);
+					lblImpuestos.text = monedaSimbolo+" " + UtilsFormatosNumericos.precisionADosDecimalesConComas(imp);
+					lblGranTotal.text = monedaSimbolo+" " + UtilsFormatosNumericos.precisionADosDecimalesConComas(imp + subTotalMonto);
+				}
+			}
+			
+			
+			
+			/**
+			 * ESTA FUNCION TIENE UN TIMER, QUE DIRECCIONA DESPUES A LA 
+			 * FUNCION DE BUSQUEDA, LA CUAL LO HACE POR LOS CAMPOS DE CONCEPTO Y CODIGO
+			 * ['trafico','familia','stock','reasignada','concepto','codigo'])
+			 */
+			protected function buscadorTxt(event:TextOperationEvent):void
+			{
+				setTimeout(busqueda,500);
+			}
+			
+			protected function busqueda():void
+			{
+				if (StringUtil.trim(txtBuscador.text).length > 0 )
+				{
+					actualizarLista();
+					var nom:String = txtBuscador.text.toLowerCase();
+					var listaOriginal:ArrayCollection = listaProductos.dataProvider as ArrayCollection; 
+					var busqueda:Query = new Query(listaOriginal,['todos',true]);
+					var puntt:Array;
+					
+					var areere:ArrayCollection = UtilsGrid.queryCampoXLikeDosCampos(listaOriginal,"conceptoLowerCase","codigoLowerCase",nom);
+					
+					if(areere.length > 0)
+					{
+						var totales:Query = new Query(areere,['todos'],true);
+						puntt = new Array();
+					}
+					
+					for(var t:int=0; t < areere.length; t++)
+					{
+						(areere[t] as ListaProductos_clase).numFila = t+1;
+						puntt.push(t);
+					}
+					
+					listaProductos.dataProvider = areere;
+				}
+				else
+				{
+					actualizarLista();
+				}
+				
+				// ESTOS SON LOS TOTALES QUE VIENEN DE LA BUSQUEDA
+				if(puntt)
+				{
+					lblTotal.text = "#"+listaProductos.dataProvider.length.toString(); 
+					lblClientes.text = busqueda.getSumarCampo('totalClientes',puntt).toString().toString() + " Clientes";
+					lblPiezas.text = busqueda.getSumarCampo('totalPiezas',puntt).toString() +" Piezas";
+					lblMonto.text = "Monto Total: "+monedaSimbolo+" " + UtilsFormatosNumericos.precisionADosDecimalesConComas(busqueda.getSumarCampo('montoTotal',puntt));
+				}
+				else
+				{
+					generarTotales();
+				}
+			}
+			
+			
+			
+			
+			/**
+			 * ES LA FUNCION QUE SE ENCARGA DE CREAR Y MOSTRAR EL POPUP DE LAS PARTIDAS
+			 * CON SU GRAFICA
+			 * ['trafico','familia','stock','reasignada','concepto','codigo'],true)
+			 */
+			private var currentSelect:ListaProductos_clase;
+			protected function listaClic(evt:Event):void
+			{ 
+				currentSelect = listaProductos.selectedItem as ListaProductos_clase;
+				
+				if(currentSelect)
+				{
+					var puntero:Array = new Array;
+					if(currentSelect.trafico != "Programado" && 
+						currentSelect.nombreVendedor == 'Pharma' &&
+						(currentSelect.control == "Normal" || currentSelect.control == null)){
+						puntero = sql.getPunteros([null,null,null,null,null,currentSelect.codigo.toLowerCase(),currentSelect.nombreVendedor.toLowerCase(),currentSelect.control.toLowerCase()]);
+					}
+					else if(currentSelect.trafico != "Programado" && 
+						currentSelect.nombreVendedor != 'Pharma' && 
+						(currentSelect.control == "Normal" || currentSelect.control == null)){
+						var punterosTemp:Array = new Array();
+						punterosTemp = sql.getPunteros([null,null,null,null,null,currentSelect.codigo.toLowerCase(),null,currentSelect.control.toLowerCase()]);
+						for (var i:int = 0; i < punterosTemp.length; i++) 
+						{
+							if(sql.universo[punterosTemp[i]].nombreVendedor != 'Pharma')
+								puntero.push(punterosTemp[i]);
+							
+						}
+					}
+					else{
+						puntero = currentSelect.posicionesSql;
+					}
+					/*else{
+						puntero = sql.getPunteros([null,null,null,null,null,currentSelect.codigo.toLowerCase(),currentSelect.nombreVendedor,currentSelect.control]);
+					}*/
+					
+					/*if($universo[i].trafico != "Programado" 
+						&& ($universo[i].control.toLowerCase() == "normal" || $universo[i].control.toLowerCase() == null)){
+						listaFiltrada.addItem($universo[i]);
+					}else{
+						listaProgramados.addItem($universo[i]);
+					}*/
+					/*var puntero:Array = sql.getPunteros([null,null,null,null,null,currentSelect.codigo.toLowerCase()]);*/
+					var productos:ArrayCollection = sql.armarLista(puntero);
+					
+					if(popUpVista == null)
+					{
+						popUpVista = VistaTramitar_popUpPartidasProducto(PopUpManager.createPopUp( this, VistaTramitar_popUpPartidasProducto, true ) );
+						PopUpManager.centerPopUp( popUpVista );
+						popUpVista.addEventListener("cerrarPopUp",cerrarPopUp);
+					}
+					else
+					{
+						PopUpManager.addPopUp( popUpVista , this, true );
+						PopUpManager.centerPopUp( popUpVista );
+					}
+					
+					popUpVista.cleanPopUp();
+					popUpVista.currentPedido = ObjectUtil.copy(currentSelect) as ListaProductos_clase;
+					popUpVista.listaSubProductos = productos;
+				}
+			}
+			
+			private function cerrarPopUp(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpVista );
+				popUpVista = null;
+			}
+			
+			
+			
+			
+			
+			
+			
+			/*********************************************
+			 * 
+			 * CONTROLES Y FUNCIONES PARA LA LISTA INICIAL *
+			 * 
+			 * *******************************************
+			 */
+			
+			
+			protected function renumerarLista():void
+			{
+				setTimeout(numerar,100);
+			}
+			
+			private function numerar():void
+			{
+				for (var k:int = 0; k < listaProductos.dataProvider.length; k++) 
+				{
+					var curr:ListaProductos_clase = (listaProductos.dataProvider as ArrayCollection)[k];
+					curr.numFila = k + 1;
+				}
+				
+				for (var p:int = 0; p < listaFinal.dataProvider.length; p++) 
+				{
+					var curr1:ListaProductos_clase = (listaFinal.dataProvider as ArrayCollection)[p];
+					curr1.numFila = p + 1;
+				}
+				
+				generarTotales();
+				generarTotalesListaFinal();
+				actualizarLista();
+			}
+			
+			
+			
+			
+			
+			/*********************************************
+			 * 
+			 * CONTROLES Y FUNCIONES PARA LA LISTA FINAL *
+			 * 
+			 * *******************************************
+			 */
+			
+			private static var contadorFinal:Number = 0;
+			private var indiceValidar:int;
+			protected function entroItem(event:DragEvent):void
+			{
+				
+				var current:Vector.<Object> = event.dragSource.dataForFormat("itemsByIndex") as Vector.<Object>; 
+				
+				var curr:ListaProductos_clase;
+				for (var i:int = 0; i < 1; i++) 
+				{ 
+					curr = current[i] as ListaProductos_clase;
+					grpLeyenda.alpha = 0;
+				}
+				
+				var index:int;
+				for (var j:int = 0; j < arregloFin.length; j++) 
+				{
+					if((arregloFin[j] as ListaProductos_clase).puntero == curr.puntero)
+					{
+						index = j;
+						break;
+					}
+				}
+				indiceValidar = index;
+				/*universoTramitado.addItem(arregloFin.getItemAt(index));*/
+				
+				
+				
+				
+				if(listaFinal.dataProvider && listaFinal.dataProvider.length > 0){
+					var ultimo:int = listaFinal.dataProvider.length - 1;
+					if(listaFinal.dataProvider[0].control == "Normal"){
+						if(curr.control.toLowerCase() != "Normal".toLowerCase()){
+							alertaSingleton.show("Los productos no se pueden agregar por que su control es diferente a normal");
+							event.dragSource = new DragSource();
+							return ;
+						}
+					}else{
+						if(curr.control == "Normal"){
+							alertaSingleton.show("Los productos no se pueden agregar por que su control es normal");
+							event.dragSource = new DragSource();
+							return ;
+						}
+					}
+					
+					
+					if(listaFinal.dataProvider[0].nombreVendedor == "Pharma"){
+						if(curr.nombreVendedor != "Pharma"){
+							alertaSingleton.show("Los productos no se pueden agregar por que el vendedor es Pharma");
+							event.dragSource = new DragSource();
+							return ;
+						}
+					}else{
+						if(curr.nombreVendedor == "Pharma"){
+							alertaSingleton.show("Los productos no se pueden agregar por que el vendedor no es Pharma");
+							event.dragSource = new DragSource();
+							return ;
+						}
+					}
+				}
+				
+				arregloFin.removeItemAt(index);
+				/*validarBotonOC();*/
+				setTimeout(validarBotonOC,200);
+			}
+			
+			
+			private function cambioListaFinal(evt:CollectionEvent):void
+			{
+				validarBotonOC();
+			}
+			
+			
+			protected function entraListaFinal(event:NativeDragEvent):void
+			{
+				renumerarLista();
+			}
+			
+			
+			private function removerItem(evt:Event):void
+			{
+				var indice:int = listaFinal.selectedIndex;
+				var final:ArrayCollection = listaFinal.dataProvider as ArrayCollection;
+				var currentCopia:ListaProductos_clase = ObjectUtil.copy(final[indice]) as ListaProductos_clase;
+				
+				/*universoTramitado.removeItemAt(indice);*/
+				final.removeItemAt(indice);
+				///COMPARAR FAMILIA SI ES LA MISMA
+				if(familiaSelect.toLowerCase() == currentCopia.familia.toLowerCase())
+					arregloFin.addItem(currentCopia);
+				
+				actualizarLista();
+				
+				renumerarLista();
+				
+				if(listaFinal.dataProvider.length == 0)
+					grpLeyenda.alpha = 1;
+				else
+					grpLeyenda.alpha = 0;
+				
+				validarBotonOC();
+			}
+			
+			private function agregarItem(evt:Event):void
+			{
+				var indice:int = listaProductos.selectedIndex;
+				var inicial:ArrayCollection = listaProductos.dataProvider as ArrayCollection;
+				var final:ArrayCollection = listaFinal.dataProvider as ArrayCollection;
+				var currentCopia:ListaProductos_clase = ObjectUtil.copy(inicial[indice]) as ListaProductos_clase;
+				
+				if( (listaProductos.dataProvider && listaProductos.dataProvider.length > 0) &&
+					listaFinal.dataProvider && listaFinal.dataProvider.length > 0){
+					
+					if(currentCopia.control == "Normal" && 
+						listaFinal.dataProvider[0].control != "Normal"){
+						alertaSingleton.show("Los productos no se pueden agregar por que su control es diferente a normal");
+						return ;
+					}else if(currentCopia.control != "Normal" && 
+						listaFinal.dataProvider[0].control == "Normal"){
+						alertaSingleton.show("Los productos no se pueden agregar por que su control es normal");
+						return ;
+					}
+					
+					
+					if(currentCopia.nombreVendedor == "Pharma" && 
+						listaFinal.dataProvider[0].control != "Pharma"){
+						alertaSingleton.show("Los productos no se pueden agregar por que el vendedor es Pharma");
+						return ;
+					}else if(currentCopia.nombreVendedor != "Pharma" && 
+						listaFinal.dataProvider[0].nombreVendedor == "Pharma"){
+						alertaSingleton.show("Los productos no se pueden agregar por que el vendedor no es Pharma");
+						return ;
+					}
+				}
+				
+				var index:int;
+				for (var j:int = 0; j < arregloFin.length; j++) 
+				{
+					if((arregloFin[j] as ListaProductos_clase).puntero == currentCopia.puntero)
+					{
+						index = j;
+						break;
+					}
+				}
+				arregloFin.removeItemAt(index);
+				
+				inicial.removeItemAt(indice);
+				/*universoTramitado.addItem(currentCopia);*/
+				final.addItem(currentCopia);
+				
+				actualizarLista();
+				listaFinal.dataProvider = final;
+				grpLeyenda.alpha = 0;
+				renumerarLista();
+				setTimeout(validarBotonOC,200);
+			}
+			
+			
+			private function validarBotonOC():void
+			{
+				if(cmbCompra.selectedIndex > 0 && cmbEmbarque.selectedIndex > 0 && listaFinal.dataProvider.length > 0)
+					imgBoton.source = catalogoIconosBotoneras.getInstance().generar_activo;
+				else
+					imgBoton.source = catalogoIconosBotoneras.getInstance().generar_inactivo;
+			}
+			
+			
+			
+			protected function clicOC(event:MouseEvent):void
+			{
+				if(cmbCompra.selectedIndex > 0 && cmbEmbarque.selectedIndex > 0 && listaFinal.dataProvider.length > 0)
+				{
+					if(popUpOC == null)
+					{
+						popUpOC = VistaTramitar_popUpGenerarOC(PopUpManager.createPopUp( this, VistaTramitar_popUpGenerarOC, true ) );
+						PopUpManager.centerPopUp( popUpOC );
+						popUpOC.addEventListener("cerrarPopUpOC",cerrarPopUpOC);
+					}
+					else
+					{
+						PopUpManager.addPopUp( popUpOC , this, true );
+						PopUpManager.centerPopUp( popUpOC );
+					}
+					
+					/*SE CARRGA LA INFO PARA LA GENERACION DE OC*/
+					popUpOC.cargarContactos(currentPartida.proveedor);
+					popUpOC.listaPedidos = obtenerArregloSeleccionados();
+					popUpOC.idProveedor = currentPartida.proveedor;
+					popUpOC.publicaciones = publicaciones;
+					popUpOC.empresaCompra = cmbCompra.selectedItem as Empresa;
+					popUpOC.empresaEmbarque = cmbEmbarque.selectedItem as Empresa;
+					popUpOC.subTotal = subTotalMonto;
+				}
+			}
+			
+			private function cerrarPopUpOC(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpOC );
+				popUpOC = null;
+			}
+			
+			
+			private function obtenerArregloSeleccionados():ArrayCollection
+			{
+				var tmp:ArrayCollection = listaFinal.dataProvider as ArrayCollection;
+				var finalArreglo:Array = new Array();
+				var punteroTemp:Array = new Array();
+				
+				for (var f:int = 0; f < tmp.length; f++) 
+				{
+					punteroTemp.push((tmp[f] as ListaProductos_clase).posicionesSql);
+				}
+				
+				finalArreglo = UtilsGrid.generateArrayBiToArrayUni(punteroTemp);
+				
+				return sql.armarLista(finalArreglo);
+			}
+			
+			public function set recibeConfirmacionOC($resultado:String):void
+			{
+				if(!$resultado)
+					return;
+				
+				PopUpManager.removePopUp( popUpOC );
+				popUpOC = null;
+				crearPopUpExito($resultado);
+			}
+			
+			
+			private var popUpExito:VistaTramitar_popUpExitoOC = new VistaTramitar_popUpExitoOC();
+			public function crearPopUpExito(orden:String):void
+			{
+				if(popUpExito == null)
+				{
+					popUpExito = VistaTramitar_popUpExitoOC(PopUpManager.createPopUp( this, VistaTramitar_popUpExitoOC, true ) );
+					PopUpManager.centerPopUp( popUpExito );
+					popUpExito.addEventListener("cerrarPopUpExito",cerrarPopUpexito);
+				}
+				else
+				{
+					PopUpManager.addPopUp( popUpExito , this, true );
+					PopUpManager.centerPopUp( popUpExito );
+				}
+				popUpExito.ordenCompra = orden;
+				this.orden = orden;
+				
+			}
+			
+			private function cerrarPopUpexito(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpExito );
+				popUpExito = null;
+				
+				limpiar();
+				var eve:EventoTramitarComprarMateriales = new EventoTramitarComprarMateriales(EventoTramitarComprarMateriales.OBTENER_PEDIDOS_PENDIENTES_TRAMITAR_COMPRA_MATERIALES);
+				eve.internacional = true;
+				eve.publicaciones = false;
+				eve.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+				//DESCARGA DE CSV
+				if(proveedor.toLowerCase() == "usp")
+					descargarArchivoCSV();
+				
+				dispatchEvent(eve);
+				dispatchEvent( new Event("camviarVistaPrincipalMat",true));
+			}
+			
+			private function convertirAListaProducto(value:ArrayCollection,puntero:int = 0):ArrayCollection
+			{
+				var lista:ArrayCollection = new ArrayCollection();
+				for (var i:int = 0; i < value.length; i++) 
+				{
+					var tmpProd:ListaProductos_clase = new ListaProductos_clase();
+					var tmpPartida:PartidaPedido = value[i];
+					
+					tmpProd.numFila = i + 1;
+					tmpProd.puntero = i;//REVISAR
+					tmpProd.monedaSimbolo = tmpPartida.monedaSimbolo;
+					tmpProd.codigo = tmpPartida.codigo;
+					tmpProd.concepto = tmpPartida.concepto;
+					tmpProd.trafico = tmpPartida.trafico;
+					tmpProd.totalClientes = 1;
+					/*tmpProd.totalClientes = new_sql.getPunteros([codigos[r]],'nombreCliente').length;*///REVISAR
+					tmpProd.montoUnitario = tmpPartida.costo;
+					tmpProd.totalPiezas = tmpPartida.cant_productos;
+					tmpProd.montoTotal =  tmpPartida.cant_productos * tmpPartida.costo;
+					tmpProd.fee = tmpPartida.FEntrega;
+					tmpProd.posicionesSql = tmpPartida.punteros;
+					tmpProd.familia = tmpPartida.familia;
+					tmpProd.control = tmpPartida.control;
+					tmpProd.nombreVendedor = tmpPartida.nombreVendedor;
+					lista.addItem(tmpProd);
+				}
+				return lista;
+			}
+			private function asignarPunterosAProgramados(value:ArrayCollection):ArrayCollection
+			{
+				for (var i:int = 0; i < value.length; i++) 
+				{
+					if(value[i].trafico == "Programado"){
+						value[i].punteros = [i];
+					}else if(!value[i].control){
+						value[i].punteros = [i];
+					}else if(value[i].control != "Normal"){
+						value[i].punteros = [i];
+					}
+				}
+				return ObjectUtil.copy(value) as ArrayCollection;
+			}
+			
+			private	var file:File = new File();
+			private var orden:String;
+			private function descargarArchivoCSV():void
+			{
+				var request:URLRequest;
+				var variables:URLLoader = new URLLoader();
+				variables.dataFormat = URLLoaderDataFormat.BINARY;
+				///PRODUCCION
+				var ruta:String = RutasPdF.GENERAL_RUTA + RutasPdF.COMPRAS_RUTA + orden+ ".csv";
+				///LOCAL
+				/*var ruta:String = "http://localhost:8080/SAP/" + RutasPdF.COMPRAS_RUTA + this.orden + ".csv";*/
+				request = new URLRequest(ruta);
+				variables.addEventListener(Event.COMPLETE, completeHandler);
+				variables.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+				try{
+					variables.load(request);
+				} 
+				catch (error:Error){
+					trace("Unable to load URL: " + error);
+				}
+			}
+			
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+					file.save( bytes, orden +'.csv' );	
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+			}
+			private function errorHandler(event:Event):void{
+				alertaSingleton.show("No se encontro archivo");
+			}
+			
+			private function revisarCoincidenciaEnPartidas(lista:ArrayCollection):ArrayCollection
+			{
+				var listaTemp:ArrayCollection = new ArrayCollection;
+				if(listaFinal.dataProvider && listaFinal.dataProvider.length > 0){
+					for (var i:int = 0; i < listaFinal.dataProvider.length; i++) 
+					{
+						for (var j:int = 0; j < lista.length; j++) 
+						{
+							if(compararPunteros(listaFinal.dataProvider[i].posicionesSql,lista[j].posicionesSql)){
+								lista.removeItemAt(j);
+								break;
+							}
+						}
+						
+					}
+					
+				}
+				return ObjectUtil.copy(lista) as ArrayCollection;
+			}
+			
+			private function compararPunteros(punteros1:Array,punteros2:Array):Boolean
+			{
+				var coinciden:Boolean = true;
+				for (var i:int = 0; i < punteros1.length; i++) 
+				{
+					for (var j:int = 0; j < punteros2.length; j++) 
+					{
+						if(punteros1[i] != punteros2[j]){
+							coinciden = false;
+							break;
+						}
+					}
+				}
+				return coinciden;
+				
+			}
+			
+			private function agruparPorCodigo(value:ArrayCollection,isPharma:Boolean):ArrayCollection
+			{
+				var codigos:Array = new Array();
+				var punteros:Array = new Array(); 
+				var listaTemp:ArrayCollection = new ArrayCollection;
+				new_sql = new Query(ObjectUtil.copy( value ) as ArrayCollection,['codigo','nombreCliente','trafico'],true);
+				codigos = new_sql.getPunteros(['codigo']);
+				
+				/*arregloFin = new ArrayCollection();*/
+				if(codigos.length > 0)
+				{
+					
+					for (var r:int = 0; r < codigos.length; r++) 
+					{
+						var tmpProd:ListaProductos_clase = new ListaProductos_clase();
+						punteros = new_sql.getPunteros([codigos[r]]);
+						var control:String = new_sql.getValoresCampo('control',punteros)[0].toLowerCase();
+						var nombreVendedor:String = new_sql.getValoresCampo('nombreVendedor',punteros)[0];
+						if(nombreVendedor)
+							nombreVendedor = nombreVendedor.toLowerCase();
+						var piezas:Number = new_sql.getSumarCampo('cant_productos',punteros);
+						
+						tmpProd.numFila = r + 1;
+						tmpProd.puntero = r;
+						tmpProd.monedaSimbolo = new_sql.getValoresCampo('monedaSimbolo',punteros)[0];
+						tmpProd.codigo = new_sql.getValoresCampo('codigo',punteros)[0];
+						tmpProd.concepto = new_sql.getValoresCampo('concepto',punteros)[0];
+						tmpProd.trafico = new_sql.getValoresCampo('trafico',punteros)[0];
+						tmpProd.totalClientes = new_sql.getPunteros([codigos[r]],'nombreCliente').length;
+						tmpProd.montoUnitario = new_sql.getValoresCampo('costo',punteros)[0];
+						tmpProd.totalPiezas = piezas;
+						tmpProd.montoTotal =  tmpProd.montoUnitario * piezas;
+						tmpProd.fee = new_sql.getValoresCampo('FEntrega',punteros)[0];
+						if(isPharma){
+							tmpProd.posicionesSql = sql.getPunteros([tmpProd.trafico.toLowerCase(),null,null,null,null,codigos[r],nombreVendedor,control]);
+						}else{
+							var arrayTemp:Array = new Array;
+							var array:Array= sql.getPunteros([tmpProd.trafico.toLowerCase(),null,null,null,null,codigos[r],nombreVendedor,control]);
+							for (var i:int = 0; i < array.length; i++) 
+							{
+								if(sql.universo.getItemAt(array[i]).nombreVendedor != 'Pharma')
+									arrayTemp.push(array[i]);
+							}
+							tmpProd.posicionesSql = arrayTemp;
+						}
+						tmpProd.familia = new_sql.getValoresCampo('familia',punteros)[0];
+						tmpProd.control = new_sql.getValoresCampo('control',punteros)[0];
+						tmpProd.nombreVendedor = new_sql.getValoresCampo('nombreVendedor',punteros)[0];
+						listaTemp.addItem(tmpProd);
+					}
+					/*actualizarLista();*/
+				}
+				return listaTemp;
+			}
+			
+			protected function cargarOpciones(event:FlexEvent):void
+			{
+				var arrayTemp:ArrayCollection = new ArrayCollection();
+				arrayTemp.addItem("--NINGUNA--");
+				arrayTemp.addItem("Concepto");
+				arrayTemp.addItem("FEE+");
+				arrayTemp.addItem("Catálogo");
+				comboOrdenar.dataProvider = arrayTemp;
+			}
+			
+			private var listaOrdenada:ArrayCollection = new ArrayCollection;
+			protected function cambiarOrden(event:IndexChangeEvent):void
+			{
+				listaOrdenada = new ArrayCollection;
+				if(comboOrdenar.selectedItem == "Concepto"){
+					listaOrdenada =  ModeloGestorCompras.ordenarAlfabeto(ObjectUtil.copy(listaProductos.dataProvider) as ArrayCollection,"concepto");
+					setTimeout(asignarOrdenamiento,300);
+				}
+				else if(comboOrdenar.selectedItem == "FEE+"){
+					listaOrdenada = ModeloGestorCompras.ordenarFecha(ObjectUtil.copy(listaProductos.dataProvider) as ArrayCollection,"fee");
+					setTimeout(asignarOrdenamiento,300);
+				}
+				else if(comboOrdenar.selectedItem == "Catálogo"){
+					listaOrdenada = ModeloGestorCompras.ordenarAlfabeto(ObjectUtil.copy(listaProductos.dataProvider) as ArrayCollection,"codigo");
+					setTimeout(asignarOrdenamiento,300);
+				}
+					
+			}
+			private function asignarOrdenamiento():void
+			{
+				listaProductos.dataProvider = listaOrdenada;
+				/*renumerarLista();*/
+				
+				for (var k:int = 0; k < listaProductos.dataProvider.length; k++) 
+				{
+					var curr:ListaProductos_clase = (listaProductos.dataProvider as ArrayCollection)[k];
+					curr.numFila = k + 1;
+				}
+				
+				for (var p:int = 0; p < listaFinal.dataProvider.length; p++) 
+				{
+					var curr1:ListaProductos_clase = (listaFinal.dataProvider as ArrayCollection)[p];
+					curr1.numFila = p + 1;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" gap="0" paddingBottom="10">
+		
+		<!--TITULO DE LA VISTA DE OPERACION-->
+		<!--HGROUP QUE CONTIENE EL COVER Y LOS DRAGS AND DROP-->
+		<s:HGroup width="100%" height="100%" verticalAlign="middle" gap="0" >
+			
+			<s:VGroup width="100%" height="100%" paddingLeft="-12" gap="0" paddingRight="-2">
+				<cover:CoverFlowGris id="cmpCoverflow" showIconos="false" vista="clasificacion"/>
+				
+				<s:Spacer height="2%" />
+				
+				
+				<!--BOTONERA-->
+				<botoneraTramitarCompra:botoneraTramitarCompra id="botonera" width="100%" botoneraClic="clicBotonera(event)" />	
+				<s:Spacer height="3%" />
+				
+				
+				
+				<!--BUSCADOR-->
+				<s:HGroup width="100%" verticalAlign="middle" paddingLeft="20" paddingRight="15" >
+					<s:Label  text="Ordenar Por:" fontWeight="bold" />
+					<s:ComboBox id="comboOrdenar" creationComplete="cargarOpciones(event)" change="cambiarOrden(event)" selectedIndex="0"/>
+					<s:Spacer width="100%" />
+					<s:TextInput id="txtBuscador" width="100%" maxWidth="{200}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" 
+								 changing="buscadorTxt(event)" prompt="Catálogo, Descripción"/>
+				</s:HGroup>  
+				<s:Spacer height="3%" />
+				
+				
+				
+				<!--ESTA ES LA LISTA DE PRODUCTOS PRINCIPAL-->
+				<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20">
+					<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" 
+							id="listaProductos" contentBackgroundAlpha="0" dragEnabled="true" dragMoveEnabled="true"
+							itemRenderer="mx.com.proquifa.vista.vistas.tramitarCompra.operacion.VistaTramitar_IR_Productos"
+							/>
+					<!--dragComplete="renumerarLista(event)"-->
+				</s:VGroup>  
+				
+				
+				<otros:division width="100%" />
+				
+				
+				<!--FOOTER 1 DE LA LISTA DE PRODUCTOS-->
+				<s:HGroup width="100%" paddingLeft="20" paddingRight="20" height="40" verticalAlign="middle" left="0" right="0">
+					<s:Spacer width="14%" />
+					<s:Label id="lblTotal" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="100%" />
+					<s:Label id="lblPiezas" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="100%" />
+					<s:Label id="lblMonto" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="100%" />
+					<s:Label id="lblClientes" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="9%" />
+				</s:HGroup>  
+				
+				
+				
+			</s:VGroup>  
+			
+			<otros:divisionDegradadoVertical height="85%" />
+			
+			
+			
+			<!--EMPIEZA EL SIGUIENTE VGROUP-->
+			
+			<s:VGroup width="100%" height="100%" paddingRight="20" paddingLeft="20" paddingTop="20" >
+				
+				
+				<!--  ENCABEZADO CON BOTON DE GENERAR  -->
+				<s:HGroup width="100%" >
+					<mx:Image source="{catalogoIconosBotoneras.getInstance().carrito_compra}" />
+					<s:Spacer width="100%" />
+					<mx:Image id="imgBoton" source="{catalogoIconosBotoneras.getInstance().generar_activo}" click="clicOC(event)" />
+				</s:HGroup>
+				
+				
+				
+				<!--  SECCION DE COMBOS  -->
+				<otros:LineaDivision id="linea" width="100%" height="2" color="#eceef0" top="0"/>
+				<s:HGroup width="100%" height="10%" paddingBottom="20" paddingTop="20" >
+					
+						
+					
+					
+					
+					<s:VGroup width="100%" height="100%" >
+						<s:Label text="Empresa que compra" styleName="tab_texto_14_Helvetica" fontWeight="bold"/>
+						<combos:comboEmpresa id="cmbCompra" width="100%" changing="validarBotonOC()"/>
+					</s:VGroup>  
+					<s:Spacer width="15%" />
+					<s:VGroup width="100%" height="100%" >
+						<s:Label text="Empresa de embarque" styleName="tab_texto_14_Helvetica" fontWeight="bold"/>
+						<combos:comboEmpresaEmbarque id="cmbEmbarque" width="100%" changing="validarBotonOC()"/>
+					</s:VGroup>  
+					
+					
+					
+					
+				</s:HGroup>  
+				<otros:LineaDivision width="100%" height="2" color="#eceef0" top="0"/>
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				<!--ESTA ES LA LISTA FINAL DONDE SE HACE EL DROP DE LOS PRODUCTOS-->
+				
+				<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" >
+					<s:Group width="100%" height="100%" >
+						
+						<s:VGroup id="grpLeyenda" width="100%" verticalCenter="0" >
+							<label:TituloNovecento_32 text="AGREGUE O ARRASTRE LOS PRODUCTOS DE" width="100%" textAlign="center" color="#c2c3c9"/>
+							<label:TituloNovecento_32 text="LA LISTA PARA GENERAR UNA ORDEN DE COMPRA" width="100%" textAlign="center" color="#c2c3c9"/>
+						</s:VGroup>  
+						
+						<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+								id="listaFinal" contentBackgroundAlpha="0" dropEnabled="true" dragDrop="entroItem(event)"
+								itemRenderer="mx.com.proquifa.vista.vistas.tramitarCompra.operacion.VistaTramitar_IR_ProductosTache"
+								nativeDragDrop="entraListaFinal(event)"
+								/>
+						
+					</s:Group>  
+				</s:VGroup>  
+				
+				
+				
+				<!--FOOTER 2 DE LA LISTA FINAL-->
+				<otros:LineaDivision width="100%" height="2" color="#eceef0" top="0"/>
+				<s:HGroup width="100%" paddingLeft="20" paddingRight="20" height="40" verticalAlign="middle" left="0" right="0">
+					<s:Spacer width="14%" />
+					<s:Label id="lblTotal2" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="10%" />
+					<s:Label id="lblPiezas2" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="100%" />
+					<s:Label id="lblMonto2" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="100%" />
+					<s:Label id="lblProductos" styleName="tab_texto_14_Helvetica"/>
+					<s:Spacer width="9%" />
+				</s:HGroup>  
+				
+				<s:Spacer height="2%" />
+				
+				
+				
+				<s:VGroup width="100%" height="18%" gap="3" paddingBottom="20" >
+						
+						
+						
+					<s:HGroup width="100%" height="100%" >
+						<label:TituloNovecento_18 text="TOTALES" />
+						<label:TituloNovecento_18 text="({monedaTexto})" fontWeight="normal"/>
+					</s:HGroup>  
+					<otros:division width="100%" />
+					
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+						<label:Texto_16_Helvetica text="Subtotal" fontSize="20" color="#424242" width="100%"/>
+						<label:TituloNovecento_18 id="lblSubtotal" text="{monedaSimbolo}0.00" width="100%" textAlign="right" color="#008894"/>
+					</s:HGroup>  
+					
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+						<label:Texto_16_Helvetica text="Impuestos" fontSize="20" color="#424242" width="100%"/>
+						<label:TituloNovecento_18 id="lblImpuestos" text="{monedaSimbolo}0.00" width="100%" textAlign="right" fontSize="20" color="#008894"/>
+					</s:HGroup>  
+					
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" >
+						<label:Texto_16_Helvetica text="Total" fontSize="24" color="#424242" width="100%"/>
+						<label:TituloNovecento_18 id="lblGranTotal" text="{monedaSimbolo}0.00" width="100%" textAlign="right" fontSize="22" color="#008894"/>
+					</s:HGroup>  
+
+						
+						
+						
+					
+				</s:VGroup>  
+				
+				
+				
+				
+			</s:VGroup>  
+			
+			
+			
+			
+			
+		</s:HGroup>
+		
+		
+		<!--DIVISION Y FOOTER-->
+		<otros:division width="100%" />
+				
+			<operacion:VistaTramitar_footerOperacion height="50" width="100%" />
+				
+				
+			
+		
+		
+	</s:VGroup>
+</s:Group>

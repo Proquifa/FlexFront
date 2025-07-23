@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" initialize="inicializarValidadores()" creationComplete="init()"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="710" height="435"
+			   skinClass="skins.titleWindow.skinTitleWindowBlanca" xmlns:largo="skins.botones.largo.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:largosinicono="skins.botones.largosinicono.*" xmlns:pqNet="skins.botones.pqNet.*"
+			   >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoDocumentosPendientesAEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoRecibido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.AutorizacionContrasenas;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.validators.NumberValidator;
+			import mx.validators.StringValidator;
+			
+			import skins.catalogos.catalogoAlertas;
+					
+			private var validarContrasena:StringValidator;
+			private var validarSituacion:StringValidator;
+			private var validarHora:NumberValidator;
+			public var idContacto:Number;
+			public var fechaOrigen:Date;
+			public var manejoModificado:String;
+			public var validarDocumentacion:Boolean;
+			public var fechaModificada:String;
+			public var empresaModificado:String;
+			public var medioModifcado:String;
+			public var tipoModificado:String;
+			public var referenciaModificado:String;
+			public var destinoModificado:String;
+			public var ComentariosModificados:String;
+			public var rutaArchivoOrigen:String;
+			public var rutaArchivosModificados:String;
+			public var fechaOriginal:String;
+			public var origenOriginal:String;
+			public var empresaOriginal:String;
+			public var MedioOriginal:String;
+			public var tipoOriginal:String;
+			public var referenciaOriginal:String;
+			public var destinoOriginal:String;
+			public var ComentariosOriginales:String;
+			public var nombreUsuario:String;
+			public var ingresoDoc:String;
+			public var folioModificado:Number;
+			private var urlRequest:URLRequest;
+			private var archivo:File = new File();
+			private var inicio:Number = 0;
+			private var listaValidar:ArrayCollection;
+			/* [Bindable]
+			[Embed(source="iconos/error.png")]
+			private var iconDenegado:Class; */
+			
+			/* [Bindable]
+			[Embed(source="iconos/error2.png")]
+			private var errorFatal:Class; */
+			
+			[Bindable]
+			public var _documentoModificar:DocumentoRecibido = new DocumentoRecibido();
+			
+			private function init():void{
+				//subir archivourlRequest = new URLRequest;
+				urlRequest = new URLRequest();
+				var url:String= "http://localhost:8080/Recepcion/UploadDocumentoR";
+				urlRequest.url = url;
+				urlRequest.method = URLRequestMethod.POST;	
+				
+			}
+			
+			private function inicializarValidadores():void{    
+				/* CamposRecepcion = new Recepcion(); */
+				this.txtPassword.text = "";
+				this.txtSituacion.text = "";
+				validarContrasena = new StringValidator();
+				validarContrasena.source = this.txtPassword;
+				validarContrasena.property = "text";
+				validarContrasena.requiredFieldError = "Debe escribir la contraseña";			
+				validarSituacion = new StringValidator();
+				validarSituacion.source = this.txtSituacion;
+				validarSituacion.property = "text";
+				validarSituacion.requiredFieldError = "Debe escribir la situación"	
+			} 
+			
+			private function cerrar():void{
+				this.txtPassword.text = "";
+				this.txtSituacion.text = "";
+				PopUpManager.removePopUp( this );
+				this.visible = false;
+			}
+			
+			private function validarInfo():Boolean {
+				var contrasenaValidada:ValidationResultEvent = this.validarContrasena.validate();			
+				var situacionValidada:ValidationResultEvent = this.validarSituacion.validate();
+				var validacionCompleta:Boolean = new Boolean();
+				if (contrasenaValidada.type == ValidationResultEvent.VALID && 
+					situacionValidada.type == ValidationResultEvent.VALID) {
+					return validacionCompleta = true;
+				}else{
+					return validacionCompleta = false;
+				}
+			}
+			
+			/**
+			 * Metodo que recibe del Mapa si esta correcto la contraseña o no.  
+			 */ 
+			public function set contrasenaValidaAutorizacion(valido:Boolean):void{
+				if(this.inicio == 0){
+					return;
+				}else{
+					if (valido == false ){
+						//Alert.show("Contraseña incorrecta","Error",Alert.OK,this,null);
+						/* var event:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.ECUCHA_POP_UP_ALERTAPQNET);
+						event.alertaEncabezado = "Error";
+						event.alertaMensaje = "Contraseña incorrecta";
+						dispatchEvent(event); */
+						alertaSingleton.show(catalogoAlertas.ERR_usuarioContraseniaNoValida, catalogoAlertas.TIT_ERR);
+						return;
+					}else{
+						this.modificarDocumentacion();
+						this.inicio = 0;	
+						cerrar();
+					}
+				}
+			}           
+			private function guardarInfo():void{                 
+				//if (validarDocumentacion){
+					if (validarInfo()){
+						//Verificar contraseña
+						this.inicio = 1;
+						var usuario:String = new String;
+						/*usuario = AutorizacionContrasenas.obtenUsuarioPorContraseña( this.txtPassword.text.toLowerCase() )*/
+						usuario =obtenUsuarioPorContraseña( this.txtPassword.text.toLowerCase() )
+						if (usuario == null || usuario == ""){
+							//Alert.show("Contraseña incorrecta","Error");
+							/* var event:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.ECUCHA_POP_UP_ALERTAPQNET);
+							event.alertaEncabezado = "Error";
+							event.alertaMensaje = "Contraseña incorrecta";
+							dispatchEvent(event); */
+							alertaSingleton.show(catalogoAlertas.ERR_usuarioContraseniaNoValida, catalogoAlertas.TIT_ERR);
+							return;
+						}
+						var evento:EventoGenerico = new EventoGenerico ( EventoGenerico.VALIDAR_AUTORIZACION );
+						var empleadoAValidar:Empleado = new Empleado();
+						empleadoAValidar.usuario = usuario;
+						empleadoAValidar.password = this.txtPassword.text;
+						evento.empleado = empleadoAValidar;
+						dispatchEvent( evento );						  
+					}else{	   	   
+						//Alert.show("Información incompleta","Información incompleta",Alert.OK,this,null);		
+						/* var event:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.ECUCHA_POP_UP_ALERTAPQNET);
+						event.alertaEncabezado = "Error";
+						event.alertaMensaje = "Información incompleta";
+						dispatchEvent(event); */
+						alertaSingleton.show( catalogoAlertas.ADV_informacionIncompleta, catalogoAlertas.TIT_ADV_atencion);
+					}  
+				/* }else {
+					//Alert.show("Información incompleta","Información incompleta",Alert.OK,this,null);
+					var bivent:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.ECUCHA_POP_UP_ALERTAPQNET);
+					bivent.alertaEncabezado = "Error";
+					bivent.alertaMensaje = "Información incompleta";
+					dispatchEvent(bivent);
+				}  */ 	  
+			}
+			/**
+			 * Recibe la inyeccion q trae todos los datos de la llamada GUARDADA
+			 */
+			public function set recibeDocumentosModificado ( datos:Boolean ):void{
+				if(datos == false){
+					return;
+				}
+				if(datos == true){
+					//Alert.show("Documento modificado", "Operación exitosa");
+					/* var event:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.ECUCHA_POP_UP_ALERTAPQNET);
+					event.alertaEncabezado = "Operación exitosa";
+					event.alertaMensaje = "Documento modificado";
+					dispatchEvent(event); */
+					alertaSingleton.show( catalogoAlertas.CONF_AIESC_documentoModificado, catalogoAlertas.TIT_CONF_operacionExitosa );
+				}
+			}
+			
+			
+			private function modificarDocumentacion():void{
+				var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.MODIFICAR_DOCUMENTACION_EXISTENTE);
+				var documentacion:DocumentoRecibido = new DocumentoRecibido();
+				_documentoModificar.partida = 0; 
+				_documentoModificar.origen = "Cliente";
+				_documentoModificar.ingreso = DatosGlobales.getInstance()._usuario.usuario;
+				_documentoModificar.FOrigen = 0;
+				_documentoModificar.esHijo = false;				
+				
+				evento.documentoNuevo = _documentoModificar;
+				dispatchEvent( evento );
+				 
+				/* if(_documentoModificar.habilitadoCliente == false){
+					var pend:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.CREAR_PENDIENTE_HABILITAR_CLIENTE);
+					pend.folio = _documentoModificar.folio.toString();
+					dispatchEvent(pend);  
+				} */
+				
+			}
+			
+			public function set recibeListaValidar ( datos:ArrayCollection ):void{
+				listaValidar = datos;
+			}
+			private function obtenUsuarioPorContraseña( contrasena:String ):String{
+				if( contrasena == null || contrasena == "" ){
+					return "";
+				}
+				var usuario:String;
+				var usuarioTemp:String;
+				var pass:String
+				for(var i:int; i < listaValidar.length;i++){
+					usuarioTemp = (listaValidar[i] as String).split(",")[0];
+					pass = (listaValidar[i] as String).split(",")[1];
+					if(pass == contrasena){
+						usuario = usuarioTemp 
+						break;						
+					}
+				}
+				return usuario;
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" paddingLeft="35" paddingRight="35">
+		<label:labelSubtitulo text="AUTORIZACIÓN" fontSize="30"/>
+		<otros:divisionHueca width="100%" />
+		<s:HGroup width="100%" horizontalAlign="right" paddingTop="15" paddingBottom="0">
+			<s:Label text="Situación:" fontFamily="Tahoma" fontSize="15" fontWeight="bold"/>
+			<s:TextArea width="530" height="190" id="txtSituacion" fontStyle="normal"/>
+		</s:HGroup>
+		<s:HGroup width="100%" horizontalAlign="right" paddingBottom="15" paddingTop="20">
+			<s:Label text="Contraseña:" fontFamily="Tahoma" fontSize="15" fontWeight="bold" />
+			<s:TextInput width="530" height="27" displayAsPassword="true" id="txtPassword"/>
+		</s:HGroup>
+		<otros:divisionHueca width="100%"/>
+		<s:HGroup horizontalCenter="0" gap="330" paddingTop="15">
+			<pqNet:botonPqNetLargo label="Cancelar" click="cerrar()" width="150" />
+			<pqNet:botonPqNetLargo label="Autorizar" click="guardarInfo()" width="150" />
+		</s:HGroup>
+	</s:VGroup>
+</s:TitleWindow>

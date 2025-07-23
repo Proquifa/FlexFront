@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.*"
+		 width="100%" height="100%"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.pagos.EventoConsultaPagos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			
+			private var keys:Object;
+			private var infoPagosETvsET:ArrayCollection;			
+			public function set obtenerListaPagos($pagos:ArrayCollection):void
+			{
+				if($pagos == null)
+					return;
+				
+				infoPagosETvsET = new ArrayCollection;
+				chartETvsFT.recibirDataProvider = new ArrayCollection;
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($pagos) as ArrayCollection).source;
+				
+				if(arrayTemp.length > 0)
+				{
+					if(arrayTemp.length > 1)
+						arrayTemp.sortOn("tiempoPago",Array.DESCENDING);
+					
+					/**
+					 * Se obtiene un array con ET o FT con el fin de saber si vienen los dos o sólo uno 
+					 *  sin duplicarse, que será el que controlará el for para las sumas.
+					 * */
+					keys = new Object();
+					var arrayTotalETvsFT:Array = new Array();
+					arrayTotalETvsFT = arrayTemp.filter(quitaDuplicados);
+					
+					if(arrayTotalETvsFT.length>1)
+						arrayTotalETvsFT.sortOn("tiempoPago",Array.DESCENDING);
+					
+					FormarLosETvsFT(arrayTotalETvsFT,arrayTemp,"ETVSFT",infoPagosETvsET);
+					
+					var eventoPasarInfo:EventoConsultaPagos = new EventoConsultaPagos(EventoConsultaPagos.PASAR_INFO_A_ETVSFT_SECUNDARIA);
+					eventoPasarInfo.arregloExtra = (ObjectUtil.copy(infoPagosETvsET) as ArrayCollection);
+					dispatchEvent(eventoPasarInfo); 
+					
+					chartETvsFT.recibirDataProvider = infoPagosETvsET;
+					
+					//Para liberar Memoria
+					arrayTemp = new Array();
+					arrayTotalETvsFT = new Array();
+					keys = new Object();
+				}
+				else
+				{
+					chartETvsFT.recibirDataProvider = new ArrayCollection;
+				}
+			}
+			
+			private function FormarLosETvsFT(TotalETvsFT:Array,etvsftInfo:Array,etiqueta:String,infoETvsFT:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPagos:int;
+				var totalMonto:Number;
+				var totalProveedores:int;
+				
+				var keysPagoProveedorFT:Object= new Object();
+				var keysProveedores:Object= new Object();
+				var keys2:Object = new Object();
+				keys = new Object();
+				
+				var currentPartidaPago:PagoProveedor; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				
+				for(var i:int =0; i<TotalETvsFT.length; i++){
+					j=0;
+					totalPartidas =0;
+					totalPagos =0;
+					totalMonto =0;
+					totalProveedores =0;
+					currentPartidaPago = etvsftInfo[j] as PagoProveedor;
+					
+					while( (TotalETvsFT[i] as PagoProveedor).tiempoPago == currentPartidaPago.tiempoPago ){
+						
+						totalPartidas += currentPartidaPago.cantidad;
+						totalPiezas += currentPartidaPago.totalPiezas;
+						totalMonto += currentPartidaPago.montoDolares;
+						
+						/**
+						 * Para el conteo de pagos, danto más peso a las partidas que estan FT
+						 * */
+						if( currentPartidaPago.enTiempo == "FT"){
+							
+							if(!keysPagoProveedorFT.hasOwnProperty(currentPartidaPago.ordenCompra)){
+								keysPagoProveedorFT[currentPartidaPago.ordenCompra] = currentPartidaPago.ordenCompra;
+								totalPagos++
+							}
+							if(!keysProveedores.hasOwnProperty(currentPartidaPago.nombreProveedor)){
+								keysProveedores[currentPartidaPago.nombreProveedor] = currentPartidaPago.nombreProveedor;
+								totalProveedores++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentPartidaPago.ordenCompra) && !keysPagoProveedorFT.hasOwnProperty(currentPartidaPago.ordenCompra)){
+								keys[currentPartidaPago.cpedido]=currentPartidaPago.ordenCompra;
+								totalPagos++
+							}
+							if(!keys2.hasOwnProperty(currentPartidaPago.nombreProveedor) && !keysProveedores.hasOwnProperty(currentPartidaPago.nombreProveedor)){
+								keys2[currentPartidaPago.nombreProveedor] = currentPartidaPago.nombreProveedor;
+								totalProveedores++;
+							}
+						}
+						
+						etvsftInfo.shift();
+						if(etvsftInfo.length >0)
+							currentPartidaPago = etvsftInfo[j] as PagoProveedor;
+						else
+							currentPartidaPago =new PagoProveedor();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalETvsFT[i] as PagoProveedor).tiempoPago .toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.clientes_proveedores = totalProveedores;
+					itemResumenConsulta.totalPagos = totalPagos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoETvsFT.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+				
+				/**
+				 * Se necesita ordenar inversamente primero la suma de los ET y luego los FT para invertir colores en la gráfica.
+				 * */ 
+				if(infoETvsFT.length>0){
+					if(infoETvsFT.length == 1){
+						if((infoETvsFT[0] as ResumenConsulta).conceptoResultado == "FT"){
+							itemResumenConsulta = new ResumenConsulta();
+							itemResumenConsulta.conceptoResultado ="ET";
+							itemResumenConsulta.etiqueta = "ETVSFT";
+							itemResumenConsulta.total = 0;
+							itemResumenConsulta.piezasTotal = 0;
+							itemResumenConsulta.totalPedidos = 0;
+							itemResumenConsulta.totalClientes = 0;
+							itemResumenConsulta.partidas = 0;
+							infoETvsFT.addItemAt(itemResumenConsulta,0);
+						}
+					} else{
+						var sortField:SortField = new SortField();
+						sortField.name = "conceptoResultado";
+						sortField.numeric = false;
+						
+						var sort:Sort = new Sort();
+						sort.fields = [sortField];
+						infoETvsFT.sort = sort;
+						infoETvsFT.refresh();
+					} 
+				}
+			}
+			
+			private function quitaDuplicados(item:PagoProveedor, idx:uint, _clientes:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.tiempoPago)){
+					return false;
+				}else{
+					keys[item.tiempoPago]= item.tiempoPago;
+					return true;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<graficaPie:GraficaChartGrisTituloAbajoConsultaPagos id="chartETvsFT" tipoGrafica="pieSeriesVS" tituloGrafica ="ET vs FT" habilitarClickItem="true"/>
+</s:Group>

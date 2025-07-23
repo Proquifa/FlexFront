@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="100%" xmlns:linkButton="skins.skin.linkButton.*" 
+		  xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*" 
+		  xmlns:label="skins.skin.label.*">
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable]
+			private var _infoGeneral:Facturacion;
+			private var _fpor:String="";
+			
+			public function recibeDatos( $dato:EventoConsultaFacturacion2013, fPor:String ):void{
+				if( $dato == null ){
+					return;
+				}
+				_infoGeneral = $dato.listaPrepago[0];
+				if ( _infoGeneral.fechaInicioPortal != null ){
+					vgFacturaPortal.visible = true; vgFacturaPortal.includeInLayout = true;
+					if (_infoGeneral.document != null ){
+						lnkVer.visible = true; lnkVer.includeInLayout = true;
+						lblPendiente.visible = false; lblPendiente.includeInLayout = false;
+					}
+					else{
+						lnkVer.visible = false; lnkVer.includeInLayout = false;
+						lblPendiente.visible = true; lblPendiente.includeInLayout = true;
+					}
+				}
+				else{
+					vgFacturaPortal.visible = false; vgFacturaPortal.includeInLayout = false;
+				}
+				_fpor = fPor;
+			}
+			
+			private	var file:File = new File();
+			private function verPDF( $tipoDocumento:String ):void{
+				var path:Object;
+				var urlreq:URLRequest = new URLRequest();
+				if( $tipoDocumento == 'xml' ){
+					file = new File();
+					file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+					
+					var path:Object = Util.rutaFecha(_infoGeneral.fechaFacturacion);
+					var urlGeenral:String = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA;
+					var request:URLRequest = new URLRequest();
+					var variables:URLLoader = new URLLoader();
+					variables.dataFormat = URLLoaderDataFormat.BINARY;
+					request = new URLRequest( urlGeenral + this._fpor +'/' + path.ruta + this._infoGeneral.factura +'.xml' ); 
+					variables.addEventListener(Event.COMPLETE, completeHandler);
+					variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+					try{
+						variables.load(request);
+					} 
+					catch (error:Error){
+						trace("Unable to load URL: " + error);
+					}
+				}else if( $tipoDocumento == 'factura'){
+					var path:Object = Util.rutaFecha(_infoGeneral.fechaFacturacion);
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + this._fpor +"/" + path.ruta + _infoGeneral.factura +".pdf";
+					navigateToURL( urlreq );
+				}else if( $tipoDocumento == 'pedido'){
+					path = Util.rutaFecha(_infoGeneral.fechaR);
+					urlreq.url = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + path.ruta + _infoGeneral.documento +".pdf";
+					navigateToURL( urlreq );
+				}
+				
+			}
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+				file.save( bytes, this._infoGeneral.factura +'.xml' );	
+			}	
+			private function avisaGuardadoArchivos(event:Event):void{
+				file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+				alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+			}
+			
+			private function verComprobante():void{
+				var urlreq:URLRequest;
+				var ruta:String;
+				var path:Object = Util.rutaNueva(this._infoGeneral.document);
+				ruta = RutasPdF.GENERAL_RUTA + RutasPdF.COMPROBANTE_PORTAL + path.ruta + this._infoGeneral.document + ".pdf";
+				urlreq = new URLRequest( ruta );
+				navigateToURL( urlreq );
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" paddingLeft="15" paddingBottom="10">
+		<label:Titulo_w100  text="Fecha tramitación PSC:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaTramitacion}"/>
+		<label:Titulo_w100  text="Fecha facturación por adelantado:" />
+		<label:FechaYHora fecha="{_infoGeneral.fechaFacturacion}"/>
+		<label:Titulo_w100  text="Pedido:" />
+		<linkButton:LinkButtonPQNet2 label="{_infoGeneral.pedido}" click="verPDF('pedido')"/>
+		<label:Titulo_w100  text="Factura:" />
+		<linkButton:LinkButtonPQNet2 label="{_infoGeneral.factura}" click="verPDF('factura')"/>
+		<label:Titulo_w100 id="lblArchXML" text="Archivo XML:" />
+		<linkButton:LinkButtonPQNet2 label="{ _infoGeneral.factura }.xml" click="verPDF('xml')"/>
+		<label:Titulo_w100  text="Facturó:" />
+		<label:Texto_w100  text="{_infoGeneral.responsable}" />
+		<label:Titulo_w100  text="Tipo de cambio:" />
+		<label:Texto_w100  text="${ UtilsFormatosNumericos.precisionADosDecimalesConComas( _infoGeneral.tcambio ) }" />
+		<label:Titulo_w100  text="Tipo:" />
+		<label:Texto_w100  text="{ _infoGeneral.tipo }" />
+		<label:Titulo_w100  text="Medio:" />
+		<label:Texto_w100  text="{ _infoGeneral.medio}" />
+	</s:VGroup>  
+	<s:VGroup width="100%" id="vgFacturaPortal" paddingBottom="10">
+		<panelCtaDetalle:SubHeader2 label="CARGAR FACTURA A PORTAL"/>
+		<s:VGroup width="100%" height="100%" paddingLeft="15">
+			<panelCtaDetalle:FechasInicioFinyTiempoTotal fechaInicio="{_infoGeneral.fechaInicioPortal}" fechaFin="{_infoGeneral.fechaFinPortal}"/>
+			<label:Titulo_w100  text="Realizó:" />
+			<label:Texto_w100  text="{_infoGeneral.contacto}" />
+			<label:Titulo_w100  text="Comprobante portal:" />
+			<linkButton:LinkButtonPQNet2 id="lnkVer" label="Ver" click="verComprobante()" />
+			<label:Texto_w100 id="lblPendiente" text="Pendiente" />
+		</s:VGroup>  
+	</s:VGroup>
+</s:VGroup>

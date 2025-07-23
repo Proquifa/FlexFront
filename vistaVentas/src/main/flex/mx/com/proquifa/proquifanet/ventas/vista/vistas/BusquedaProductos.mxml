@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Panel xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" borderColor="#E45731" backgroundColor="#FFFFFF" initialize="inicializar();"
+		 fontSize="12" title="Búsqueda de Producto" cornerRadius="10"
+		 xmlns:maps="mx.com.proquifa.proquifanet.ventas.vista.mapas.*" >
+	<mx:states>
+		<mx:State name="AgregarMarca">
+			<mx:RemoveChild target="{cmbFabricantes}"/>
+			<mx:AddChild relativeTo="{hbox1}" position="lastChild">
+				<mx:TextArea height="22" width="100%"/>
+			</mx:AddChild>
+			<mx:RemoveChild target="{btnAgregar}"/>
+			<mx:AddChild relativeTo="{hbox1}" position="lastChild" target="{btnAgregar}"/>
+		</mx:State>
+	</mx:states>
+	<mx:Script>
+		<![CDATA[
+			import mx.messaging.ChannelSet;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.controls.Alert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.Pendiente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.InformacionVentana;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.Producto;
+			import mx.controls.List;
+			import mx.com.proquifa.proquifanet.ventas.vista.servicios.PartidasAInvestigarServicio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.Cotizacion;
+			import mx.events.ListEvent;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.Usuario;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.ventas.vista.eventos.PartidasAInvestigarEvento;
+		
+			[Bindable]
+			private var bandera:int = 0;
+			[Bindable]
+			private var _unidades:ArrayCollection = null;
+			[Bindable]
+			private var _fabricantes:ArrayCollection = null;
+			[Bindable]
+			private var _tipoProductos:ArrayCollection = null;
+			[Bindable]
+			private var _pendiente:ArrayCollection = null;
+			[Bindable]
+			private var _partidasCotizacion:ArrayCollection = null;				
+			[Bindable]
+			private var _datosProductos:PartidaCotizacion = null;			
+			
+			
+			[Bindable]
+			public var idCliente:Number;
+			[Bindable]
+			public var nombreCliente:String;
+			
+			[Bindable]	
+			private var indice:int = 0;
+			[Bindable]	
+			private var indice2:int = 0;
+			
+			private var canal:AMFChannel;
+			private var canales:ChannelSet;
+						
+			private  function cambiarTextoAMarca():void{
+				if(this.bandera == 0){
+					this.bandera = 1;
+					this.currentState='AgregarMarca';  
+					this.btnAgregar.label = "X";
+				}else{
+					this.bandera = 0;
+					this.currentState = '';
+					this.btnAgregar.label = "+";
+				}
+			}
+			
+			/**
+			 * Inicializa la aplicaci&oacute;n.
+			 */
+			private function inicializar():void{
+				
+				//id y url definidas en el services-config.xml, mismo que esta en web-inf/flex/services-config.xml
+				canal = new AMFChannel("my-polling-amf", "http://localhost:8080/pqNet/messagebroker/amfpolling");
+				//instanciamos el conjunto canalees
+				canales = new ChannelSet();
+				//agregamos el canal
+				canales.addChannel( canal );
+				productorPendientes.channelSet = canales;
+				
+				this.lblCliente.label = this.nombreCliente;
+				var evento:PartidasAInvestigarEvento = null;
+				evento = new PartidasAInvestigarEvento(PartidasAInvestigarEvento.TRAER_UNIDADES);
+				dispatchEvent( evento );
+				evento = new PartidasAInvestigarEvento(PartidasAInvestigarEvento.TRAER_FABRICANTES);
+				dispatchEvent( evento );
+				evento = new PartidasAInvestigarEvento( PartidasAInvestigarEvento.TRAER_TIPO_PRODUCTOS);	
+				dispatchEvent( evento );	
+						
+				var usuario:String = new String;
+				var idCliente1:Number = new Number;	
+				var infoVentana:InformacionVentana = new InformacionVentana();	
+				usuario = "lterrones";				
+				idCliente1 = this.idCliente;
+					
+				/* idCliente = infoVentana.informacion; */				
+				evento = new PartidasAInvestigarEvento ( PartidasAInvestigarEvento.TRAER_COTIZACIONES );				
+ 				evento.usuario = usuario;
+				evento.idCliente = idCliente1;
+				dispatchEvent( evento );				
+			}
+			
+			/**
+			 * Recibe las unidades del servicio.
+			 */
+			public function set unidades( datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}
+				this._unidades = datos;
+			}
+			
+			/**
+			 * Recibe los fabricantes del servicio.
+			 */
+			public function set fabricantes ( datos:ArrayCollection ): void{
+				if(datos == null){
+					return;
+				}
+				this._fabricantes = datos;
+			}
+			
+			/**
+			 * Recibe el tipo de producto del servicio.
+			 */
+			public function set tipoProductos ( datos:ArrayCollection ): void{
+				if(datos == null){
+					return;
+				}
+				this._tipoProductos = datos;
+			}
+			
+			/**
+			 * Recibe la inyeccion de pendientes del servicio.
+			 */
+			public function set pendiente ( datos:ArrayCollection ): void{
+				if(datos == null){
+					return;
+				}
+				this._pendiente = datos;
+			}
+			
+			/**
+			 * Recibe la inyeccion de pendientes del servicio para las partidas de la cotizacion
+			 * Por el folioCotiza y por Tipo.
+			 */
+			public function set partidasCotizacion ( datos:ArrayCollection ): void{
+				if(datos == null){
+					return;
+				}
+				this._partidasCotizacion = datos;
+			}			
+			
+			/**
+			 * Recibe la inyeccion q trae todos los datos del producto
+			 */
+			public function set datosProducto ( datos:PartidaCotizacion ): void{
+				if(datos == null){
+					return;
+				}				
+				this.txtNombre.text = datos.concepto
+				this.txtCatalogo.text = datos.codigo;
+				this.txtCantidad.text = datos.presentacion + " ";
+				this.cmbUnidades.text = datos.unidades;
+				this.cmbFabricantes.text = datos.fabrica;
+				this.cmbTipoProducto.text = datos.tipo;
+				this.txtCodigo.text = datos.codigo;
+				this._datosProductos = datos;
+			}
+			
+			/**
+			 * Recibe la inyeccion q trae todos los datos del producto GUARDADO
+			 */
+			public function set recibeProductoGuardados ( datos:Boolean ):void{
+				if(datos == false){
+					return;
+				}
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = "haz este pendiente";
+				this.productorPendientes.send( mensaje );
+			}			
+			
+			/**
+			 * funcion que manda a llamr el evento para cargar las partidas de la cotizacion
+			 */
+			 
+			private function itemClickCotizacion(event:ListEvent):void{
+				indice = 0;
+				indice2 = 0;
+				if(event.columnIndex == 1){
+					this.txtCotizacion.text = this.grdCotizacion.selectedItem.folioCotizacion;
+					var evento:PartidasAInvestigarEvento = null;
+					var cotiza:String = new String;
+					var tipo:String = new String;
+					cotiza = this.grdCotizacion.selectedItem.folioCotizacion;
+					tipo = "Buscar producto F/S";
+					evento = new PartidasAInvestigarEvento( PartidasAInvestigarEvento.TRAER_PARTIDAS_COTIZACIONES );
+					evento.folioCotizacion = cotiza;
+					evento.tipo = tipo;
+					dispatchEvent( evento );
+				}
+			}			
+			
+			private function itemClicProductos(event:ListEvent):void{				
+				indice = 0;
+				indice2 = 0;
+				var evento:PartidasAInvestigarEvento = null;
+				var idPCotiza:Number = new Number;				
+				idPCotiza =  (this.grdPartidasCotizacion.selectedItem as PartidaCotizacion).idPartidaCotizacion; 
+				evento = new PartidasAInvestigarEvento( PartidasAInvestigarEvento.TRAER_PRODUCTOS );	
+				evento.idPCotiza = idPCotiza;			
+				dispatchEvent( evento );
+			}
+			
+			/**
+			 * funcion para mandar a llamar el evento q guarda el producto 			
+			*/
+			private function guardarProducto():void{
+				//validar antes de guardar
+											
+				/* if(this.txtNombre.text == "" ){
+					Alert.show("Falta el codigo","Pon mas atenciòn XD");
+					return;	
+				}
+				if(this.txtCatalogo.text = "" == "" ){
+					Alert.show("Falta el catalogo","Pon mas atenciòn XD");
+					return;	
+				}
+				if(this.cmbFabricantes.text = "" == "" ){
+					Alert.show("Faltan Fabricante","Pon mas atenciòn XD");
+					return;	
+				}
+				if(this.txtCantidad.text == "" ){
+					Alert.show("Faltan la cantidad de la presentacion","Pon mas atenciòn XD");
+					return;	
+				}
+				if(this.cmbTipoProducto.text = "" ){
+					Alert.show("Falta el tipo del Producto","Pon mas atenciòn XD");
+					return;	
+				} 
+				if(this.cmbUnidades.text = "" ){
+					Alert.show("Falta la Unidad","Pon mas atenciòn XD");
+					return;	
+				}  */
+				var Producto_partidaCotizacion:PartidaCotizacion = new PartidaCotizacion();				
+				var evento:PartidasAInvestigarEvento = null;	
+				Producto_partidaCotizacion.codigo = this.txtCatalogo.text;
+				Producto_partidaCotizacion.concepto = this.txtNombre.text;
+				Producto_partidaCotizacion.cotizacion = this.txtCotizacion.text;
+				Producto_partidaCotizacion.fabrica = this.cmbFabricantes.text;
+				Producto_partidaCotizacion.idPartidaCotizacion = this._datosProductos.idPartidaCotizacion;				
+				Producto_partidaCotizacion.presentacion = this.txtCantidad.text;
+				Producto_partidaCotizacion.cantidad = this._datosProductos.cantidad;
+				Producto_partidaCotizacion.tipo = this.cmbTipoProducto.text;
+				Producto_partidaCotizacion.unidades = this.cmbUnidades.text;
+				Producto_partidaCotizacion.variasMarcas = this.chkVariasMarcas.selected;
+				
+				var producto:Producto = new Producto();
+				producto.concepto = this.txtNombre.text;
+				producto.fabrica = this.cmbFabricantes.text;
+				producto.cantidad = this._datosProductos.cantidad + " ";
+				producto.unidad = this.cmbUnidades.text;
+				producto.tiempoEntrega = "2 a 3 semanas";
+				
+				Producto_partidaCotizacion.producto = producto;
+				
+				var pendiente:Pendiente = new Pendiente();
+			    pendiente.docto = this.txtCotizacion.text;
+			    pendiente.partida = this._datosProductos.idPartidaCotizacion.toString();
+			    pendiente.fechaFin = null;			  
+			    pendiente.tipoPendiente = "Buscar producto F/S";
+			    pendiente.responsable = "CTirado";				
+				evento = new PartidasAInvestigarEvento( PartidasAInvestigarEvento.GUARDAR_PRODUCTO_INVESTIGADO );
+				evento.partidaCotizacion = Producto_partidaCotizacion;
+				evento.pendiente = pendiente;
+				dispatchEvent( evento );				 
+				/* Producto_partidaCotizacion.idProducto; */				
+			}			
+			 
+			/**
+			 *  Con esta funci&oacute;n se manda allamar el Menu de Pendientes pendienteBuscarProducto
+			 */
+			private function cancelar():void{
+				var evento:EventoGenerico = new EventoGenerico( EventoGenerico.ABRIR_VENTANA_EN_PENDIENTES );
+				var infoVentana:InformacionVentana = new InformacionVentana();
+				infoVentana.idVentana = "pendienteBusquedaProductos";
+				evento.informacion = infoVentana;
+				this.dispatchEvent( evento );	 				
+			}	
+			
+			/**
+			 * Con esta funcion mostramos el idCliente en el Grid
+			 */
+			private function agrgarIndice(objeto:Object, renglon:DataGridColumn):Number{
+				if (indice2 == 0){
+					if(indice == 0){
+						indice = -1;
+						indice2++;
+					}
+				}
+				indice++;
+				return indice;					
+			}					
+		]]>
+	</mx:Script>
+	<mx:Producer id="productorPendientes"  fault="Alert.show(event.faultDetail,'Error')"
+		acknowledge="Alert.show('Pendiente Enviado','Mensaje Informativo')"/>
+	<!--destination="pendientes"-->	
+	
+	<maps:PartidasAInvestigarMapa/>
+	
+	<mx:LinkButton label="Cliente" width="100%" textAlign="center" color="blue" id="lblCliente" textDecoration="underline"/>
+	<mx:VBox label="Datos" width="100%" height="100%" borderStyle="solid" x="0" y="74" paddingLeft="15" paddingRight="15" paddingTop="15" paddingBottom="15"  borderColor="#000000" backgroundColor="#FFFFFF">	
+		<mx:VBox width="100%"  height="50%">			
+			<mx:HBox width="100%">			
+					<mx:Label text="Cotizaciones" width="30%"  fontWeight="bold"/>
+					<mx:Spacer width="5%" />
+					<mx:Label text="XXXXXX-XXXX" id="txtCotizacion" width="100%" fontWeight="bold"/>					
+					<mx:LinkButton label="3" fontWeight="normal" color="blue" textDecoration="underline"/>			
+			</mx:HBox>
+			<mx:HBox width="100%" height="100%">
+				<mx:DataGrid  id="grdCotizacion" dataProvider="{this._pendiente}" itemClick="itemClickCotizacion( event )" width="30%" height="100%" textAlign="center">
+					<mx:columns>
+						<mx:DataGridColumn headerText="#" width="50" labelFunction="agrgarIndice"/>
+						<mx:DataGridColumn headerText="Cotizacion" dataField="folioCotizacion">
+							<mx:itemRenderer>
+								<mx:Component>
+									<mx:LinkButton textDecoration="underline" color="blue" label="{data.folioCotizacion}"/>
+								</mx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</mx:columns>
+				</mx:DataGrid>
+				<mx:Spacer width="5%"/>
+				<mx:DataGrid width="100%" id="grdPartidasCotizacion" dataProvider="{this._partidasCotizacion}" itemClick="itemClicProductos( event )" height="100%" textAlign="center">
+						<mx:columns>
+						<mx:DataGridColumn headerText="#" width="50" labelFunction="agrgarIndice"/>
+						<mx:DataGridColumn headerText="Concepto" dataField="concepto"/>
+						<mx:DataGridColumn headerText="Cantidad" dataField="cantidad"/>
+						<mx:DataGridColumn headerText="Tipo" dataField="tipo"/>
+						<mx:DataGridColumn headerText="Cotizable" >
+							<mx:itemRenderer>
+								<mx:Component>
+									<mx:LinkButton color="blue" label="Asociar" textDecoration="underline"/>
+								</mx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</mx:columns>
+				</mx:DataGrid>
+			</mx:HBox>		
+		</mx:VBox>
+		<mx:VBox width="100%" height="1%"/>
+		<mx:HBox width="100%" borderStyle="solid"  paddingBottom="5" height="50%" paddingLeft="10" paddingTop="10">				
+			<mx:VBox width="42%">
+					<mx:Label text="Catálogo, ISB-N, # Serie, Chemical Abstract Number(CAS):" fontWeight="bold"/>								
+					<mx:TextArea height="22" width="100%" id="txtCatalogo"/>					
+					<mx:Label text="Nombre:" fontWeight="bold"/>
+					<mx:TextArea width="100%" id="txtNombre" />
+					<mx:Label text="Presentación" fontWeight="bold"/>
+					<mx:Grid width="100%"  borderStyle="solid" borderThickness="1" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4">					
+						<mx:GridRow width="100%">
+							<mx:GridItem>
+								<mx:Label text="Cantidad:" fontWeight="bold"/>
+							</mx:GridItem>
+							
+							<mx:GridItem/>
+							
+							<mx:GridItem>
+								<mx:Label text="Unidad:" fontWeight="bold"/>
+							</mx:GridItem>							
+						</mx:GridRow>
+						
+						<mx:GridRow width="100%">							
+							<mx:GridItem>
+								<mx:TextArea height="22" id="txtCantidad" textAlign="center"/>
+							</mx:GridItem>
+							
+							<mx:GridItem>
+								<mx:Label text="-" width="100%" textAlign="center"/>
+							</mx:GridItem>
+							<mx:GridItem>
+								<mx:ComboBox id="cmbUnidades" dataProvider="{this._unidades}" labelField="valor"/>
+							</mx:GridItem>								
+						</mx:GridRow>							
+					</mx:Grid>
+					<mx:Label text="Marca:" fontWeight="bold"/>
+					<mx:HBox width="100%" id="hbox1">
+						<mx:ComboBox width="100%" id="cmbFabricantes" dataProvider="{this._fabricantes}" labelField="valor"/>
+						<mx:Button label="+" id="btnAgregar" click="this.cambiarTextoAMarca();"/>
+						<mx:TextArea visible="false" id="txtCodigo"/>
+					</mx:HBox>
+					<mx:CheckBox label="Es posible ofrecer en la cotización distintas marcas" id="chkVariasMarcas"/>
+			</mx:VBox>
+			<mx:VBox width="8%">				
+				<mx:Label text="Tipo:" fontWeight="bold"/>
+				<mx:ComboBox width="100%" id="cmbTipoProducto" dataProvider="{this._tipoProductos}" labelField="valor" />
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" paddingRight="10" paddingBottom="10">
+				<mx:Label text="Comentarios adicionales para la búsqueda:" fontWeight="bold"/>
+				<mx:TextArea  width="100%" height="100%" backgroundColor="#FFF9A0" id="txtComentarios"/>
+			</mx:VBox>			
+		</mx:HBox>	
+		
+	</mx:VBox>
+	<mx:ControlBar horizontalAlign="right" width="100%">		
+		<mx:Button id="btnCancelar" label="CANCELAR" click="cancelar();"/>   		
+		<mx:Button id="btnGuardar" label="Guardar" click="guardarProducto();"/>
+	</mx:ControlBar>	
+</mx:Panel>
+

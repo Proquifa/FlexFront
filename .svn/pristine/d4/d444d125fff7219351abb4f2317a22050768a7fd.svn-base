@@ -1,0 +1,542 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:vista="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.empresaDelGrupo.vistas.*" 
+		 xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*"
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:catalogos="skins.skin.comun.catalogos.*" 
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		 xmlns:pqNet1="skins.botones.pqNet.*"
+		 xmlns:chekbox="skins.skin.chekbox.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*" 
+		 height="100%" 
+		 width="100%" 
+		 creationComplete="init()" 
+		 >
+	
+	<fx:Declarations>
+		
+		<s:Parallel id="showGrpDarVigencia" duration="250">
+			<s:Fade alphaFrom="0" alphaTo="1" startDelay="200"/>
+			<s:Resize heightFrom="0" heightTo="63" />
+		</s:Parallel>
+		
+		<s:Parallel id="hideGrpDarVigencia" duration="250">
+			<s:Fade alphaFrom="1" alphaTo="0" duration="50"/>
+			<s:Resize heightFrom="63" heightTo="0" />
+		</s:Parallel>
+		
+	</fx:Declarations>
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.grupoEmpresarial.EventoCatalogoGrupoEmpresarial;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.AsignacionFolio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Importacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.alertPqNet.alertPqNet;
+			import mx.controls.Alert;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			import skins.plantillaproquifa.barratitulo.barraTitulo;
+			
+			[Bindable]
+			private var _listaComboLinea:ArrayCollection = new ArrayCollection( [{valor:'Factura',llave:1}, {valor:'Nota de crédito',llave:2} ] );
+			[Bindable]
+			private var _empresaSeleccionada:Empresa;
+			[Bindable]
+			private var _listaFolios:ArrayCollection;
+			[Bindable]
+			private var _listaNotas:ArrayCollection;
+			
+			private var _idEmpresaSeleccionada:int = 0;
+			
+			private function init():void
+			{
+				grpPadron.addEventListener(MouseEvent.CLICK,chksPadron,true,0,false);
+				btnBarraPrecio.dataProvider = _listaComboLinea;
+				btnBarraPrecio.selectedIndex = 0;
+				var evento:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.OBTENER_EMPRESAS_DEL_GRUPO );
+				dispatchEvent( evento );
+			}
+			
+			private function muestraEmpresa():void
+			{
+				_idEmpresaSeleccionada = this.lstEmpresas.selectedIndex;
+				this._empresaSeleccionada = new Empresa();
+				this._empresaSeleccionada = this.lstEmpresas.selectedItem;
+				this.grupoConceptos._idempresa = _empresaSeleccionada.idEmpresa;
+				var evt:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.OBTENER_CONCEPTOS );
+				evt.idEmpresa = ( this.lstEmpresas.selectedItem as Empresa ).idEmpresa;
+				dispatchEvent( evt );
+				var evtF:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.OBTENER_FOLIOS );
+				evtF.idEmpresa = ( this.lstEmpresas.selectedItem as Empresa ).idEmpresa;
+				dispatchEvent( evtF );
+				ocultarMostrarFolios();
+				
+				if(_empresaSeleccionada.importador)
+					grpPadron.visible = true;
+				else
+					grpPadron.visible = false;
+				
+				if(_empresaSeleccionada.padronImportador)
+				{
+					chkSi.selected = true;
+					chkNo.selected = false;
+				}
+				else
+				{
+					chkSi.selected = false;
+					chkNo.selected = true;
+				}
+			}
+			
+			public function set recibeEmpresasDelGrupo( $datos:ArrayCollection ):void
+			{
+				if( $datos == null ){
+					return;
+				}
+				this.lstEmpresas.dataProvider = new ArrayCollection();
+				var $temp:Empresa = new Empresa();
+				$temp.totalEmpresas = $datos.length;
+				$datos.addItem( $temp );
+				for( var i:int = 0; i < $datos.length; i++ ){
+					( $datos[i] as Empresa ).numFila = i+1;
+				}
+				this.lstEmpresas.dataProvider = ObjectUtil.copy( $datos ) as ArrayCollection;
+				this.lstEmpresas.selectedIndex = _idEmpresaSeleccionada;
+				muestraEmpresa();
+			}
+			
+			public function set ObtenFolios( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				this.gridFolios.dataProvider = new ArrayCollection();
+				_listaFolios= new ArrayCollection();
+				_listaNotas = new ArrayCollection();
+				for( var i:int = 0; i < $datos.length; i++ ){
+					if( ( $datos[i] as AsignacionFolio ).tipo == "Factura" ){
+						( $datos[i] as AsignacionFolio ).numFila = _listaFolios.length + 1;
+						this._listaFolios.addItem( $datos[i] )
+					}else{
+						( $datos[i] as AsignacionFolio ).numFila = _listaNotas.length + 1;
+						this._listaNotas.addItem( $datos[i] )
+					}
+				}
+				if( btnBarraPrecio.selectedIndex == 0 ){
+					this.gridFolios.dataProvider = ObjectUtil.copy( _listaFolios ) as ArrayCollection;
+					if( _listaFolios.length > 0){
+						this.txtInicio.text = ( ( gridFolios.dataProvider[0] as AsignacionFolio ).folioFinal + 1 ).toString();
+					}else{
+						this.txtInicio.text = '1';
+					}
+				}else if(btnBarraPrecio.selectedIndex == 1 ){
+					this.gridFolios.dataProvider = ObjectUtil.copy( _listaNotas ) as ArrayCollection;
+					if( _listaNotas.length > 0){
+						this.txtInicio.text = ( ( gridFolios.dataProvider[0] as AsignacionFolio ).folioFinal + 1 ).toString();
+					}else{
+						this.txtInicio.text = '1';
+					}
+				}
+				
+			}
+			
+			private function habilitaAgregarFolio():void{
+				if( this.txtFinal.text != '' && this.txtInicio.text != '' ){
+					imgAgrega.enabled = true;
+				}else{
+					imgAgrega.enabled = false;
+				}
+			}
+			
+			private function guardaFolio():void{
+				
+				if( this.txtFinal.text != '' && this.txtInicio.text != '' && (parseInt( this.txtFinal.text) > parseInt( this.txtInicio.text) ) ){
+					var evtF:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.GUARDAR_FOLIO );
+					evtF.folios = new AsignacionFolio();
+					evtF.folios.folioInicio = parseInt( txtInicio.text );
+					evtF.folios.folioFinal = parseInt( txtFinal.text );
+					evtF.folios.idEmpresa = this._empresaSeleccionada.idEmpresa;
+					evtF.folios.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+					if( btnBarraPrecio.selectedIndex == 0){
+						evtF.folios.tipo = "Factura";
+					}else{
+						evtF.folios.tipo = "Nota credito";
+					}
+					dispatchEvent( evtF );
+				}
+			}
+			
+			public function set avisoGuardaFolio( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				imgAgrega.enabled = false;
+				this.txtFinal.text = '';
+				this.txtInicio.text = '';
+				var evento:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.OBTENER_EMPRESAS_DEL_GRUPO );
+				dispatchEvent( evento );
+			}
+			
+			public function set confirmaEliminacionConcepto( $dato:Boolean ):void{
+				if( $dato == false ){
+					return;
+				}
+				muestraEmpresa();
+			}
+			
+			public function set confirmaAgregaConceptos( $dato:int ):void{
+				if( isNaN($dato) || $dato == 0 ){
+					return;
+				}
+				muestraEmpresa();
+				alertaSingleton.show( "Se agrego el concepto de factura exitosamente" );
+			}
+			
+			protected function btnBarraPrecio_clickHandler():void
+			{
+				// TODO Auto-generated method stub
+				if( btnBarraPrecio.selectedIndex == 0 ){
+					this.gridFolios.dataProvider = ObjectUtil.copy( _listaFolios ) as ArrayCollection;
+					if( gridFolios.dataProvider.length > 0 ){
+						this.txtInicio.text = ( ( gridFolios.dataProvider[0] as AsignacionFolio ).folioFinal + 1 ).toString();
+					}else{
+						this.txtInicio.text = '1';
+					}
+				}else{
+					this.gridFolios.dataProvider = ObjectUtil.copy( _listaNotas ) as ArrayCollection;
+					if( gridFolios.dataProvider.length > 0 ){
+						this.txtInicio.text = ( ( gridFolios.dataProvider[0] as AsignacionFolio ).folioFinal + 1 ).toString();
+					}else{
+						this.txtInicio.text = '1';
+					}
+				}
+			}
+			private function asignaTipoFacturacion():void{
+				var evento:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.ASIGNA_TIPO_FACTURA );
+				evento.idEmpresa = this._empresaSeleccionada.idEmpresa;
+				evento.facElecronica = chkFacElectronica.selected;
+				evento.facMatriz = chkFacMatriz.selected;
+				dispatchEvent( evento );
+			}
+			
+			public function set confirmaTipoFactura( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				var evento:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.OBTENER_EMPRESAS_DEL_GRUPO );
+				dispatchEvent( evento );
+				alertaSingleton.show("Se asigno el tipo de facturación");
+			}
+			private function ocultarMostrarFolios():void{
+				if( !_empresaSeleccionada.facturaElectronica ){
+					foliosGroup.visible = false;  gridFolios.visible = false; foliosSpacer1.visible = false;
+					gridFolios.includeInLayout = false;
+					foliosSpacer1.includeInLayout = false;
+					foliosGroup.includeInLayout = false; 
+					foliosSpacer1.visible = false; foliosDivisio2.visible = false;
+				}else{
+					foliosGroup.visible = true;  gridFolios.visible = true; foliosSpacer1.visible = true;
+					gridFolios.includeInLayout = true;
+					foliosSpacer1.includeInLayout = false;
+					foliosGroup.includeInLayout = true; 
+					foliosSpacer1.visible = true;  foliosDivisio2.visible = true;
+				}
+			}
+			
+			protected function botonpqnetlargo1_clickHandler(event:MouseEvent):void
+			{
+				
+				
+			}
+			
+			protected function asignarRoles($check:Boolean=false):void
+			{
+				if(chkImportador.selected && !$check)
+					mostrarPadron();
+				
+				if(!chkImportador.selected)
+					chkSi.selected = false;
+				
+				var event:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial(EventoCatalogoGrupoEmpresarial.ASIGNA_ROLES);
+				event.datosImportacion = new Importacion;
+				event.datosImportacion.idEmpresa = _empresaSeleccionada.idEmpresa;
+				event.datosImportacion.compra = chkComprador.selected;
+				event.datosImportacion.vende = chkVendedor.selected;
+				event.datosImportacion.importa = chkImportador.selected;
+				event.datosImportacion.exporta = chkExportador.selected;
+				event.datosImportacion.padronImportacion = chkSi.selected;
+				dispatchEvent(event);
+			}
+			
+			public function set confirmaTipoRol( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				var evento:EventoCatalogoGrupoEmpresarial = new EventoCatalogoGrupoEmpresarial( EventoCatalogoGrupoEmpresarial.OBTENER_EMPRESAS_DEL_GRUPO );
+				dispatchEvent( evento );
+				alertaSingleton.show("Se asigno el tipo de rol");
+			}
+			
+			private var padronImpor:Boolean;
+			protected function chksPadron(event:MouseEvent):void
+			{
+				chkSi.selected = false;
+				chkNo.selected = false;
+				
+				if(event.target.id == "chkSi")
+				{
+					chkSi.selected = true;
+					chkNo.enabled = false;
+					padronImpor = true;
+				}
+				else
+				{
+					chkSi.selected = false;
+					chkNo.selected = true;
+					padronImpor = false;
+				}
+				asignarRoles(true);
+			}
+			
+			private function mostrarPadron():void
+			{
+				if(grpPadron.visible == false)
+				{
+					grpPadron.visible = true;
+					chkSi.selected = false;
+					chkNo.selected = true;
+					padronImpor = false;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<!--<s:HGroup width="50%"  verticalAlign="middle">
+	<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_empresa}"/>
+	<label:labelSubtitulo height="100%" text="EMPRESAS DEL GRUPO" verticalAlign="bottom"/>
+	</s:HGroup> JM -->
+	<!--<s:Spacer height="15"/>-->
+	<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" id="grpProveedores" horizontalAlign="center" gap="10">
+		<s:HGroup width="100%">			
+			<catalogos:TituloParaVistaDefaultEnCatalogos id="btnSalir" labelIzquierdo="EMPRESAS DEL GRUPO" labelDerecho="[CONFIGURACIÓN]"/>
+		</s:HGroup>
+		<otros:divisionGruesa width="100%"/>
+		<s:Spacer height="1"/>
+		<s:Scroller  width="100%" height="100%" >
+			<s:HGroup width="100%" height="100%">
+				<s:Scroller  width="17%" height="100%" >
+					<s:VGroup width="100%" height="100%" gap="0">
+						<!--<otros:division width="100%"/>-->
+						<s:List width="100%" height="100%" borderVisible="false" id="lstEmpresas" mouseDown="muestraEmpresa()" horizontalScrollPolicy="off"
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.empresaDelGrupo.vistas.itemRenderer.CatalogoEmpresasITRListaEmpresas" />
+					</s:VGroup>
+				</s:Scroller>
+				<s:Spacer width="15"/>
+				<otros:VDivisionHueca height="100%"/>
+				<s:Spacer width="15"/>
+				<s:Scroller  width="50%" height="100%"  >
+					<s:VGroup width="100%"  height="100%">
+						<s:Label width="100%" textAlign="center" fontSize="18" text="{ _empresaSeleccionada.razonSocial }"/>
+						<s:Label color="0x{catalogoColores.LABEL_GRIS}" width="100%" textAlign="center" id="lblRfcEmpresa" text="{ _empresaSeleccionada.rfcEmpresa }"/>
+						<s:Spacer height="15"/>
+						<s:HGroup width="100%" horizontalAlign="center">
+							<label:Titulo text="GENERALES" />
+						</s:HGroup>
+						<otros:division width="100%" />
+						<s:HGroup paddingTop="10" width="100%" >
+							<s:VGroup width="100%"  >
+								<label:Titulo text="Identificador:" />
+								<label:Texto text="{ _empresaSeleccionada.nomenclaturaEmpresa }" />
+							</s:VGroup>
+							<s:VGroup width="100%" >
+								<label:Titulo text="Razón Social:" />
+								<label:Texto text="{ _empresaSeleccionada.razonSocial }" />
+							</s:VGroup>
+							<s:VGroup width="100%" >
+								<label:Titulo text="RFC:" />
+								<label:Texto text="{ _empresaSeleccionada.rfcEmpresa }" />
+							</s:VGroup>
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<s:VGroup width="67%" >
+								<label:Titulo text="Dirección fiscal:" />
+								<label:Texto text="{ _empresaSeleccionada.direccionString }" />
+							</s:VGroup>
+							<s:VGroup width="33%" >
+								<label:Titulo text="Roles:" />
+								<s:HGroup width="100%">
+									<s:CheckBox label="Comprador" id="chkComprador" selected="{ _empresaSeleccionada.comprador }" change="asignarRoles()" fontSize="13" fontWeight="bold"/>
+									<s:Spacer width="20%" />
+									<s:CheckBox label="Vendedor" id="chkVendedor"  selected="{ _empresaSeleccionada.vendedor }" change="asignarRoles()" fontSize="13" fontWeight="bold" />
+								</s:HGroup>
+								<s:HGroup width="100%">
+									<s:CheckBox label="Importador" id="chkImportador" selected="{ _empresaSeleccionada.importador }"  change="{asignarRoles()}" fontSize="13" fontWeight="bold"/>
+									<s:Spacer width="20%" />
+									<s:CheckBox label="Exportador" id="chkExportador" selected="{ _empresaSeleccionada.exportador }" change="asignarRoles()" fontSize="13" fontWeight="bold" />
+								</s:HGroup>
+								
+								<s:VGroup id="grpPadron" width="100%">
+									<label:Titulo text="¿Cuenta con Padrón de Importador?"  width="100%" textAlign="center"/>
+									<s:HGroup width="100%" gap="15" horizontalAlign="center">
+										<chekbox:radioDefaultPQNet id="chkSi" tipoCheck="circuloRadio" label="Si" />
+										<chekbox:radioDefaultPQNet id="chkNo" tipoCheck="circuloRadio" label="No" />
+									</s:HGroup>
+								</s:VGroup>
+								
+							</s:VGroup>
+						</s:HGroup>
+						<s:Spacer height="15"/>
+						<s:HGroup width="100%" horizontalAlign="center">
+							<label:Titulo text="CRITERIOS" />
+						</s:HGroup>
+						<otros:division width="100%" />
+						<s:HGroup width="100%" horizontalAlign="center" paddingTop="10">
+							<s:CheckBox label="Facturación Electronica" id="chkFacElectronica" selected="{ _empresaSeleccionada.facturaElectronica }" change="asignaTipoFacturacion()" fontSize="13"/>
+							<s:Spacer width="20%" />
+							<s:CheckBox label="Facturación en Matríz" id="chkFacMatriz"  selected="{ _empresaSeleccionada.facturaMatriz }" change="asignaTipoFacturacion()" fontSize="13"/>
+						</s:HGroup>
+						<!--<s:HGroup width="100%">
+						<s:Label width="50%" color="0x{ catalogoColores.LABEL_VERDE_AZUL }" fontSize="14" fontWeight="bold" text="GENERALES" textAlign="left"/>
+						<s:Spacer width="15"/>
+						<s:Label width="50%" color="0x{ catalogoColores.LABEL_VERDE_AZUL }" fontSize="14" fontWeight="bold" text="CRITERIOS" textAlign="left"/>
+						</s:HGroup>
+						<s:Spacer height="10" />
+						<s:HGroup width="100%">
+						<s:BorderContainer width="50%" height="100%" backgroundAlpha="0.5"  backgroundColor="#CCCCCC" borderVisible="false">
+						<s:VGroup height="100%" width="100%" paddingTop="20" paddingLeft="25" paddingRight="25" paddingBottom="20">
+						<s:Label  text="Identificador:" fontWeight="bold"/>
+						<s:Label text="{ _empresaSeleccionada.nomenclaturaEmpresa }" />
+						<s:Spacer height="10" />
+						<s:Label text="Razón Social:" fontWeight="bold"/>
+						<s:Label text="{ _empresaSeleccionada.razonSocial }" width="100%" maxDisplayedLines="2"  />
+						<s:Spacer height="10" />
+						<s:Label text="RFC:" fontWeight="bold"/>
+						<s:Label text="{ _empresaSeleccionada.rfcEmpresa }"  />
+						<s:Spacer height="10" />
+						<s:Label text="Dirección fiscal:" fontWeight="bold"/>
+						<s:Label id="lblCalle" text="{ (_empresaSeleccionada.calle != null ? _empresaSeleccionada.calle : '' ) }" width="100%" maxDisplayedLines="2"/>
+						<s:Label id="lblColoniaDelegacion" width="100%" maxDisplayedLines="2" 
+						text="{ (_empresaSeleccionada.colonia != null ? _empresaSeleccionada.colonia + ' ':'' )  +  ( _empresaSeleccionada.delegacion != null ? _empresaSeleccionada.delegacion:'')}" />
+						<s:Label id="lblEstadoCP" width="100%" maxDisplayedLines="2" 
+						text="{ (_empresaSeleccionada.ciudad != null ? _empresaSeleccionada.ciudad + ' ':'') +  (_empresaSeleccionada.cp != null ? _empresaSeleccionada.cp:'' )}" />
+						<s:Label id="lblPais" text="{ ( _empresaSeleccionada.pais != null ? _empresaSeleccionada.pais:'') }" />
+						</s:VGroup>
+						</s:BorderContainer>
+						<s:Spacer width="15"/>
+						<s:BorderContainer width="50%" height="100%" backgroundAlpha="0.5" backgroundColor="#CCCCCC" borderVisible="false" >
+						<s:VGroup width="100%" height="100%" paddingTop="20" paddingLeft="25" paddingRight="25" paddingBottom="20">
+						<s:CheckBox label="Facturación Electronica" id="chkFacElectronica" selected="{ _empresaSeleccionada.facturaElectronica }" change="asignaTipoFacturacion()" fontSize="13"/>
+						<s:Spacer height="5"/>
+						<s:CheckBox label="Facturación en Matríz" id="chkFacMatriz"  selected="{ _empresaSeleccionada.facturaMatriz }" change="asignaTipoFacturacion()" fontSize="13"/>
+						</s:VGroup>
+						</s:BorderContainer>
+						</s:HGroup>-->
+						<s:Spacer height="15"/>
+						<otros:divisionHueca width="100%"/>
+						<s:Spacer height="15"/>
+						<!--	<s:Scroller verticalScrollPolicy="off" width="100%" id="foliosGroup">-->
+						<!--<s:HGroup width="100%" minWidth="700">-->
+						<s:HGroup width="100%" id="foliosGroup">
+							<s:HGroup width="50%" height="100%"  horizontalAlign="center">
+								<s:Label height="100%" color="0x{catalogoColores.LABEL_ROJO}" fontSize="16" text="FOLIOS" textAlign="right" verticalAlign="middle"/>
+								<s:ButtonBar  id="btnBarraPrecio" labelField="valor" horizontalCenter="0" click="btnBarraPrecio_clickHandler()" width="250"/>
+							</s:HGroup>
+							<s:HGroup width="50%" verticalAlign="middle"  horizontalAlign="center">
+								<s:Label fontWeight="bold" text="Inicial:" height="100%" verticalAlign="middle"/>
+								<s:TextInput width="50" id="txtInicio" restrict="0-9" change="habilitaAgregarFolio()" fontStyle="normal"/>
+								<s:Spacer width="15"/>
+								<s:Label fontWeight="bold" text="Final:" height="100%" verticalAlign="middle"/>
+								<s:TextInput width="50" id="txtFinal" restrict="0-9" change="habilitaAgregarFolio()" fontStyle="normal"/>
+								<s:Image source="{catalogoIconosBotones.getInstance().flechaabajo}" click="guardaFolio()" id="imgAgrega" /> 
+							</s:HGroup>
+						</s:HGroup>
+						<!--</s:Scroller>-->
+						<s:Spacer height="15" id="foliosSpacer1"/>
+						<otros:division width="100%"  id="foliosDivisio2"/> 
+						<pqNet:dataGridPqNet width="100%" height="100%" minHeight="300" id="gridFolios" porcentajesColumnasPq="{[5,19,19,19,20,15]}" rowHeight="30" >
+							<pqNet:columns>
+								<mx:DataGridColumn headerText="#" dataField="numFila"/>
+								<mx:DataGridColumn headerText="{'Folio\nInicial'}" dataField="folioInicio"/>	
+								<mx:DataGridColumn headerText="{'Folio\nFinal'}" dataField="folioFinal"/>	
+								<mx:DataGridColumn headerText="{'Fecha de\ngeneración'}" dataField="formatoFecha"/>	
+								<mx:DataGridColumn headerText="Registró" dataField="nombreEmpleado" />	
+								<mx:DataGridColumn >
+									<mx:headerRenderer>
+										<fx:Component>
+											<s:MXItemRenderer width="100%" height="100%" autoDrawBackground="false">
+												<fx:Script>
+													<![CDATA[
+														import skins.catalogos.catalogoColores;
+														
+													]]>
+												</fx:Script>
+												<s:Label color="0x{ catalogoColores.LABEL_VERDE_AZUL}" text="CONSUMO" fontWeight="bold" 
+														 width="100%" height="100%" verticalAlign="middle" textAlign="center"/>
+											</s:MXItemRenderer>
+										</fx:Component>
+									</mx:headerRenderer>
+									<mx:itemRenderer>
+										<fx:Component>
+											<s:MXItemRenderer width="100%" autoDrawBackground="false">
+												<fx:Script>
+													<![CDATA[
+														import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.AsignacionFolio;
+														
+														import skins.catalogos.catalogoColores;
+														
+														override public function set data(value:Object):void{
+															super.data = value;
+															if( (data as AsignacionFolio).foliosConsumidos == (data as AsignacionFolio).rangoFoliosAsignados ){
+																lblITRConsumo.setStyle( 'color', '0x' + catalogoColores.LABEL_ROJO );
+															}else{
+																lblITRConsumo.setStyle( 'color', '0x' + catalogoColores.LABEL_VERDE_AZUL );
+															}
+														}
+													]]>
+												</fx:Script>
+												<s:Label color="0x{ catalogoColores.LABEL_AZUL_FUERTE}" text="{ (data as AsignacionFolio).foliosConsumidos + '/' + (data as AsignacionFolio).rangoFoliosAsignados }" 
+														 width="100%" textAlign="center" id="lblITRConsumo"/>
+											</s:MXItemRenderer>
+										</fx:Component>
+									</mx:itemRenderer>
+								</mx:DataGridColumn>
+							</pqNet:columns>
+						</pqNet:dataGridPqNet>
+					</s:VGroup>
+				</s:Scroller>
+				<s:Spacer width="15" />
+				<otros:VDivisionHueca height="100%"/>
+				<s:Spacer width="15" />
+				<s:Scroller width="33%" height="100%">
+					<vista:CatalogoEmpresasDelGrupoConceptos width="100%" height="100%" id="grupoConceptos" paddingLeft="5" paddingRight="5"/>
+				</s:Scroller>
+			</s:HGroup>
+		</s:Scroller>
+		<!--<s:Spacer height="15"/>
+		<otros:divisionGruesa width="100%"/>
+		<s:Spacer height="15"/>
+		<s:HGroup width="100%"  verticalAlign="middle">
+		<s:Spacer width="100%"/>
+		<pqNet1:botonPqNetLargo  label="Salir" click="botonpqnetlargo1_clickHandler(event)" id="btnSalir"/>
+		</s:HGroup>-->
+	</contenedores:VGroupConPaddingStandardPqNet>
+</s:Group>

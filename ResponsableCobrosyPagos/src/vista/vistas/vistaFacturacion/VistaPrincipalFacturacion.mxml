@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" paddingBottom="20" paddingTop="20" paddingLeft="30" paddingRight="30"
+		  xmlns:s="library://ns.adobe.com/flex/spark"  
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*" xmlns:otros="skins.otros.*" xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:linkButton="skins.skin.linkButton.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.SolicitudCFDI;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.mysuite.RequestTransactionResponse;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.utils.ObjectUtil;
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import vista.eventos.EventoFacturacionGeneral;
+			import vista.eventos.EventoFacturaciones;
+			
+			[Bindable]
+			private var _universoFacturas:ArrayCollection;
+			[Bindable]
+			private var _empresaSeleccionada:String = "";
+			
+			
+			
+			/* private function init():void{
+			this.addEventListener( ResizeEvent.RESIZE, redimensiona );
+			}
+			private function redimensiona(evt:Event):void{
+			this.gridFacturas.porcentajesColumnasPq= new Array([3,8,11,25,11,11,11,7,7,4 ]); 
+			} */
+			
+			
+			/*
+			private function descargaArchivo():void
+			{
+			(outerDocument as VistaPrincipalFacturacion).descargaArchivo();
+			}
+			
+			*/
+			
+			///////////////////Guardar Archivos PDF y MXL
+			public function set recibirFacturas( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				_universoFacturas = new ArrayCollection();
+				_listaGrid = new ArrayCollection();
+				lstEmpresas.dataProvider = new ArrayCollection();
+				_universoFacturas = ObjectUtil.copy( $datos ) as ArrayCollection;
+				for( var i:int = 0; i < $datos.length; i++ ){
+					if( lstEmpresas.dataProvider.length == 0){
+						($datos[i] as Factura).numFila = 1;
+						lstEmpresas.dataProvider.addItem( $datos[i] );
+					}
+					var esRepetido:Boolean = false;
+					for( var n:int = 0; n < lstEmpresas.dataProvider.length ; n++ ){
+						if( ($datos[i] as Factura).rfc_FPor ==  (lstEmpresas.dataProvider[n] as Factura).rfc_FPor ){
+							esRepetido = true;
+						}
+					}
+					if( !esRepetido ){
+						($datos[i] as Factura).numFila = lstEmpresas.dataProvider.length + 1;
+						lstEmpresas.dataProvider.addItem( $datos[i] );
+					}
+				}
+				//agrega total empresas 
+				var facTemporal:Factura = new Factura();
+				facTemporal.totalAgrupado = lstEmpresas.dataProvider.length;
+				lstEmpresas.dataProvider.addItem( facTemporal );
+				if( lstEmpresas.dataProvider != null && lstEmpresas.dataProvider.length > 0 && _empresaSeleccionada == ""){
+					lstEmpresas.selectedIndex = 0;
+					_empresaSeleccionada = (lstEmpresas.dataProvider[0] as Factura).rfc_FPor;
+					muestraFacturasPorEmpresa( _empresaSeleccionada );
+				}else{
+					for( var m:int = 0; m < lstEmpresas.dataProvider.length; m++ ){
+						if( _empresaSeleccionada == (lstEmpresas.dataProvider[m] as Factura).rfc_FPor){
+							lstEmpresas.selectedIndex = m;
+							m = lstEmpresas.dataProvider.length;
+						}
+					}
+					setTimeout(retardo,700);					
+				}
+			}
+			private function retardo():void{
+				lstEmpresas.ensureIndexIsVisible( lstEmpresas.selectedIndex );
+				muestraFacturasPorEmpresa( _empresaSeleccionada );
+			}
+			[Bindable]
+			private var _listaGrid:ArrayCollection;
+			private function muestraFacturasPorEmpresa( $dato:String ):void{//$dato:String  es el frc de la empresa seleccionada
+				_empresaSeleccionada = $dato;
+				_listaGrid = new ArrayCollection();
+				for( var u:int = 0; u < _universoFacturas.length; u++ ){
+					if( ( _universoFacturas[u] as Factura).rfc_FPor == _empresaSeleccionada){
+						this.lblEmpresa.text = (_universoFacturas[u] as Factura).razonSocialFPor;
+						(_universoFacturas[u] as Factura).numFila = (gridFacturas.dataProvider as ArrayCollection ).length + 1;
+						( _listaGrid ).addItem( _universoFacturas[u] );
+					}
+				}
+				
+			}
+			
+			[Bindable]
+			private var _listaFacturasPorCancelar:ArrayCollection;
+			
+			private var _soloUnaVez:Boolean;
+			
+			private function warningGuardar():void{
+				_listaFacturasPorCancelar = new ArrayCollection();
+				for( var i:int = 0; i < gridFacturas.dataProvider.length; i++ ){
+					if( (gridFacturas.dataProvider[i] as Factura).cancelada ){
+						_listaFacturasPorCancelar.addItem( gridFacturas.dataProvider[i] );
+					}
+				}
+				if( _listaFacturasPorCancelar.length > 0 ){
+					_soloUnaVez = true;
+					var cadena:String = "";
+					_listaFacturasPorCancelar.length == 1 ? cadena = 'Se cancelara 1 factura \n¿Desea Continuar?': cadena = 'Se cancelara ' + _listaFacturasPorCancelar.length + ' facturas \n¿Desea Continuar?';
+					alertaSingleton.show(cadena,catalogoAlertas.TIT_ADV_atencion,'FacturacionCancelarFacturas','','','SI','NO')
+				}else{
+					alertaSingleton.show('Es necesario seleccionar al menos una factura',catalogoAlertas.TIT_ADV_operacionImposible)
+				}
+			}
+			private var _numeroFacturaEnviado:Number;
+			public function set recibeDelAlert( $dato:ResultAlert ):void{
+				if( $dato == null || $dato.vieneD == null ){
+					return;
+				}
+				if( _soloUnaVez ){
+					if( $dato.vieneD == "FacturacionCancelarFacturas" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						enviaListaFacturasCanceladas();
+					}
+				}
+			}
+			private function enviaListaFacturasCanceladas():void{
+				if( _listaFacturasPorCancelar.length > 0){
+					var evt:EventoFacturaciones = new EventoFacturaciones( EventoFacturaciones.CANCELA_FACTURA );
+					_numeroFacturaEnviado = (_listaFacturasPorCancelar[0] as Factura).numeroFactura;
+					evt.cfdi = new SolicitudCFDI();
+					evt.cfdi.empresaFactura =  (_listaFacturasPorCancelar[0] as Factura).facturadoPor;
+					evt.cfdi.serie =  (_listaFacturasPorCancelar[0] as Factura).serie; 
+					evt.cfdi.folio = (_listaFacturasPorCancelar[0] as Factura).numeroFactura.toString();
+					evt.cfdi.accion = "Cancelar";
+					dispatchEvent( evt );
+					_listaFacturasPorCancelar.removeItemAt( 0 );
+					btnCancelar.enabled = false;
+				}else if( _listaFacturasPorCancelar.length == 0){
+					alertaSingleton.show( _cadenaResumen , "RESUMEN" ); 
+					_cadenaResumen = "";
+					btnCancelar.enabled = true;
+					var evtConsulta:EventoFacturacionGeneral = new EventoFacturacionGeneral( EventoFacturaciones.CONSULTA_FACTURAS);
+					dispatchEvent( evtConsulta );	
+				}
+				
+			}
+			private var _cadenaResumen:String = "";
+			public function set cancelaFactura( $dato:RequestTransactionResponse):void{
+				if( $dato == null ){
+					return;
+				}
+				if( !$dato.requestTransactionResult.response.result ){
+					_cadenaResumen = _cadenaResumen + 'La fatura No ' + _numeroFacturaEnviado + ' genero un error\n';
+				}else{
+					_cadenaResumen = _cadenaResumen + 'La fatura No ' + _numeroFacturaEnviado + ' fue cancelada correctamente\n';
+				}
+				enviaListaFacturasCanceladas();
+			}
+			public function set errorCancelaFactura( $dato:Boolean):void{
+				if( !$dato ){
+					return;
+				}
+				_cadenaResumen = _cadenaResumen + 'La fatura No ' + _numeroFacturaEnviado + ' genero un error\n';
+				enviaListaFacturasCanceladas();
+			}
+			
+		
+			
+		]]>
+	</fx:Script>
+	<s:Spacer height="10"/>
+	<s:Label text="FACTURACIÓN" width="100%" fontSize="20" fontWeight="bold" />
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="15"/>
+	<s:HGroup width="100%" height="100%">
+		<s:VGroup width="20%" height="100%" gap="0">
+			
+			<s:List width="100%" height="100%" id="lstEmpresas" itemRenderer="vista.vistas.vistaFacturacion.facturacionIR.FacturacionListaFPorIR" borderVisible="false"
+					click="muestraFacturasPorEmpresa( (lstEmpresas.selectedItem as Factura).rfc_FPor )" horizontalScrollPolicy="off"/>
+		</s:VGroup>
+		<s:Spacer width="10"/>
+		<otros:VDivisionClaro height="100%"/>
+		<s:Spacer width="10"/>
+		<s:VGroup width="80%" height="100%" horizontalAlign="right">
+			<s:Spacer height="7"/>
+			<s:Label fontSize="14" fontWeight="bold" id="lblEmpresa" width="100%"/>
+			<s:Spacer height="5"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Spacer height="15"/>
+			<pqNet1:advancedGridPqNet width="100%" height="100%" textAlign="center" variableRowHeight="true" dataProvider="{_listaGrid}" 
+									  porcentajesColumnasPq="{ [3,8,11,25,11,11,11,6,6,6 ] }"  rowHeight="60" id="gridFacturas" >
+				<pqNet1:columns>
+					<mx:AdvancedDataGridColumn headerText="#"  dataField="numFila" />
+					<mx:AdvancedDataGridColumn headerText="Folio"  dataField="numeroFactura" />
+					<mx:AdvancedDataGridColumn headerText="RFC"  dataField="rfc_Cliente" />
+					<mx:AdvancedDataGridColumn headerText="Cliente"  dataField="nombre_Cliente" />
+					<mx:AdvancedDataGridColumn headerText="Fecha"  dataField="formatoFecha" />
+					<mx:AdvancedDataGridColumn headerText="Monto" dataField="formatoImporte"/>
+					<mx:AdvancedDataGridColumn headerText="Estado" dataField="estado" />
+					<mx:AdvancedDataGridColumn headerText="PDF" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+											import vista.vistas.vistaFacturacion.VistaPrincipalFacturacion;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.metodos.zip.Method;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.metodos.zip.ASZip;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.metodos.zip.CompressionMethod;
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import mx.utils.StringUtil;
+											import skins.catalogos.catalogoAlertas;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+											
+											import skins.catalogos.catalogoColores;
+											private	var file:File = new File();
+											
+											private function muestraPDF():void{
+												var fpor:String = (data as Factura).facturadoPor == 'Proquifa Servicios' ? 'ProquifaServicios' :  (data as Factura).facturadoPor;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												var _request:URLRequest = new URLRequest();
+												_request.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + (data as Factura).numeroFactura + '.pdf'; 
+												navigateToURL( _request );
+											}
+									
+										
+											protected function descargar(event:MouseEvent):void
+											{
+												file = new File();
+												file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+												var fpor:String = (data as Factura).facturadoPor == 'Proquifa Servicios' ? 'ProquifaServicios' :  (data as Factura).facturadoPor;
+												var request:URLRequest = new URLRequest();
+												var variables:URLLoader = new URLLoader();
+												variables.dataFormat = URLLoaderDataFormat.BINARY;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												request = new URLRequest(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + (data as Factura).numeroFactura + '.pdf');
+												variables.addEventListener(Event.COMPLETE, completeHandler);
+												variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+												try{
+													variables.load(request);
+												} 
+												catch (error:Error){
+													trace("Unable to load URL: " + error);
+												}
+											}
+											private function avisaGuardadoArchivos(event:Event):void{
+												file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+												alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+											}
+											private function completeHandler(event:Event):void{
+												var folio:Number = (data as Factura).numeroFactura;
+												var loader:URLLoader = URLLoader(event.target);
+												var bytes:ByteArray = new ByteArray();
+												try{
+													bytes = (event.target as URLLoader).data;
+												}
+												catch (error:*){
+													alertaSingleton.show("No se encontro archivo");
+												}
+												file.save( bytes,"Folio"+ folio + ".pdf");	
+											}
+											
+											protected function scrollId_mouseWheelHandler(event:MouseEvent):void
+											{
+												
+												if(event.delta == -1)
+												{
+													event.localY = event.localY - 5;
+												}
+												
+											}
+											
+									]]>
+									</fx:Script>
+									<s:HGroup width="100%" horizontalAlign="center">
+										<linkButton:LinkButtonPQNet label="Ver" id="lnk" click="descargar(event)" />
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="XML" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" >
+									<fx:Script>
+										<![CDATA[
+											import flash.net.navigateToURL;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+											
+											import flashx.textLayout.formats.TextDecoration;
+											
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+											import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+											import skins.catalogos.catalogoAlertas;
+											import mx.utils.StringUtil;
+											private	var file:File = new File();
+								
+											import skins.catalogos.catalogoColores;
+											
+											private function muestraXML():void{
+												var fpor:String = (data as Factura).facturadoPor == 'Proquifa Servicios' ? 'ProquifaServicios' :  (data as Factura).facturadoPor;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												var _request:URLRequest = new URLRequest();	
+												_request.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + (data as Factura).numeroFactura + '.xml'; 
+												navigateToURL( _request );
+											}
+											
+											protected function descargarXml(event:MouseEvent):void
+											{
+												file = new File();
+												file.addEventListener(Event.COMPLETE, avisaGuardadoArchivos );
+												var fpor:String = (data as Factura).facturadoPor == 'Proquifa Servicios' ? 'ProquifaServicios' :  (data as Factura).facturadoPor;
+												
+												var request:URLRequest = new URLRequest();
+												var variables:URLLoader = new URLLoader();
+												variables.dataFormat = URLLoaderDataFormat.BINARY;
+												
+												var path:Object = Util.rutaFecha(data.fecha);
+												request = new URLRequest(RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fpor +'/'+ path.ruta + (data as Factura).numeroFactura + '.xml');
+												variables.addEventListener(Event.COMPLETE, completeHandler);
+												variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandler);
+												try{
+													variables.load(request);
+												} 
+												catch (error:Error){
+													trace("Unable to load URL: " + error);
+												}
+											}
+											private function avisaGuardadoArchivos(event:Event):void{
+												file.removeEventListener(Event.COMPLETE,avisaGuardadoArchivos);
+												alertaSingleton.show('Se guardaron los archivos',catalogoAlertas.TIT_CONF_operacionExitosa);
+											}
+											private function completeHandler(event:Event):void{
+												var folio:Number = (data as Factura).numeroFactura;
+												var loader:URLLoader = URLLoader(event.target);
+												var bytes:ByteArray = new ByteArray();
+												try{
+													bytes = (event.target as URLLoader).data;
+												}
+												catch (error:*){
+													alertaSingleton.show("No se encontro archivo");
+												}
+												file.save( bytes,"Folio"+folio + ".xml");	
+											}
+											
+											protected function scrollId_mouseWheelHandler(event:MouseEvent):void
+											{
+												
+												if(event.delta == -1)
+												{
+													event.localY = event.localY - 5;
+												}
+												
+											}
+										]]>
+									</fx:Script>
+									<s:HGroup width="100%" horizontalAlign="center">
+										<linkButton:LinkButtonPQNet label="Ver" id="lnk" click="descargarXml(event)" />
+										
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+					<mx:AdvancedDataGridColumn headerText="Elegir" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+											
+											import skins.catalogos.catalogoColores;
+											private function preparaParaCancelar():void{
+												(data as Factura).cancelada = chkCancelar.selected;
+											}
+										]]>
+									</fx:Script>
+									<s:HGroup width="100%" horizontalAlign="center">
+										<s:CheckBox change="preparaParaCancelar()" id="chkCancelar" selected="{(data as Factura).cancelada}"/>
+									</s:HGroup>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</pqNet1:columns>
+			</pqNet1:advancedGridPqNet>
+			<s:Spacer height="10"/>
+			<otros:divisionGruesa width="100%" />
+			<s:Spacer height="10"/>
+			<pqNet:botonPqNetLargo label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO}" gradientePqnet="true" click="warningGuardar()" id="btnCancelar"/>
+		</s:VGroup>
+	</s:HGroup>
+</s:VGroup>

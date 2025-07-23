@@ -1,0 +1,589 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:menuFlotante="skins.skin.menuFlotante.*"
+		  creationComplete="init(event)" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%"  gap="0" 
+		  >
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.carteras.EventoCatClientes_Carteras;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cartera;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CarteraCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Corporativo;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			private var _carterasArray:ArrayCollection;
+			private var _valoresActuales:ArrayCollection;
+			private var _botonActual:String;
+			private var clickeado:String;
+			private var _clickeado:String;
+			private var _currentIndex:Number;
+			private var _nivelSelected:String;
+			private var _rutaSelected:String;
+			private var _todos:Boolean;
+			private var _sql:Query;
+			private var _sqlCorp:Query;
+			private var _nombresCorporativos:Array;
+			private var listaCorporativos:ArrayCollection;
+			private var _esacArreglo:Array;
+			private var _vendedorArreglo:Array;
+			private var _cobradorArreglo:Array;
+			private var _industriaArreglo:Array;
+			private var _animacionesActivas:Number=0;
+			private var _carterasPublicas:ArrayCollection;
+			private var _carterasBorrador:ArrayCollection;
+			private var _idUser:Number = DatosGlobales.getInstance()._usuario.idEmpleado;
+			private var _publicada:Boolean;
+			
+			private var arregloNiveles:Array = new Array (
+				'AA+','AA','AM','AB','MA','MM','MB','BAJO','DIST','NUEVOS');
+			
+			private var arregloRutas:Array = new Array (
+				'LOCAL','FORÁNEO','GUADALAJARA','CENTROAMÉRICA','SUDAMÉRICA','RESTO DEL MUNDO');
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener("escuchaSubMenuBusqueda",busquedaSubMenu,false,0,true);
+				addEventListener("terminoAnimacionCartera",terminoAnimacion,false,0,true);
+				addEventListener("empezoAnimacion",empezoAnimacion,false,0,true);
+				btn4.arrayValores = arregloNiveles;
+				btn5.arrayValores = arregloRutas;
+				btn0.seleccionar();
+				_botonActual = clickeado = "todos";
+				_todos = true;
+			}
+			
+			private function sendClientesPadre($arreglo:ArrayCollection):void
+			{
+				var evt:EventoCatClientes_Carteras = new EventoCatClientes_Carteras(EventoCatClientes_Carteras.ENVIAR_CARTERAS_BUSCADAS);
+				evt.carterasSeleccionadas = $arreglo;
+				dispatchEvent(evt);	
+			}
+			
+			public function recibeCarteras($array:ArrayCollection):void
+			{
+				if ($array)
+				{
+					_carterasArray = $array;
+					_carterasPublicas = new ArrayCollection();
+					_carterasBorrador = new ArrayCollection();
+					for(var i:int =0; i<$array.length; i++)
+					{
+						var curr:CarteraCliente = $array[i] as CarteraCliente;
+						
+						if (curr.cart_publicada)
+							_carterasPublicas.addItem(curr);
+						
+						if(!curr.cart_publicada && curr.idCreador == _idUser )
+							_carterasBorrador.addItem(curr); 
+					}
+					
+					if(publicada)
+						aplySQL(_carterasPublicas);
+					else
+						aplySQL(_carterasBorrador);
+					
+					deseleccionarBotones(0);
+					seleccionarBoton("todos");
+				}
+			}
+			
+			private function filtraje($array:ArrayCollection):void
+			{
+				if ($array)
+				{
+					_carterasArray = $array;
+					_carterasPublicas = new ArrayCollection();
+					_carterasBorrador = new ArrayCollection();
+					for(var i:int =0; i<$array.length; i++)
+					{
+						var curr:CarteraCliente = $array[i] as CarteraCliente;
+						
+						if (curr.cart_publicada)
+							_carterasPublicas.addItem(curr);
+						
+						if(!curr.cart_publicada && curr.idCreador == _idUser )
+							_carterasBorrador.addItem(curr); 
+					}
+					
+					if(publicada)
+					{
+						aplySQL(_carterasPublicas);
+						sendClientesPadre(_carterasPublicas);
+					}
+					else
+					{
+						aplySQL(_carterasBorrador);
+						sendClientesPadre(_carterasBorrador);
+					}
+				}
+			}
+			
+			
+			private function aplySQL($arreglo:ArrayCollection):void
+			{
+				if ($arreglo)
+				{
+					_esacArreglo = new Array();
+					_valoresActuales = ObjectUtil.copy(_carterasArray) as ArrayCollection;
+					_sql = new Query(_carterasArray,["cart_publicada","nivelIngreso","ruta","nombreCorporativo","idCorporativo","cart_nombreEsac","cart_nombreEv","cart_nombreCobrador","industria","cart_sistema","cart_corporativo"],true);
+					_todos = false;
+					_esacArreglo = _sql.getPunteros([null,null,null,null,null,"cart_nombreEsac"],"cart_nombreEsac"); 
+					_vendedorArreglo = _sql.getPunteros([null,null,null,null,null,null,"cart_nombreEv"],"cart_nombreEv"); 
+					_cobradorArreglo = _sql.getPunteros([null,null,null,null,null,null,null,"cart_nombreCobrador"],"cart_nombreCobrador"); 
+					_industriaArreglo = _sql.getPunteros([null,null,null,null,null,null,null,null,"industria"],"industria"); 
+					btn1.arrayValores = _esacArreglo;
+					btn2.arrayValores = _vendedorArreglo;
+					btn3.arrayValores = _cobradorArreglo;
+					btn6.arrayValores = _industriaArreglo;
+				}
+			}
+			
+			public function filtrarClientes($nombre:String):void
+			{
+				if($nombre != "null")
+				{
+					if ($nombre.length > 0)
+					{
+						var sqlBusqueda:Query;
+						var punteroCliente:Array = new Array();
+						var nom:String;
+						var parecidos:Array = new Array();
+						var arreTemp:Array = new Array();
+						var arregloTe:ArrayCollection = new ArrayCollection();
+						
+						sqlBusqueda = new Query(_valoresActuales,["nombre"],true);
+						punteroCliente = new Array();
+						nom = StringUtil.trim( $nombre).toLowerCase();
+						parecidos = sqlBusqueda.getCampoLikeLowerCase("nombre",nom);
+						
+						if (parecidos.length > 0)
+						{
+							for ( var i:int = 0; i<parecidos.length; i++)
+							{
+								punteroCliente.push(sqlBusqueda.getPunteros([parecidos[i],null]));
+							}
+						}
+						
+						//  ---------------------------------- ORDENA Y ELIMINA REPETIDOS  ----------------------------------
+						arreTemp = UtilsGrid.generateArrayBiToArrayUni(punteroCliente);
+						arregloTe = sqlBusqueda.armarLista(StringFunciones.removerDuplicados(arreTemp));
+						sendClientesPadre(arregloTe);
+					}
+				}
+				else
+				{
+					sendClientesPadre(_valoresActuales);
+				}
+			}
+			
+			
+			private function empezoAnimacion(evt:Event):void
+			{
+				_animacionesActivas++;
+			}
+			
+			private function terminoAnimacion(evt:Event):void
+			{
+				_animacionesActivas = _animacionesActivas - 1;
+				if(_clickeado != _botonActual && _animacionesActivas == 0)
+				{
+					seleccionarBoton(_botonActual);
+				} 
+			}
+			
+			public function switchClientes():void
+			{
+				deseleccionarBotones(2);
+				btn2.seleccionar();
+				clickeado = "clientes";
+				sendClientesPadre(_valoresActuales);
+				_todos = true;
+			}
+			
+			private function deseleccionarBotones($index:Number):void
+			{
+				switch($index)
+				{
+					case 0:
+					{
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 1:
+					{
+						btn0.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 2:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 3:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 4:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn5.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 5:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn6.deseleccionar();
+						break;
+					}
+					case 6:
+					{
+						btn0.deseleccionar();
+						btn1.deseleccionar();
+						btn2.deseleccionar();
+						btn3.deseleccionar();
+						btn4.deseleccionar();
+						btn5.deseleccionar();
+						break;
+					}
+				}
+			}
+			
+			protected function clickBotoneraBusqueda(event:Event):void
+			{
+				
+				if(_clickeado != event.currentTarget.tipoBoton)
+				{
+					clickeado = event.currentTarget.tipoBoton;
+					seleccionarBoton(clickeado);
+				}  	
+			}
+			
+			private function seleccionarBoton($boton:String):void
+			{
+				switch($boton)
+				{
+					case "todos":
+					{
+						_currentIndex = 0;
+						if(!_todos)
+						{
+							_todos = true;
+							deseleccionarBotones(_currentIndex);
+							if(publicada)
+							{
+								sendClientesPadre(_carterasPublicas);
+								_valoresActuales = ObjectUtil.copy(_carterasPublicas) as ArrayCollection;
+							}
+							else
+							{
+								sendClientesPadre(_carterasBorrador);
+								_valoresActuales = ObjectUtil.copy(_carterasBorrador) as ArrayCollection;
+								
+							}
+						} 
+						_botonActual =_clickeado = $boton;
+						deseleccionarBotones(_currentIndex);
+						btn0.seleccionar();
+						break;
+					}
+					case "esac":
+					{
+						_currentIndex = 1;
+						break;
+					}
+					case "ev":
+					{
+						_currentIndex = 2;
+						break;
+					}
+					case "cobrador":
+					{
+						_currentIndex = 3;
+						break;
+					}
+					case "nivelIngreso":
+					{
+						_currentIndex = 4;
+						break;
+					}
+					case "ruta":
+					{
+						_currentIndex = 5;
+						break;
+					}
+					case "industria":
+					{
+						_currentIndex = 6;
+						break;
+					}
+				}
+			}
+			
+			private function busquedaSubMenu(evt:Event):void
+			{
+				var menu:String="";
+				var menuArray:Array = new Array();
+				var nuevoUniverso:ArrayCollection = new ArrayCollection();
+				
+				if(_currentIndex == 1)
+				{
+					btn1.seleccionar();
+					_botonActual = _clickeado = clickeado;
+					//textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = btn1.subMenuSelected.toLowerCase();
+					menuArray= _sql.getPunteros([null,null,null,null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+					sendClientesPadre(nuevoUniverso);
+					_todos = false;
+				}
+				if(_currentIndex == 2)
+				{
+					btn2.seleccionar();
+					_botonActual = _clickeado = clickeado;
+					//textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = btn2.subMenuSelected.toLowerCase();
+					menuArray= _sql.getPunteros([null,null,null,null,null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+					sendClientesPadre(nuevoUniverso);
+					_todos = false;
+				}
+				if(_currentIndex == 3)
+				{
+					btn3.seleccionar();
+					_botonActual = _clickeado = clickeado;
+					//textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu = btn3.subMenuSelected.toLowerCase();
+					menuArray= _sql.getPunteros([null,null,null,null,null,null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+					sendClientesPadre(nuevoUniverso);
+					_todos = false;
+				}
+				if(_currentIndex == 4)
+				{
+					btn4.seleccionar();
+					_botonActual = _clickeado = clickeado;
+					//textBusqueda.text = "";      LIMPIAR TEXT BUSQUEDA
+					deseleccionarBotones(_currentIndex);
+					menu = btn4.subMenuSelected.toLowerCase();
+					
+					if(menu=="nuevos")
+					{
+						menuArray = _sql.getPunteros([null,null,null,null,null,null,null,null,null,true,false]);
+					}
+					else
+					{
+						if (menu == "aa+")
+							menu = "aaplus";
+						if (menu == "dist")
+							menu = "distribuidor";
+						menuArray = _sql.getPunteros([null,menu]);
+					}
+					nuevoUniverso = _sql.armarLista(menuArray);
+					_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+					sendClientesPadre(nuevoUniverso);
+					_todos = false;
+				}
+				if(_currentIndex == 5)
+				{
+					btn5.seleccionar();
+					_botonActual = _clickeado = clickeado;
+					//textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu =  btn5.subMenuSelected.toLowerCase();
+					menuArray= _sql.getPunteros([null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+					sendClientesPadre(nuevoUniverso);
+					_todos = false;
+				}
+				if(_currentIndex == 6)
+				{
+					btn6.seleccionar();
+					_botonActual = _clickeado = clickeado;
+					//textBusqueda.text = "";
+					deseleccionarBotones(_currentIndex);
+					menu =  btn6.subMenuSelected.toLowerCase();
+					menuArray= _sql.getPunteros([null,null,null,null,null,null,null,null,menu]);
+					nuevoUniverso = _sql.armarLista(menuArray);
+					_valoresActuales = ObjectUtil.copy(nuevoUniverso) as ArrayCollection;
+					sendClientesPadre(nuevoUniverso);
+					_todos = false;
+				}
+			}
+			
+			private function buscaCuentasClaves():void
+			{
+				var punterosCuentas:Array = new Array();
+				var tmpPunteros:Array = new Array();
+				var arregloCuentas:Array = new Array("aaplus","aa","am","ab");
+				var nuevoUniverso:ArrayCollection = new ArrayCollection();
+				for(var i:int=0; i< arregloCuentas.length;i++)
+				{
+					tmpPunteros = _sql.getPunteros([null,arregloCuentas[i]]);
+					if(tmpPunteros.length > 0)
+					{
+						for (var j:int=0; j<tmpPunteros.length; j++)
+						{
+							punterosCuentas.push(tmpPunteros[j]);
+						}
+					}
+				}
+				_todos = false;
+				if(punterosCuentas.length>0)
+				{
+					nuevoUniverso = _sql.armarLista(punterosCuentas);
+					sendClientesPadre(nuevoUniverso);
+				}
+				else
+				{
+					sendClientesPadre(_valoresActuales);
+				}
+			}
+			
+			
+			// +++++++++++++++++++++++++++++++++++++++ BUSQUEDA +++++++++++++++++++++++++++++++++++++++
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private	var temporizador:Timer;
+			private function filtroPorTexto():void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaHab:ArrayCollection = new ArrayCollection();
+				var _listaDeshab:ArrayCollection = new ArrayCollection();
+				listaAFiltrar = ObjectUtil.copy( _carterasArray ) as ArrayCollection;
+			}
+			
+			public function ponerCartera($numero:Number):void
+			{
+				switch(_currentIndex)
+				{
+					case 0:
+					{
+						btn0.noCarteras = $numero;
+						break;
+					}
+					case 1:
+					{
+						btn1.noCarteras = $numero;
+						break;
+					}
+					case 2:
+					{
+						btn2.noCarteras = $numero;
+						break;
+					}
+					case 3:
+					{
+						btn3.noCarteras = $numero;
+						break;
+					}
+					case 4:
+					{
+						btn4.noCarteras = $numero;
+						break;
+					}
+					case 5:
+					{
+						btn5.noCarteras = $numero;
+						break;
+					}
+					case 6:
+					{
+						btn6.noCarteras = $numero;
+						break;
+					}
+				}
+			}
+			
+			public function get publicada():Boolean
+			{
+				return _publicada;
+			}
+			
+			public function set publicada(value:Boolean):void
+			{
+				_publicada = value;
+				
+				filtraje(_carterasArray);
+				
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:Group width="100%" height="100%">
+		
+		<s:VGroup width="100%" height="90" gap="0" >
+			<otros:division width="100%"/>
+			<s:Group width="100%" horizontalCenter="1" >
+				<s:layout>
+					<s:HorizontalLayout gap="0" />
+				</s:layout>
+				<menuFlotante:OverLayerMenuCartera id="btn0" tipoBoton="todos" click="clickBotoneraBusqueda(event)" />
+				<menuFlotante:OverLayerMenuCartera id="btn1" tipoBoton="esac" click="clickBotoneraBusqueda(event)" />
+				<menuFlotante:OverLayerMenuCartera id="btn2" tipoBoton="ev" click="clickBotoneraBusqueda(event)" />
+				<menuFlotante:OverLayerMenuCartera id="btn3" tipoBoton="cobrador" click="clickBotoneraBusqueda(event)" />
+				<menuFlotante:OverLayerMenuCartera id="btn4" tipoBoton="nivelIngreso" click="clickBotoneraBusqueda(event)" />
+				<menuFlotante:OverLayerMenuCartera id="btn5" tipoBoton="ruta" click="clickBotoneraBusqueda(event)" />
+				<menuFlotante:OverLayerMenuCartera id="btn6" tipoBoton="industria" click="clickBotoneraBusqueda(event)" />
+			</s:Group>
+		</s:VGroup>
+		<s:VGroup width="100%" height="90" paddingTop="90" gap="0" >
+			<otros:division width="100%"/>
+		</s:VGroup>
+	</s:Group>
+</s:VGroup>

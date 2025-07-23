@@ -1,0 +1,183 @@
+package mx.com.proquifa.vista.modelo.tramitarCompra
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaPedido;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.ObjectUtil;
+	
+	public class ModeloTramitarCompraPublicaciones extends EventDispatcher
+	{
+		public static var queryOC:Query;
+		private var ordenesCompraPendientes:ArrayCollection;
+		
+		private var arrayListaPedidos:ArrayCollection;
+		private var arrayProveedoresPie:ArrayCollection;
+		private var arrayTransitoPie:ArrayCollection;
+		private var arrayFamiliaPie:ArrayCollection;
+		public function setObtenerPedidos(data:ArrayCollection):void
+		{
+			var fila:int = 1;
+			if(data == null || data.length == 0)
+				arrayListaPedidos = new ArrayCollection();
+			else
+				arrayListaPedidos = data;
+			
+			arrayTransitoPie = new ArrayCollection();
+			arrayProveedoresPie = new ArrayCollection();
+			arrayFamiliaPie = new ArrayCollection();
+			ordenesCompraPendientes = new ArrayCollection();
+			queryOC = new Query(data,['nombreProveedor','trafico','familia']);
+			var punteroProveedores:Array = queryOC.getPunteros(['nombreProveedor'],'nombreProveedor');
+			for each (var proveedor:String in punteroProveedores) 
+			{
+				var punteros:Array = queryOC.getPunteros([proveedor]);
+				
+				var orden:PartidaPedido = ObjectUtil.copy(queryOC.universo.getItemAt(punteros[0])) as PartidaPedido;
+				var resumenProvee:ResumenConsulta = new ResumenConsulta();
+				
+				resumenProvee.totalProveedores = 1;
+				resumenProvee.etiqueta = ObjectUtil.copy(proveedor) as String;
+				resumenProvee.piezasTotal = orden.cant_piezas = queryOC.getSumarCampo('cant_piezas',punteros);
+				resumenProvee.monto = orden.monto = queryOC.getSumarCampo('monto',punteros);
+				resumenProvee.noProductos = orden.cant_productos = queryOC.getSumarCampo('cant_productos',punteros);
+				orden.cant_programados = queryOC.getSumarCampo('cant_programados',punteros);
+				orden.cant_regular = queryOC.getSumarCampo('cant_regular',punteros);
+				orden.cant_fleteExpress = queryOC.getSumarCampo('cant_fleteExpress',punteros);
+				orden.numeroFila = ObjectUtil.copy(fila) as int; 
+				ordenesCompraPendientes.addItem(orden);
+				arrayProveedoresPie.addItem(resumenProvee);
+				fila++;
+			}
+			
+			var punterosTipo:Array = queryOC.getPunteros([null,'trafico'],'trafico');
+			for each (var tipo:String in punterosTipo) 
+			{
+				var punterosT:Array = queryOC.getPunteros([null,tipo]);
+				var resumenTipo:ResumenConsulta = new ResumenConsulta();
+				
+				resumenTipo.etiqueta = ObjectUtil.copy(tipo) as String;
+				resumenTipo.noProductos = queryOC.getSumarCampo('cant_programados',punterosT);
+				resumenTipo.piezasTotal = queryOC.getSumarCampo('cant_piezas',punterosT);
+				resumenTipo.monto = queryOC.getSumarCampo('monto',punterosT);
+				resumenTipo.noTipoTransito = 1;
+				arrayTransitoPie.addItem(resumenTipo);
+			}
+			
+			
+			var punterosFamilia:Array = queryOC.getPunteros([null,null,'familia'],'familia');
+			for each (var familia:String in punterosFamilia) 
+			{
+				var punterosF:Array = queryOC.getPunteros([null,null,familia]);
+				var resumenFamilia:ResumenConsulta = new ResumenConsulta();
+				
+				resumenFamilia.etiqueta = ObjectUtil.copy(familia) as String;
+				resumenFamilia.noProductos = queryOC.getSumarCampo('cant_programados',punterosF);
+				resumenFamilia.piezasTotal = queryOC.getSumarCampo('cant_piezas',punterosF);
+				resumenFamilia.monto = queryOC.getSumarCampo('monto',punterosF);
+				resumenFamilia.cantFamilia = 1;
+				arrayFamiliaPie.addItem(resumenFamilia);
+			}
+			dispatchEvent(new Event("enviarListaPedidosModeloTramitarCompraPub"));
+			dispatchEvent(new Event("enviarListaProveedoresPieTramitarCompraPub"));
+			dispatchEvent(new Event("enviarListaTransitoPieTramitarCompraPub"));
+			dispatchEvent(new Event("enviarListaFamiliaPieTramitarCompraPub"));
+		}
+		
+		[Bindable(event="enviarListaPedidosModeloTramitarCompraPub")]
+		public function get enviarListaPedidos():ArrayCollection
+		{
+			return ordenesCompraPendientes;
+		}
+		[Bindable(event="enviarListaProveedoresPieTramitarCompraPub")]
+		public function get enviarListaProveedoresPie():ArrayCollection
+		{
+			return arrayProveedoresPie;
+		}
+		[Bindable(event="enviarListaTransitoPieTramitarCompraPub")]
+		public function get enviarListaTransitoPie():ArrayCollection
+		{
+			return arrayTransitoPie;
+		}
+		[Bindable(event="enviarListaFamiliaPieTramitarCompraPub")]
+		public function get enviarListaFamiliaPie():ArrayCollection
+		{
+			return arrayFamiliaPie;
+		}
+		
+		/**
+		 ***************************************** LISTA UNIVERSO PRODUCTOS  **************************************
+		 */ 
+		private var _universoProd:ArrayCollection;
+		public function setObtenerUniverso($universo:ArrayCollection):void{
+			
+			_universoProd = $universo;
+			if($universo.length > 0)
+			{
+				for (var h:int = 0; h < _universoProd.length; h++) 
+				{
+					if((_universoProd[h] as PartidaPedido).stock)
+						(_universoProd[h] as PartidaPedido).trafico = "stock";
+				}
+				
+			}
+			dispatchEvent(new Event ("universoProductosTramitarCompra"));
+		}
+		
+		[Bindable(event="universoProductosTramitarCompra")]
+		public function get getUniversoProductos():ArrayCollection{
+			return this._universoProd;
+		}
+		
+		/**
+		 ***************************************** FAMILIAS PROVEEDOR   **************************************
+		 */ 
+		private var _familiasProvee:ArrayCollection;
+		public function setObtenerFamiliasProvee($universo:ArrayCollection):void{
+			
+			_familiasProvee = $universo;
+			dispatchEvent(new Event ("familiasProveedorTramitarCompraPub"));
+		}
+		
+		[Bindable(event="familiasProveedorTramitarCompraPub")]
+		public function get getFamiliasProvee():ArrayCollection{
+			return _familiasProvee;
+		}
+		
+		/**
+		 ***************************************** GENERAR ORDEN DE COMPRA   **************************************
+		 */ 
+		private var _ordenCompra:String;
+		public function setObtenerOrdenCompra($universo:String):void
+		{
+			_ordenCompra = $universo;
+			dispatchEvent(new Event ("ordenComprasTramitarCompra"));
+		}
+		
+		[Bindable(event="ordenComprasTramitarCompra")]
+		public function get getObtenerOrdenCompra():String{
+			return _ordenCompra;
+		}
+		
+		public function errorListaAgentes(objeto:Object):void
+		{
+			trace("ERROR LISTA AGENTES")
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		
+		
+		
+		public function ModeloTramitarCompraPublicaciones(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+	}
+}
+

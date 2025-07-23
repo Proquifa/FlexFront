@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<productos:ContenedorTableroProductosMiniChart xmlns:fx="http://ns.adobe.com/mxml/2009" 
+											   xmlns:s="library://ns.adobe.com/flex/spark" 
+											   xmlns:mx="library://ns.adobe.com/flex/mx" 
+											   xmlns:productos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.productos.*"
+											   xmlns:componentes="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+											   titulo="COMPRAS"
+											   informacion="{catalogoInfoGraficas.TABLERO_PRODUCTOS_COMPRAS_REALIZADAS}"
+											   
+											   width="100%" height="100%" 
+											   >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="500"/>
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="2"/>
+		<mx:SolidColorStroke id = "s2" color="0xdd9c12" weight="2"/>
+		<mx:SolidColor id="sc3" color="0x{catalogoColores.LABEL_NARANJA}" alpha="1"/>
+		<s:SolidColorStroke id="stroke2" color="0x{catalogoColores.LABEL_NARANJA}" weight="5"/>
+		<mx:SolidColorStroke id = "sObj" color="0xC54B8C" weight="3"/>
+		<mx:SolidColor id="sc4" color="0xC54B8C" alpha="1"/>
+		<s:SolidColorStroke id="s4" color="0xC54B8C" weight="2"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.charts.renderers.TriangleItemRenderer;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.productos.ParametrosBusquedaProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.PeriodoToolTip;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+			
+			private const _tamanioMinimo:int = 170;
+			private var totalLegend:Number = 0;
+			
+			[Bindable] private var _ocComprasGrafica:ArrayCollection;
+			
+			private var _listaMontoObjetivo:ArrayCollection = new ArrayCollection();			
+			private var yallegaronLasCompras:Boolean = false;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			private var _anioMultiple:Boolean;
+			private var _event:ParametrosBusquedaProducto;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _anioInicio:int = 0;
+			private var _anioFin:int = 0;			
+			
+			public function set recibeComprasRealizadas(comparativa:ArrayCollection):void{
+				if(comparativa == null) return;
+				
+				this._ocComprasGrafica = new ArrayCollection();
+				this._ocComprasGrafica = comparativa;				
+				yallegaronLasCompras  = true;
+			}
+			
+			public function set recibeFiltros(parametros:ParametrosBusquedaProducto):void{
+				
+				if(parametros == null) return;
+				_event = parametros;
+				_minimoMeses = _event.mesInicio;
+				_maximoMeses = _event.mesFin;
+				_anioMultiple = parametros.aniosMultiple;		
+				
+				if(_anioMultiple){
+					_anioInicio = parametros.anioInicio;
+					_anioFin = parametros.anioFin;
+				}				
+				llamarAIniciarGrafica();				
+			}			
+			
+			private function llamarAIniciarGrafica():void
+			{
+				if(yallegaronLasCompras)
+				{					
+					yallegaronLasCompras = false;
+					if(_anioMultiple){
+						myChart.dataProvider = iniciarGraficaAniosMulti( _ocComprasGrafica );
+					}else{
+						myChart.dataProvider = iniciarGrafica( _ocComprasGrafica );
+					}
+				}
+				else
+				{
+					setTimeout(llamarAIniciarGrafica,300);
+				}
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection{
+				totalLegend = 0;
+				var m:int = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var contador:int = 0;
+				
+				while( cuenta < 13){
+					if(cuenta >= _minimoMeses && cuenta <= _maximoMeses){
+						objeto = new Object();
+						objeto.numeroMes = cuenta;
+						objeto.mes = _listaMensual[cuenta -1];
+						objeto.montoUSD_0 = 0;
+						objeto.montoUSD_1 = 0;
+						objeto.montoUSD_2 = 0;
+						objeto.totalPeriodo = 0;
+						objeto.montoObjetivo = 0; 
+						objeto.montoFundamental = 0;
+						
+						for( m = 0; m < $lista.length;m++ ){
+							var resumen:ResumenConsulta = $lista[m] as ResumenConsulta;
+							if(cuenta == resumen.mes){
+								if( resumen.etiqueta == "OC_COMPRAS_0" && resumen.conceptoResultado == 'Confirmada')
+									totalLegend += objeto.montoUSD_0 += resumen.total;
+								if( resumen.etiqueta == "OC_COMPRAS_1" && resumen.conceptoResultado == 'Confirmada')
+									objeto.montoUSD_1 += resumen.total;
+								if( resumen.etiqueta == "OC_COMPRAS_2" && resumen.conceptoResultado == 'Confirmada' )
+									objeto.montoUSD_2 += resumen.total;
+							}
+						}
+						
+						arrReturn.addItem(objeto);
+					}
+					cuenta++;
+				} 
+				for( var g:int = 0; g < arrReturn.length; g++ )      
+				{
+					arrReturn[g].totalPeriodo = totalLegend;
+				}
+				return arrReturn;	
+			}
+			
+			private function iniciarGraficaAniosMulti( $lista:ArrayCollection ):ArrayCollection
+			{
+				//_desempenoActual = 0;
+				totalLegend = 0;
+				var m:int = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				arrReturn.addItem(new Object());
+				var objeto:Object ;
+				var cuenta:int = 1;
+				var contador:int = 0;
+				var contadorPromedio:int = 0;				
+				var pintarAnio:int = _anioInicio;
+				//_desepenoAnterior = 0;
+				var copiaUniverso:ArrayCollection = ObjectUtil.copy($lista) as ArrayCollection;  
+								
+				while( pintarAnio <= _anioFin)
+				{					
+					objeto = new Object();
+					objeto.numeroMes = pintarAnio;
+					objeto.mes = pintarAnio;
+					objeto.montoUSD_0 = 0;
+					objeto.montoUSD_1 = 0;
+					objeto.montoUSD_2 = 0;
+					objeto.totalPeriodo = 0;
+					objeto.montoObjetivo = 0; 
+					objeto.montoFundamental = 0;
+					
+					var arrCopia:ArrayCollection = UtilsGrid.queryCampoX( copiaUniverso, "mes",pintarAnio.toString() );
+					
+					for( m = 0; m < arrCopia.length;m++ ){
+						var resumen:ResumenConsulta = arrCopia[m] as ResumenConsulta;
+						
+						totalLegend += resumen.total;
+						objeto.montoUSD_0 += resumen.total;
+						//_desempenoActual += resumen.total;	
+						contadorPromedio++;						
+					}						
+					arrReturn.addItem(objeto);
+					pintarAnio++;
+					cuenta++;
+				}	
+				
+				arrReturn.addItem( new Object() );				
+				return arrReturn;	
+			}
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso =  '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}		
+		]]>
+	</fx:Script>
+	<productos:contenido >	
+		<s:VGroup width="100%" height="100%" horizontalAlign="right" paddingTop="50" paddingBottom="10" >
+			<mx:LineChart height="100%" width="100%" id="myChart"
+						  mouseSensitivity="5" 
+						  dataTipRenderer="{PeriodoToolTip}" 
+						  showDataTips="true" 
+						  showDataTipTargets="false"  
+						  dataTipMode="single" 
+						  paddingRight="{ width > _tamanioMinimo ? 30 : 5}"
+						  paddingLeft="{ width > _tamanioMinimo ? 20 : 5}"
+						  seriesFilters="[]">
+				<mx:series>
+					<!--<mx:LineSeries  yField="montoObjetivo" xField="numeroMes" form="step"  lineStroke="{s2}" showDataEffect="{fxInterpolateIn}" />
+					<mx:PlotSeries id="montoObjetivo" yField="montoObjetivo" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}" 
+								   stroke="{stroke2}" fill="{sc3}" itemRenderer="mx.charts.renderers.TriangleItemRenderer">
+					</mx:PlotSeries>
+					<mx:LineSeries  yField="montoFundamental" xField="numeroMes" form="step"  lineStroke="{s4}" showDataEffect="{fxInterpolateIn}" />
+					<mx:PlotSeries id="montoFundamental" yField="montoFundamental" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}" 
+								   stroke="{s4}" fill="{sc4}" itemRenderer="mx.charts.renderers.TriangleItemRenderer">
+					</mx:PlotSeries>-->
+					<mx:LineSeries yField="montoUSD_0" xField="numeroMes" form="segment"  lineStroke="{s1}" showDataEffect="{fxInterpolateIn}" />
+					<mx:PlotSeries yField="montoUSD_0" xField="numeroMes" displayName="Compras" showDataEffect="{fxInterpolateIn}">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer>
+									<fx:Script>
+										<![CDATA[
+											import skins.catalogos.catalogoColores;
+										]]>
+									</fx:Script>
+									<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+										<s:fill>
+											<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+										</s:fill>		
+									</s:Ellipse>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:PlotSeries>
+				</mx:series>
+				
+				<mx:horizontalAxis>
+					<mx:DateTimeAxis id="vMes" alignLabelsToUnits="true" displayLocalTime="true" dataUnits="months" />
+				</mx:horizontalAxis>
+				<mx:verticalAxis>
+					<mx:LinearAxis id="vCantidad" labelFunction="formateoEje" />
+				</mx:verticalAxis>
+				<mx:verticalAxisRenderers>
+					<mx:AxisRenderer axis="{vCantidad}" showLine="false" showLabels="{ width > _tamanioMinimo ? true : false}" tickPlacement="none" styleName="axisVerticalLabels"/>
+				</mx:verticalAxisRenderers>
+				<mx:horizontalAxisRenderers>
+					<mx:AxisRenderer axis="{vMes}" showLine="false" showLabels="false" />
+				</mx:horizontalAxisRenderers>
+				<mx:backgroundElements>
+					<mx:GridLines visible="{ width > _tamanioMinimo ? true: false}">
+						<mx:horizontalStroke>
+							<s:SolidColorStroke weight="0.5" color="0xeeeeee" />
+						</mx:horizontalStroke>
+					</mx:GridLines>
+				</mx:backgroundElements>
+			</mx:LineChart>
+			<componentes:horizontalAxisChartPq text="CANTIDAD CONFIRMADA" horizontalCenter="0" width="100%" paddingRight="{ width > _tamanioMinimo ? 30 : 5}" paddingLeft="{ width > _tamanioMinimo ? 70 : 5}"/>
+			<s:Label width="100%" paddingLeft="15" styleName="axisVerticalLabels">
+				<s:text>Los montos se refieren a costo de Compra</s:text>
+			</s:Label>
+		</s:VGroup>				
+	</productos:contenido>
+</productos:ContenedorTableroProductosMiniChart>

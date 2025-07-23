@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" creationComplete="iniciar()" xmlns:label="skins.skin.label.*">
+	
+	<mx:Script>
+		<![CDATA[
+			import flash.utils.getTimer;
+			
+			import mx.charts.HitData;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAnalisisincidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Gestion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.controls.Alert;
+			import mx.core.Application;
+			import mx.events.ItemClickEvent;
+			import mx.events.ListEvent;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.utils.ObjectUtil;
+			
+			private var _listaIncidentes:ArrayCollection;
+			private var totalPendientes:int = 0;
+			[Bindable]
+			private var estadoTiempo:ArrayCollection;
+			[Bndable]
+			private var _incidente:Incidente;
+			[Bndable]
+			private var _itemSeleccionado:Boolean;
+			[Bndable]
+			private var _gestion:Gestion;
+			[Bindable]
+			private var actualizaFilaParaEmpleado:Number;
+			private var contadorGraficoEnTiempo:Number = 0;
+			private var contadorGraficoFueraTiempo:Number = 0;
+			private var fechaHoy:Date = new Date();
+			private var usuario:String;
+			private var datosEmpledoLogueado:Empleado;
+			
+			
+			private var consumidorGestion:Consumer = new Consumer();
+			private var canalGestion:AMFChannel;
+			private var canalesGestion:ChannelSet;
+			
+			private function iniciar():void{
+				this.consumidorGestion.destination = "actualizacionService";
+				this.consumidorGestion.addEventListener("fault",falloconsumidor);
+				this.consumidorGestion.addEventListener(MessageEvent.MESSAGE,actualizar);
+				this.canalGestion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesGestion = new ChannelSet();
+				this.canalesGestion.addChannel(canalGestion);
+				this.consumidorGestion.channelSet = this.canalesGestion;
+				this.consumidorGestion.subscribe();
+				this.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				this.datosEmpledoLogueado = DatosGlobales.getInstance()._usuario;// parentApplication.datosUsuarioLogueado;
+				buscarListaIncidente();
+			}
+			
+			private function falloconsumidor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Consumidor de gestión","Error");
+			}
+			
+			private function actualizar(mensaje:MessageEvent):void{
+				if(mensaje.message.headers["Destino"] == "Gestion" && mensaje.message.headers["Usuario"] == this.usuario){
+					this.buscarListaIncidente();
+				}
+			}
+			
+			/**
+			 * Metodo que invoca la lista de Incidentes por Gestionar
+			 */ 
+			public function buscarListaIncidente():void{
+				this._gestion = new Gestion();
+				var evento:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.CARGA_LISTA_DE_INCIDENTES );
+				evento.usuario = this.datosEmpledoLogueado.usuario;				
+				dispatchEvent( evento );
+			}
+			/**
+			 * Metodo publico que recibe la inyeccion de los Pendientes por Gestionar 
+			 */ 
+			public function set recibirListaIncidentes(lista:ArrayCollection):void{
+				if( lista.source.length == 0 ){
+					this.grdGestionPendiente.dataProvider = lista;
+					this.grdGestionPendiente.percentWidth = 100;
+					this.vbxGrafico.percentWidth = 0;
+					this.vbxGrafico.visible = false;
+					return;					
+				}else{									
+					totalPendientes = 0;
+					contadorGraficoEnTiempo = 0;
+					contadorGraficoFueraTiempo = 0;
+					this.grdGestionPendiente.percentHeight = 50;
+					this.vbxGrafico.percentHeight = 50;
+					this.vbxGrafico.visible = true;
+					this._listaIncidentes = lista;	
+					var fechaTextoHoy:String = formatDate2.format( fechaHoy );	
+					//se analiza la Lista de los Pendientes 1: para agregar el numero de fila y 2 para encontrar los pendientes en tiempo					
+					for(var i:int = 0; i < this._listaIncidentes.source.length; i++){
+						(this._listaIncidentes.getItemAt( i ) as Incidente).numFila = i + 1;	
+						if((this._listaIncidentes.getItemAt( i ) as Incidente).diasAtraso == 0){
+							contadorGraficoEnTiempo ++;	
+						}else{
+							contadorGraficoFueraTiempo ++;
+						}			
+					}
+					this.totalPendientes = contadorGraficoEnTiempo + contadorGraficoFueraTiempo;
+					this.grdGestionPendiente.dataProvider = this._listaIncidentes;	
+					//creamos el dataProvider del pie
+					this.estadoTiempo = new ArrayCollection([
+						{estado:"En Tiempo", Monto: contadorGraficoEnTiempo , EtiquetaMonto: "Total de Pendientes En Tiempo ( "+ contadorGraficoEnTiempo + " )"},
+						{estado:"Fuera de Tiempo", Monto: contadorGraficoFueraTiempo, EtiquetaMonto: "Total de Pendientes Fuera de Tiempo ( "+ contadorGraficoFueraTiempo + " )" }				        
+					]);										
+				}
+			}
+			/**
+			 * Con esta funcion obtenemos los dias de atraso
+			 */
+			private function obtenDiasDeAtraso(objeto:Object, renglon:DataGridColumn):Number{
+				var diasDeAtraso:Number;
+				diasDeAtraso = UtilsFecha.regresaDiferenciaEntreFechasEnDias( (objeto as Incidente).fecha, fechaHoy );
+				if (diasDeAtraso > 2 ){
+					diasDeAtraso = diasDeAtraso - 2;
+				}else{
+					diasDeAtraso = 0;
+				}
+				return diasDeAtraso;
+			}	 
+			/**
+			 * Metodo usado para darle formato a los DATATIPS del la grafica del Pie (en tiempo y fuera de tiempo)
+			 */ 
+			public function dtFunc(hd:HitData):String {
+				var porcentaje:Number = new Number;
+				porcentaje = (hd.item.Monto * 100 ) /this.totalPendientes;
+				return 	"<B>" + hd.item.estado + ":</B> "+ formatoDecimales.format( porcentaje ) + "<B>%</B>" + "<BR>" +
+					"<B>No. de pendientes:</B> "+ hd.item.Monto + "<BR>";
+			}
+			/**
+			 * Metodo usado para mandar Gestionar el Incidente Seleccionado
+			 * Tambien se dispara un evento si existe la gestion para consultarla usando el Mapa MapaGestionIncidentes
+			 */ 
+			public function gestionaIncidente(renglon:ListEvent):void{
+				if( renglon.columnIndex == 6 ){
+					var eventoU:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.CARGA_GESTION_UBICACION );
+					eventoU.idIncidente = this.grdGestionPendiente.selectedItem.idIncidente;
+					dispatchEvent( eventoU ); 
+				}
+			}
+			/**
+			 * Metodo publico que recibe del MapaGestionIncidentes la gestion cuando es buscada por ubicacion desde el Grid
+			 */
+			public function set recibirGestionXUbicacion(datos:Gestion):void{
+				if(datos == null){
+					if(this.grdGestionPendiente != null && this.grdGestionPendiente.selectedItem != null){
+						this._itemSeleccionado = true;
+						seleccionaUbicacion();
+					}
+					return;
+				}
+				this._gestion = datos;
+				seleccionaUbicacion();
+			}
+			/**
+			 * Funcion que dispara el evento con el metadata  seleccionaUbicacionInc para hacer un salto a la ubicacion en la que se encuentra
+			 */ 
+			private function seleccionaUbicacion():void{
+				var eventoSalto:EventoGestionIncidente = new EventoGestionIncidente( EventoGestionIncidente.SELECCIONA_UBICACION_INCIDENTE );
+				eventoSalto.incidente = this.grdGestionPendiente.selectedItem as Incidente;
+				eventoSalto.empleado = this.datosEmpledoLogueado;			
+				eventoSalto.gestion = this._gestion;
+				if( this._itemSeleccionado ){
+					eventoSalto.ubicadoEn = "gestion";
+					this._itemSeleccionado = false;
+				}else{
+					eventoSalto.ubicadoEn = this.grdGestionPendiente.selectedItem.ubicacion;
+				}
+				dispatchEvent( eventoSalto );
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:Metadata>
+		[Event(name="seleccionaUbicacionInc", type="mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente")]
+	</mx:Metadata>
+	<mx:Metadata>
+		[Event(name="gestionarIncidente", type="mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente")]		
+	</mx:Metadata>
+	
+	<mx:SolidColor id="sc1" color="0x32CD32"/>
+	<mx:SolidColor id="scPorCobrar" color="0xFF0000"/>
+	<mx:NumberFormatter id="formatoDecimales" precision="2" />
+	<mx:DateFormatter id="formatDate2" formatString="MM/DD/YYYY" />
+	<mx:VBox width="100%" height="100%" >
+		<mx:DataGrid id="grdGestionPendiente" height="100%" width="100%" textAlign="center" itemClick="gestionaIncidente(event)">
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" dataField="numFila"/>
+				<mx:DataGridColumn headerText="Folio" dataField="folio"/>
+				<mx:DataGridColumn headerText="En espera desde" dataField="fechaFormato"/>
+				<mx:DataGridColumn headerText="Días de atraso" dataField="diasAtraso" />
+				<mx:DataGridColumn headerText="Redactó" dataField="redacto"/>
+				<mx:DataGridColumn headerText="Ubicación" dataField="ubicacion"/>
+				<mx:DataGridColumn headerText=" ">
+					<mx:itemRenderer>
+						<mx:Component>
+							<mx:LinkButton label="Gestionar" textDecoration="underline" color="#0C4AFC"/>
+						</mx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="Folio" dataField="folio" visible="false"/>
+				<mx:DataGridColumn headerText="IDEmpleado" dataField="idEmpleado" visible="false"/>
+				<mx:DataGridColumn headerText="IDIncidente" dataField="idIncidente" visible="false"/>
+				<mx:DataGridColumn headerText="IDPendiente" dataField="idPendiente" visible="false"/>
+				<mx:DataGridColumn headerText="NombreEmpleado" dataField="nombreEmpleado" visible="false"/> 
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:Spacer width="1%"/>
+		<mx:VBox width="100%" height="0" id="vbxGrafico" visible="false" borderStyle="solid">
+			<!--<mx:Label text="Tasa de espera" fontSize="24" fontWeight="bold" width="100%" paddingTop="10" paddingLeft="10"/>-->
+			<label:labelSubtitulo text="Tasa de espera" width="100%" paddingTop="10" paddingLeft="10"/>
+			<mx:PieChart id="pieGestion" height="100%" width="100%" dataProvider="{this.estadoTiempo}" showDataTips="true" dataTipFunction="dtFunc">
+				<mx:series>
+					<mx:PieSeries id="pieSeriesId" 
+								  field="Monto" 
+								  nameField="estado"
+								  labelField= "EtiquetaMonto"  
+								  explodeRadius=".1" 
+								  labelPosition="callout"
+								  fills="{[sc1, scPorCobrar]}"/>
+					<!--labelPosition="callout"-->  
+				</mx:series>		
+			</mx:PieChart>
+		</mx:VBox>
+	</mx:VBox>
+</mx:VBox>

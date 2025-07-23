@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="utf-8"?>
+<popUp:PopUpDefaultPQNet xmlns:fx="http://ns.adobe.com/mxml/2009" 
+										xmlns:s="library://ns.adobe.com/flex/spark" 
+										xmlns:mx="library://ns.adobe.com/flex/mx"  
+										xmlns:popUp="skins.popUp.*" 
+										xmlns:label="skins.skin.label.*" 
+										xmlns:otros="skins.otros.*" 
+										xmlns:pqNet="skins.botones.pqNet.*" 
+										xmlns:chekbox="skins.skin.chekbox.*"
+										xmlns:numericStepper="skins.skin.numericStepper.*"
+										xmlns:textinput="skins.skin.textinput.*" xmlns:switchPq="skins.skin.switchPq.*"
+										>
+	
+	<fx:Declarations>
+		<s:NumberValidator id="validatorPorcentajePositivo"
+						   allowNegative="false" 
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   maxValue="100"
+						   greaterThanMaxError="El número debe ser menor a 100."
+						   />
+		
+		<s:NumberValidator id="validatorMontoPositivo"
+						   allowNegative="false" 
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+		
+		
+		<s:Parallel id="showGrpDarVigencia" duration="250">
+			<s:Fade alphaFrom="0" alphaTo="1" startDelay="200"/>
+			<s:Resize heightFrom="0" heightTo="35" />
+		</s:Parallel>
+		
+		<s:Parallel id="hideGrpDarVigencia" duration="250">
+			<s:Fade alphaFrom="1" alphaTo="0" duration="50"/>
+			<s:Resize heightFrom="35" heightTo="0" />
+		</s:Parallel>
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoCatProOferta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.core.IVisualElement;
+			import mx.events.FlexEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.components.TextInput;
+			
+			import skins.catalogos.catalogoIconosGrid;
+			import skins.skin.textinput.textInputOpcional;
+			private var _config:ConfiguracionPrecioProducto;
+			private var _nivel:String;
+			[Bindable]
+			private var currentMoneda:String;
+			[Bindable]public var nom_Producto:String;
+			[Bindable]public var proInternacional:Boolean;
+			[Bindable]public var proNacional:Boolean;
+			public var cambioCosto:Boolean;
+			public var cambioTransito:Boolean;
+			public var respaldo_Costo:String;
+			public var transitoActivo:Boolean;
+			public var nuevotransitoActivo:Boolean;
+			
+			public function recibeConfiguracion( $dato:ConfiguracionPrecioProducto, $nivel:String, $proveedor:Proveedor ):void{
+				
+				txtPrecio.text = '0';
+				_config = new ConfiguracionPrecioProducto();		
+				_config = ObjectUtil.copy( $dato ) as ConfiguracionPrecioProducto;
+				
+		
+				
+				if($dato.producto.tipo != null && StringUtil.trim($dato.producto.tipo).length > 0)
+				{
+					if($dato.producto.tipo.toLowerCase() == "estandares")
+					{
+						lblFamilia.text = "Estándares";
+					}
+					else
+					{
+						lblFamilia.text = $dato.producto.tipo;
+					}
+				}
+				
+				if( $dato.producto.subtipo != null && StringUtil.trim($dato.producto.subtipo).length > 0 )
+				{
+					lblFamilia.text = lblFamilia.text + ' · ' + $dato.producto.subtipo;
+				}
+				
+				lblFamilia.text = lblFamilia.text + ' · ' +  $dato.producto.control;
+				lblIndustria.text = '';
+				$dato.producto.industria == null ||  $dato.producto.industria == '' ? lblIndustria.text = 'FARMA' :  lblIndustria.text =  $dato.producto.industria.toUpperCase();
+				nom_Producto = $dato.producto.concepto;
+				
+				//txtPrecio.text = UtilsFormatosNumericos.precisionADosDecimales( _config.producto.costo );
+				currentMoneda = $proveedor.monedaCompraSimbolo;
+				
+				txtPorcentaje.textDisplay.text = '0';
+				_nivel = $nivel;
+				
+				grpMonto.enabled = false;
+				chkMonto.selected = false;
+				
+				chkPorcentaje.selected = false;
+				txtPrecio.enabled = false;
+				txtPorcentaje.enabled = false;
+				
+				
+				if( _nivel == 'Generales' || _nivel == 'Familia'){
+					chkPorcentaje.selected = true;
+					txtPrecio.text = 'Generales';
+					
+					txtPorcentaje.enabled = true;
+					txtPorcentaje.setFocus();
+				}
+				else
+				{
+					grpMonto.enabled = true;
+					chkMonto.selected = true;
+					
+					txtPrecio.enabled = true;
+					txtPrecio.setFocus();
+				}
+				
+				if($nivel == "Producto")
+				{
+					proInternacional = true;
+					if($proveedor.pais != "MEXICO" )
+						proNacional = false;
+					else
+						proNacional = true;
+					
+					transitoActivo = $dato.producto.transitoMandatorioMexico;
+					
+					grpCosto.enabled = false;
+					txtPrecio.enabled = false;
+					
+					setTimeout(inicioSwitch,300);
+				}
+				else
+				{
+					proInternacional = false;
+					cambioTransito = false;
+				}
+			}
+			
+			
+			public function set recibeCostoProductoCompra($costo:Number):void
+			{
+				if(!$costo)
+				{
+					return;
+				}
+				respaldo_Costo = UtilsFormatosNumericos.precisionADosDecimales( $costo );
+				txtPrecio.text = UtilsFormatosNumericos.precisionADosDecimales( $costo );
+			}
+			
+			private function guarda():void{
+				
+				_config.producto.transitoMandatorioMexico = nuevotransitoActivo;
+				var evt:EventoCatProOferta = new EventoCatProOferta( EventoCatProOferta.GUARDA_PRECIO_PORCENTAJE );
+				evt.configuracionPrecioProducto = new ConfiguracionPrecioProducto();
+				evt.configuracionPrecioProducto = ObjectUtil.copy( _config ) as ConfiguracionPrecioProducto;
+				
+				if(_nivel == 'Generales')
+				{
+					evt.configuracionPrecioProducto.nivel = 'Familia';
+				}
+				else if(_nivel == 'Precio lista')
+				{
+					evt.configuracionPrecioProducto.nivel = 'Costo';
+				}
+				else if(_nivel == 'Producto')
+				{
+					evt.configuracionPrecioProducto.nivel = 'Producto';
+				}
+				else if(_nivel == 'Clasificacion')
+				{
+					evt.configuracionPrecioProducto.nivel = 'Clasificacion';
+				}
+				
+				if( chkMonto.selected ){
+					if( validatorMontoPositivoNoVacio(txtPrecio) && StringUtil.trim(txtPrecio.text).length > 0){
+						evt.monto = txtPrecio.text;	
+					}else{
+						//alertaSingleton.show('Se requiere un precio', catalogoAlertas.TIT_ADV_informacionIncompleta );
+						return;
+					}
+				}
+				if( chkPorcentaje.selected ){
+					if(validarPorcetajePositivoNoVacio(txtPorcentaje) ){
+						evt.monto = txtPorcentaje.textDisplay.text;
+					}else{
+						//alertaSingleton.show('Se requiere un porcentaje', catalogoAlertas.TIT_ADV_informacionIncompleta );
+						return;
+					}
+				}
+				evt.modificaPrecio = chkMonto.selected;
+				if(_nivel != 'Producto'){
+					evt.cambioCosto = true;
+				}
+				else{
+					evt.cambioCosto = cambioCosto;
+				}
+			
+				evt.cambioTransito = cambioTransito;
+				evt.ventana = "CatProveedor_Oferta_PrecioLista "+_nivel+"( idProveedor:"+evt.configuracionPrecioProducto.idProveedor+
+					", idConf:"+evt.configuracionPrecioProducto.idConfiguracion+", idCofigPrecioProducto:"+evt.configuracionPrecioProducto.idConfiguracionPrecioProducto+
+					", Monto:"+evt.monto+", idProducto:"+evt.configuracionPrecioProducto.producto.idProducto+", categoriaPrecioLista:"+evt.configuracionPrecioProducto.producto.categoriaPrecioLista+" )";
+				dispatchEvent( evt );
+			}
+			
+			public function cerrar():void{
+				/* _nivel = '';
+				numericsteper.textDisplay.text = '0';
+				_config = new ConfiguracionPrecioProducto(); 
+				
+				PopUpManager.removePopUp( this );*/
+				
+				dispatchEvent(new Event("CerrarElPopupCatProOferta_ModificacionPrecio_PopUp",true,false));
+			}
+			
+			protected function chkPorcentaje_clickHandler(event:MouseEvent):void
+			{
+				txtPrecio.errorString = "";
+				chkPorcentaje.selected = true;
+				chkMonto.selected = false;
+				txtPrecio.enabled = false;
+				txtPorcentaje.enabled = true;
+				txtPorcentaje.setFocus();
+			}
+			
+			protected function chkMonto_clickHandler(event:MouseEvent):void
+			{
+				txtPorcentaje.errorString = "";
+				chkMonto.selected = true;
+				chkPorcentaje.selected = false;
+				txtPorcentaje.enabled = false;
+				txtPrecio.enabled = true;
+				txtPrecio.setFocus();
+			}
+			
+			protected function chkMonto_mouseDownHandler(event:MouseEvent):void
+			{
+				if(chkMonto.selected)
+				{
+					event.stopImmediatePropagation();
+					event.preventDefault();
+				}
+			}
+			
+			protected function validarPorcetajePositivoNoVacio($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if($txtInput != null && $txtInput is TextInput)
+				{
+					var currentTxtInput:TextInput = $txtInput as TextInput;
+					validatorPorcentajePositivo.listener = currentTxtInput;
+					error = validatorPorcentajePositivo.validate(currentTxtInput.text);
+				}
+				else if($txtInput != null && $txtInput is textInputOpcional)
+				{
+					var currentTxtInputOpcional:textInputOpcional = $txtInput as textInputOpcional;
+					if(currentTxtInputOpcional.habilitaBoton)
+					{
+						validatorPorcentajePositivo.listener = currentTxtInputOpcional.texto;
+						error = validatorPorcentajePositivo.validate(currentTxtInputOpcional.texto.text);
+					}
+				}
+				
+				if(error == null || error.results == null)
+					return true;
+				else
+					return false;
+			}
+			
+			protected function validatorMontoPositivoNoVacio($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if($txtInput != null && $txtInput is TextInput)
+				{
+					var currentTxtInput:TextInput = $txtInput as TextInput;
+					validatorMontoPositivo.listener = currentTxtInput;
+					error = validatorMontoPositivo.validate(currentTxtInput.text);
+				}
+				else if($txtInput != null && $txtInput is textInputOpcional)
+				{
+					var currentTxtInputOpcional:textInputOpcional = $txtInput as textInputOpcional;
+					if(currentTxtInputOpcional.habilitaBoton)
+					{
+						validatorMontoPositivo.listener = currentTxtInputOpcional.texto;
+						error = validatorMontoPositivo.validate(currentTxtInputOpcional.texto.text);
+					}
+				}
+				
+				if(error == null || error.results == null)
+					return true;
+				else
+					return false;
+			}
+			
+			[Bindable]
+			private var tipoCambio:String = "NO" ;
+			
+			public function compruebaRestablecer():void
+			{
+				switchEvent();
+			}
+			
+			protected function switchEvent():void
+			{
+				if(switchVigencia.selected)
+				{
+					grpVigencia.visible = true;
+					tipoCambio = "SI";
+					nuevotransitoActivo = true;
+					
+			    }
+				else
+				{
+					grpVigencia.visible = false;
+					tipoCambio = "NO";
+					nuevotransitoActivo = false;
+					
+					
+					
+				}
+			}
+			
+			protected function inicioSwitch():void
+			{
+				if(_nivel == "Producto")
+				{
+					var select:Boolean = _config.producto.transitoMandatorioMexico;
+					switchVigencia.selected = select;
+					switchEvent();
+				}
+				else
+				{
+					proInternacional = false;
+					cambioTransito = false;
+				}
+			}
+			
+			public function cambiaCandados(event:MouseEvent):void
+			{
+				if(candado_Cerrado.visible == true)
+				{
+					candado_Cerrado.visible = candado_Cerrado.includeInLayout = false;
+					candado_Abierto.visible = candado_Abierto.includeInLayout = true;
+					cambioCosto = true;
+					grpCosto.enabled = true;
+					txtPrecio.enabled = true;
+					
+				}
+				
+				else if(candado_Abierto.visible == true)
+				{
+					candado_Cerrado.visible = candado_Cerrado.includeInLayout = true;
+					candado_Abierto.visible = candado_Abierto.includeInLayout = false;
+				    cambioCosto = false;
+					txtPrecio.text = respaldo_Costo;
+					txtPorcentaje.textDisplay.text = '0';
+					grpCosto.enabled = false;
+					txtPrecio.enabled = false;
+					
+				}
+				
+			}
+			
+			public function cambioCandadosgrpTransito(event:MouseEvent):void
+			{
+				if(candado_Cerrado_Ruta.visible == true)
+				{
+					candado_Cerrado_Ruta.visible = candado_Cerrado_Ruta.includeInLayout = false;
+					candado_Abierto_Ruta.visible = candado_Abierto_Ruta.includeInLayout = true;
+					cambioTransito = true;
+					grpTransito.enabled = true;
+				
+					
+					
+				}
+				
+				else if(candado_Abierto_Ruta.visible == true)
+				{
+					candado_Cerrado_Ruta.visible = candado_Cerrado_Ruta.includeInLayout = true;
+					candado_Abierto_Ruta.visible = candado_Abierto_Ruta.includeInLayout = false;
+					cambioTransito = false;
+					switchVigencia.selected = transitoActivo;
+					switchEvent();
+					grpTransito.enabled = false;
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" gap="10" horizontalAlign="center" maxWidth="502">
+		<label:TituloBankGothic_22 text="ACTUALIZAR PRODUCTO" width="100%"/>
+		<otros:division width="100%"/>
+		<label:Titulo_14_pTop10 text="{nom_Producto}" paddingTop="0" maxDisplayedLines="2" width="100%" visible="{proInternacional}" includeInLayout="{proInternacional}" />
+		
+		<label:TextoVerdeAzul_w100 id="lblFamilia"/>
+		<label:Texto_14_RojoClaro width="100%" id="lblIndustria" visible="{!proInternacional}"/>
+		<s:HGroup  gap="30" horizontalAlign="left" paddingLeft="0" width="100%" verticalAlign="middle" visible="{proInternacional}" includeInLayout="{proInternacional}">
+			<label:Titulo_14_pTop10 text="PRECIO" fontWeight="bold" width="100%" paddingLeft="0" />	
+			<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadonegrocerrado }" id="candado_Cerrado" click="cambiaCandados(event)" />
+			<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadonegroabierto }" id="candado_Abierto"  visible="false" includeInLayout="false" click="cambiaCandados(event)" />
+		</s:HGroup>
+		
+		<otros:divisionHueca width="100%" visible="{proInternacional}" includeInLayout="{proInternacional}"/>
+		
+		<s:HGroup verticalAlign="middle" id="grpCosto" paddingTop="20" paddingBottom="20" gap="25"  width="100%" horizontalAlign="left" paddingLeft="0" >
+			
+			<s:VGroup width="200" verticalAlign="middle" gap="10" id="grpMonto">
+				<chekbox:CheckRadioDefaultPQNet width="100%" id="chkMonto" click="chkMonto_clickHandler(event)" label="Monto:" mouseDown="chkMonto_mouseDownHandler(event)"/>
+				<s:HGroup width="100%" verticalAlign="middle">
+					<textinput:txtInputBlancoDefaultPQNet width="100%" textAlign="right" id="txtPrecio" click="chkMonto_clickHandler(event)" restrict="0-9." focusOut="validatorMontoPositivoNoVacio(txtPrecio)"/>
+					<label:Texto text="{currentMoneda}" click="chkMonto_clickHandler(event)"/>
+				</s:HGroup>
+			</s:VGroup>
+			
+			<s:VGroup width="200" verticalAlign="middle" gap="10" id="grpPorcentaje">
+				<chekbox:CheckRadioDefaultPQNet width="100%" id="chkPorcentaje" click="chkPorcentaje_clickHandler(event)" label="Porcentaje:"/>
+				<s:HGroup width="100%" verticalAlign="middle">
+					<!--<numericStepper:NumericStepperDefaultPQNet width="100%" textAlign="right" id="numericsteper" maximum="100" click="chkPorcentaje_clickHandler(event)"/>-->
+					<textinput:txtInputBlancoDefaultPQNet width="100%" textAlign="right" id="txtPorcentaje" click="chkPorcentaje_clickHandler(event)" restrict="0-9." focusOut="validarPorcetajePositivoNoVacio(txtPorcentaje)"/>
+					<label:Texto text="%" click="chkPorcentaje_clickHandler(event)"/>
+				</s:HGroup>
+			</s:VGroup>
+			
+		</s:HGroup>
+		
+		<s:HGroup  gap="30" horizontalAlign="left" paddingLeft="0" width="100%" verticalAlign="middle" visible="{proInternacional &amp;&amp; !proNacional}" includeInLayout="{proInternacional &amp;&amp; !proNacional}">
+			<label:Titulo_14_pTop10 text="TRÁNSITO" fontWeight="bold" paddingLeft="0" width="100%" />
+			<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadonegrocerrado }" id="candado_Cerrado_Ruta" click="cambioCandadosgrpTransito(event)" />
+			<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadonegroabierto }" id="candado_Abierto_Ruta"  visible="false" includeInLayout="false" click="cambioCandadosgrpTransito(event)" />
+		</s:HGroup>
+	   
+		<otros:divisionHueca width="100%" visible="{proInternacional &amp;&amp; !proNacional}" includeInLayout="{proInternacional &amp;&amp; !proNacional}"/>
+		
+		<s:HGroup  gap="30" horizontalAlign="left" paddingLeft="0" width="100%" verticalAlign="middle" visible="{proInternacional &amp;&amp; !proNacional}" includeInLayout="{proInternacional &amp;&amp; !proNacional}" enabled="false" id="grpTransito">
+			
+			<s:Label styleName="tab_texto_14_Helvetica" text="Mandatorio México" paddingTop="-1" fontSize="18" />
+			  <s:Group  height="35" >
+				<switchPq:switch2D_PqNet id="switchVigencia" label_izquierdo="NO" label_derecho="SI" change="switchEvent()" horizontalCenter="0" verticalCenter="0" />
+				<s:Group id="grpVigencia" height="0" alpha="0" visible="false" showEffect="{showGrpDarVigencia}" hideEffect="{hideGrpDarVigencia}" right="30" verticalCenter="0">
+				
+				</s:Group> 
+			</s:Group>  	
+			
+		</s:HGroup>
+		<otros:divisionHueca width="100%" visible="{proInternacional &amp;&amp; !proNacional}" includeInLayout="{proInternacional &amp;&amp; !proNacional}"/>
+		<otros:division width="100%" visible="{!proInternacional &amp;&amp; !proNacional}" includeInLayout="{!proInternacional &amp;&amp; !proNacional}" />
+		<pqNet:botonPqNetLargo label="Aceptar" click="guarda()"/>
+		<pqNet:botonPqNetLargo label="Cancelar" click="cerrar()"/>
+	</s:VGroup>  
+</popUp:PopUpDefaultPQNet>

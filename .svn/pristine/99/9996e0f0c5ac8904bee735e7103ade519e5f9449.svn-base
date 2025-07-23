@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" width="100%" height="100%" 
+		  xmlns:linkButton="skins.skin.linkButton.*" xmlns:panelCtaDetalle="skins.skin.comun.consultas.panelCtaDetalle.*">
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			
+			[Bindable]
+			private var _cobroMonitoreo:TiempoProceso;
+			
+			private function verComprobantePagos():void{
+				if(this.lnkCPagosMonitoreo.label != 'Pendiente'){
+					var _url:URLRequest = new URLRequest();
+					var path:Object = Util.rutaNueva(this.lnkCPagosMonitoreo.label);
+					_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.PAGOS_CLIENTE + path.ruta + this.lnkCPagosMonitoreo.label + ".pdf";
+					navigateToURL(_url);	
+				}
+			}
+			
+			public function get cobroMonitoreo():TiempoProceso
+			{
+				return _cobroMonitoreo;
+			}
+			
+			private var _factura:String="";
+			private var _fpor:String="";
+			public function set recibirFacturaFpor( $data:Object ):void
+			{
+				if( $data == null ) return;	
+				_factura = $data.factura;
+				_fpor = $data.fpor;
+				
+			}
+			
+			public function set cobroMonitoreo(value:TiempoProceso):void
+			{
+				
+				_cobroMonitoreo = value;
+				
+				lnkCPagosMonitoreo.visible = lnkCPagosMonitoreo.includeInLayout = false; 
+				lbl_CPagosMonitoreo.visible = lbl_CPagosMonitoreo.includeInLayout = false;
+				
+				if(value.fechaProgramacion == null){
+					lblMoroso.text = "Pendiente";
+					lblMoroso.styleName ="cltas_texto";
+					
+					if(value.monto <= 0)
+						lblMontoCobradoMon.text = 'Pendiente';
+				}else{
+					if(value.cobro == null){
+						lblMoroso.text = "ND";
+						lblMoroso.styleName ="cltas_texto";
+					}else{
+						if(value.cobro == '1'){
+							lblMoroso.text = "SI";
+							lblMoroso.styleName ="cltas_texto_rojo_upperCase";
+						}else{
+							lblMoroso.text = "NO";
+							lblMoroso.styleName ="cltas_texto_verde_upperCase";
+						}
+					}
+					
+					if(value.monto <= 0){
+						lblMontoCobradoMon.text = 'ND';
+					}else{
+						lblMontoCobradoMon.text ='$ '+UtilsFormatosNumericos.precisionADosDecimalesConComas(value.monto)+' ' +value.comentarios; 
+					}
+				}
+				
+				if(value.doscResult1 == 'Pendiente' || value.doscResult1 == 'ND'){
+					lbl_CPagosMonitoreo.visible = lbl_CPagosMonitoreo.includeInLayout = true;
+				}else{
+					lnkCPagosMonitoreo.visible = lnkCPagosMonitoreo.includeInLayout = true; 
+				}
+				
+				
+				if(_cobroMonitoreo.documento != undefined && _cobroMonitoreo.documento && _cobroMonitoreo.documento != ''){
+					lbl_ComplementoPago.visible = lbl_ComplementoPago.includeInLayout = true;
+					hg_ComplementoPago.visible = hg_ComplementoPago.includeInLayout = true;
+				}else{
+					lbl_ComplementoPago.visible = lbl_ComplementoPago.includeInLayout = false;
+					hg_ComplementoPago.visible = hg_ComplementoPago.includeInLayout = false;
+				}
+			}
+			
+			private function visualizaPDF():void{
+				var _url:URLRequest = new URLRequest();
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.COMPLEMENTO_PAGO + _fpor + '/' + _cobroMonitoreo.documento + ".pdf";
+				navigateToURL(_url);
+			}
+			
+			private	var file:File = new File();
+			private function descargaXML():void{
+				var request:URLRequest;
+				var variables:URLLoader = new URLLoader();
+				if(_cobroMonitoreo.documento != ''){
+					variables.dataFormat = URLLoaderDataFormat.BINARY;
+					///PRODUCCION
+					var ruta:String = RutasPdF.GENERAL_RUTA + RutasPdF.COMPLEMENTO_PAGO + _fpor + '/' + _cobroMonitoreo.documento + ".xml";
+					///LOCAL
+					request = new URLRequest(ruta);
+					variables.addEventListener(Event.COMPLETE, completeHandler);
+					variables.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+					try{
+						variables.load(request);
+					} 
+					catch (error:Error){
+						trace("Unable to load URL: " + error);
+					}	
+				}				
+			}
+			
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = (event.target as URLLoader).data;
+					file.save( bytes, _cobroMonitoreo.documento +'.xml' );	
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+			}
+			
+			private function errorHandler(event:Event):void{
+				alertaSingleton.show("No se encontro archivo");
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<panelCtaDetalle:SubHeader2 label="MONITOREO"/>
+	<s:VGroup width="100%" paddingLeft="15" paddingBottom="15">
+		<panelCtaDetalle:FechasInicioFinyTiempoTotal fechaInicio="{_cobroMonitoreo.fechaRevision}" fechaFin="{_cobroMonitoreo.fechaProgramacion}"/>
+		<label:Titulo_w100  text="Comprobante pago:"/>
+		<linkButton:LinkButtonPQNet2 id="lnkCPagosMonitoreo" label="{_cobroMonitoreo.doscResult1}" click="verComprobantePagos()" visible="false" includeInLayout="false"/>
+		
+		<label:Titulo_w100 id="lbl_ComplementoPago" text="Complemento de pago:"/>
+		<s:HGroup id="hg_ComplementoPago" width="100%" >
+			<linkButton:LinkButtonPQNet2 id="lnkPDF" label="PDF" click="visualizaPDF()" />
+			<s:Spacer width="15"/>
+			<linkButton:LinkButtonPQNet2 id="lnkXML" label="XML" click="descargaXML()" />
+		</s:HGroup> 
+		<label:Texto_w100 id="lbl_CPagosMonitoreo" text="{_cobroMonitoreo.doscResult1}" visible="false" includeInLayout="false" />
+		<label:Titulo_w100 id="lbl_TitleMontoCobrado" text="Monto cobrado:"/>
+		<label:Texto_w100 id="lblMontoCobradoMon" />
+		<label:Titulo_w100  text="Moroso:"/>
+		<s:Label id="lblMoroso"/>
+	</s:VGroup>
+</s:VGroup>

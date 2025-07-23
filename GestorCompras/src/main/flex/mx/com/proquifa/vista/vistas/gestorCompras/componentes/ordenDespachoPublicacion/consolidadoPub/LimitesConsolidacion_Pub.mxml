@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%"
+		  creationComplete="init(event)"
+		  >
+	
+	<fx:Declarations>
+		<s:Rotate3D id="fxShow3D" duration="500" autoCenterTransform="true" angleYFrom="180" angleYTo="0" effectEnd="{ fxShow3D.angleYFrom = ( fxShow3D.angleYFrom == 180 ? -180:180)}" />
+		<s:Rotate3D id="fxHide3D" duration="500" autoCenterTransform="true" angleYFrom="0" angleYTo="-180" effectEnd="{ fxHide3D.angleYTo = ( fxHide3D.angleYTo == -180 ? 180:-180); }"/>
+		<s:Fade id="fxFade" duration="450" />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ListaArribo;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.EffectEvent;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			
+			
+			[Bindable] public var datos:ArrayCollection = new ArrayCollection;
+			public var totales:Object = new Object;
+			private var _limites:Object = new Object;
+			private var _listasArribo:ArrayCollection;
+			public var arregloFinal:ArrayCollection;
+			private var $sql:Query;
+			
+			[Bindable] private var font24:int;
+			[Bindable] private var font22:int;
+			[Bindable] private var font20:int;
+			[Bindable] private var font18:int;
+			[Bindable] private var pad:int;
+			[Bindable] private var padS:int;
+			[Bindable] private var padR:int;
+			[Bindable] private var padB:int;
+			[Bindable] private var gapL:int;
+			[Bindable] private var gapAduana:int;
+			
+			
+			protected function init(event:FlexEvent):void
+			{
+				listasArribo = new ArrayCollection();
+				listPanelOrdenDespacho.dataProvider = new ArrayCollection();
+				lblOrdenesDespacho.text = "0 Lista de Arribo";
+				lblMax.text = "$ 0.00";
+				lblMin.text = "$ 0.00";
+				lblMontoTotal.text = "$ 0.00";
+			}
+			
+			
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				datos = value;
+				lblOrdenesDespacho.text = datos.length.toString();
+				lblOrdenesDespacho.text += datos.length == 1 ? ' Lista de Arribo' : ' Listas de Arribo';
+				listasArribo = datos;
+				$sql = new Query(datos,['nombreProveedor','tiempo','fechaString']);
+				listPanelOrdenDespacho.dataProvider = armarLista();
+				obtenerTotalesOrdenes();
+			}
+			
+			private function armarLista():ArrayCollection
+			{
+				arregloFinal = new ArrayCollection();
+				var proveedores:Array = $sql.getPunteros(['nombreProveedor']);
+				var contador:int = 0;
+				
+				for (var n:int = 0; n < proveedores.length; n++) 
+				{
+					var current:ListaArribo = new ListaArribo();
+					var punTemp:Array = $sql.getPunteros([proveedores[n]]);
+					if(punTemp.length > 0)
+					{
+						current.nombreProveedor = proveedores[n];
+						current.numFila = n + 1;
+						current.totalMonto = $sql.getSumarCampo("totalMonto",punTemp);
+						current.totalPiezas = $sql.getSumarCampo("totalPiezas",punTemp);
+						current.totalListasArribo = punTemp.length;
+						current.listasArribo = $sql.armarLista(punTemp);
+						current.punteros = punTemp;
+						current.fecha = fechaAntigua($sql.armarLista(punTemp));
+						
+						var valTiempo:Array = $sql.getPunteros([proveedores[n],null,current.fechaString]);
+						current.tiempo = $sql.getValoresCampo('tiempo',valTiempo)[0];
+						
+					}
+					
+					arregloFinal.addItem(current);
+				}
+				return arregloFinal;
+			}
+			
+			private function fechaAntigua($collection:ArrayCollection):Date
+			{
+				var sort:Sort = new Sort();  
+				sort.fields = [new SortField("fecha", false, false, true)];  
+				
+				$collection.sort = sort;  
+				$collection.refresh();  
+				
+				return ($collection[0] as ListaArribo).fecha;
+			}
+			
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				font24 = (24/397) * ($width);
+				font22 = (22/397) * ($width);
+				font20 = (20/397) * ($width);
+				font18 = (18/397)*($width);
+				font18 = font18 > 18 ? 18:font18;
+				pad = (30/397) * ($width);
+				padS = (100/397) * ($width);
+				padR = (20/397) * ($width);
+				padB = (20/397) * ($width);
+				gapL = (20/397) * ($width);
+				gapAduana = (30/397) * ($width);
+			}
+			
+			
+			private function obtenerTotalesOrdenes():void
+			{
+				totales.totalMonto = 0;
+				totales.DTA = 0;
+				totales.IGI = 0;
+				totales.IVA = 0;
+				totales.flete = 0;
+				totales.montoAduana = 0;
+				totales.monto = 0;
+				for (var i:int = 0; i < datos.length; i++) 
+				{
+					totales.totalMonto += datos[i].totalMonto;
+					totales.DTA += datos[i].DTA;
+					totales.IGI += datos[i].IGI;
+					totales.IVA += datos[i].IVA;
+					totales.flete += datos[i].flete;
+					totales.montoAduana += datos[i].montoAduana;
+					totales.monto += datos[i].monto;
+				}
+				
+				lblMontoTotal.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.totalMonto);
+				lblDTA.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.DTA);
+				lblIGI.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.IGI);
+				lblIVA.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.IVA);
+				lblAduanal.text = lblTotalImpuestos.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.IVA + totales.IGI + totales.DTA);
+				
+				lblFTE.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.flete);
+				lblValorComercial.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.totalMonto);
+				lblAduanalTot.text = lblTotal.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.totalMonto + totales.flete);
+				lblTotalGlobal.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.montoAduana);
+			}
+			
+			public function get limites():Object
+			{
+				return _limites;
+			}
+			
+			public function set limites(value:Object):void
+			{
+				_limites = value;
+				lblMax.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(limites.limiteMax);
+				lblMin.text = "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(limites.limiteMin);
+			}
+			
+			public function get listasArriboResumen():ArrayCollection
+			{
+				return arregloFinal;
+			}
+			
+			public function get listasArribo():ArrayCollection
+			{
+				var punTemp:Array = new Array();
+				for (var i:int = 0; i < arregloFinal.length; i++) 
+				{
+					punTemp.push((arregloFinal[i] as ListaArribo).punteros);
+				}
+				
+				return $sql.armarLista(UtilsGrid.generateArrayBiToArrayUni(punTemp));
+			}
+			
+			public function set listasArribo(value:ArrayCollection):void
+			{
+				_listasArribo = value;
+			}
+			
+			
+			protected function girarLista(event:MouseEvent):void
+			{
+				stackTodo.selectedIndex = 1;
+			}
+			
+			protected function regresarVista(event:MouseEvent):void
+			{
+				stackTodo.selectedIndex = 0;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<pq:MobViewStack id="stackTodo" width="100%" height="100%" activateFade="true">
+		
+		<!--ESTE ES EL FRENTE-->
+		<s:VGroup width="100%" height="100%" showEffect="{fxShow3D}" hideEffect="{fxHide3D}">
+			
+			
+			
+			<s:Group width="100%" height="100%"   >
+				
+				<s:Group width="26" height="37" verticalCenter="-20" right="0" click="girarLista(event)">
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="#0b8894"/>
+						</s:fill>
+					</s:Rect>
+					<mx:Image source="{catalogoIconosBotoneras.getInstance().montos_boton}" verticalCenter="0" horizontalCenter="0" />
+				</s:Group>  
+				
+				<s:VGroup width="100%" height="100%">
+					
+					<s:VGroup width="100%" horizontalAlign="center" paddingBottom="15">
+						<label:Titulo_15_Helvetica text="ORDEN DE DESPACHO" fontSize="{font20}" fontWeight="bold"/>
+					</s:VGroup>
+					
+					<s:VGroup width="100%" height="100%" gap="0" paddingBottom="0" paddingLeft="{pad}" paddingRight="{pad}">
+						<s:VGroup width="100%" height="100%" >
+							<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+									id="listPanelOrdenDespacho" contentBackgroundAlpha="0"
+									itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.PanelOrdenesCompra_IR"
+									/>
+							<otros:LineaDivision width="100%" height="1" color="#000000"/>
+							<label:Texto_14_Helvetica width="100%" id="lblOrdenesDespacho" textAlign="center" fontSize="{font18}" paddingTop="10" paddingBottom="{padB}" color="#424242"/>
+							
+						</s:VGroup>  
+					</s:VGroup>
+					
+					<s:VGroup width="100%" paddingLeft="20" paddingRight="20" paddingBottom="{pad}">
+						<s:Label width="100%" text="LÍMITES DE" textAlign="center" fontFamily="Novecento" fontSize="{font20}" fontWeight="bold" fontStyle="normal" color="#424242"/>
+						<label:Titulo_15_Helvetica width="100%" text="CONSOLIDACIÓN" textAlign="center" fontFamily="Novecento" fontSize="{font20}" fontWeight="bold" fontStyle="normal" color="#424242"/>
+					</s:VGroup>
+					
+					<s:VGroup width="100%" paddingLeft="{padS}" paddingRight="{padS}" paddingBottom="30" gap="{gapL}">
+						<s:HGroup width="100%" paddingBottom="10">
+							<label:Texto_16_Helvetica text="Máx." textAlign="left" fontSize="{font20}" fontFamily="Helvetica" color="#424242"/>
+							<label:Texto_16_Helvetica width="100%" id="lblMax" textAlign="right" color="#de0014" fontSize="{font20}"/>
+						</s:HGroup>
+						<s:HGroup width="100%" paddingBottom="{padR}">
+							<label:Texto_16_Helvetica text="Min." textAlign="left" fontSize="{font20}" color="#424242"/>
+							<label:Texto_16_Helvetica width="100%" id="lblMin" textAlign="right" color="#de0014" fontSize="{font20}"/>
+						</s:HGroup>
+						<s:HGroup width="100%">
+							<label:Texto_16_Helvetica width="100%" text="Actual: " textAlign="left" fontSize="{font20}" color="#424242"/>
+							<label:Texto_16_Helvetica width="100%" id="lblMontoTotal" textAlign="right" color="#4fa834" fontSize="{font20}"/>
+						</s:HGroup>
+					</s:VGroup>
+				</s:VGroup>
+			</s:Group>
+			
+		</s:VGroup>
+		
+		
+		
+		
+		<!--ESTE ES EL REVERSO-->
+		
+		<s:VGroup width="100%" height="100%" showEffect="{fxShow3D}" hideEffect="{fxHide3D}">
+			
+			<s:Group width="100%" height="100%" >
+				<s:Group width="26" height="37" verticalCenter="-20" left="-5" click="regresarVista(event)">
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="#0b8894" />
+						</s:fill>
+					</s:Rect>
+					<mx:Image source="{catalogoIconosBotoneras.getInstance().montos_boton}" verticalCenter="0" horizontalCenter="0" />
+				</s:Group>  
+				
+				
+				<s:VGroup width="100%" height="100%" paddingLeft="35" paddingRight="35">
+					
+					
+					<s:VGroup width="100%" horizontalAlign="center" paddingBottom="15">
+						<label:Titulo_15_Helvetica text="MONTO DE IMPORTACIÓN" fontSize="{font20}" fontWeight="bold"/>
+					</s:VGroup>
+					
+					<s:Spacer height="15%" /> 
+					
+					<s:VGroup width="100%" horizontalAlign="center" gap="{gapAduana}" >
+						<s:HGroup width="100%" >
+							<label:Titulo_15_Helvetica text="VAD" fontSize="{font22}" color="#424242" width="100%" fontWeight="bold"/>
+							<label:Titulo_15_Helvetica id="lblTotal" text="$0.00" fontSize="{font22}" color="#008893" fontWeight="bold"/>
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="VAC" fontSize="{font18}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblValorComercial" text="$0.00" fontSize="{font18}" color="#008893" />
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="FTE" fontSize="{font18}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblFTE" text="$0.00" fontSize="{font18}" color="#008893" />
+						</s:HGroup>
+					</s:VGroup>
+					
+					<s:Spacer height="100%" />
+					
+					<s:VGroup width="100%" horizontalAlign="center" gap="{gapAduana}" >
+						<s:HGroup width="100%" >
+							<label:Titulo_15_Helvetica text="IMP" fontSize="{font22}" color="#424242" width="100%" fontWeight="bold"/>
+							<label:Titulo_15_Helvetica id="lblTotalImpuestos" text="$0.00" fontSize="{font22}" color="#008893" fontWeight="bold"/>
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="IGI" fontSize="{font18}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblIGI" text="$0.00" fontSize="{font18}" color="#008893" />
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="DTA" fontSize="{font18}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblDTA" text="$0.00" fontSize="{font18}" color="#008893" />
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="IVA" fontSize="{font18}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblIVA" text="$0.00" fontSize="{font18}" color="#008893" />
+						</s:HGroup>
+					</s:VGroup>
+					
+					<s:Spacer height="100%" />
+					
+					<s:VGroup width="100%" horizontalAlign="center" gap="{gapAduana}" >
+						<s:HGroup width="100%" >
+							<label:Titulo_15_Helvetica text="VEI" fontSize="{font24}" color="#424242" width="100%" fontWeight="bold"/>
+							<label:Titulo_15_Helvetica id="lblTotalGlobal" text="$0.00" fontSize="{font24}" color="#008893" fontWeight="bold"/>
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="VAD" fontSize="{font18}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblAduanalTot" text="$0.00" fontSize="{font18}" color="#008893" />
+						</s:HGroup>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="IMP" fontSize="{font20}" color="#424242" width="100%"/>
+							<label:Texto_14_Helvetica id="lblAduanal" text="$0.00" fontSize="{font20}" color="#008893" />
+						</s:HGroup>
+					</s:VGroup>
+					<s:Spacer height="100%" />
+					
+				</s:VGroup>
+			</s:Group>
+		</s:VGroup>
+		
+		
+	</pq:MobViewStack>	
+	
+</s:VGroup>

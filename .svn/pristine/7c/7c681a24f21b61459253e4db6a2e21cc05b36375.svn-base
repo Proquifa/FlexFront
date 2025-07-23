@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  width="100%" height="100%" 
+		  >
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="600" />
+		<mx:SolidColorStroke id = "s1" color="0x3b98af" weight="2"/>
+		<mx:SolidColorStroke id = "s2" color="0xdd9c12" weight="2"/>
+		<mx:SolidColorStroke id = "s3" color="0x4ba92b" weight="2"/>
+		<mx:SolidColorStroke id = "s4" color="0xf15a29" weight="2"/>
+		<mx:SolidColor id="sc3" color="0x{catalogoColores.LABEL_NARANJA}" alpha="1"/>
+		<s:SolidColorStroke id="stroke2" color="0x{catalogoColores.LABEL_NARANJA}" weight="5"/>
+		<mx:SolidColorStroke id = "sObj" color="0xC54B8C" weight="3"/>
+		<mx:SolidColor id="sc4" color="0xC54BCC" alpha="1"/>
+		<s:SolidColorStroke id="stroke4" color="0xC54B8C" weight="5"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import vista.vistas.reporte.visita.cotizar.componentes.popUpCotizacion;
+			
+			private const _tamanioMinimo:int = 170;
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();
+			private var _listaMontoObjetivo:ArrayCollection = new ArrayCollection();
+			private var _listaMontoObjetivoFundamental:ArrayCollection = new ArrayCollection();
+			private var totalLegend:Number = 0;
+			private var _montoFundamental:Number = 0;
+			
+			private var yallegaronlosMontosObjetivos:Boolean = false;
+			private var yallegaronlosMontosObjetivosFundamentales:Boolean = false;
+			private var yallegaronLasVentas:Boolean = false;
+			
+			
+			[Bindable] public var intervalo:Number = 0;
+			[Bindable] public var precioMin:Number = 0;
+			[Bindable] public var precioMax:Number = 0;
+			[Bindable] public var promedioCantidad:Number = 0;
+			[Bindable] public var promedio:Number = 0;
+			public const ESPACIO_MINIMO:int = 2;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			
+			public function iniciarGrafica($lista:ArrayCollection,tipo:String,tipoMoneda:String):void
+			{
+				totalLegend = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var objetoNoP:Object;
+				var contador:int = 0;
+				var contadorFundamental:int = 0;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var cuantasVecesEntro:int = 0;
+				var numVecesReal:int = 0;
+				var montoTotal:Number = 0;
+				var primeraVezPedido:Boolean = true;
+				var primeraVezCotizado:Boolean = true;
+				var sqlGrafica:Query = new Query($lista,["grafica"],true);
+				var punterosCot:Array = new Array;
+				var punteros:Array = new Array;
+				var punterosClave:Array = new Array;
+				punteros = sqlGrafica.getPunteros(['producto']);
+				var listaFiltrada:ArrayCollection = new ArrayCollection();
+				var listaTemp:ArrayCollection = new ArrayCollection();
+				var numCotizacion:Number = 1;
+				
+				
+				for (var k:int = 0; k < punteros.length; k++) 
+				{
+					var obj:Object;
+					obj = ObjectUtil.copy(sqlGrafica.universo.getItemAt(punteros[k]));
+					listaTemp.addItem(obj);
+				}
+				listaFiltrada = ObjectUtil.copy(listaTemp) as ArrayCollection;
+				
+				var sqlCotizacion:Query = new Query(listaFiltrada,["clave"],true);
+				punterosClave = sqlCotizacion.getPunteros(['clave']);
+				
+				
+				/*for (var j:int = 0; j < punterosClave.length; j++) 
+				{
+					numCotizacion = j + 1;;*/
+					
+					var oldCotizacion:String = "";
+					var isPedido:Boolean = false;
+					for (var m:int = 0; m < listaFiltrada.length; m++) 
+					{
+						/*if(listaFiltrada[m].clave == punterosClave[j])
+						{*/
+						
+						if (listaFiltrada[m].clave != oldCotizacion && oldCotizacion != "") {
+							//arrReturn.addItem( objetoNoP );
+							numCotizacion++;
+							isPedido = false;
+						}
+							
+							
+							cuantasVecesEntro++;
+							//PEDIDO
+							objeto = new Object();
+							objeto.numeroMes = cuenta;
+							objeto.mes = _listaMensual[cuenta-1];
+							objeto.cantidad = 0;
+							objeto.precio = 0;
+							objeto.clave = listaFiltrada[m].clave
+							objeto.precioNoP =  0;
+							objeto.cantidadNoP = 0;
+							objeto.numCot = numCotizacion;
+							objeto.total = 0;
+							objeto.precioUnitario = 0 ;
+							objeto.estado = "Pedido";
+							// NO PEDIDO
+							objetoNoP = new Object();
+							objetoNoP.numeroMes = cuenta;
+							objetoNoP.mes = _listaMensual[cuenta-1];
+							objetoNoP.precioNoP =  0;
+							objetoNoP.cantidadNoP = 0;
+							objetoNoP.precio = 0;
+							objeto.clave = 0;
+							objetoNoP.clave = listaFiltrada[m].clave
+							objetoNoP.numCot = numCotizacion;
+							objetoNoP.total = 0;
+							objetoNoP.precioUnitario = 0 ;
+							objetoNoP.estado = "NoPedido" ;
+
+							
+							
+							if(tipoMoneda == "Dolares")
+							{
+								montoTotal += listaFiltrada[m].precioDolares;
+								if(listaFiltrada[m].estado == 'Pedido') {
+									objeto.total += listaFiltrada[m].precioDolares;
+									objeto.precioUnitario = listaFiltrada[m].precioDolares;
+									objeto.simboloMoneda = "$";
+									objeto.monedaAbre = "USD";
+								} else {
+									objetoNoP.total += listaFiltrada[m].precioDolares;
+									objetoNoP.precioUnitario = listaFiltrada[m].precioDolares;
+									objetoNoP.simboloMoneda = "$";
+									objetoNoP.monedaAbre = "USD";
+								}
+							}
+								
+							else if(tipoMoneda == "Pesos")
+							{
+								montoTotal += listaFiltrada[m].precioPesos;
+								if(listaFiltrada[m].estado == 'Pedido') {
+									objeto.total += listaFiltrada[m].precioPesos;
+									objeto.precioUnitario = listaFiltrada[m].precioEuros;
+									objeto.simboloMoneda = "$";
+									objeto.monedaAbre = "MXN"; 
+								} else {
+									objetoNoP.total += listaFiltrada[m].precioPesos;
+									objetoNoP.precioUnitario = listaFiltrada[m].precioEuros;
+									objetoNoP.simboloMoneda = "$";
+									objetoNoP.monedaAbre = "MXN"; 
+									
+								}
+							}
+								
+							else if(tipoMoneda == "Euros")
+							{
+								montoTotal += listaFiltrada[m].precioEuros;
+								if(listaFiltrada[m].estado == 'Pedido') {
+									objeto.total += listaFiltrada[m].precioEuros;
+									objeto.precioUnitario = listaFiltrada[m].precioEuros;
+									objeto.simboloMoneda = "€";
+									objeto.monedaAbre = "EUR";
+								}
+								
+								else {
+									objetoNoP.total += listaFiltrada[m].precioPesos;
+									objetoNoP.precioUnitario = listaFiltrada[m].precioEuros;
+									objetoNoP.simboloMoneda = "€";
+									objetoNoP.monedaAbre = "EUR";
+									
+								}
+							}
+							
+							if(listaFiltrada[m].estado == 'Pedido')
+							{
+								
+								objeto.cantidad += listaFiltrada[m].cant;
+								if(tipoMoneda == "Dolares")
+									objeto.precio = listaFiltrada[m].precioDolares;
+								else if(tipoMoneda == "Pesos")
+									objeto.precio += listaFiltrada[m].precioPesos;
+								else if(tipoMoneda == "Euros")
+									objeto.precio = listaFiltrada[m].precioEuros;
+								
+							}
+							else{
+							
+								if(tipoMoneda == "Dolares")
+									objetoNoP.precioNoP = listaFiltrada[m].precioDolares;
+								else if(tipoMoneda == "Pesos")
+									objetoNoP.precioNoP = listaFiltrada[m].precioPesos;
+								else if(tipoMoneda == "Euros")
+									objetoNoP.precioNoP = listaFiltrada[m].precioEuros;
+								objetoNoP.cantidadNoP += listaFiltrada[m].cant;
+								
+							}
+							
+							if (listaFiltrada[m].clave != oldCotizacion && listaFiltrada[m].estado == 'Pedido') {
+								arrReturn.addItem( objeto );
+								oldCotizacion = listaFiltrada[m].clave;
+								isPedido = true;
+							} else {
+								if (!isPedido) {
+									arrReturn.addItem( objeto );
+								}
+								objeto = arrReturn.getItemAt(arrReturn.length-1);
+								objeto.precioNoP = objetoNoP.precioNoP;
+								objeto.cantidadNoP = objetoNoP.cantidadNoP;
+								if (objetoNoP.precioUnitario != 0 ) {
+									objeto.precioUnitario = objetoNoP.precioUnitario;
+									objeto.simboloMoneda = objetoNoP.simboloMoneda;
+								}
+								objeto.estado = "Nopedido"
+								//arrReturn.addItem( objetoNoP );
+								oldCotizacion = "";
+								numCotizacion++;
+								isPedido = false;
+							}
+							
+							
+							
+						//}
+					}
+					
+			/*		if (isPedido ){
+						arrReturn.addItem( objetoNoP );
+					}*/
+					
+					
+					
+					
+				//}
+					
+				numVecesReal = cuantasVecesEntro / 2;
+				promedioCantidad = (montoTotal / numVecesReal);
+				promedio =  (((precioMax-promedioCantidad)/(precioMax-precioMin)) * 134 ) + 40;
+				
+				//(this.parentDocument as popUpCotizacion).vgLinePromedio.y = promedio;
+				
+				myChart.dataProvider = arrReturn;
+				
+				myChart.invalidateProperties()
+				
+				
+			}
+			
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+<!--	<s:Rect width="100%" height="100%">
+		<s:stroke>
+			<s:SolidColorStroke color="#000000" weight="1"/>
+		</s:stroke>
+		
+	</s:Rect>-->
+	<s:VGroup width="100%" height="100%" horizontalAlign="right" paddingTop="20" paddingBottom="10" >
+	<!--<s:VGroup width="100%" height="100%" horizontalAlign="right" paddingTop="50" paddingBottom="10" >-->
+		<mx:LineChart height="100%" width="100%" id="myChart"
+					  mouseSensitivity="5" 
+					  showDataTips="true" 
+					  dataTipRenderer="{toolTipGraficasReporte}"
+					  showDataTipTargets="false"  
+					  dataTipMode="single" 
+					  paddingRight="{ width > _tamanioMinimo ? 30 : 5}"
+					  paddingLeft="{ width > _tamanioMinimo ? 20 : 5}"
+					  seriesFilters="[]"
+					  >
+			<mx:series>
+				<!--Punto Verde-->
+				<mx:LineSeries yField="precio" xField="numCot" form="segment"  lineStroke="{s3}" showDataEffect="{fxInterpolateIn}" />
+				<mx:PlotSeries id="montoActual" yField="precio" xField="numCot" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+					<mx:itemRenderer> <!--los datos que va pintar-->
+						<fx:Component>
+							<s:MXItemRenderer>
+								<fx:Script>
+									<![CDATA[
+									]]>
+								</fx:Script>
+								<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+									<s:fill>
+										<s:SolidColor color="0x4ba92b"/>
+									</s:fill>		
+								</s:Ellipse>
+							</s:MXItemRenderer>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:PlotSeries>
+			
+			<!--Punto Rojo-->
+			<mx:LineSeries yField="precioNoP" xField="numCot" form="segment"  lineStroke="{s4}" showDataEffect="{fxInterpolateIn}" />
+			<mx:PlotSeries id="montoNoPedido" yField="precioNoP" xField="numCot" displayName="Ventas" showDataEffect="{fxInterpolateIn}">
+				<mx:itemRenderer> <!--los datos que va pintar-->
+					<fx:Component>
+						<s:MXItemRenderer>
+							<fx:Script>
+								<![CDATA[
+									
+								]]>
+							</fx:Script>
+							<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0">
+								<s:fill>
+									<s:SolidColor color="0xf15a29"/>
+								</s:fill>		
+							</s:Ellipse>
+						</s:MXItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:PlotSeries>
+				</mx:series>
+			
+			<mx:horizontalAxis>
+				<mx:CategoryAxis id="numCot" categoryField="numCot" />
+			</mx:horizontalAxis>
+			
+			<mx:horizontalAxisRenderers >
+				<mx:AxisRenderer axis="{numCot}" showLabels="false" showLine="false" />
+			</mx:horizontalAxisRenderers>
+			
+			
+			<mx:verticalAxis>
+				<mx:LinearAxis id="ventasDLS"   /> 
+			</mx:verticalAxis>
+			<mx:verticalAxisRenderers>
+				<mx:AxisRenderer axis="{ventasDLS}"
+								 tickPlacement="none" showLine="false" showLabels="false"/>
+			</mx:verticalAxisRenderers>
+			
+			<mx:backgroundElements>
+				<mx:GridLines visible="false">
+					<mx:horizontalStroke>
+						<s:SolidColorStroke weight="0" color="0xeeeeee" alpha="0" />
+					</mx:horizontalStroke>
+				</mx:GridLines>
+			</mx:backgroundElements>
+		</mx:LineChart>
+	</s:VGroup>
+</s:Group>

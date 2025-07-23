@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+				xmlns:s="library://ns.adobe.com/flex/spark" xmlns:lstscrl="skins.spark.components.*"  
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				xmlns:shaders="skins.skin.shaders.*" 
+				xmlns:pqNet="skins.botones.pqNet.*"
+				xmlns:label="skins.skin.label.*"
+				xmlns:otros="skins.otros.*" 
+				autoDrawBackground="false"
+				creationComplete="init(event)" 
+				depth="0"
+				maxWidth="630" maxHeight="450"
+				width="100%" height="100%"
+				>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cartera;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.EffectEvent;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			protected function borrar_OrdenGuardada(event:MouseEvent):void
+			{
+				dispatchEvent( new Event("borrarOrdenDespacho",true));
+			}
+			
+			protected function editarOrdenGuardada(event:MouseEvent):void
+			{
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.EDITAR_INFORMACION_ORDEN_DESPACHO);
+				evento.ordenDespacho = new OrdenDespacho;
+				evento.ordenDespacho = data as OrdenDespacho;
+				dispatchEvent(evento);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:Rotate3D id="fxShow3D" duration="500" autoCenterTransform="true" angleYFrom="180" angleYTo="0" effectEnd="{ fxShow3D.angleYFrom = ( fxShow3D.angleYFrom == 180 ? -180:180)}" />
+		<s:Rotate3D id="fxHide3D" duration="500" autoCenterTransform="true" angleYFrom="0" angleYTo="-180" effectEnd="{ fxHide3D.angleYTo = ( fxHide3D.angleYTo == -180 ? 180:-180); }"/>
+		<s:Fade id="fxFade" duration="450" />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			
+			private var imag:Number = 0;
+			private var idTimeOut:uint;
+			private var _reverso:Boolean;
+			
+			[Bindable] private var _cartera:Cartera;
+			
+			override public function set data(value:Object):void{
+				super.data = value;
+				
+				data.totalDocumentos = data.documentosCargados + data.documentosFaltantes;
+				data.totalListasArribo = data.listasArribo.length.toString();
+				data.totalListasArribo += data.listasArribo.length == 1 ? ' Lista de Arribo' : ' Listas de Arribo';
+				
+				if(data.idAgenteAduanal > 0 )
+				{
+					imgAgenteFrente.source =catalogoIconosBotones.getInstance()["Agent_"+data.idAgenteAduanal.toString()];
+					imgAgenteAtras.source =catalogoIconosBotones.getInstance()["Agent_"+data.idAgenteAduanal.toString()];
+				}
+				
+				switch(value.progresoVista)
+				{
+					case "despacho_Ajustes":
+						imgSeccion.source = catalogoIconosBotones.getInstance().ajustes_imp;
+						imgSeccionGuardada.source = catalogoIconosBotones.getInstance().ajustes_imp;
+						break;
+					case "despacho_Consolidado":
+						imgSeccion.source = catalogoIconosBotones.getInstance().consolidado;
+						imgSeccionGuardada.source = catalogoIconosBotones.getInstance().consolidado;
+						break;
+					case "despacho_Documentacion":
+						imgSeccion.source = catalogoIconosBotones.getInstance().documentacion;
+						imgSeccionGuardada.source = catalogoIconosBotones.getInstance().documentacion;
+						break;
+					case "despacho_GOrden":
+						imgSeccion.source = catalogoIconosBotones.getInstance().generar_orden;
+						imgSeccionGuardada.source = catalogoIconosBotones.getInstance().generar_orden;
+						break;
+				}
+				
+				
+				
+				/**
+				 * SE VALIDA LA FECHA QUE SE MUESTRA, SI ES NULL Y SI NO TIENE LISTA ARRIBO
+				 */
+				if(data.fua == null)
+				{
+					if((data.listasArribo as ArrayCollection) && (data.listasArribo as ArrayCollection).length > 0 )
+						lblFecha.text = lblFecha1.text = "Stock";
+					else
+						lblFecha.text = lblFecha1.text = "ND";
+				}
+				else
+				{
+					lblFecha.text = data.fechaString;
+					lblFecha1.text = data.fechaString;
+				}
+				
+				if(value.diasRestantes  > 2)
+				{
+					tiempo.color = 0x4fa834;
+					tiempo1.color = 0x4fa834;
+				}
+				else if(value.diasRestantes < 0)
+				{
+					tiempo.color = 0xde0014;
+					tiempo1.color = 0xde0014;
+				}
+				else
+				{
+					if(value.fua == null)
+					{
+						tiempo.color = 0x4fa834;
+						tiempo1.color = 0x4fa834;
+					}
+					else
+					{
+						tiempo.color = 0xf09500;
+						tiempo1.color = 0xf09500;
+					}
+					
+				}
+			}
+			
+			////////////////////// CREA LOS LISTENERS PARA EL EFECTO DE GIRAR ////////////////////////////////////////////
+			protected function init(event:FlexEvent):void
+			{
+				fxShow3D.addEventListener( EffectEvent.EFFECT_START, effectShowHandler);
+				fxHide3D.addEventListener( EffectEvent.EFFECT_START, effectHideHandler);
+			}
+			
+			
+			private function effectShowHandler( event:EffectEvent ):void{
+				fxFade.target = (event.currentTarget as Rotate3D).target;
+				fxFade.alphaFrom = 0;
+				fxFade.alphaTo = 1;
+				fxFade.play();
+			}
+			private function effectHideHandler( event:EffectEvent ):void{
+				fxFade.target = (event.currentTarget as Rotate3D).target;
+				fxFade.alphaFrom = 1;
+				fxFade.alphaTo = 0;
+				fxFade.play();
+			}
+			
+			
+			protected function muestraReverso(event:MouseEvent):void
+			{
+				
+				stackTodo.selectedIndex = 1;
+			}
+			
+			protected function muetraPrincipal(event:MouseEvent):void
+			{
+				stackTodo.selectedIndex = 0;
+				idTimeOut = 1500;
+			}
+			
+			////////////////////////////////   REDIMENSION DE LETRA Y LOGOS   //////////////////////////////////////////////
+			
+			[Bindable] private var font22:int; 
+			[Bindable] private var font20:int; 
+			[Bindable] private var font14:int; 
+			[Bindable] private var imgFW:int;
+			[Bindable] private var imgFH:int;
+			[Bindable] private var imgBW:int;
+			[Bindable] private var imgBH:int;
+			[Bindable] private var padF:int;
+			[Bindable] private var padFL:int;
+			[Bindable] private var gapF:int;
+			[Bindable] private var imgF:int;
+			[Bindable] private var imgHF:int;
+			[Bindable] private var punto:int;
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				
+				////////////   FRENTE   //////////////
+				
+				font22 = (22/649) * ($width);
+				font14 = (14/649) * ($width);
+				imgFW = (450/649) * ($width);
+				imgFH = (150/649) * ($width);
+				padFL = (70/649) * ($width);
+				padF = (40/649) * ($width);
+				gapF = (40/649) * ($width);
+				imgF = (30/649) * ($width);
+				if(data.progresoVista == "despacho_Consolidado")
+					imgSeccionGuardada.width = (52/649) * ($width);
+				imgHF = (18/649) * ($width);
+				
+				/////////////   ATRAS ///////////////
+				
+				font20 = (20/649) * ($width);
+				imgBW = (300/649) * ($width);
+				imgBH = (140/649) * ($width);
+				punto = (20/649) * ($width);
+				
+			}
+			
+			
+		]]>
+		
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="hovered" />
+		<s:State name="selected"/>
+	</s:states>	
+	
+	
+	<pq:MobViewStack id="stackTodo" width="100%" height="100%" creationPolicy="all" >
+		
+		<!--/////////////////////// ESTE ES EL FRENTE  ///////////////////////  -->
+		
+		<s:Group width="100%" height="100%" showEffect="{fxShow3D}" hideEffect="{fxHide3D}" >
+			<s:Rect  width="100%" height="100%">
+				<s:fill>
+					<s:SolidColor color="#FFFFFF" color.selected="#FFFFFF" color.hovered="#FFFFFF"/>
+				</s:fill>
+			</s:Rect>
+			
+			<s:VGroup width="100%" height="100%" id="grpEspacioA" paddingBottom="33" gap="15" click="muestraReverso(event)">
+				<s:HGroup width="100%" height="100%" horizontalAlign="center" paddingTop="{padF}" paddingBottom="{padF}">
+					<mx:Image id="imgAgenteFrente" width="{imgFW}" height="{imgFH}" horizontalAlign="center"/>
+				</s:HGroup>
+				<s:HGroup width="100%" height="100%" horizontalAlign="center">
+					<otros:division width="70%"/>
+				</s:HGroup>
+				<s:VGroup width="100%" height="100%" paddingLeft="{padFL}" paddingTop="{padF}">
+					<s:HGroup width="100%">
+						<label:Titulo_15_Helvetica text="#{data.numFila} · " fontSize="{font22}"/>
+						<label:Titulo_15_Helvetica text="{data.folio}" fontSize="{font22}"/>
+					</s:HGroup>
+					<s:Spacer height="15%"/>
+					<label:Titulo_15_Helvetica text="$ {UtilsFormatosNumericos.precisionADosDecimalesConComas(data.totalMonto)}" fontSize="{font22}"/>
+					<s:Spacer height="15%"/>
+					<s:HGroup width="100%" verticalAlign="middle">
+						<s:HGroup >
+							<label:Texto_14_Helvetica id="lblFecha1" fontSize="{font22}"/>
+							<s:Ellipse width="{punto}" height="{punto}">
+								<s:fill>
+									<s:SolidColor  id="tiempo"/>
+								</s:fill>
+							</s:Ellipse>
+						</s:HGroup>
+						<s:Spacer width="30%"/>
+						<mx:Image id="imgSeccionGuardada" width="{imgF}" height="{imgF}" source="{catalogoIconosBotones.getInstance().ajustes_imp}" />
+						<s:Spacer width="17%"/>
+						<label:Texto_14_Helvetica text="{data.totalDocumentos}" color="#008894" fontSize="{font22}"/>
+						<mx:Image width="{imgF}" height="{imgHF}" source="{catalogoIconosBotones.getInstance().documentos_totales}"/>
+					</s:HGroup>
+				</s:VGroup>
+				
+				
+				
+			</s:VGroup>
+			
+		</s:Group>
+		
+		
+		<!--/////////////////////// ESTE ES EL REVERSO ///////////////////////  -->
+		
+		<s:Group width="100%" height="100%" showEffect="{fxShow3D}" hideEffect="{fxHide3D}"  >
+			<s:Rect width="100%" height="100%">
+				<s:fill>
+					<s:SolidColor  color="#FFFFFF"  color.selected="#FFFFFF" color.hovered="#FFFFFF" />
+				</s:fill>
+			</s:Rect>
+			<s:Spacer height="4.5%"/>
+			<s:VGroup id="grpEspacioB"  horizontalAlign="center" width="100%" height="100%" paddingLeft="20" paddingRight="20" >
+				<s:Group width="100%">
+					<s:HGroup width="100%" horizontalAlign="right">
+						<mx:Image source="{catalogoIconosBotones.getInstance().tache_verde}" horizontalAlign="right" verticalAlign="bottom" click="muetraPrincipal(event)"/>
+					</s:HGroup>
+					<s:HGroup width="100%" verticalAlign="middle" paddingTop="20">
+						<s:VGroup   paddingLeft="30">
+							<s:HGroup >
+								<label:Titulo_15_Helvetica text="#{data.numFila} · " fontSize="{font20}"/>
+								<label:Titulo_15_Helvetica text="{data.folio}" fontSize="{font20}"/>
+							</s:HGroup>
+							<s:Spacer height="9%"/>
+							<label:Titulo_15_Helvetica text="$ {UtilsFormatosNumericos.precisionADosDecimalesConComas(data.totalMonto)}" fontSize="{font20}"/>
+							<s:Spacer height="9%"/>
+							<label:Texto_14_Helvetica text="{data.totalListasArribo}" fontSize="{font14}"/>
+							<s:Spacer height="9%"/>
+							<s:HGroup >
+								<label:Texto_14_Helvetica id="lblFecha" fontSize="{font20}"/>
+								<s:Ellipse width="{punto}" height="{punto}">
+									<s:fill>
+										<s:SolidColor id="tiempo1" />
+									</s:fill>
+								</s:Ellipse>
+							</s:HGroup>
+						</s:VGroup>
+						<s:Spacer width="10%"/>
+						<s:HGroup height="100%" verticalAlign="middle" horizontalAlign="center">
+							<mx:Image id="imgAgenteAtras" width="{imgBW}" height="{imgBH}" horizontalAlign="center" verticalAlign="middle"/>
+						</s:HGroup>
+					</s:HGroup>
+				</s:Group>
+				
+				<s:Spacer height="10%"/>
+				<s:HGroup width="100%" horizontalAlign="center" >
+					<otros:division width="90%"/>
+				</s:HGroup>
+				<s:Spacer height="10%"/>
+				
+				<s:HGroup width="100%" height="100%" paddingLeft="30"  paddingBottom="10">
+					<s:VGroup width="100%" height="100%">
+						<s:HGroup width="100%">
+							<label:Texto_14_Helvetica text="Importador:" color="#424242" fontSize="{font14}"/>
+							<label:Texto_16_Helvetica text="{data.nombreImportador}" color="#424242" fontSize="{font14}" fontWeight="bold"/>
+						</s:HGroup>
+						<s:Spacer height="10%"/>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="Exportador:" color="#424242" fontSize="{font14}"/>
+							<label:Texto_16_Helvetica text="{data.nombreExportador}" color="#424242" fontSize="{font14}" fontWeight="bold"/>
+						</s:HGroup>
+						<s:Spacer height="10%"/>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="Agente Aduanal:" color="#424242" fontSize="{font14}"/>
+							<label:Texto_16_Helvetica text="{data.nombreAgenteAduanal}" color="#424242" fontSize="{font14}" fontWeight="bold"/>
+						</s:HGroup>
+						<s:Spacer height="10%"/>
+						<s:HGroup width="100%">
+							<mx:Image id="imgSeccion" height="{imgF}" source="{catalogoIconosBotones.getInstance().ajustes_imp}"/>
+						</s:HGroup>
+					</s:VGroup>
+					
+					<s:VGroup width="100%" height="100%">
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="Fletera:" color="#424242" fontSize="{font14}"/>
+							<label:Texto_16_Helvetica text="{data.fletera}" color="#424242" fontSize="{font14}" fontWeight="bold"/>
+						</s:HGroup>
+						<s:Spacer height="10%"/>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="Incoterm:" color="#424242" fontSize="{font14}"/>
+							<label:Texto_16_Helvetica text="{data.incoterm}" color="#424242" fontSize="{font14}" fontWeight="bold"/>
+						</s:HGroup>
+						<s:Spacer height="10%"/>
+						<s:HGroup width="100%" >
+							<label:Texto_14_Helvetica text="Packing List:" color="#424242" fontSize="{font14}"/>
+							<label:Texto_16_Helvetica text="{data.pakinglist}" color="#424242" fontSize="{font14}" fontWeight="bold"/>
+						</s:HGroup>
+						<s:Spacer height="10%"/>
+						<s:HGroup width="100%">
+							<s:HGroup>
+								<!--<label:Texto_14_Helvetica text="0" color="#70a83b" fontSize="{font14}"/>-->
+								<label:Texto_14_Helvetica text="{data.documentosCargados}" color="#70a83b" fontSize="{font14}"/>
+								<mx:Image width="{imgF}" source="{catalogoIconosBotones.getInstance().documentos_cargados}"/>
+							</s:HGroup>
+							<s:Spacer width="5%"/>
+							<s:HGroup>
+								<!--<label:Texto_14_Helvetica text="0" color="#bf0411" fontSize="{font14}"/>-->
+								<label:Texto_14_Helvetica text="{data.documentosFaltantes}" color="#bf0411" fontSize="{font14}"/>
+								<mx:Image source="{catalogoIconosBotones.getInstance().documentos_faltantes}"/>
+							</s:HGroup>
+						</s:HGroup>
+					</s:VGroup>
+					<s:Spacer height="4.5%"/>
+				</s:HGroup>
+				
+				<s:Group width="100%">
+					<s:HGroup id="btnEditar" width="100%" horizontalAlign="center">
+						<pqNet:botonPqNetLargo label="EDITAR" width="100" height="30" colorBase="0x008894" click="editarOrdenGuardada(event)"/>
+					</s:HGroup>
+					<s:HGroup width="100%" height="{btnEditar.height}" horizontalAlign="right" verticalAlign="middle">
+						<mx:Image source="{catalogoIconosBotones.getInstance().bote_eliminar}" click="borrar_OrdenGuardada(event)"/>
+					</s:HGroup>
+				</s:Group>
+				
+				
+				<s:Spacer height="4.5%"/>
+			</s:VGroup>
+		</s:Group>
+		
+		
+	</pq:MobViewStack>
+	
+</s:ItemRenderer>

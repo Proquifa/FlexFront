@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:botoneraFlotante="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.botoneraFlotante.*"
+		 xmlns:registrarConfirmacion="mx.com.proquifa.vista.vistas.registrarConfirmacion.*" 
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*"
+		 xmlns:boton="skins.skin.botones.boton.*"
+		 width="100%" height="100%"
+		 creationComplete="group1_creationCompleteHandler(event)"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.ResumenInspeccionProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			
+			private var timeLineData:ArrayList = new ArrayList(['1 · INSPECCIONAR PARTIDA', '2 · INSPECCIONAR PIEZAS','3 · ALMACENAR PRODUCTOS']);
+			
+			private var _sql:Query;
+			private var partida:VistaPartidaInspeccion;
+			private var piezasV:VistaPiezasInspeccionar;
+			private var productosV:VistaProductosInspeccionA;
+			private var universo:ArrayCollection = new ArrayCollection();
+			private var punterosPrioridad:Array;
+			private var listaAux:ArrayCollection = new ArrayCollection();
+			
+			public function setDatos(value:ArrayCollection):void
+			{
+				universo = new ArrayCollection();
+				universo =  ObjectUtil.copy(value) as ArrayCollection;
+				
+				if(value != null)
+				{
+					armaLista('p1');
+				
+				}
+				
+				else
+				{
+					lstClientes.dataProvider = new ArrayCollection();
+				}
+				timeLine.selectedIndex = -1;
+				timeLine.Cmenu();
+				timeLine.selectedIndex = 0;
+			}
+			
+			private function armaLista(prioridad:String):void
+			{
+				var universoAux:ArrayCollection = ObjectUtil.copy(universo) as ArrayCollection;
+				var sqlTipo:Query = new Query(universoAux,["prioridad"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlTipo.getPunteros([prioridad]);
+				listaAux = sqlTipo.armarLista(punteros) as ArrayCollection;
+				
+				if(listaAux.length > 0)
+				{
+					lstClientes.dataProvider = listaAux;
+					seleccionarPrimero();
+				}
+				else{
+					lstClientes.dataProvider = new ArrayCollection;
+					lstPartidas.dataProvider = new ArrayCollection;
+				}
+			}
+			
+			[Bindable] public var totales:ResumenInspeccionProductos;
+			public function recibeTotales(to:ResumenInspeccionProductos):void
+			{
+				totales = to;
+				
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				timeLine.data = timeLineData;
+				timeLine.conPalomita = false;
+				
+				zonaTrabajoTimeLine.removeAllElements();
+				if (!partida)
+					partida = new VistaPartidaInspeccion();
+				zonaTrabajoTimeLine.addElement(partida);
+				timeLine.maxItemList = 1;
+				
+				
+				timeLine.addEventListener("verificaSiavanza",verificaSiAvanza);
+				
+			}
+			
+			protected function lstClientes_changeHandler(event:IndexChangeEvent):void
+			{
+				if(lstClientes.selectedItem.partidas != null && lstClientes.selectedItem.partidas.length > 0 )
+				{
+					lstPartidas.dataProvider = lstClientes.selectedItem.partidas;
+					lstPartidas.selectedIndex = 0;
+					conceptoAct = (lstPartidas.selectedItem as PartidaInspeccion).concepto;
+					partida.llenarInfo(lstPartidas.selectedItem as PartidaInspeccion);
+				}
+				else{
+					lstPartidas.dataProvider = new ArrayCollection();
+				}
+				
+			}
+			
+			
+			private function llenarInformacion():void{
+				
+			}
+			
+			
+			private function limpiarInformacion():void{
+				
+			}
+			
+			private var almacenSelect:String;
+			private var presentacionSelect:String;
+			private var caducidadSelect:String;
+			private var numPiezasTotal:Number;
+			private var numPiezasReal:Number;
+			private var loteSelect:String;
+			protected function timeLine_cambiarVista(event:Event):void
+			{
+				
+				zonaTrabajoTimeLine.removeAllElements();
+				switch(timeLineData.source[timeLine.selectedIndex])
+				{
+					case '1 · INSPECCIONAR PARTIDA':
+					{
+						if (!partida)
+							partida = new VistaPartidaInspeccion();
+						zonaTrabajoTimeLine.addElement(partida);
+						/*requerimientos.iniciaVista(reportarVisita.requerimientos);*/
+						timeLine.maxItemList = 1;
+						btnSiguiente.visible = btnSiguiente.includeInLayout = true;
+						btnFinalizar.visible = btnFinalizar.includeInLayout = false;
+						btnVolver.visible = false;
+						
+						break;
+					}
+					case '2 · INSPECCIONAR PIEZAS':
+					{
+						if(!piezasV)
+							piezasV = new VistaPiezasInspeccionar();
+						 zonaTrabajoTimeLine.addElement(piezasV);
+						 piezasV.iniciarVista(numPiezasTotal,numPiezasReal,loteSelect,presentacionSelect,almacenSelect,caducidadSelect);
+							
+						 btnSiguiente.visible = btnSiguiente.includeInLayout = true;
+						 btnFinalizar.visible = btnFinalizar.includeInLayout = false;
+						 btnVolver.visible = true;
+							break;
+					}
+					case '3 · ALMACENAR PRODUCTOS':
+					{
+						if (!productosV)
+							productosV = new VistaProductosInspeccionA();
+						zonaTrabajoTimeLine.addElement(productosV);
+						productosV.iniciarVista(numPiezasTotal,numPiezasReal,loteSelect,presentacionSelect,almacenSelect,caducidadSelect,folioP);
+						
+						btnSiguiente.visible = btnSiguiente.includeInLayout = false;
+						btnFinalizar.visible = btnFinalizar.includeInLayout = true;
+						btnVolver.visible = true;
+						break;
+					}
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			[Bindable] private var _colorR:uint = 0xbf2932;
+			[Bindable] private var _colorA:uint = 0xffffff;
+			[Bindable] private var _colorv:uint = 0xffffff;
+			protected function cambio_de_boton(event:MouseEvent,tipo:String):void
+			{
+				if(tipo == 'amarillo'){
+					_colorR = 0xffffff;
+					_colorv = 0xffffff;
+					_colorA = 0xf9af4c;
+					
+					/*rojo*/
+					tex1P1.setStyle( "color","0xbf2932" );
+					tex2P1.setStyle( "color","0x000000" );
+					tex3P1.setStyle( "color","0x000000" );
+					tex1P1.setStyle( "fontWeight","normal");
+					tex2P1.setStyle( "fontWeight","normal" );
+					tex3P1.setStyle( "fontWeight","normal" );
+					
+					/*amarillo*/
+					tex1P2.setStyle( "color","0xffffff" );
+					tex2P2.setStyle( "color","0xffffff" );
+					tex3P2.setStyle( "color","0xffffff" );
+					tex1P2.setStyle( "fontWeight","bold");
+					tex2P2.setStyle( "fontWeight","bold" );
+					tex3P2.setStyle( "fontWeight","bold" );
+					
+					
+					/*verde*/
+					tex1P3.setStyle( "color","0x40b34f" );
+					tex2P3.setStyle( "color","0x000000" );
+					tex3P3.setStyle( "color","0x000000" );
+					tex1P3.setStyle( "fontWeight","normal" );
+					tex2P3.setStyle( "fontWeight","normal" );
+					tex3P3.setStyle( "fontWeight","normal");
+					
+					armaLista('p2');
+				}
+				
+				else if(tipo == 'rojo'){
+					_colorR = 0xbf2932;
+					_colorv = 0xffffff;
+					_colorA = 0xffffff;
+					
+					/*rojo*/
+					tex1P1.setStyle( "color","0xffffff" );
+					tex2P1.setStyle( "color","0xffffff" );
+					tex3P1.setStyle( "color","0xffffff" );
+					tex1P1.setStyle( "fontWeight","bold");
+					tex2P1.setStyle( "fontWeight","bold" );
+					tex3P1.setStyle( "fontWeight","bold" );
+				
+					
+					/*amarillo*/
+					tex1P2.setStyle( "color","0xf9af4c" );
+					tex2P2.setStyle( "color","0x000000" );
+					tex3P2.setStyle( "color","0x000000" );
+					tex1P2.setStyle( "fontWeight","normal");
+					tex2P2.setStyle( "fontWeight","normal" );
+					tex3P2.setStyle( "fontWeight","normal" );
+					
+					/*verde*/
+					tex1P3.setStyle( "color","0x40b34f" );
+					tex2P3.setStyle( "color","0x000000" );
+					tex3P3.setStyle( "color","0x000000" );
+					tex1P3.setStyle( "fontWeight","normal" );
+					tex2P3.setStyle( "fontWeight","normal" );
+					tex3P3.setStyle( "fontWeight","normal");
+					
+					armaLista('p1');
+				}
+				
+				else if(tipo == 'verde'){
+					_colorR = 0xffffff;
+					_colorv = 0x40b34f;
+					_colorA = 0xffffff;
+					
+					/*rojo*/
+					tex1P1.setStyle( "color","0xbf2932" );
+					tex2P1.setStyle( "color","0x000000" );
+					tex3P1.setStyle( "color","0x000000" );
+					tex1P1.setStyle( "fontWeight","normal");
+					tex2P1.setStyle( "fontWeight","normal" );
+					tex3P1.setStyle( "fontWeight","normal" );
+					
+					/*amarillo*/
+					tex1P2.setStyle( "color","0xf9af4c" );
+					tex2P2.setStyle( "color","0x000000" );
+					tex3P2.setStyle( "color","0x000000" );
+					tex1P2.setStyle( "fontWeight","normal");
+					tex2P2.setStyle( "fontWeight","normal" );
+					tex3P2.setStyle( "fontWeight","normal" );
+					
+					/*verde*/
+					tex1P3.setStyle( "color","0xffffff" );
+					tex2P3.setStyle( "color","0xffffff" );
+					tex3P3.setStyle( "color","0xffffff" );
+					tex1P3.setStyle( "fontWeight","bold" );
+					tex2P3.setStyle( "fontWeight","bold" );
+					tex3P3.setStyle( "fontWeight","bold");
+					
+					armaLista('p3');
+					
+				}
+				
+			}
+			
+			private function seleccionarPrimero():void
+			{
+				lstClientes.selectedIndex = 0;
+				lstClientes.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				
+			}
+			
+			[Bindable]public var conceptoAct:String;
+			[Bindable]public var imagenA:String;
+			[Bindable]public var folioP:String;
+			protected function lstPartidas_changingHandler(event:IndexChangeEvent):void
+			{
+				partida.llenarInfo(lstPartidas.selectedItem as PartidaInspeccion);
+				conceptoAct = (lstPartidas.selectedItem as PartidaInspeccion).concepto;
+			}
+			
+			private function verificaVistaPartida():Boolean
+			{
+				var infoCompleta:Boolean = false;
+                var partAc:PartidaInspeccion = lstPartidas.selectedItem as PartidaInspeccion;
+				
+				
+				if(partida.cmbPresentacion.selectedIndex >=0 && partida.cmbAlmacen.selectedIndex >=0 && partida.cmbTransporte.selectedIndex >= 0)
+				{
+					infoCompleta = true
+					almacenSelect = partida.cmbAlmacen.dataProvider[partida.cmbAlmacen.selectedIndex].valor;
+					presentacionSelect = partida.cmbPresentacion.dataProvider[partida.cmbPresentacion.selectedIndex].valor;
+					caducidadSelect = "1/Dic/2017"
+					numPiezasTotal = partAc.cantidadCompra;
+					numPiezasReal = Number(partida.txtNumero.text);
+					loteSelect = partida.loteTxt.text;
+					folioP = lstPartidas.selectedItem.folioEtiqueta;
+				}
+		
+				
+						if(infoCompleta)
+						{
+							if(Number(partida.txtNumero.text)<= (lstPartidas.selectedItem as PartidaInspeccion).cantidadCompra)
+								 infoCompleta = true
+							else
+								infoCompleta = false;
+						}
+				
+				
+				return infoCompleta;
+			}
+			
+			
+			private function verificaSiAvanza(event:Event):void{
+				if(verificaVistaPartida())
+				{
+					timeLine.maxItemList = 4;
+					timeLine.avanzaEntrePestanas(1);
+				}
+				else{
+					alertaSingleton.show("Información Incompleta");
+				}
+				
+			}
+			
+		
+			
+			protected function avansar_vista(event:MouseEvent):void
+			{
+				timeLine.avanzaEntrePestanas(1);
+				
+			}
+			
+			protected function regresar_Vista(event:MouseEvent):void
+			{
+				timeLine.avanzaEntrePestanas(0);
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" gap="0">
+		<s:HGroup width="100%" height="12%" gap="0" >
+			
+			<s:Group width="100%" height="100%"  click="cambio_de_boton(event,'rojo')" >
+				<s:Rect width="100%" height="100%" bottom="0" id="recR">
+					<s:fill>
+						<s:SolidColor color="{_colorR}" />
+					</s:fill>
+				</s:Rect>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle" paddingLeft="20" >
+					<s:Label styleName="tab_texto_12_Helvetica"  color="#FFFFFF" text="PRIORIDAD 1" fontWeight="bold" fontSize="30" id="tex1P1" />
+					<s:Label styleName="tab_texto_12_Helvetica"  color="#FFFFFF" text="{totales.numPartP1} {totales.numPartP1 == 1? 'Partida':'Partidas'} · {totales.numPiezasP1} {totales.numPiezasP1 == 1 ? 'Pieza':'Piezas'}"  fontSize="24" id="tex2P1" />
+					<s:Label styleName="tab_texto_12_Helvetica"  color="#FFFFFF" text="{totales.numCliP1} {totales.numCliP1 == 1? 'Cliente':'Clientes'}"  fontSize="18" id="tex3P1" />
+				</s:VGroup>  
+				
+				<otros:division colorLinea="rojo" width="100%" grueso="5" bottom="0" />
+				<mx:Image id="imagePopUp" source="{catalogoIconosBotones.getInstance().triangulo_rojo}" bottom="0"  />
+			</s:Group>
+			
+			
+			
+			<s:Group width="100%" height="100%"  click="cambio_de_boton(event,'amarillo')" id="Tamarrillo" >
+				<s:Rect width="100%" height="100%" bottom="0" id="recA">
+					<s:fill>
+						<s:SolidColor color="{_colorA}" />
+					</s:fill>
+				</s:Rect>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle" paddingLeft="20" >
+					<s:Label styleName="tab_texto_12_Helvetica" color="#f9af4c" text="PRIORIDAD 1" fontWeight="bold" fontSize="30" id="tex1P2" />
+					<s:Label styleName="tab_texto_12_Helvetica" color="#000000" text="{totales.numPartP2} {totales.numPartP2 == 1? 'Partida':'Partidas'} · {totales.numPiezasP2} {totales.numPiezasP2 == 1 ? 'Pieza':'Piezas'}"  fontSize="24" id="tex2P2"  />
+					<s:Label styleName="tab_texto_12_Helvetica" color="#000000" text="{totales.numCliP2} {totales.numCliP2 == 1? 'Cliente':'Clientes'}"  fontSize="18" id="tex3P2"  />
+				</s:VGroup>  
+				
+				<otros:division colorLinea="amarillo" width="100%" grueso="5" bottom="0" />
+				
+			</s:Group>
+			<s:Group width="100%" height="100%"  click="cambio_de_boton(event,'verde')" >
+				<s:Rect width="100%" height="100%" bottom="0" id="recV">
+					<s:fill>
+						<s:SolidColor color="{_colorv}"/>
+					</s:fill>
+				</s:Rect>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle" paddingLeft="20" >
+					<s:Label styleName="tab_texto_12_Helvetica"  color="#40b34f" text="PRIORIDAD 3" fontWeight="bold" fontSize="30" id="tex1P3" />
+					<s:Label styleName="tab_texto_12_Helvetica"  color="#000000" text="{totales.numPartP3} {totales.numPartP3 == 1? 'Partida':'Partidas'} · {totales.numPiezasP3} {totales.numPiezasP3 == 1 ? 'Pieza':'Piezas'}"  fontSize="24" id="tex2P3"  />
+					<s:Label styleName="tab_texto_12_Helvetica"  color="#000000" text="{totales.numCliP3} {totales.numCliP3 == 1? 'Cliente':'Clientes'}"  fontSize="18" id="tex3P3"  />
+				</s:VGroup> 
+				<otros:division colorLinea="verde" width="100%" grueso="5" bottom="0" />
+			</s:Group>
+		</s:HGroup>  
+		
+		<s:HGroup width="100%" height="7%" verticalAlign="middle" >
+			<s:VGroup width="17%" height="100%" verticalAlign="middle" >
+				<s:Label styleName="tab_texto_14_Helvetica"  text="CLIENTES" fontFamily="Helvetica" color="#008894" maxDisplayedLines="1" fontSize="23" fontWeight="bold" width="100%"/>
+			</s:VGroup>  
+			
+			<s:VGroup width="22%" height="100%" verticalAlign="middle"  >
+				<s:Label styleName="tab_texto_14_Helvetica" textAlign="center"  text="PARTIDAS" fontFamily="Helvetica" color="#008894" maxDisplayedLines="1" fontSize="23" fontWeight="bold" width="100%"/>
+			</s:VGroup>  
+			
+			<s:VGroup width="61%" height="100%" verticalAlign="middle" >
+				<s:Label styleName="tab_texto_14_Helvetica"  text="INSPECCIÓN" fontFamily="Helvetica" color="#008894" maxDisplayedLines="1" fontSize="23" fontWeight="bold" width="100%" />
+			</s:VGroup>  
+			
+			
+		</s:HGroup>  
+		
+		
+		<s:HGroup width="100%" height="81%" gap="0" >
+			<s:VGroup width="17%" height="98%" paddingLeft="22" paddingRight="19" horizontalAlign="center">
+				<s:TextInput id="txtBuscador" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D"  prompt="Cliente"/>
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" 
+						selectedIndex="0" id="lstClientes" contentBackgroundAlpha="0"
+						itemRenderer="vista.vistas.InspeccionarArribados.itemRender.IR_listaClientesInspeccion"  changing="lstClientes_changeHandler(event)" />
+				
+				<s:VGroup width="100%" height="2%" >
+					<otros:division colorLinea="grisObscuro" width="100%" grueso="2" />
+					<s:Spacer height="3" />
+					<s:Label styleName="tab_texto_14_Helvetica" text="{lstClientes.dataProvider.length} CLIENTES" fontFamily="Helvetica" color="#4d4d4d" maxDisplayedLines="1" fontSize="12" fontWeight="bold" width="100%" />
+				</s:VGroup>  
+			
+			</s:VGroup>  
+			<otros:VDivisionSuperDelgada height="100%"/>
+			
+			<s:VGroup width="22%" height="98%" paddingLeft="20" paddingRight="20" >
+				<s:TextInput id="txtBuscador2" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D"  prompt="Concepto"/>
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+						selectedIndex="0" id="lstPartidas" contentBackgroundAlpha="0"  changing="lstPartidas_changingHandler(event)"
+						itemRenderer="vista.vistas.InspeccionarArribados.itemRender.IR_listaPartidasEnInspecion" 
+						/>
+				
+				<s:VGroup width="100%" height="2%" >
+					<otros:division colorLinea="grisObscuro" width="100%" grueso="2" />
+					<s:Spacer height="3" />
+					<s:Label styleName="tab_texto_14_Helvetica" text="{lstPartidas.dataProvider.length} {lstPartidas.dataProvider.length ==1?'Partida':'Partidas'} " fontFamily="Helvetica" color="#4d4d4d" maxDisplayedLines="1" fontSize="12" fontWeight="bold" width="100%" />
+				</s:VGroup> 
+			</s:VGroup>  
+			<otros:VDivisionSuperDelgada height="100%"/>
+			<s:VGroup width="61%" height="100%" paddingLeft="30" paddingRight="30" >
+				<s:VGroup width="100%" height="9%" > 
+					<botoneraFlotante:botonSecciones id="timeLine" width="100%" avanzarVista="timeLine_cambiarVista(event)" regresarVista="timeLine_cambiarVista(event)" />
+				</s:VGroup> 
+				<otros:LineaDivision id="linea" width="100%" height="2" color="#f4f4f4" top="0"/>
+				
+				<s:VGroup width="100%" height="10%" paddingTop="20" >
+					<s:Label styleName="tab_texto_14_Helvetica"  text="Descripción" fontFamily="Helvetica" color="#000000" maxDisplayedLines="1" fontSize="18" fontWeight="bold" width="100%" />
+					<s:Label styleName="tab_texto_14_Helvetica"  text="{conceptoAct}" 
+							 fontFamily="Helvetica" color="#008894" maxDisplayedLines="3" fontSize="18" fontWeight="bold" width="100%" />
+				</s:VGroup>  
+
+				<otros:LineaDivision  width="100%" height="2" color="#f4f4f4" top="0"/>
+				<s:Group id="zonaTrabajoTimeLine" width="100%" height="81%" />
+				
+				<s:VGroup width="100%" height="2%" >
+					<otros:division colorLinea="grisObscuro" width="100%" grueso="2" />
+					<s:Spacer height="3" />
+					<s:Label styleName="tab_texto_14_Helvetica" text="{lstPartidas.dataProvider.length} {lstPartidas.dataProvider.length ==1?'Partida':'Partidas'} " fontFamily="Helvetica" color="#4d4d4d" maxDisplayedLines="1" fontSize="12" fontWeight="bold" width="100%" />
+				</s:VGroup> 
+				
+				<s:HGroup width="100%" height="2%" verticalAlign="middle" paddingBottom="20">
+				
+					<boton:BotonDefault width="200" height="40" conTexto="true" color="#0C8893" label="VOLVER" id="btnVolver"  visible="false" click="regresar_Vista(event)"
+										verticalCenter="0" styleNameLabel="titulo_blanco_Novecento"  />	
+					
+					<s:Spacer width="100%" />
+					
+						<boton:BotonDefault width="200" height="40" conTexto="true" color="#0C8893" label="SIGUIENTE" id="btnSiguiente" click="avansar_vista(event)"
+											 verticalCenter="0" styleNameLabel="titulo_blanco_Novecento"  />	
+				
+					
+				
+					
+					
+					<boton:BotonDefault width="200" height="40" conTexto="true" color="#50a635" label="FINALIZAR" id="btnFinalizar" visible="false" includeInLayout="false"
+										horizontalCenter="0" verticalCenter="0" styleNameLabel="titulo_blanco_Novecento"  />
+					
+					
+				
+				</s:HGroup>  
+				
+			</s:VGroup>  
+			
+			
+			
+		</s:HGroup>  
+		
+		
+	</s:VGroup>  
+</s:Group>
+ 

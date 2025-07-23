@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas  
+	xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+	xmlns:btnToggleEstados="skins.botonesToggle.btnToggleEstados.*"
+	xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+	xmlns:botonesToggle="skins.botonesToggle.*"
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx" 
+	xmlns:fx="http://ns.adobe.com/mxml/2009"  
+	xmlns:chekbox="skins.skin.chekbox.*"
+	xmlns:pqNet="skins.botones.pqNet.*" 
+	xmlns:tabla="skins.botones.tabla.*"
+	xmlns:label="skins.skin.label.*" 
+	xmlns:otros="skins.otros.*" 
+	width="100%" height="100%"
+	titulo="REPORTE COBROS"
+	creationComplete="inicia()" xmlns:evento="skins.botones.evento.*"
+	>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.cobros.EventoReporteCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Services;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			
+			private var _estado:String = 'tabla';
+			private var clickeado:String = "";
+			private var _filtroMontoLabel:String = "";
+			private var _loginEmpleado:Empleado;
+			private var _listaCobros:ArrayCollection = new ArrayCollection();
+			
+			private var currentCliente:String;
+			private var currentCPago:String;
+			private var currentMPago:String;
+			private var currentFPor:String;
+			private var currentEsac:String;
+			private var currentCobrador:String;
+			
+			[Bindable] private var _pasado:int = 0; 
+			[Bindable] private var _anteAntier:int = 0;
+			[Bindable] private var _antier:int = 0; 
+			[Bindable] private var _ayer:int = 0;
+			[Bindable] private var _hoy:int = 0; 
+			[Bindable] private var _manana:int = 0;
+			[Bindable] private var _pasadoManana:int = 0; 
+			[Bindable] private var _posPasado:int = 0;
+			[Bindable] private var _fututro:int =  0;
+			[Bindable] private var _todo:int = 0;
+			[Bindable] private var _clickeadoAnterior:String  = '';
+			[Bindable] private var _clickeado:String = "DIA0";
+			[Bindable] public var _vistaAvanzada:Boolean = true;
+			[Bindable] private var _cliente:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _cobrador:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _esac:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _vendedor:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _cpago:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _mpago:ArrayCollection = new ArrayCollection();
+			[Bindable] private var _icoGrafica:Class = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+			[Bindable] private var _icoTabla:Class = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+			[Bindable] private var _listaBotones:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1}, 
+				{valor:'Rápida',llave:0} ] );
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizar.png")]
+			private var imgNormal:Class;
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizarverde.png")]
+			private var imgDown:Class;
+			
+			private function inicia():void{
+				_loginEmpleado = DatosGlobales.getInstance()._usuario;
+				
+				
+				if( _loginEmpleado.nivel == 1 // PLozada
+					|| _loginEmpleado.nivel == 35 // Ing
+					|| _loginEmpleado.nivel == 44 // CMRamirez
+					|| _loginEmpleado.esGerente == true
+					|| _loginEmpleado.idFuncion == 37) // Master ESAC
+				{
+					mostrarCombos(true);
+				}
+				else
+				{
+					mostrarCombos(false);
+				}
+				
+				var eventEspera:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.CONFIGURAR_ESPERA_REPORTE_COBRO);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.tipoEventos = [];
+				eventEspera.tipoEventos.push("OBTENER_UNIVERSO_FACTURAS");
+				dispatchEvent(eventEspera);
+				
+				var event:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.OBTENER_UNIVERSO_FACTURAS);
+				event.factura = '';
+				event.pedido = '';
+				event.cliente = 0;
+				event.facturo = '';
+				event.cpago = '';
+				event.mpago = '';
+				event.cpedido = '';
+				event.idUsuarioLogueado = _loginEmpleado.clave;
+				event.esac = '';
+				event.cobrador = '';
+				dispatchEvent(event);
+				
+				this.imgActualizar.source = imgDown;
+				addEventListener("clickCustomButton",escuchar);
+				this.btn4.currentState = "seleccionado";
+				this.clickeado = "btn4"; 
+			}
+			
+			private function mostrarCombos($visible:Boolean):void
+			{
+				cmbESAC.visible = cmbESAC.includeInLayout = $visible;
+				LblEsac.visible = LblEsac.includeInLayout = $visible;
+				spcESAC.visible = spcESAC.includeInLayout = $visible;
+				
+				cmbCobrador.visible = cmbCobrador.includeInLayout = $visible;
+				LblCobrador.visible = LblCobrador.includeInLayout = $visible;
+				spcCobrador.visible = spcCobrador.includeInLayout = $visible;
+			}
+			
+			protected function actualizarUniverso():void{
+				
+				this.imgActualizar.source = imgDown;
+				
+				var eventEspera:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.CONFIGURAR_ESPERA_REPORTE_COBRO);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.tipoEventos = [];
+				eventEspera.tipoEventos.push("OBTENER_UNIVERSO_FACTURAS");
+				dispatchEvent(eventEspera);
+				
+				var event:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.OBTENER_UNIVERSO_FACTURAS);
+				event.factura = "";
+				event.pedido = "";
+				event.cliente = 0;
+				event.facturo = "";
+				event.cpago = "";
+				event.mpago = '';
+				event.cpedido = '';
+				event.idUsuarioLogueado = _loginEmpleado.clave;
+				event.esac = '';
+				event.cobrador = '';
+				dispatchEvent(event);
+				
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				if($actualizarEstadoEspera.hasOwnProperty("isBusy")){
+					if(!$actualizarEstadoEspera.isBusy){
+						switch(_clickeado)
+						{
+							case 'PASADO': {btn0.imagen = 'tabla'; btn0.currentState = 'normal';	break;}
+							case 'ANTE ANTIER': {btn1.imagen = 'tabla';btn1.currentState = 'normal';	break;}
+							case 'ANTIER': {btn2.imagen = 'tabla';btn2.currentState = 'normal';	break;}
+							case 'AYER': {btn3.imagen = 'tabla';btn3.currentState = 'normal';	break;}
+							case 'HOY': {btn4.imagen = 'tabla';btn4.currentState = 'normal';	break;}
+							case 'MAÑANA': {btn5.imagen = 'tabla';btn5.currentState = 'normal';	break;}
+							case 'PASADO MAÑANA': {btn6.imagen = 'tabla';btn6.currentState = 'normal';	break;}
+							case 'POS PASADO': {btn7.imagen = 'tabla';btn7.currentState = 'normal';	break;}
+							case 'FUTURO': {btn8.imagen = 'tabla';btn8.currentState = 'normal';	break;}
+							case 'TODO': {btn9.imagen = 'tabla';btn9.currentState = 'normal';	break;}
+						}
+						clickeado = 'btn4';
+						_clickeado = "DIA0"; //HOY
+						btn4.currentState = "seleccionado";
+						
+						btnBarra.selectedIndex = 0;
+						menuAvanzado.visible = menuAvanzado.includeInLayout = true;
+						MenuRapido.visible = MenuRapido.includeInLayout = false;
+						//btnBarra.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));  
+					}
+				}
+			}
+			
+			protected function actualizarCobrosXDia($dia:String = null):void{
+				var evt:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.FILTRAR_COBROS );
+				evt.clasificacion =_filtroMontoLabel
+				evt.diaSeleccionado = $dia;
+				evt.nombreCliente = currentCliente;
+				evt.cpago = currentCPago;
+				evt.factura = '';
+				evt.mpago =currentMPago;
+				evt.facturo =currentFPor;
+				evt.cpedido = '';
+				evt.esac = currentEsac;
+				evt.cobrador = currentCobrador;
+				dispatchEvent(evt);
+			}
+			
+			protected function filtrarCobrosXDia($filtro:String = null):void{
+				
+				var dispararEvento:Boolean = false;
+				switch($filtro)
+				{
+					case 'cmbCliente':
+					{
+						if (cmbCliente.selectedItem != null && currentCliente != cmbCliente.selectedItem){
+							currentCliente = cmbCliente.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case 'cmbMedio':
+					{
+						if (cmbMedio.selectedItem != null && currentMPago != cmbMedio.selectedItem){
+							currentMPago = cmbMedio.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case 'cmbpago':
+					{
+						if (cmbpago.selectedItem != null && currentCPago != cmbpago.selectedItem){
+							currentCPago = cmbpago.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case 'cmbVendio':
+					{
+						if (cmbVendio.selectedItem != null && currentFPor != cmbVendio.selectedItem){
+							currentFPor = cmbVendio.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case 'cmbESAC':
+					{
+						if (cmbESAC.selectedItem != null && currentEsac != cmbESAC.selectedItem){
+							currentEsac = cmbESAC.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case 'cmbCobrador':
+					{
+						if (cmbCobrador.selectedItem != null && currentCobrador != cmbCobrador.selectedItem){
+							currentCobrador = cmbCobrador.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+				if (dispararEvento){
+					var evt:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.FILTRAR_FILTRO_COBROS );
+					evt.clasificacion =_filtroMontoLabel;
+					evt.diaSeleccionado = _clickeado;
+					evt.nombreCliente = currentCliente;
+					evt.cpago = currentCPago;
+					evt.factura = '';
+					evt.mpago = currentMPago;
+					evt.facturo = currentFPor;
+					evt.cpedido = '';
+					evt.usuario = DatosGlobales.getInstance()._usuario.clave;
+					evt.esac = currentEsac;
+					evt.cobrador = currentCobrador;
+					dispatchEvent(evt);
+				}
+				
+			}
+			
+			protected function escuchar(event:Event):void{
+				
+				var eventIndice:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.SET_INDICE_REPORTE_COBROS );
+				var evento:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.CAMBIA_INDICE);
+				if(event.target.imagen == "tabla"){
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+					
+					eventIndice.indice = evento.indice = 0 ;
+					_estado = 'tabla';
+					dispatchEvent(eventIndice);
+					
+				}else if(event.target.imagen == "grafica"){
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablaminigris;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficamini;
+					
+					eventIndice.indice = evento.indice = 1 ;
+					_estado = 'grafica';
+					dispatchEvent(eventIndice);
+					var evt:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.MOSTRAR_GRAFICAS_REPORTE_COBROS);
+					dispatchEvent(evt);
+					
+				}
+				dispatchEvent(evento);
+				
+				if(clickeado != event.target.id.toString()){
+					
+					clickeado = event.target.id.toString();
+					
+					if( event.target.id != null )
+						var id:String = event.target.id.toString();
+					if( id == "btn0" ){
+						_clickeado = "PASADO";
+						btn0.currentState = "seleccionado";	
+					}
+					if( id == "btn1" ){
+						_clickeado = "DIA-3";
+						btn1.currentState = "seleccionado";	
+					}
+					if( id == "btn2" ){
+						_clickeado = "DIA-2";
+						btn2.currentState = "seleccionado";
+					}
+					if( id == "btn3" ){
+						_clickeado = "DIA-1";
+						btn3.currentState = "seleccionado";	
+					}
+					if( id == "btn4" ){
+						_clickeado = "DIA0";
+						btn4.currentState = "seleccionado";	
+					}
+					if( id == "btn5" ){
+						_clickeado = "DIA1";
+						btn5.currentState = "seleccionado";	
+					}
+					if( id == "btn6" ){
+						_clickeado = "DIA2";
+						btn6.currentState = "seleccionado";						
+					}
+					if( id == "btn7" ){
+						_clickeado = "DIA3";
+						btn7.currentState = "seleccionado";	
+					}
+					if( id == "btn8" ){
+						_clickeado = "FUTURO";
+						btn8.currentState = "seleccionado";	
+					}
+					if( id == "btn9" ){
+						_clickeado = "TODO";
+						btn9.currentState = "seleccionado";	
+					}
+					
+					actualizarCobrosXDia(_clickeado);
+				} 	
+			}
+			
+			public function set obtenerInfoCombos($datos:ArrayCollection):void{
+				
+				if($datos == null) return;
+				var arrTemp:ArrayCollection = ObjectUtil.copy($datos) as ArrayCollection;
+				//generaCombos(arrTemp);
+			}
+			
+			public function set recibicirLabelFiltroMonto($label:String):void{
+				
+				if ($label == 'TODO'){
+					_filtroMontoLabel ="";
+				}
+				if ($label == '> $10,000'){
+					_filtroMontoLabel ="> $10,000";
+				}
+				if ($label == '$2,001 - $10,000'){
+					_filtroMontoLabel ="$2,001 - $10,000";
+				}
+				if ($label == '0 - $2,000'){
+					_filtroMontoLabel ="0 - $2,000";
+				}
+				
+			}
+			
+			public function set recibirObjLabels( $objLabel:Object ):void{
+				if( $objLabel == null )	return;
+				btn0.total = validaDisplay( $objLabel["PASADO"] );
+				btn1.total = validaDisplay( $objLabel["DIA-3"] );
+				btn2.total = validaDisplay( $objLabel["DIA-2"] );
+				btn3.total = validaDisplay( $objLabel["DIA-1"] );
+				btn4.total = validaDisplay( $objLabel["DIA0"] );
+				btn5.total = validaDisplay( $objLabel["DIA1"] );
+				btn6.total = validaDisplay( $objLabel["DIA2"] );
+				btn7.total = validaDisplay( $objLabel["DIA3"] );
+				btn8.total = validaDisplay( $objLabel["FUTURO"] );
+				btn9.total = validaDisplay( $objLabel["TODO"] );
+				btn3.label2 = validaDisplay( $objLabel.ayer );
+				btn4.label2 = validaDisplay( $objLabel.hoy );
+				btn5.label2 = validaDisplay( $objLabel.manana );
+				this.imgActualizar.source = imgNormal;
+			}
+			
+			public function set recibeArraysCombos(combos:Object):void{
+				if (combos != null){
+					if (combos.hasOwnProperty("cmbCliente")){
+						cmbCliente.setDataProvider(new ArrayCollection(combos.cmbCliente),currentCliente);
+					}
+					if (combos.hasOwnProperty("cmbMedio")){
+						cmbMedio.setDataProvider(new ArrayCollection(combos.cmbMedio),currentMPago);
+					}
+					if (combos.hasOwnProperty("cmbpago")){
+						cmbpago.setDataProvider(new ArrayCollection(combos.cmbpago),currentCPago);
+					}
+					if (combos.hasOwnProperty("cmbVendio")){
+						cmbVendio.setDataProvider(new ArrayCollection(combos.cmbVendio),currentFPor);
+					}
+					if (combos.hasOwnProperty("cmbCobrador")){
+						cmbCobrador.setDataProvider(new ArrayCollection(combos.cmbCobrador),currentCobrador);
+					}
+					if (combos.hasOwnProperty("cmbESAC")){
+						cmbESAC.setDataProvider(new ArrayCollection(combos.cmbESAC),currentEsac);
+					}
+				}
+			}
+			
+			private function validaDisplay( $propiedad:* ):String{
+				if( $propiedad == null ) return '';
+				return $propiedad.toString();
+			}
+			
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if((event.currentTarget as ButtonBar).selectedItem == null){
+					event.preventDefault();
+				}
+				else if( event.currentTarget.selectedItem.llave == 0 ){
+					menuAvanzado.visible = menuAvanzado.includeInLayout = false;
+					MenuRapido.visible = MenuRapido.includeInLayout = true;
+					txtFactura.text = '';
+					
+				}else{
+					menuAvanzado.visible = menuAvanzado.includeInLayout = true;
+					MenuRapido.visible = MenuRapido.includeInLayout = false;	
+					actualizarCobrosXDia(_clickeado);
+				}
+			}
+			
+			private function buscaFactura():void{
+				
+				var evento:EventoReporteCobros = new EventoReporteCobros(EventoReporteCobros.CAMBIA_INDICE);
+				_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+				_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+				evento.indice = 0 ;
+				_estado = 'tabla';
+				dispatchEvent(evento);
+				
+				var evt:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.OBTENER_BUSQUEDA_FACTURA_RAPIDA );
+				evt.clasificacion =""
+				evt.diaSeleccionado = 'TODO';
+				evt.nombreCliente = '--TODOS--';
+				evt.cpago = '--TODOS--';
+				evt.idUsuarioLogueado = _loginEmpleado.clave;
+				evt.factura = txtFactura.text;
+				evt.mpago ='--TODOS--';
+				evt.facturo ='--TODOS--';
+				evt.cpedido = '';
+				dispatchEvent(evt);  
+			}
+			
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%">
+			
+			<s:HGroup horizontalAlign="center" width="100%">
+				<s:Image id="imgActualizar"  click="actualizarUniverso()"/>
+			</s:HGroup>
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="2"/>
+			<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" requireSelection="true"/>
+			<s:Spacer height="2"/>
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="10"/>
+			
+			<s:VGroup width="100%" height="100%" id="menuAvanzado" visible="true" >
+				<label:Titulo paddingTop="0" id="cliente" text="Cliente:"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbCliente" labelField="nombreCliente" change="filtrarCobrosXDia('cmbCliente')"/> <!--dataProvider="{ this._cliente}"-->
+				<s:Spacer id="spcCobrador" height="1"/>
+				<label:Titulo paddingTop="0" id="LblCobrador" text="Cobrador:"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbCobrador" labelField="cobrador" change="filtrarCobrosXDia('cmbCobrador')"/> <!--dataProvider="{ this._cobrador}"-->
+				<s:Spacer id="spcESAC" height="1"/>
+				<label:Titulo paddingTop="0" id="LblEsac" text="ESAC:"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbESAC" labelField="esac" change="filtrarCobrosXDia('cmbESAC')"/> <!--dataProvider="{ this._esac}"-->
+				<s:Spacer height="1"/>
+				<label:Titulo paddingTop="0" id="vendio" text="Vendió:"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbVendio" labelField="fpor"  change="filtrarCobrosXDia('cmbVendio')"/> <!--dataProvider="{ this._vendedor}"-->
+				<s:Spacer height="1"/>
+				<label:Titulo paddingTop="0" text="Condiciones de pago:" />
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbpago" labelField="cpago" change="filtrarCobrosXDia('cmbpago')"/> <!--dataProvider="{ this._cpago}"-->
+				<s:Spacer height="1"/>
+				<label:Titulo paddingTop="0" text="Medio de pago:" />
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbMedio" labelField="medioPago" change="filtrarCobrosXDia('cmbMedio')"/> <!--dataProvider="{ this._mpago}"-->
+				<s:Spacer height="1"/>
+				<otros:divisionHueca width="100%"/>
+				<s:Spacer height="10"/>
+				
+				<s:HGroup width="100%" horizontalAlign="right" gap="9" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" paddingBottom="10" >
+					<s:Image id="icoGrafica" source="{ this._icoGrafica }" />
+					<s:Image id="icoTabla" source="{ this._icoTabla }" />
+				</s:HGroup>
+				
+				<!--<s:HGroup width="100%" gap="5" id="grid" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" >
+				<s:VGroup width="100%" gap="9" >-->
+				<s:Group width="100%">
+					<s:layout>
+						<btnToggleEstados:LayoutBotoneraReporteAHyM minGap="2" minWidthElement="92" /> 		
+					</s:layout>
+					<btnToggleEstados:botonReporteAHyM id="btn3" tipoBoton="ayer" label1="AYER" currentState="{_clickeado == 'AYER' ? 'seleccionado': 'normal' }" total="{_ayer}"/> <!--valor="-1"-->
+					<btnToggleEstados:botonReporteAHyM id="btn4" tipoBoton="hoy" label1="HOY" currentState="{_clickeado == 'HOY' ? 'seleccionado': 'normal' }" total="{_hoy}" /> <!--valor="0"-->
+					<btnToggleEstados:botonReporteAHyM id="btn5" tipoBoton="manana" label1="MAÑANA" currentState="{_clickeado == 'DIA1' ? 'seleccionado': 'normal' }" total="{_manana}"/> <!--valor="1"-->
+					<btnToggleEstados:botonReporteAHyM id="btn2" tipoBoton="antier" label1="ANTIER" currentState="{_clickeado == 'ANTIER' ? 'seleccionado': 'normal' }" total="{_antier}"/> <!--valor="-2"-->
+					<btnToggleEstados:botonReporteAHyM id="btn6" tipoBoton="pasadomanana" label1="PASADO MAÑANA" currentState="{_clickeado == 'PASADO MAÑANA' ? 'seleccionado': 'normal' }" total="{_pasadoManana}"/><!--valor="2"-->
+					<btnToggleEstados:botonReporteAHyM id="btn1" tipoBoton="anteantier" label1="ANTE ANTIER"  currentState="{_clickeado == 'ANTE ANTIER' ? 'seleccionado': 'normal' }" total="{_anteAntier}"/> <!--valor="-3"-->
+					<btnToggleEstados:botonReporteAHyM id="btn9" tipoBoton="todo" label1="TODO" currentState="{_clickeado == 'TODO' ? 'seleccionado': 'normal' }" total="{_todo}"/>
+					<btnToggleEstados:botonReporteAHyM id="btn7" tipoBoton="pospasado" label1="POS PASADO" currentState="{_clickeado == 'POS PASADO' ? 'seleccionado': 'normal' }" total="{_posPasado}"/> <!--valor=3"-->
+					<btnToggleEstados:botonReporteAHyM id="btn0" tipoBoton="pasado" label1="PASADO" currentState="{_clickeado == 'PASADO' ? 'seleccionado': 'normal' }" total="{_pasado}"/> <!--valor="-4"-->
+					<btnToggleEstados:botonReporteAHyM id="btn8" tipoBoton="futuro" label1="FUTURO" currentState="{_clickeado == 'FUTURO' ? 'seleccionado': 'normal' }" total="{_fututro}"/> <!--valor="4"-->
+				</s:Group>
+				<s:Spacer height="15" />
+				<otros:divisionHueca width="100%"/>
+				<s:Spacer height="15"/>
+			</s:VGroup>
+			<s:VGroup id="MenuRapido" visible="false" width="100%" height="100%">
+				<s:Label  text="Factura:"  fontWeight="bold"/>
+				<s:Spacer height="5"/>
+				<s:TextInput width="100%" enter="buscaFactura()" id="txtFactura" fontStyle="normal" toolTip="Folio factura"/>
+				<s:Spacer height="15"/>
+				<otros:divisionHueca width="100%"/>
+			</s:VGroup>
+			
+		</s:VGroup>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

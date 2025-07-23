@@ -1,0 +1,313 @@
+package vista.modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.HorarioCalendario;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+	import mx.controls.Alert;
+	import mx.utils.ObjectUtil;
+
+	public class ModeloEVAgendarVisita extends EventDispatcher
+	{
+		/**
+		 ***************************************************** PENDIENTES VISITA A CLIENTE *************************************************************
+		 */
+		private var visitasAgendar:ArrayCollection;
+		public function setObtenerVisitasEV( data:ArrayCollection ):void{
+			
+			if(data){
+				for each (var visita:VisitaCliente in data) 
+				{
+					if(visita.horaVisitaInicio){
+						visita.fechaVInicioHora = visita.horaVisitaInicio.getHours();
+						visita.fechaVInicioMinuto = visita.horaVisitaInicio.getMinutes();
+						visita.fechaVisita = visita.fechaEstimadaVisita;
+					}
+					
+					if(visita.horaVisitaFin){
+						visita.fechaVFinHora = visita.horaVisitaFin.getHours();
+						visita.fechaVFinMinuto = visita.horaVisitaFin.getMinutes();
+						visita.fechaVisita = visita.fechaEstimadaVisita;
+					}
+				}
+				visitasAgendar = data;
+				
+			}else{
+				visitasAgendar = new ArrayCollection;
+			}
+			
+			
+			dispatchEvent( new Event("enviarVisitasParaAgendarModeloEVAgendarVisita") );
+		}
+		
+		public static function convertirRangoFechasLista(fechaInicio:Date,fechaFin:Date):ArrayCollection
+		{
+			var nombreDiasCorto:Array = ["Dom","Lun","Mar","Miér","Jue","Vie","Sáb"];
+			var nombreDias:Array = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+			var meses:Array = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+			var lista:ArrayCollection = new ArrayCollection;
+			var temp:Date;
+			
+			var diaInicio:int = fechaInicio.getDate();
+			var diaFin:int = fechaFin.getDate();
+			
+			if(fechaInicio.getMonth() == fechaFin.getMonth()){
+				for (var i:int = diaInicio; i <= diaFin; i++) 
+				{
+					var objIgual:HorarioCalendario = new HorarioCalendario;
+					
+					temp = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth(),i);
+					if(temp.day == 1 || temp.day == 2 || temp.day == 3 || temp.day == 4 || temp.day == 5){
+						objIgual.numeroDia = i;
+						objIgual.siglasDia = nombreDiasCorto[temp.getDay()];
+						objIgual.diaNombre = nombreDias[temp.getDay()];
+						objIgual.mesNombre = meses[temp.getMonth()];
+						objIgual.numeroMes = fechaInicio.getMonth();
+						objIgual.anio  = fechaInicio.getFullYear();
+						lista.addItem(objIgual);
+					}
+				}
+			}else{
+				temp = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth());
+				var finMes:int = getNumeroDias(fechaInicio.getFullYear(),fechaInicio.getMonth());
+				
+				for (var j:int = diaInicio; j <= finMes; j++) 
+				{
+					var objIgual1:HorarioCalendario = new HorarioCalendario;
+					var temp1:Date = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth(),j);
+					if(temp1.day == 1 || temp1.day == 2 || temp1.day == 3 || temp1.day == 4 || temp1.day == 5){
+						objIgual1.numeroDia = j;
+						objIgual1.siglasDia = nombreDiasCorto[temp1.getDay()];
+						objIgual1.diaNombre = nombreDias[temp1.getDay()];
+						objIgual1.mesNombre = meses[temp1.getMonth()];
+						objIgual1.numeroMes = fechaInicio.getMonth();
+						objIgual1.anio  = fechaInicio.getFullYear();
+						lista.addItem(objIgual1);
+					}
+				}
+				for (var k:int = 1; k <= diaFin; k++) 
+				{
+					var objIgual2:HorarioCalendario = new HorarioCalendario;
+					var temp2:Date = new Date(fechaFin.getFullYear(),fechaFin.getMonth(),k);
+					if(temp2.day == 1 || temp2.day == 2 || temp2.day == 3 || temp2.day == 4 || temp2.day == 5){
+						objIgual2.numeroDia = k;
+						objIgual2.siglasDia = nombreDiasCorto[temp2.getDay()];
+						objIgual2.diaNombre = nombreDias[temp2.getDay()];
+						objIgual2.mesNombre = meses[temp2.getMonth()];
+						objIgual2.numeroMes = fechaFin.getMonth();
+						objIgual2.anio  = fechaInicio.getFullYear();
+						lista.addItem(objIgual2);
+					}
+				}
+				
+			}
+			return lista;
+		}
+		private static function getNumeroDias(year:int, month:int):int{
+			var d:Date=new Date(year, month+1, 0);
+			return d.getDate();
+		}
+		
+		[Bindable(event="enviarVisitasParaAgendarModeloEVAgendarVisita")]
+		public function get enviarVisitasEV():ArrayCollection{
+			return visitasAgendar;
+		}
+		/**
+		 ***************************************************** PENDIENTES VISITA A CLIENTE *************************************************************
+		 */
+		private var exitoVisitasAgendadas:Boolean;
+		public function setObtenerRespuestaVisitasAgendadas( data:Boolean ):void{
+			
+			exitoVisitasAgendadas = data;
+			dispatchEvent( new Event("enviarExitoGuardadoVisitasModeloEVAgendarVisita") );
+		}
+		[Bindable(event="enviarExitoGuardadoVisitasModeloEVAgendarVisita")]
+		public function get enviarRespuestaVisitasAgendadas():Boolean{
+			return exitoVisitasAgendadas;
+		}
+		
+		public function ModeloEVAgendarVisita(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+		public function errorAgendarVisitas(objeto:Object):void{
+			Alert.show( objeto.toString() );
+		}
+		
+		/**
+		 ***************************************************** TOTALES VISTA INICIAL *************************************************************
+		 */	
+		
+		private var totalesClientes:ArrayCollection;
+		private var listaGraficaClientes:ArrayCollection;
+	    public function setObtenerTotalesVisitaAG( data:ArrayCollection ):void{
+			if( data == null ){
+				totalesClientes = new ArrayCollection();
+				listaGraficaClientes = new ArrayCollection();
+			}else{
+				totalesClientes = data;
+				listaGraficaClientes = new ArrayCollection();
+				
+				
+				var totalSolicitudes:int;
+				var totalCRM:int;
+				
+				for each (var temp:VisitaCliente in data) 
+				{
+					var resumen:ResumenConsulta = new ResumenConsulta;
+					resumen.etiqueta = temp.nombreCliente;
+					resumen.totalSolicitudes = temp.numSolicitud;
+					resumen.totalCRM = temp.numCRM;
+					resumen.totalClientes = 1;
+					resumen.totalVisita = temp.numSolicitud + temp.numCRM;
+					listaGraficaClientes.addItem(resumen);
+					
+					totalSolicitudes += temp.numSolicitud;
+					totalCRM += temp.numCRM;
+					
+				}
+				
+				var resumenTV:ResumenConsulta = new ResumenConsulta;
+				resumenTV.etiqueta = "SOLICITUDES";
+				resumenTV.totalSolicitudes = totalSolicitudes;
+				resumenTV.totalCRM = 0;
+				resumenTV.totalVisita = totalSolicitudes;
+				
+				
+				resumenTV = new ResumenConsulta;
+				resumenTV.etiqueta = "CRM";
+				resumenTV.totalSolicitudes = 0;
+				resumenTV.totalCRM = totalCRM;
+				resumenTV.totalVisita = totalCRM;
+				
+				
+			}
+			
+			dispatchEvent( new Event("obtenerTotalesAgendarVisitas") );
+			dispatchEvent( new Event("obtenerlistaGraficaClienteAgrupadasAgendarVisitas") );
+		}
+		
+		[Bindable(event="obtenerTotalesAgendarVisitas")]
+		public function get enviarTotalesVisitasClientesAgrupadas():ArrayCollection{
+			return totalesClientes;
+		}
+		[Bindable(event="obtenerlistaGraficaClienteAgrupadasAgendarVisitas")]
+		public function get enviarGraficaClientesAgrupadas():ArrayCollection{
+			return listaGraficaClientes;
+		}
+		
+		
+		/**
+		 ***************************************************** RESPUESTA DE REAGENDARVISITA*************************************************************
+		 */
+		private var repsuestaAG:Boolean;
+		public function setObtenerRespuestaREAGVisita( data:Boolean ):void{
+			
+			repsuestaAG = data;
+			dispatchEvent( new Event("enviarREspuestaREAG") );
+		}
+		[Bindable(event="enviarREspuestaREAG")]
+		public function get enviarRespuestaREAGVisita():Boolean{
+			return exitoVisitasAgendadas;
+		}
+		
+		
+		/**
+		 ***************************************************** OBTENER LISTA DE SEMANAS*************************************************************
+		 */
+		
+		
+		
+		
+		
+		public static function obtenerSemanas(fechaInicio:Date,fechaFin:Date):ArrayCollection
+		{
+			var nombreDiasCorto:Array = ["Dom","Lun","Mar","Miér","Jue","Vie","Sáb"];
+			var nombreDias:Array = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+			var meses:Array = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+			var lista:ArrayCollection = new ArrayCollection;
+			var temp:Date;
+			var auxF:Date = ObjectUtil.copy(fechaInicio) as Date;
+			
+			var diaInicio:int = fechaInicio.getDate();
+			var diaFin:int = fechaFin.getDate();
+			
+			
+			if(fechaInicio.day != 1)
+			{
+				var inicio:int;
+				
+				if(fechaInicio.getDay()==2)
+					auxF.setDate(fechaInicio.getDate()-1);
+				else if(fechaInicio.getDay()==3)
+					auxF.setDate(fechaInicio.getDate()-2);
+				else if(fechaInicio.getDay()==4)
+					auxF.setDate(fechaInicio.getDate()-3);
+				else if(fechaInicio.getDay()==5)
+					auxF.setDate(fechaInicio.getDate()-4);
+				
+				lista.addItem(auxF);
+				
+			}
+			
+			if(fechaInicio.getMonth() == fechaFin.getMonth()){
+				for (var i:int = diaInicio; i <= diaFin; i++) 
+				{
+					var objIgual:HorarioCalendario = new HorarioCalendario;
+					
+					temp = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth(),i);
+					if(temp.day == 1){
+						/*objIgual.numeroDia = i;
+						objIgual.siglasDia = nombreDiasCorto[temp.getDay()];
+						objIgual.diaNombre = nombreDias[temp.getDay()];
+						objIgual.mesNombre = meses[temp.getMonth()];
+						objIgual.numeroMes = fechaInicio.getMonth();
+						objIgual.anio  = fechaInicio.getFullYear();*/
+						lista.addItem(temp);
+					}
+				}
+			}else{
+				temp = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth());
+				var finMes:int = getNumeroDias(fechaInicio.getFullYear(),fechaInicio.getMonth());
+				
+				for (var j:int = diaInicio; j <= finMes; j++) 
+				{
+					var objIgual1:HorarioCalendario = new HorarioCalendario;
+					var temp1:Date = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth(),j);
+					if(temp1.day == 1){
+						/*objIgual1.numeroDia = j;
+						objIgual1.siglasDia = nombreDiasCorto[temp1.getDay()];
+						objIgual1.diaNombre = nombreDias[temp1.getDay()];
+						objIgual1.mesNombre = meses[temp1.getMonth()];
+						objIgual1.numeroMes = fechaInicio.getMonth();
+						objIgual1.anio  = fechaInicio.getFullYear();*/
+						lista.addItem(temp1);
+					}
+				}
+				for (var k:int = 1; k <= diaFin; k++) 
+				{
+					var objIgual2:HorarioCalendario = new HorarioCalendario;
+					var temp2:Date = new Date(fechaFin.getFullYear(),fechaFin.getMonth(),k);
+					if(temp2.day == 1){
+						/*objIgual2.numeroDia = k;
+						objIgual2.siglasDia = nombreDiasCorto[temp2.getDay()];
+						objIgual2.diaNombre = nombreDias[temp2.getDay()];
+						objIgual2.mesNombre = meses[temp2.getMonth()];
+						objIgual2.numeroMes = fechaFin.getMonth();
+						objIgual2.anio  = fechaInicio.getFullYear();*/
+						lista.addItem(temp2);
+					}
+				}
+				
+			}
+			
+			
+			return lista;
+		}
+
+	}
+}

@@ -1,0 +1,633 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.compras.cobros
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.cobros.EventoConsultaCobros;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.TiempoProceso;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.StringUtil;
+	
+	import skins.catalogos.catalogoAlertas;
+	
+	public class ModeloConsultaCobros extends EventDispatcher
+	{
+		public function ModeloConsultaCobros(target:IEventDispatcher = null)
+		{
+			super(target);
+		}
+		
+		/**
+		 * Función para obtener lista de cobros
+		 */ 
+		private var _lstcobros:ArrayCollection;
+		public var _classCobro:Cobros = new Cobros();
+		public function setListaCobros (cobros:ArrayCollection):void{
+			_lstcobros = new ArrayCollection();
+			if(cobros != null){
+				
+				for(var d:int = 0; d<cobros.length ; d++){
+					var currentItem:Cobros =cobros[d]; 
+					
+					currentItem.numFila = d + 1;
+					currentItem.formatoMontoRealCobro = currentItem.formatoMontoRealCobro + currentItem.monedaRealCobro;
+					
+					if(currentItem.estado == 'Por Cobrar' || currentItem.estado == 'Por cancelar' || currentItem.estado == 'A refacturación'){
+						currentItem.estadoParaMostrar = 'Abierto';
+						
+					}else if(currentItem.estado == 'Cobrada'){
+						currentItem.estado = 'Cobrado';
+						(currentItem as Cobros).estadoParaMostrar = 'Cerrado';
+						
+					}else if(currentItem.estado == "Cancelada"){
+						currentItem.estado = 'Cancelado';
+						(currentItem as Cobros).estadoParaMostrar = 'Cerrado';
+					}
+					
+					if(currentItem.estado == 'Cobrado'){
+						currentItem.color = '0xFFFFFF';
+						currentItem.drc = 'Cobrado';
+						currentItem.diasRestantesCobro = 'Cobrado';
+					}else if(currentItem.estado == 'Cancelado'){
+						currentItem.color = '0xFFFFFF';
+						currentItem.drc = 'Cancelado';
+						currentItem.diasRestantesCobro = 'Cancelado';
+					}else{
+						if (Number(currentItem.diasRestantesCobro) >= 4 ){//Verde 
+							currentItem.color = '0x32CD32';
+							currentItem.drc = 'En tiempo';
+						}else if (Number(currentItem.diasRestantesCobro) >= 1 && Number(currentItem.diasRestantesCobro) <= 3){ //Amarillo
+							currentItem.color = '0xFFFF00';
+							currentItem.drc = 'A 3 días del vencimiento';
+						}else if(Number(currentItem.diasRestantesCobro) == 0){//Naranja
+							if(currentItem.fechaEsperadaPago == null){
+								currentItem.color = '0xFFFFFF';
+								currentItem.diasRestantesCobro = 'Pendiente';
+								currentItem.drc = 'Pendiente';
+							}else{
+								currentItem.color = '0xFFA500';
+								currentItem.drc = 'Vencimiento';
+							}
+						}else if(Number(currentItem.diasRestantesCobro) >= -3 && Number(currentItem.diasRestantesCobro) <= -1){//Rojo
+							currentItem.color = '0xFF0000';
+							currentItem.drc = '3 días después del vencimiento';
+						}else if(Number(currentItem.diasRestantesCobro) <= -4){//Morado
+							currentItem.color = '0xC0C0FF';
+							currentItem.drc = 'Vencido';
+						}/*else if(currentItem.diasRestantesCobro == 'Cobrada'){
+						currentItem.color = '0xFFFFFF';
+						currentItem.drc = 'Cobrado';
+						}*/
+					}
+				}
+				
+				_lstcobros = cobros;
+			}
+			dispatchEvent(new Event("obtenerListaCobrosModeloConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerListaCobrosModeloConsultaCobros")]
+		public function get listaCobros():ArrayCollection{
+			if(_lstcobros!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerListaCobrosModeloConsultaCobros");
+				}
+			}
+			return this._lstcobros
+		}
+		
+		/**
+		 * Función para obtener linea de tiempo de cobros 
+		 */
+		public var _lista:ArrayCollection;
+		public var _arrTemp:ArrayCollection;
+		public function setListaLineaDTiempo(lTiempo:ArrayCollection):void{
+			_arrTemp = new ArrayCollection();
+			/*var currenItem:TiempoProceso ;*/
+			/*for(var i:int = 0; i<lTiempo.length ; i++){
+				currenItem = (lTiempo[i] as TiempoProceso);
+				if(currenItem.etapa == 'COBRO' && currenItem.etapaPadre == '1'){ // 1 es sin credito
+					_arrTemp.addItem(currenItem);
+				}else if(currenItem.etapa == 'COOBRADA' && currenItem.etapaPadre == '5'){ // 5 es sin credito
+					currenItem.fechaInicio = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaInicio;
+					currenItem.fechaFin = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaFin;
+					currenItem.totalProceso = (lTiempo[lTiempo.length - 1] as TiempoProceso).totalProceso;
+				}else if(currenItem.etapa == 'COOBRADA' && currenItem.etapaPadre == '8'){ // 5 es sin credito
+					currenItem.fechaInicio = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaInicio;
+					currenItem.fechaFin = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaFin;
+					currenItem.totalProceso = (lTiempo[lTiempo.length - 1] as TiempoProceso).totalProceso;
+				}else 	if(currenItem.etapa == 'COOBRADA_SC'){
+					lTiempo.removeItemAt(lTiempo.length - 1);
+				}else if(currenItem.etapa == 'ENTREGA'){
+					if(currenItem.fechaFin == null){
+						if(currenItem.conforme == "NO DISPONIBLE")
+							currenItem.conforme = "Pendiente";
+					}else{
+						if(currenItem.conforme == "NO DISPONIBLE")
+							currenItem.conforme = "ND";
+					}
+				}
+			}*/
+			var cobradaInterFacturacion:Boolean;
+			var contador:int = 0;var indiceCobrada:int = 0;
+			for each (var currenItem:TiempoProceso in lTiempo) 
+			{
+				if(currenItem.etapa == 'COBRO' && currenItem.etapaPadre == '1'){ // 1 es sin credito
+					_arrTemp.addItem(currenItem);
+				}else if(currenItem.etapa == 'COOBRADA' && currenItem.etapaPadre == '5'){ // 5 es sin credito
+					currenItem.fechaInicio = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaInicio;
+					currenItem.fechaFin = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaFin;
+					currenItem.totalProceso = (lTiempo[lTiempo.length - 1] as TiempoProceso).totalProceso;
+					
+					indiceCobrada = contador;
+				}else if(currenItem.etapa == 'COOBRADA' && currenItem.etapaPadre == '8'){ // 5 es sin credito
+					currenItem.fechaInicio = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaInicio;
+					currenItem.fechaFin = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaFin;
+					currenItem.totalProceso = (lTiempo[lTiempo.length - 1] as TiempoProceso).totalProceso;
+					
+					indiceCobrada = contador;
+				}else 	if(currenItem.etapa == 'COOBRADA_SC'){
+					lTiempo.removeItem(currenItem);
+				}else if(currenItem.etapa == 'ENTREGA'){
+					if(currenItem.fechaFin == null){
+						if(currenItem.conforme == "NO DISPONIBLE")
+							currenItem.conforme = "Pendiente";
+					}else{
+						if(currenItem.conforme == "NO DISPONIBLE")
+							currenItem.conforme = "ND";
+					}
+				}else if(currenItem.etapa == 'COBRADA INTER' ){ 
+					cobradaInterFacturacion = true;
+					/*currenItem.fechaInicio = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaInicio;
+					currenItem.fechaFin = (lTiempo[lTiempo.length - 1] as TiempoProceso).fechaFin;
+					currenItem.totalProceso = (lTiempo[lTiempo.length - 1] as TiempoProceso).totalProceso;*/
+					
+					currenItem.fechaCobro = currenItem.fechaFin;
+					currenItem.fechaDispobible = currenItem.fechaInicio;
+					currenItem.totalProceso = UtilsFecha.regresaDiferenciaEntreFechasEnDias(currenItem.fechaInicio,currenItem.fechaFin);
+				}
+				contador++;
+			}
+			if(cobradaInterFacturacion)
+				lTiempo.removeItemAt(indiceCobrada);
+			
+			/*COOBRADA 8*/
+			for(var k:int = 0; k<lTiempo.length ; k++){
+				if(lTiempo[k].etapaPadre != '1'){
+					_arrTemp.addItem(lTiempo[k]);
+				}
+			}
+			if(_arrTemp.length>0)
+				_arrTemp[_arrTemp.length-1].finLista = true;
+			
+			_lista = _arrTemp;
+			dispatchEvent(new Event("obtenerLineaDTiempoModeloConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerLineaDTiempoModeloConsultaCobros")]
+		public function get listaLineaDTiempo():ArrayCollection{
+			return this._lista;
+		}
+		
+		/**
+		 * Función para obtener inspector ENTREGA 
+		 */
+		public var _entrega:ArrayCollection;
+		public function setObtenerInspectorEntrega(iEntrega:ArrayCollection):void{
+			_entrega = iEntrega;
+			var currentItem:TiempoProceso;
+			for(var i:uint;i<_entrega.length;i++){
+				currentItem = (_entrega[i] as TiempoProceso);
+				if(currentItem.etapa == 'TRAMITAR RUTA'){
+					currentItem.comentarios = validarTextosXFechaFin(currentItem.comentarios,currentItem.fechaFin);
+					currentItem.referencia = validarTextosXFechaFin(currentItem.referencia,currentItem.fechaFin);
+				}else if(currentItem.etapa == 'SURTIR RUTA'){
+					currentItem.referencia = validarTextosXFechaFin(currentItem.referencia,currentItem.fechaFin);
+					currentItem.pedimento = validarTextosXFechaFin(currentItem.pedimento,currentItem.fechaFin);
+				}else if(currentItem.etapa == 'CERRAR RUTA'){
+					currentItem.referencia = validarTextosXFechaFin(currentItem.referencia,currentItem.fechaFin);
+					currentItem.pedimento = validarTextosXFechaFin(currentItem.pedimento,currentItem.fechaFin);
+					currentItem.comentarios = validarTextosXFechaFin(currentItem.comentarios,currentItem.fechaFin);
+				}else if(currentItem.etapa == 'EJECUTAR RUTA'){
+					currentItem.referencia = validarTextosXFechaFin(currentItem.referencia, currentItem.fechaFin);
+				}
+			}
+			dispatchEvent(new Event("obtenerInspectorEntregaModeloConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerInspectorEntregaModeloConsultaCobros")]
+		public function get obtnerInspectorEntrega():ArrayCollection{
+			return this._entrega;
+		}
+		
+		private function validarTextosXFechaFin(_texto:String,FFin:Date):String
+		{
+			if(FFin == null){
+				if(_texto == null || StringUtil.trim(_texto).length<=0)
+					return 'Pendiente';
+				else
+					return _texto;
+			}else if(FFin != null){
+				if(_texto == null || StringUtil.trim(_texto).length<=0)
+					return 'ND';
+				else
+					return _texto;
+			}
+			return '';
+		}
+		
+		/**
+		 * Función para obtener inspector REVISION 
+		 */
+		public var _revision:ArrayCollection;
+		public function setObtenerInspectorRevision(iRevision:ArrayCollection):void{
+			_revision = iRevision;
+			var currentItem:TiempoProceso;
+			if(_revision.length >0){
+				currentItem = _revision[0] as TiempoProceso;
+				currentItem.doscResult1 = validarTextosXFechaFin(currentItem.doscResult1, currentItem.fechaFin);
+				currentItem.doscResult2 = validarTextosXFechaFin(currentItem.doscResult2, currentItem.fechaFin);
+				currentItem.docsCierre = validarTextosXFechaFin(currentItem.docsCierre,currentItem.fechaFin);
+				currentItem.commentRevision = validarTextosXFechaFin(currentItem.commentRevision, currentItem.fechaFin);
+			}
+			dispatchEvent(new Event("obtenerInspectorRevisionModeloConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerInspectorRevisionModeloConsultaCobros")]
+		public function get obtnerInspectorRevision():ArrayCollection{
+			return this._revision;
+		}
+		
+		/**
+		 * Función para obtener inspector COBROS 
+		 */
+		public var _cobros:ArrayCollection;
+		public function setObtenerInspectorCobros(iCobros:ArrayCollection):void{
+			_cobros = new ArrayCollection;
+			_cobros = iCobros;
+			var currentItem:TiempoProceso;
+			for(var i:int=0; i<_cobros.length; i++){ 
+				currentItem = _cobros[i] as TiempoProceso;
+				if(currentItem.etapa =='GESTION_PSC'){
+					currentItem.cobro = validarTextosXFechaFin(currentItem.cobro,currentItem.fechaProgramacion);
+				}else if(currentItem.etapa == 'MONITOREO_CO_SC'){
+					currentItem.cobro = validarTextosXFechaFin(currentItem.cobro,currentItem.fechaProgramacion);
+					currentItem.docsCierre = validarTextosXFechaFin(currentItem.docsCierre,currentItem.fechaProgramacion);
+					currentItem.revision = validarTextosXFechaFin(currentItem.revision, currentItem.fechaProgramacion);
+				}else if(currentItem.etapa == 'COBRO_MONITOREO'){
+					currentItem.doscResult1 = validarTextosXFechaFin(currentItem.doscResult1, currentItem.fechaProgramacion);
+				}else if(currentItem.etapa == 'COBRO_PROGR'){
+					
+				}
+			}
+			dispatchEvent(new Event("obtenerInspectorCobrosModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerInspectorCobrosModelosConsultaCobros")]
+		public function get obtnerInspectorCobros():ArrayCollection{
+			return this._cobros;
+		}
+		
+		/**
+		 * Función para obtener inspector COBRADA 
+		 */
+		public var _cobrada:TiempoProceso;
+		public function setObtenerInspectorCobrada(cobrada:TiempoProceso):void{
+			_cobrada = cobrada;
+			dispatchEvent(new Event("obtenerInspectorCobradaModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerInspectorCobradaModelosConsultaCobros")]
+		public function get obtnerInspectorCobrada():TiempoProceso{
+			return this._cobrada;
+		}
+		/**
+		 * Función para obtener inspector CANCELADA 
+		 */
+		public var _cancelada:TiempoProceso;
+		public function setObtenerInspectorCancelada(cancelada:TiempoProceso):void{
+			_cancelada = cancelada;
+			dispatchEvent(new Event("obtenerInspectorCanceladaModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerInspectorCanceladaModelosConsultaCobros")]
+		public function get obtenerInspectorCancelada():TiempoProceso{
+			return this._cancelada;
+		}
+
+		/**
+		 * Función para obtener inspector REFACTURADA 
+		 */
+		public var _refacturada:TiempoProceso;
+		public function setObtenerInspectorRefacturada(refacturada:TiempoProceso):void{
+			_refacturada = refacturada;
+			dispatchEvent(new Event("obtenerInspectorRefacturadaModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenerInspectorRefacturadaModelosConsultaCobros")]
+		public function get obtenerInspectorRefacturada():TiempoProceso{
+			return this._refacturada;
+		}
+		
+		/**
+		 * Funcion que muestra tab garficas false- ocultar , true - muestra
+		 */ 
+		private var _tab:Boolean;
+		public function setMostrarOcultaTabGrafica(tab:Boolean):void{
+			_tab = tab;
+			dispatchEvent(new Event("muestraOcultaInfoTabGraficaModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="muestraOcultaInfoTabGraficaModelosConsultaCobros")]
+		public function get mostrarOcultaTabGrafica():Boolean{
+			return this._tab;
+		}
+		
+		/**
+		 * Funcion que obtiene tiempo proceso cobros
+		 */ 
+		private var _proceso:TiempoProceso;
+		public function setObtenerInspectorFacturacion(tProceso:TiempoProceso):void{
+			_proceso = tProceso;
+			dispatchEvent(new Event("obtenTiempoProcesoCobrosModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenTiempoProcesoCobrosModelosConsultaCobros")]
+		public function get obtenerInspectorFacturacion():TiempoProceso{
+			return this._proceso;
+		}
+		
+		/**
+		 * Funcion que obtiene info ffin y finicio de entregas
+		 */ 
+		private var _infoEntrega:TiempoProceso;
+		public function setObtenerInfoEntregas(entrega:TiempoProceso):void{
+			_infoEntrega = entrega;
+			dispatchEvent(new Event("obtenInfoEntregasCobroModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenInfoEntregasCobroModelosConsultaCobros")]
+		public function get obtenerInfoEntregas():TiempoProceso{
+			return this._infoEntrega;
+		}
+		
+		/**
+		 * Funcion que obtiene info ffin y finicio de revision
+		 */ 
+		private var _infoRevision:TiempoProceso;
+		public function setObtenerInfoRevision(revision:TiempoProceso):void{
+			_infoRevision = revision;
+			dispatchEvent(new Event("obtenInfoRevisionCobroModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenInfoRevisionCobroModelosConsultaCobros")]
+		public function get obtenerInfoRevision():TiempoProceso{
+			return this._infoRevision;
+		}
+		
+		/**
+		 * Funcion que obtiene info ffin y finicio de cobros
+		 */ 
+		private var _infoCobro:TiempoProceso;
+		public function setObtenerInfoCobros(cobro:TiempoProceso):void{
+			_infoCobro = cobro;
+			dispatchEvent(new Event("obtenInfoCobroModelosConsultaCobros"));
+		}
+		
+		[Bindable(event="obtenInfoCobroModelosConsultaCobros")]
+		public function get obtenerInfoCobros():TiempoProceso{
+			return this._infoCobro;
+		}
+		
+		/**
+		 **************************************************************  Funciones que obtienen los totales de Cobros **************************************************************
+		 */  
+		private var _totalDeTresRangos:ArrayCollection;
+		public function setObtenerTotalesCobros($totales:ArrayCollection):void{
+			if($totales ==null) return;
+			_totalDeTresRangos = $totales;
+			dispatchEvent(new Event ("obtenerTotalesConsultaCobrosModeloConsultaCobros"));
+		}
+		[Bindable(event="obtenerTotalesConsultaCobrosModeloConsultaCobros")]
+		public function get obtenerTotalesCobros():ArrayCollection{
+			if(_totalDeTresRangos!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerTotalesConsultaCobrosModeloConsultaCobros");
+				}
+			}
+			return _totalDeTresRangos;
+		}
+		
+		private var _totalesPasado:ArrayCollection;
+		public function setObtenerTotalesPasadoCobros($totales:ArrayCollection):void{
+			if($totales ==null) return;
+			_totalesPasado = $totales;
+			(_totalesPasado[0] as ResumenConsulta).etiqueta = 'Pasado';
+			dispatchEvent(new Event ("obtenerTotalesPasadoConsultaCobrosModeloConsultaCobros"));
+		}
+		[Bindable(event="obtenerTotalesPasadoConsultaCobrosModeloConsultaCobros")]
+		public function get obtenerTotalesPasadoCobros():ArrayCollection{
+			if(_totalesPasado!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerTotalesPasadoConsultaCobrosModeloConsultaCobros");
+				}
+			}
+			return _totalesPasado;
+		}
+		
+		private var _totalesPostpasado:ArrayCollection;
+		public function setObtenerTotalesPostPasadoCobros($totales:ArrayCollection):void{
+			if($totales ==null) return;
+			_totalesPostpasado = $totales;
+			(_totalesPostpasado[0] as ResumenConsulta).etiqueta = 'Postpasado';
+			dispatchEvent(new Event ("obtenerTotalesPostPasadoConsultaCobrosModeloConsultaCobros"));
+		}
+		[Bindable(event="obtenerTotalesPostPasadoConsultaCobrosModeloConsultaCobros")]
+		public function get obtenerTotalesPostPasadoCobros():ArrayCollection{
+			if(_totalesPostpasado!= null){
+				if(actualizarEspera!= null && currentEnEspera){
+					setControlDeBloqueoPantalla("terminaEspera",null,null,"obtenerTotalesPostPasadoConsultaCobrosModeloConsultaCobros");
+				}
+			}
+			return _totalesPostpasado;
+		}
+		/**
+		 *******************************************  Funcion que copia las condiciones para que las comparativas individual de Totales 
+		 * 																				puedan realizar su petición de información con las mismas condiciones que la busqueda avanzada**************************************************************
+		 */  
+		private var _evt:EventoConsultaCobros;
+		public function setCopiarConficionesParaTotales(evt:EventoConsultaCobros):void{
+			if(evt == null) return;
+			_evt = evt;
+			dispatchEvent(new Event("copiarCondicionesParaComparativasDeTotalesModeloConsultaCobros"));
+		}
+		[Bindable(event="copiarCondicionesParaComparativasDeTotalesModeloConsultaCobros")]
+		public function get obtenerCondicionesParaTotales():EventoConsultaCobros
+		{
+			return _evt;
+		}
+		/**
+		 *	********************************************************Funcion que obtiene la  info para la gráfica ET y FT Secundaria ********************************************************
+		 * 
+		 */
+		private var _infoVsETFTSecundaria:ArrayCollection;
+		public function pasarInfoAGraficaETvsFT(array:ArrayCollection):void{
+			if(array == null) return;
+			_infoVsETFTSecundaria = array;
+			dispatchEvent( new Event("pasaInfoaGraficaETvsFTSecundariaModeloConsultaCobros") );
+		}
+		[Bindable(event="pasaInfoaGraficaETvsFTSecundariaModeloConsultaCobros")]
+		public function get enviarInfoAGraficaETvsFT():ArrayCollection{
+			return _infoVsETFTSecundaria;
+		}
+		
+		/**
+		 ****************************************************************** Funcion para el tipo de filto de graficos secundarios *******************************************************
+		 */
+		private var _filtro:String;
+		public function setFiltroGraficoSecundario(tipo:String):void{
+			_filtro = tipo;
+			dispatchEvent(new Event ("ObtieneElFiltroParaLosGraficosETvsFTModeloConsultaCobros"));
+		}
+		
+		[Bindable(event="ObtieneElFiltroParaLosGraficosETvsFTModeloConsultaCobros")]
+		public function get filtroGraficoSecundario():String{
+			return this._filtro;
+			
+		}
+		/**
+		 ******************************************************* FUNCION QUE OBTIENE FACURA Y FPOR ************************************************************
+		 */ 
+		private var _dataRes:Object= new Object();
+		public function setObtenerFacturaFpor($factura:String, $fpor:String):void{
+			
+			var _data:Object= new Object(); 
+			
+			_data["factura"] = $factura;
+			_data["fpor"] = $fpor;
+			
+			_dataRes=_data;
+			
+			dispatchEvent(new Event("obtenInfoFacturaFporCobros"));
+		}
+		
+		[Bindable(event="obtenInfoFacturaFporCobros")]
+		public function get obtenerFacturaFpor():Object{
+			return this._dataRes;
+		}
+		/**
+		 *	********************************************************FUNCIONES PARA TRAER DATOS DE SERVICIO A DEMANDA********************************************************
+		 * 
+		 */
+		private var _currentVista:String;
+		public function setSettearSelectedVista($vistaSelected:String):void{
+			if($vistaSelected == null) return;
+			_currentVista = $vistaSelected;
+			dispatchEvent( new Event("pasaLaVistaSeleccionadaActualmenteModeloConsultaCobros") );
+		}
+		[Bindable(event="pasaLaVistaSeleccionadaActualmenteModeloConsultaCobros")]
+		public function get enviarVistaSeleccionadaActualmente():String{
+			return _currentVista;
+		}
+		
+		private var _actualizarVistaActual:Boolean;
+		public function setActualizarDatosVistaActual($actualizar:Boolean):void{
+			_actualizarVistaActual = $actualizar;
+			dispatchEvent( new Event("actualizarLaVistaActualModeloConsultaCobros") );
+		}
+		[Bindable(event="actualizarLaVistaActualModeloConsultaCobros")]
+		public function get actualizarLaVistaSeleccionada():Boolean{
+			return _actualizarVistaActual;
+		}
+		
+		private function verificarSiElExistenLosTiposDeEvento($tiposEventos:Array):Boolean
+		{
+			for (var i:int = 0; i < $tiposEventos.length; i++) 
+			{
+				if((EventoConsultaCobros[$tiposEventos[i]])== null){
+					return false;
+				}
+			}
+			return true;
+		}
+		
+		private var currentEnEspera:Boolean;
+		private var actualizarEspera:Object = new Object;
+		private var numServices:uint;
+		private var numServicioCompletos:uint;
+		private var serviciosCompletosDifKey:Object = new Object;
+		public function setControlDeBloqueoPantalla(mensaje:String,$tiposEvento:Array,$idCurrentBottons:Array,$errorOrWhoFinish:Object):void
+		{
+			if(mensaje == "iniciarEspera"){
+				if(Boolean(verificarSiElExistenLosTiposDeEvento($tiposEvento))){
+					numServicioCompletos=0;
+					numServices = 0;
+					actualizarEspera = new Object();
+					serviciosCompletosDifKey = new Object();
+					numServices = $tiposEvento.length;
+					currentEnEspera = true;
+					actualizarEspera.isBusy = true;
+					actualizarEspera["idCurrentButtons"] = $idCurrentBottons;
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+				}
+			}else if (mensaje =="terminaEspera"){
+				if(!serviciosCompletosDifKey.hasOwnProperty($errorOrWhoFinish as String)){
+					numServicioCompletos++;
+					serviciosCompletosDifKey[($errorOrWhoFinish as String)] = ($errorOrWhoFinish as String);
+				}
+				if(numServicioCompletos == numServices){
+					alertaSingleton.remove(true);
+					actualizarEspera.isBusy=false;
+					currentEnEspera = false;
+					numServices = 0;
+				}
+			}else if(mensaje =="error"){
+				alertaSingleton.remove(true);
+				currentEnEspera = false;
+				alertaSingleton.showReintentar($errorOrWhoFinish.toString(), catalogoAlertas.TIT_ERR);
+				actualizarEspera.isBusy=false;
+			}
+			
+			dispatchEvent( new Event("actualizaEsperaYBloqueoModeloConsultaCompras") );
+		}
+		[Bindable(event="actualizaEsperaYBloqueoModeloConsultaCompras")]
+		public function get actualizarEstadoDeEsperaYBloqueo():Object
+		{
+			return actualizarEspera;
+		}
+		
+		public function faultError(error:Object):void{
+			alertaSingleton.showReintentar( error.toString(), catalogoAlertas.TIT_ERR);
+		}
+		
+		public function faultErrorCopiarCondicionesTotales(error:Object):void{
+			alertaSingleton.showReintentar( error.toString(), catalogoAlertas.TIT_ERR);
+		}
+		
+		public function faultErrorEntrega(error:Object):void{
+			alertaSingleton.showReintentar( error.toString(), catalogoAlertas.TIT_ERR);
+		}
+		
+		public function faultErrorRevision(error:Object):void{
+			alertaSingleton.showReintentar( error.toString(), catalogoAlertas.TIT_ERR);
+		}
+		
+		public function faultErrorCobro(error:Object):void{
+			alertaSingleton.showReintentar( error.toString(), catalogoAlertas.TIT_ERR);
+		}
+		public function errorTotalesActual(objeto:Object):void{
+			alertaSingleton.showReintentar(objeto.toString());
+		}
+		public function errorTotalesPostpasado(objeto:Object):void{
+			alertaSingleton.showReintentar(objeto.toString());
+		}
+		public function errorTotalesPasado(objeto:Object):void{
+			alertaSingleton.showReintentar(objeto.toString());
+		}
+	}
+}

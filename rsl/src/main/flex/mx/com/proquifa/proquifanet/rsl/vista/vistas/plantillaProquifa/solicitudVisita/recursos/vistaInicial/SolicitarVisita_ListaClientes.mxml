@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*" 
+		  width="100%" height="100%"
+		  creationComplete="ini(event)"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.soliciud.EventoSolicitarVisita;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.effects.AnimateProperty;
+			import mx.events.FlexEvent;
+			import mx.events.FlexMouseEvent;
+			
+			import spark.core.NavigationUnit;
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			import spark.layouts.VerticalLayout;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			
+			private var _totales:OrdenDespacho = new OrdenDespacho();
+			
+			private var _dataProvider:ArrayCollection;
+			[Bindable] public var sizeFontLista:Number;
+			[Bindable] private var sizeFont:Number;
+			[Bindable] private var sizeFontProvee:Number;
+			[Bindable] public var sizeWidth:Number;
+			[Bindable] public var sizeHeight:Number;
+			public var clienteSeleccionado:Number = 0;
+			
+			private var sql:Query;
+			
+			public function resetAll():void
+			{
+				_dataProvider = new ArrayCollection();
+				listClientes.dataProvider = new ArrayCollection();
+				sql = null;
+			}
+			
+			public function get dataProvider():ArrayCollection
+			{
+				return _dataProvider;
+			}
+			/*[Bindable]public var indiceSeleccionado:int ;*/
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				if(value == null || value.length == 0)
+				{
+					listClientes.dataProvider = new ArrayCollection();
+					//lblTotalClientes.text = "0 Clientes";
+					lblTotalContactos.text = "0";
+					return;
+				}
+				
+				_dataProvider = value;
+				listClientes.dataProvider = new ArrayCollection();
+				
+				sql = new Query(value,['empresa'],true);
+				
+				for(var x:int = 0;x<_dataProvider.length;x++)
+				{
+					_dataProvider[x].numFila = x+1;
+				}
+				
+				listClientes.dataProvider = _dataProvider;
+				lblTotalContactos.text = ""+sql.getSumarCampo("totalContactos",[],"",true);
+				//	lblTotalClientes.text = value.length + " Clientes";
+				//lblTotalContactos.text = sql.getPunteros(['empresa']).length + " Contactos";
+				if(clienteSeleccionado == 0)
+					listClientes.selectedIndex = 0;
+				else{
+					listClientes.selectedIndex = clienteSeleccionado;
+				}
+				obtenerContactos(); 
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				sizeFontProvee = (22/501) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 22 ? 22:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 12 ? 12:sizeFontProvee;
+				sizeWidth = (160/501) * (unscaledWidth);
+				sizeHeight = (30/1208) * (unscaledHeight);
+				
+				sizeFont = (17/501) * (unscaledWidth);
+				sizeFont = sizeFont > 17 ? 17:sizeFont;
+				sizeFont = sizeFont < 8 ? 8:sizeFont;
+			}
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				var lista:ArrayCollection = UtilsGrid.queryCampoXLike(dataProvider,"nombre",txtBuscador.text);
+				/*listClientes.dataProvider = UtilsGrid.queryCampoXLike(dataProvider,"nombre",txtBuscador.text);*/
+				
+				var dataSortField:SortField = new SortField();
+				dataSortField.name = "nombre";
+				var numericDataSort:Sort = new Sort();
+				numericDataSort.fields = [dataSortField];
+				lista.sort = numericDataSort;
+				lista.refresh();
+				
+				listClientes.dataProvider = lista;
+			}
+			
+			protected function dispararClic(event:MouseEvent):void
+			{
+				dispatchEvent( new Event("escucharClicGenerarOrdenDespacho",true));
+			}
+			
+			protected function validarItem(event:MouseEvent):void
+			{
+				dispatchEvent( new Event("cambiarVistaProceso_todos",true));
+			}
+			
+			public var indexSelect:int;
+			protected function selectLista():void
+			{
+				indexSelect = listClientes.selectedIndex;
+				
+				if(indexSelect == 0)
+					lnInicio.visible = false;
+				else
+					lnInicio.visible = true;
+				
+				/*dispatchEvent(new Event("enviarIdCliente",true));*/
+				
+				var evt:EventoSolicitarVisita = new EventoSolicitarVisita(EventoSolicitarVisita.OBTENER_LISTA_VISITA);
+				evt.idEjecutivoVentas = listClientes.selectedItem.idEjecutivoVenta;
+				/*dispatchEvent( evt );*/ 
+				
+				
+			}
+			
+			public function obtenerContactos():void
+			{
+				var evtC:EventoSolicitarVisita = new EventoSolicitarVisita(EventoSolicitarVisita.OBTENER_CONTACTOS_CLIENTE);
+				evtC.idCliente = listClientes.selectedItem.idCliente;
+				evtC.habilitado = 1;
+				dispatchEvent( evtC );
+			}
+			protected function ini(event:FlexEvent):void
+			{
+				listClientes.addEventListener(MouseEvent.CLICK,verificarUltimo);
+			}
+			protected function verificarUltimo(event:MouseEvent):void
+			{
+				if(listClientes.dataProvider.length-1 == listClientes.selectedIndex){
+					listClientes.layout.verticalScrollPosition += listClientes.layout.getVerticalScrollPositionDelta(NavigationUnit.END);
+				}
+			}
+			private var lIndex:int;
+			
+			private function scrollToIndex(index:int, animationDuration:int = 100):void 
+			{
+				var pt:Point = listClientes.layout.getScrollPositionDeltaToElement(index);
+				var verticalScroll:int = listClientes.layout.verticalScrollPosition;
+				var verticalScrollOld:int = listClientes.layout.verticalScrollPosition;
+				var delta:int = -1;
+				if (pt != null )
+				{
+					while (pt)
+					{
+						listClientes.validateNow();
+						if (pt.y > 0) {
+							delta = listClientes.layout.getVerticalScrollPositionDelta(NavigationUnit.DOWN);
+						} else {
+							verticalScrollOld = delta;
+							delta = listClientes.layout.getVerticalScrollPositionDelta(NavigationUnit.UP);
+						}
+						listClientes.layout.verticalScrollPosition += delta;
+						verticalScroll += delta;
+						pt = listClientes.layout.getScrollPositionDeltaToElement(index);
+						if ((delta == 0 || verticalScrollOld == delta) && pt != null ){
+							break;
+						}
+					}
+					var animation:AnimateProperty = new AnimateProperty(listClientes.dataGroup);
+					animation.property = "verticalScrollPosition";
+					animation.duration = animationDuration;
+					animation.toValue = verticalScroll;
+				}
+				
+				selectLista();
+			}
+			
+			protected function indiceVisible(event:MouseEvent):void
+			{
+				
+				activarIndice();
+			
+			}
+			public function activarIndice():void
+			{
+				scrollToIndex(listClientes.selectedIndex);
+			}
+			
+			protected function cambio_indice(event:IndexChangeEvent):void
+			{
+				// TODO Auto-generated method stub
+				clienteSeleccionado = listClientes.selectedIndex;
+				dispatchEvent(new Event("cambioDeClientes"));
+				obtenerContactos();
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" height="100%"  paddingTop="20" verticalAlign="middle" gap="0">
+		
+		<s:VGroup width="100%" height="100%" paddingLeft="6" paddingRight="12" gap="0">
+			
+			<s:VGroup id="grpClientes" width="100%" height="100%" gap="0">
+				
+				<s:HGroup width="100%" verticalAlign="middle" >
+					<s:Label styleName="tab_texto_14_Helvetica" fontWeight="bold" fontSize="{sizeFontProvee}" text="CLIENTES" textAlign="left" paddingTop="0" />
+				</s:HGroup> 
+				<s:Spacer height="1%" />
+				<s:TextInput id="txtBuscador" width="100%" maxWidth="{grpClientes.width}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" 
+							 change="txtBuscador_changingHandler(event)" prompt="Nombre de la empresa" fontStyle="normal" />
+				<s:Spacer height="2%" />
+				<otros:division id="lnInicio" width="100%" grueso="1" color="#404040"/>
+				
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+						id="listClientes" contentBackgroundAlpha="0" selectedIndex="0"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitudVisita.recursos.IR.IR_SolicitarVisita_Clientes"
+						click="indiceVisible(event)" change="cambio_indice(event)"
+						/>
+				<!--change="selectLista()"-->
+				
+				<otros:division width="100%" grueso="1" color="#404040"/>
+				
+				
+				<s:HGroup width="100%" height="100%" maxHeight="50" paddingTop="10" paddingBottom="10" paddingLeft="10" paddingRight="30" verticalAlign="middle">
+					
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" fontWeight="bold" text="{listClientes.dataProvider.length}" id="lblTotalClientes"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="Clientes" />
+					
+					<s:Spacer width="100%" />
+					<mx:Image source="{catalogoIconosBotones.getInstance().contacto_svg}"/>
+					<s:Label styleName="tab_texto_14_Helvetica" color="#008894" fontSize="{sizeFont}" text=" Contactos: "/>
+					<s:Label styleName="tab_texto_14_Helvetica" color="#008894" fontSize="{sizeFont}" fontWeight="bold" id="lblTotalContactos"/>
+					
+				</s:HGroup>  
+				
+				
+			</s:VGroup>
+		</s:VGroup>
+		<otros:divisionDegradadoVertical height="90%" />
+	</s:HGroup>  
+</s:VGroup>

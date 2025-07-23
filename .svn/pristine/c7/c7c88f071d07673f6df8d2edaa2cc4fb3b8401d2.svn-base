@@ -1,0 +1,444 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.comun
+{
+	import mx.collections.ArrayCollection;
+	
+	
+	[Bindable]
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.comun.Direccion")]
+	public class Direccion{
+		
+			private var _numFila:int;
+			private var _idLugar:int;
+			private var _idCliente:int;
+			private var _tipo:String;
+			private var _destino:String;
+			
+			private var _calle:String;
+			private var _municipio:String;
+			private var _estado:String;
+			private var _pais:String;
+			private var _codigoPostal:String;
+			private var _ruta:String;
+			private var _zonaMensajeria:String;
+			private var _mapa:String;
+			private var _comentarios:String;
+			private var _domicilio:String;
+			private var _idProveedor:int;
+			private var _latitud:Number;
+			private var _longitud:Number;
+			private var _altitud:Number;
+			private var _validada:Boolean;
+			private var _numAsociados:int;
+			private var _zona:String;
+			private var _isVisitaViable:Boolean;
+			private var _ciudad:String;
+			private var _colonia:String;
+			private var _lstColonias:ArrayCollection;
+			
+			private var _idDireccion:Number;
+			private var _horarios:ArrayCollection;
+			private var _borrar:Boolean;
+			private var _idPais:Number;
+			private var _fua:Date;
+			
+			private var _numInt:String;
+			private var _numExt:String;
+			private var _localidad:String;
+			
+			
+			private var _region:String;
+			private var _tipoRegion:String;
+			private var _horarioEntrega:Horario;
+		
+			//variable de Osva para la vista 
+			private var _checkDireccionSeleccionada:Boolean;		
+
+			
+			public function Direccion()
+			{
+				lstColonias = new ArrayCollection();
+			}
+
+			public function get localidad():String
+			{
+				return _localidad;
+			}
+
+			public function set localidad(value:String):void
+			{
+				_localidad = value;
+			}
+
+			public function get numInt():String
+			{
+				return _numInt;
+			}
+
+			public function set numInt(value:String):void
+			{
+				_numInt = value;
+			}
+
+			public function get numExt():String
+			{
+				return _numExt;
+			}
+
+			public function set numExt(value:String):void
+			{
+				_numExt = value;
+			}
+
+			public function get isVisitaViable():Boolean
+			{
+				return _isVisitaViable;
+			}
+
+			public function set isVisitaViable(value:Boolean):void
+			{
+				_isVisitaViable = value;
+			}
+
+			public function get checkDireccionSeleccionada():Boolean
+			{
+				return _checkDireccionSeleccionada;
+			}
+
+			public function set checkDireccionSeleccionada(value:Boolean):void
+			{
+				_checkDireccionSeleccionada = value;
+			}
+
+			public function get numFila():int
+			{
+				return _numFila;
+			}
+
+			public function set numFila(value:int):void
+			{
+				_numFila = value;
+			}
+
+			public function get idLugar():int
+			{
+				return _idLugar;
+			}
+
+			public function set idLugar(value:int):void
+			{
+				_idLugar = value;
+			}
+
+			public function get idCliente():int
+			{
+				return _idCliente;
+			}
+
+			public function set idCliente(value:int):void
+			{
+				_idCliente = value;
+			}
+
+			public function get tipo():String
+			{
+				return _tipo;
+			}
+
+			public function set tipo(value:String):void
+			{
+				_tipo = value;
+			}
+
+			public function get destino():String
+			{
+				return _destino;
+			}
+
+			public function set destino(value:String):void
+			{
+				_destino = value;
+			}
+
+			public function get calle():String
+			{
+				return _calle;
+			}
+
+			public function set calle(value:String):void
+			{
+				_calle = value;
+			}
+
+			public function get municipio():String
+			{
+				return _municipio;
+			}
+
+			public function set municipio(value:String):void
+			{
+				_municipio = value;
+			}
+
+			public function get estado():String
+			{
+				return _estado;
+			}
+
+			public function set estado(value:String):void
+			{
+				_estado = value;
+			}
+
+			public function get pais():String
+			{
+				return _pais;
+			}
+
+			public function set pais(value:String):void
+			{
+				_pais = value;
+			}
+
+			public function get codigoPostal():String
+			{
+				return _codigoPostal;
+			}
+
+			public function set codigoPostal(value:String):void
+			{
+				_codigoPostal = value;
+			}
+
+			public function get ruta():String
+			{
+				return _ruta;
+			}
+
+			public function set ruta(value:String):void
+			{
+				_ruta = value;
+			}
+
+			public function get zonaMensajeria():String
+			{
+				return _zonaMensajeria;
+			}
+
+			public function set zonaMensajeria(value:String):void
+			{
+				_zonaMensajeria = value;
+			}
+
+			public function get mapa():String
+			{
+				return _mapa;
+			}
+
+			public function set mapa(value:String):void
+			{
+				_mapa = value;
+			}
+
+			public function get comentarios():String
+			{
+				return _comentarios;
+			}
+
+			public function set comentarios(value:String):void
+			{
+				_comentarios = value;
+			}
+
+			public function get idProveedor():int
+			{
+				return _idProveedor;
+			}
+
+			public function set idProveedor(value:int):void
+			{
+				_idProveedor = value;
+			}
+
+			public function get latitud():Number
+			{
+				return _latitud;
+			}
+
+			public function set latitud(value:Number):void
+			{
+				_latitud = value;
+			}
+
+			public function get longitud():Number
+			{
+				return _longitud;
+			}
+
+			public function set longitud(value:Number):void
+			{
+				_longitud = value;
+			}
+
+			public function get altitud():Number
+			{
+				return _altitud;
+			}
+
+			public function set altitud(value:Number):void
+			{
+				_altitud = value;
+			}
+
+			public function get validada():Boolean
+			{
+				return _validada;
+			}
+
+			public function set validada(value:Boolean):void
+			{
+				_validada = value;
+			}
+
+			public function get numAsociados():int
+			{
+				return _numAsociados;
+			}
+
+			public function set numAsociados(value:int):void
+			{
+				_numAsociados = value;
+			}
+
+			public function get zona():String
+			{
+				return _zona;
+			}
+
+			public function set zona(value:String):void
+			{
+				_zona = value;
+			}
+
+			public function get domicilio():String
+			{
+				return _domicilio;
+			}
+
+			public function set domicilio(value:String):void
+			{
+				_domicilio = value;
+			}
+
+			public function get ciudad():String
+			{
+				return _ciudad;
+			}
+
+			public function set ciudad(value:String):void
+			{
+				_ciudad = value;
+			}
+
+			public function get colonia():String
+			{
+				return _colonia;
+			}
+
+			public function set colonia(value:String):void
+			{
+				_colonia = value;
+			}
+
+			public function get lstColonias():ArrayCollection
+			{
+				return _lstColonias;
+			}
+
+			public function set lstColonias(value:ArrayCollection):void
+			{
+				_lstColonias = value;
+			}
+
+			public function get idDireccion():Number
+			{
+				return _idDireccion;
+			}
+
+			public function set idDireccion(value:Number):void
+			{
+				_idDireccion = value;
+			}
+
+			public function get borrar():Boolean
+			{
+				return _borrar;
+			}
+
+			public function set borrar(value:Boolean):void
+			{
+				_borrar = value;
+			}
+
+			public function get idPais():Number
+			{
+				return _idPais;
+			}
+
+			public function set idPais(value:Number):void
+			{
+				_idPais = value;
+			}
+
+			public function get fua():Date
+			{
+				return _fua;
+			}
+
+			public function set fua(value:Date):void
+			{
+				_fua = value;
+			}
+
+			public function get horarios():ArrayCollection
+			{
+				return _horarios;
+			}
+
+			public function set horarios(value:ArrayCollection):void
+			{
+				_horarios = value;
+			}
+
+			public function get region():String
+			{
+				return _region;
+			}
+
+			public function set region(value:String):void
+			{
+				_region = value;
+			}
+
+			public function get tipoRegion():String
+			{
+				return _tipoRegion;
+			}
+
+			public function set tipoRegion(value:String):void
+			{
+				_tipoRegion = value;
+			}
+
+			public function get horarioEntrega():Horario
+			{
+				return _horarioEntrega;
+			}
+
+			public function set horarioEntrega(value:Horario):void
+			{
+				_horarioEntrega = value;
+			}
+
+
+	}
+}

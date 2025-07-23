@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+				xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				xmlns:label="skins.skin.label.*" 
+				xmlns:textinput="skins.skin.textinput.*" 
+				xmlns:pqNet="skins.botones.pqNet.*" 
+				xmlns:otros="skins.otros.*"
+				currentStateChanging="itemrenderer1_currentStateChangingHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProLogistica;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.Flete;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutaFlete;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.CatProZonaTrabajo;
+			import mx.events.EffectEvent;
+			import mx.events.StateChangeEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			private var activaCambios:Boolean;
+			private var unaVez:Boolean = false;
+			[Bindable] private var ruta:RutaFlete;
+			
+			private var current:Flete;
+			
+			override public function set data(value:Object):void{
+				super.data = value;
+				
+				current = ObjectUtil.copy(value) as Flete;
+				cargaRutas();
+				if (data.hide){
+					imgEngrane.visible = true;
+				}
+				else{
+					imgEngrane.visible = false;
+				}
+				ruta = new RutaFlete();
+				
+				if (current.ruta)
+					ruta = current.ruta[0];
+				
+			}
+			
+			protected function botonCancelar(event:MouseEvent):void
+			{
+				hideTipoCambio.play();				
+			}
+			
+			private function validarCampos():void{
+				if (txtConcepto.text == ''){
+					alertaSingleton.show("Es necesario que se agregue un Concepto.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if (txtLeyenda.text == ''){
+					alertaSingleton.show("Es necesario que se agregue una Leyenda.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if(StringUtil.trim(txtPrecio.text) == '' || txtPrecio.text == '0'){
+					alertaSingleton.show("Es necesario que el Monto sea mayor a 0.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				
+				if ((data as Flete).concepto != txtConcepto.text)
+				{
+					unaVez=true;
+					var exis:EventoCatProLogistica = new EventoCatProLogistica(EventoCatProLogistica.VERIFICAR_EXISTE_CODIGO_MODIFICACION_FLETE);
+					exis.codigo = txtConcepto.text;
+					exis.fabrica = "Fletes";
+					dispatchEvent(exis);
+				}
+				else
+				{
+					modificarInfo();
+				}
+			}
+			
+			public function set recibeExisteConceptModificacion($existe:Boolean):void
+			{
+				if (unaVez)
+				{
+					unaVez=false;
+					if (!$existe)
+					{
+						modificarInfo();
+					}
+					else
+					{
+						alertaSingleton.show("El concepto ingresado ya fue registrado.",catalogoAlertas.TIT_ADV_operacionImposible);
+					}
+					
+				}
+			}
+			
+			private function modificarInfo():void{
+				var evt:EventoCatProLogistica = new EventoCatProLogistica(EventoCatProLogistica.MODIFICAR_CONCEPTO_LISTA_FLETE_VISTA);
+				evt.flete = new Flete;
+				var rutaArray:ArrayCollection = new ArrayCollection();
+				var currentRuta:RutaFlete = new RutaFlete();
+				
+				evt.flete = ObjectUtil.copy(current) as Flete;
+				evt.flete.concepto = txtConcepto.text;
+				evt.flete.leyenda = txtLeyenda.text;
+				evt.flete.monto = Number(txtPrecio.text);
+				currentRuta.destino = cmbRuta.selectedItem.valor;
+				rutaArray.addItem(currentRuta);
+				evt.flete.ruta = rutaArray;
+				
+				dispatchEvent(evt);
+				hideTipoCambio.play();	
+			}
+			
+			protected function showGrupo(event:MouseEvent):void
+			{
+				grpEditar.includeInLayout = grpEditar.visible = true;
+				cargaRutas();
+				imgEngrane.visible = false;
+				grpTitulos.visible = grpTitulos.includeInLayout = false;
+				showTipoCambio.play();
+			}
+			
+			protected function showTipoCambio_effectEndHandler(event:EffectEvent):void
+			{
+				grpEditar.percentHeight = 100;
+				grpEditar.percentWidth = 100;
+				dispatchEvent(new Event("ReubicarPanelModificacionCatalogoProveedoresLogistica",true));
+			}
+			
+			protected function hideTipoCambio_effectEndHandler(event:EffectEvent):void
+			{
+				grpEditar.visible = false;
+				grpEditar.includeInLayout = false;
+				imgEngrane.visible = true;
+				grpTitulos.visible = grpTitulos.includeInLayout = true;
+			}
+			
+			
+			protected function itemrenderer1_currentStateChangingHandler(event:StateChangeEvent):void
+			{
+				if (event.newState == 'normal' ){
+					grpEditar.visible = false;
+					grpEditar.includeInLayout = false;
+					grpTitulos.visible = grpTitulos.includeInLayout = true;
+					
+					if (data.hide){
+						imgEngrane.visible = true;
+					}
+					else{
+						imgEngrane.visible = false;
+					}
+				}
+			}
+			
+			private function cargaRutas():void{
+				if( cmbRuta.dataProvider != null && cmbRuta.dataProvider.length > 0 ){
+					this.cmbRuta.selectedIndex = cmbRuta.seleccionarValor(ruta.destino,'valor');
+				}else{
+					setTimeout( cargaRutas, 500 );
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<fx:Declarations>
+		<s:Parallel id="showTipoCambio" effectEnd="showTipoCambio_effectEndHandler(event)" target="{grpEditar}" > 
+			<s:Resize heightFrom="0" heightTo="170" duration="200"/>
+			<s:Fade alphaFrom="0" alphaTo="1" duration="150"/>
+		</s:Parallel>
+		
+		<s:Parallel id="hideTipoCambio" effectEnd="hideTipoCambio_effectEndHandler(event)" target="{grpEditar}" >
+			<s:Resize heightFrom="170" heightTo="0" duration="220"/>
+			<s:Fade alphaFrom="1" alphaTo="0" duration="100"/>
+		</s:Parallel>
+		
+		<s:NumberValidator id="validaNumerico"
+						   domain="real"
+						   decimalSeparator="."
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   parseError="No es un número valido." />
+		
+	</fx:Declarations>
+	
+	
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="selected"/>
+	</s:states>
+	
+	<otros:division width="100%" />
+	
+	<s:VGroup width="100%" height="100%" >
+		<s:VGroup width="100%" height="100%" paddingLeft="10" paddingRight="10" paddingBottom="10" >
+			<s:HGroup width="100%" height="100%" >
+				
+				<s:VGroup id="itemPrincipal" width="100%" height="100%" horizontalAlign="center" >
+					
+					<s:HGroup width="100%" height="100%" >
+						<s:VGroup width="100%" height="100%" gap="10" id="grpTitulos">
+							<label:Titulo id="lblTitulo" text="{data.concepto}" paddingTop="10"  />
+							<label:Texto id="lblLeyenda" text="{data.leyenda}" />
+							<label:Texto id="lblRuta" text="{ ruta.destino  }" />
+							<label:Texto id="lblMonto" text="{data.monto} {CatProZonaTrabajo.currentProveedor.monedaVentaAbreviatura}" width="100%" paddingTop="0" />
+						</s:VGroup>
+						
+						<s:VGroup width="100%" height="100%">
+							<s:HGroup width="100%" paddingTop="10">
+								<s:Spacer width="100%" />
+								<s:Image height="100%" id="imgEngrane" scaleX="0.6" scaleY="0.6" click="showGrupo(event)" 
+										 source="{catalogoIconosGrid.getInstance().render_engraneGrande}"/>
+							</s:HGroup>
+						</s:VGroup>
+					</s:HGroup>
+					
+					<s:VGroup id="grpEditar" height="0" width="100%" horizontalAlign="center" visible="false" includeInLayout="false" alpha="0"  >
+						
+						
+						<label:Titulo id="lblConcepto" text="Concepto:" paddingTop="-20" width="100%" />
+						<textinput:txtInputBlancoDefaultPQNet id="txtConcepto" text="{data.concepto}" width="100%" />
+						
+						<label:Titulo id="lblLeyendaI" text="Leyenda:" paddingTop="0"  width="100%" />
+						<textinput:txtInputBlancoDefaultPQNet id="txtLeyenda" text="{data.leyenda}" width="100%" />
+						
+						<label:Titulo id="lblRutas" text="Ruta:" paddingTop="0"  width="100%" />
+						<comboPqNet:ComboCatalogos  id="cmbRuta" creationComplete="cmbRuta.cargarRutas()" width="100%" />
+						
+						<label:Titulo text="Monto: " width="100%" paddingTop="0" />
+						<s:HGroup width="100%" verticalAlign="middle" gap="10" >
+							<textinput:txtInputBlancoDefaultPQNet change="activaCambios = true;" text="{data.monto}" width="100" textAlign="right" id="txtPrecio" restrict="0-9."/>
+							<label:Texto text="{CatProZonaTrabajo.currentProveedor.monedaVentaAbreviatura}" />
+						</s:HGroup>
+						
+						<s:HGroup width="100%" height="100%" gap="10">
+							<s:VGroup height="100%" width="100%" verticalAlign="bottom" horizontalAlign="left" >
+								<pqNet:botonPqNetLargo label="Modificar" click="validarCampos()" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+							</s:VGroup>
+							<s:VGroup height="100%" width="100%" verticalAlign="bottom" horizontalAlign="right" >
+								<pqNet:botonPqNetLargo label="Cancelar" click="botonCancelar(event)" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO}" />
+							</s:VGroup>
+						</s:HGroup>
+						
+					</s:VGroup>
+					
+				</s:VGroup>
+			</s:HGroup>
+			
+			<s:VGroup id="total" width="100%" horizontalAlign="center" gap="10" paddingTop="10" visible="false" includeInLayout="false" >
+				<label:TextoGrisCasiNegro id="lbltotal" />
+				<label:TextoGris text="TOTAL"/>
+			</s:VGroup>
+			
+		</s:VGroup>
+	</s:VGroup>
+	
+</s:ItemRenderer>

@@ -1,0 +1,515 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.comun
+{
+	
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.comun.Empresa")]
+	[Bindable]
+	public class Empresa
+	{
+		private var _llave:int;
+		private var _numFila:int;
+		private var _idEmpresa:int;
+		private var _alias:String;
+		private var _nomenclaturaEmpresa:String;
+		private var _razonSocial:String;
+		private var _rfcEmpresa:String;
+		private var _usuarioMySuite:String;
+		private var _calle:String;
+		private var _colonia:String;
+		private var _delegacion:String;
+		private var _estado:String;
+		private var _ciudad:String;
+		private var _cp:String;
+		private var _pais:String;
+		private var _codigoPostalDelPais:String;		
+		
+		private var _foliosAsignados:int;
+		private var _folioActual:int;
+		private var _foliosUsadosMes:int;
+		private var _totMontoMes:Number;
+		private var _totCanceladasMes:Number;
+		
+		private var _facturaElectronica:Boolean;
+		private var _facturaMatriz:Boolean;
+		private var _facturacionHabilitada:Boolean;
+		private var _relacionProveedor:Boolean;
+		private var _numAsigCliente:String;
+		
+		private var _idEmpresaProveedor:Number;
+		private var _idProveedor:Number;
+		private var _fechaUltimaActualizacion:Date;
+		
+		private var _serieCFDI:String; 
+		private var _llavePrivada:String;
+		private var _clave:String;
+		private var _numCertificado:String;
+		private var _telefono:String;
+		
+		
+		//////solo para Flex
+		private var _presionado:Boolean; //usada en facturacion para saber si un boton fue presionado y se pueda quedar marcado
+		private var _totalEmpresas:Number;//usada para las listas em flex y determinar el total de empresas
+		private var _isEditando:Boolean;
+		
+		private var _direccionString:String;
+		
+		private var _vendedor:Boolean;
+		private var _comprador:Boolean;
+		private var _exportador:Boolean;
+		private var _importador:Boolean;
+		private var _padronImportador:Boolean;
+		
+		public function Empresa()
+		{
+		}
+
+		public function get llave():int
+		{
+			return _llave;
+		}
+
+		public function set llave(value:int):void
+		{
+			_llave = value;
+		}
+
+		public function get relacionProveedor():Boolean
+		{
+			return _relacionProveedor;
+		}
+
+		public function set relacionProveedor(value:Boolean):void
+		{
+			_relacionProveedor = value;
+		}
+
+		public function get facturacionHabilitada():Boolean
+		{
+			return _facturacionHabilitada;
+		}
+
+		public function set facturacionHabilitada(value:Boolean):void
+		{
+			_facturacionHabilitada = value;
+		}
+
+		public function get totCanceladasMes():Number
+		{
+			return _totCanceladasMes;
+		}
+
+		public function set totCanceladasMes(value:Number):void
+		{
+			_totCanceladasMes = value;
+		}
+
+		public function get totMontoMes():Number
+		{
+			return _totMontoMes;
+		}
+
+		public function set totMontoMes(value:Number):void
+		{
+			_totMontoMes = value;
+		}
+
+		public function get facturaMatriz():Boolean
+		{
+			return _facturaMatriz;
+		}
+
+		public function set facturaMatriz(value:Boolean):void
+		{
+			_facturaMatriz = value;
+		}
+
+		public function get facturaElectronica():Boolean
+		{
+			return _facturaElectronica;
+		}
+
+		public function set facturaElectronica(value:Boolean):void
+		{
+			_facturaElectronica = value;
+		}
+
+		public function get razonSocial():String
+		{
+			return _razonSocial;
+		}
+
+		public function set razonSocial(value:String):void
+		{
+			_razonSocial = value;
+		}
+
+		public function get codigoPostalDelPais():String
+		{
+			return _codigoPostalDelPais;
+		}
+
+		public function set codigoPostalDelPais(value:String):void
+		{
+			_codigoPostalDelPais = value;
+		}
+
+		public function get pais():String
+		{
+			return _pais;
+		}
+
+		public function set pais(value:String):void
+		{
+			_pais = value;
+		}
+
+		public function get cp():String
+		{
+			return _cp;
+		}
+
+		public function set cp(value:String):void
+		{
+			_cp = value;
+		}
+
+		public function get ciudad():String
+		{
+			return _ciudad;
+		}
+
+		public function set ciudad(value:String):void
+		{
+			_ciudad = value;
+		}
+
+		public function get estado():String
+		{
+			return _estado;
+		}
+
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+
+		public function get delegacion():String
+		{
+			return _delegacion;
+		}
+
+		public function set delegacion(value:String):void
+		{
+			_delegacion = value;
+		}
+
+		public function get colonia():String
+		{
+			return _colonia;
+		}
+
+		public function set colonia(value:String):void
+		{
+			_colonia = value;
+		}
+
+		public function get calle():String
+		{
+			return _calle;
+		}
+
+		public function set calle(value:String):void
+		{
+			_calle = value;
+		}
+
+		public function get usuarioMySuite():String
+		{
+			return _usuarioMySuite;
+		}
+
+		public function set usuarioMySuite(value:String):void
+		{
+			_usuarioMySuite = value;
+		}
+
+		public function get totalEmpresas():Number
+		{
+			return _totalEmpresas;
+		}
+
+		public function set totalEmpresas(value:Number):void
+		{
+			_totalEmpresas = value;
+		}
+
+		public function get foliosUsadosMes():int
+		{
+			return _foliosUsadosMes;
+		}
+
+		public function set foliosUsadosMes(value:int):void
+		{
+			_foliosUsadosMes = value;
+		}
+
+		public function get presionado():Boolean
+		{
+			return _presionado;
+		}
+
+		public function set presionado(value:Boolean):void
+		{
+			_presionado = value;
+		}
+
+		public function get numFila():int
+		{
+			return _numFila;
+		}
+
+		public function set numFila(value:int):void
+		{
+			_numFila = value;
+		}
+
+		public function get folioActual():int
+		{
+			return _folioActual;
+		}
+
+		public function set folioActual(value:int):void
+		{
+			_folioActual = value;
+		}
+
+		public function get foliosAsignados():int
+		{
+			return _foliosAsignados;
+		}
+
+		public function set foliosAsignados(value:int):void
+		{
+			_foliosAsignados = value;
+		}
+
+		public function get alias():String
+		{
+			return _alias;
+		}
+
+		public function set alias(value:String):void
+		{
+			_alias = value;
+		}
+
+		public function get rfcEmpresa():String
+		{
+			return _rfcEmpresa;
+		}
+
+		public function set rfcEmpresa(value:String):void
+		{
+			_rfcEmpresa = value;
+		}
+
+		public function get nomenclaturaEmpresa():String
+		{
+			return _nomenclaturaEmpresa;
+		}
+
+		public function set nomenclaturaEmpresa(value:String):void
+		{
+			_nomenclaturaEmpresa = value;
+		}
+
+		public function get idEmpresa():int
+		{
+			return _idEmpresa;
+		}
+
+		public function set idEmpresa(value:int):void
+		{
+			_idEmpresa = value;
+		}
+
+		public function get numAsigCliente():String
+		{
+			return _numAsigCliente;
+		}
+
+		public function set numAsigCliente(value:String):void
+		{
+			_numAsigCliente = value;
+		}
+
+		public function get isEditando():Boolean
+		{
+			return _isEditando;
+		}
+
+		public function set isEditando(value:Boolean):void
+		{
+			_isEditando = value;
+		}
+
+		public function get idEmpresaProveedor():Number
+		{
+			return _idEmpresaProveedor;
+		}
+
+		public function set idEmpresaProveedor(value:Number):void
+		{
+			_idEmpresaProveedor = value;
+		}
+
+		public function get idProveedor():Number
+		{
+			return _idProveedor;
+		}
+
+		public function set idProveedor(value:Number):void
+		{
+			_idProveedor = value;
+		}
+
+		public function get fechaUltimaActualizacion():Date
+		{
+			return _fechaUltimaActualizacion;
+		}
+
+		public function set fechaUltimaActualizacion(value:Date):void
+		{
+			_fechaUltimaActualizacion = value;
+		}
+
+		public function get direccionString():String
+		{
+			var cadena:String = "";
+			cadena = formatoDireccion(calle);
+			cadena = formatoDireccion(colonia, cadena, false);
+			cadena = formatoDireccion(delegacion, cadena);
+			cadena = formatoDireccion(ciudad, cadena, false);
+			cadena = formatoDireccion(cp, cadena);
+			cadena = formatoDireccion(pais, cadena);
+			
+			return cadena;
+		}
+
+		public function set direccionString(value:String):void
+		{
+			_direccionString = value;
+		}
+
+		private function formatoDireccion(valor:String, cadena:String = "", conComa:Boolean = true):String{
+			if (valor == null ) return cadena;
+			
+			if (conComa && cadena.length > 0 ){
+				cadena + ",";
+			}
+			cadena += " " + valor;
+			return cadena;
+		}
+
+		public function get vendedor():Boolean
+		{
+			return _vendedor;
+		}
+
+		public function set vendedor(value:Boolean):void
+		{
+			_vendedor = value;
+		}
+
+		public function get comprador():Boolean
+		{
+			return _comprador;
+		}
+
+		public function set comprador(value:Boolean):void
+		{
+			_comprador = value;
+		}
+
+		public function get exportador():Boolean
+		{
+			return _exportador;
+		}
+
+		public function set exportador(value:Boolean):void
+		{
+			_exportador = value;
+		}
+
+		public function get importador():Boolean
+		{
+			return _importador;
+		}
+
+		public function set importador(value:Boolean):void
+		{
+			_importador = value;
+		}
+
+		public function get padronImportador():Boolean
+		{
+			return _padronImportador;
+		}
+
+		public function set padronImportador(value:Boolean):void
+		{
+			_padronImportador = value;
+		}
+
+		public function get serieCFDI():String
+		{
+			return _serieCFDI;
+		}
+
+		public function set serieCFDI(value:String):void
+		{
+			_serieCFDI = value;
+		}
+
+		public function get llavePrivada():String
+		{
+			return _llavePrivada;
+		}
+
+		public function set llavePrivada(value:String):void
+		{
+			_llavePrivada = value;
+		}
+
+		public function get clave():String
+		{
+			return _clave;
+		}
+
+		public function set clave(value:String):void
+		{
+			_clave = value;
+		}
+
+		public function get numCertificado():String
+		{
+			return _numCertificado;
+		}
+
+		public function set numCertificado(value:String):void
+		{
+			_numCertificado = value;
+		}
+
+		public function get telefono():String
+		{
+			return _telefono;
+		}
+
+		public function set telefono(value:String):void
+		{
+			_telefono = value;
+		}
+
+
+	}
+}

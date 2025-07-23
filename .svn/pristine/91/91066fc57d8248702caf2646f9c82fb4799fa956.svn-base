@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:gestionarac="mx.com.proquifa.vista.vistas.gestionarac.*"
+		 width="100%" height="100%"
+		 creationComplete="group1_creationCompleteHandler(event)" 
+		 xmlns:vistas="mx.com.proquifa.vista.vistas.*"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.EventoInterlocutor;
+			import mx.com.proquifa.vista.vistas.componentes.PopUpExito;
+			import mx.com.proquifa.vista.vistas.componentes.PopUpNotificadoContacto;
+			import mx.events.FlexEvent;
+			import mx.graphics.SolidColor;
+			import mx.managers.PopUpManager;
+			
+			import spark.components.Group;
+			import spark.primitives.Rect;
+			
+			
+			private var _origen:String;
+			private var query:Query;
+			private var popUp:Group
+			private var rect:Rect;
+			private var CPedido:String;
+			public var popUpcorreo:Boolean;
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				popUp = new Group();
+				popUp.percentWidth = 100;
+				popUp.percentHeight = 100;
+				rect = new Rect();
+				rect.percentWidth = 100;
+				rect.percentHeight = 100;
+				rect.fill = new SolidColor(0xeaeaea, 0.3);
+				parentApplication.addElement(popUp);
+				
+				plantilla.cargarVistaInicial(vistaInicial);
+				plantilla.cargarVistaOperacion(vistaOperacion);
+				plantilla.header.titulo = "GESTIONAR AC";
+				
+				plantilla.addEventListener(EventoInterlocutor.CAMBIAR_VISTAS, cambiarVista);
+				plantilla.header.addEventListener("vistaAnterior", vistaAnterior);
+				addEventListener(EventoInterlocutor.MANDA_CPDIDO, reciveCPedido);
+				addEventListener(EventoInterlocutor.DECIDE_SI_ABRE_POPUP_CORREO, RecibeRespuestaSiAbrePop);
+				
+			}
+			
+			public function reciveCPedido(ev:EventoInterlocutor):void
+			{
+				CPedido = ev.cPedido;
+			}
+			
+			public function cambiarVista(event:EventoInterlocutor):void
+			{
+				plantilla.header.subTitulo = vistaInicial.cliente;
+				vistaOperacion.limpiarDatos();
+				vistaOperacion.recibeDatos(query, vistaInicial.cliente);
+			}
+			
+			public function vistaAnterior(event:EventoGestorCompras):void
+			{
+				plantilla.header.subTitulo = "";
+			}
+			
+			public function set obtenerAvisosDeCambios(datos:ArrayCollection):void
+			{
+				if (datos )
+				{
+					query = new Query(datos,["origen","cliente","contacto", "folioNT","cpedido"]);
+					vistaInicial.recibeDatos(query);
+				}
+			}
+			
+			public function get origen():String
+			{
+				return _origen;
+			}
+			
+			public function set origen(value:String):void
+			{
+				_origen = value;
+				vistaInicial.origen = value;
+				vistaOperacion.origen = value;
+			}
+			
+			public function set resultadoGuardar(resultado:Boolean):void
+			{
+				if (resultado)
+				{
+					enviarAlertaExito();
+					/*setTimeout(enviarCorreo,300,new Event("enviarNotificado"));*/
+					dispatchEvent( new Event("recargarPendientes",true));	
+					
+				}
+				
+				
+			}
+			
+			
+			var alerta:PopUpNotificadoContacto;
+			public function RecibeRespuestaSiAbrePop (eve:EventoInterlocutor):void
+			{
+				popUpcorreo = eve.mandacorreo;
+				if(eve.mandacorreo)
+				{
+					if( alerta == null ){
+						alerta = PopUpNotificadoContacto(PopUpManager.createPopUp( this, PopUpNotificadoContacto, true ) );
+						PopUpManager.centerPopUp( alerta );
+						alerta.resultadoGuardar = false;
+					/*	alerta.ponertitulo(CPedido);*/
+						alerta.listaPedidos = vistaOperacion.listaAGuardar;
+						alerta.texto = vistaOperacion.lstContactos.selectedItem.email;
+						alerta.removeEventListener("enviarNotificado", enviarCorreo);
+						alerta.addEventListener("enviarNotificado", enviarCorreo, false, 0, true);
+						alerta.removeEventListener("cerrarPopUpOC", cerrarPopUpOC);
+						alerta.addEventListener("cerrarPopUpOC", cerrarPopUpOC, false, 0, true);
+					}
+				}
+				else
+				{
+					var eventoGuardar:EventoInterlocutor = new EventoInterlocutor(EventoInterlocutor.GUARDAR_NOTIFICADOS);
+					eventoGuardar.current = vistaOperacion.listaAGuardar;
+					eventoGuardar.email = "";
+					eventoGuardar.cuerpo = "";
+					eventoGuardar.cc = "";
+					dispatchEvent(eventoGuardar);
+				}
+			}
+			
+			public function cerrarPopUpOC(event:Event):void
+			{
+				PopUpManager.removePopUp( alerta );
+				alerta = null;
+			
+			}
+			public function enviarCorreo(event:Event):void
+			{
+				
+				PopUpManager.removePopUp( alerta );
+				alerta = null;
+				trace("EnvioExitoso");
+				popUp.removeAllElements();
+				popUp.addElement(rect);
+				var alertaExito:PopUpExito = new PopUpExito();
+				if(vistaOperacion.lstContactos.selectedItem != undefined )
+				alertaExito.texto = vistaOperacion.lstContactos.selectedItem.nombreContacto;
+				alertaExito.tipoExito(true);
+				alertaExito.removeEventListener("cancelarPopUP", regresarVistaInicial);
+				alertaExito.addEventListener("cancelarPopUP", regresarVistaInicial, false, 0, true);
+				popUp.addElement(alertaExito);
+			}
+			
+			private function regresarVistaInicial(event:Event):void
+			{
+				dispatchEvent( new Event("recargarPendientes",true));	
+				trace("TODO BIEN");
+				popUp.removeAllElements();
+				plantilla.header.subTitulo = "";
+				plantilla.vistaInicial = true;
+				var eventoGestionarAC:EventoInterlocutor = new EventoInterlocutor(EventoInterlocutor.OBTENER_CONTADORES);
+				eventoGestionarAC.current = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(eventoGestionarAC);
+				var eventoGestionarACConfirmar:EventoInterlocutor = new EventoInterlocutor(EventoInterlocutor.OBTENER_AVISOS_CAMBIOS);
+				eventoGestionarACConfirmar.current = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(eventoGestionarACConfirmar);
+			}
+			
+			public function enviarAlertaExito():void
+			{
+				alertaSingleton.show("Operación Exitosa");
+				recargar();
+			}
+			
+			public function recargar():void
+			{
+				dispatchEvent( new Event("recargarPendientes",true));	
+				trace("TODO BIEN");
+				plantilla.header.subTitulo = "";
+				plantilla.vistaInicial = true;
+				var eventoGestionarAC:EventoInterlocutor = new EventoInterlocutor(EventoInterlocutor.OBTENER_CONTADORES);
+				eventoGestionarAC.current = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(eventoGestionarAC);
+				var eventoGestionarACConfirmar:EventoInterlocutor = new EventoInterlocutor(EventoInterlocutor.OBTENER_AVISOS_CAMBIOS);
+				eventoGestionarACConfirmar.current = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(eventoGestionarACConfirmar);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<gestionarac:VistaInicialGestionarAC id="vistaInicial" width="100%" height="100%" />
+	<gestionarac:VistaOperacionGestionarAC id="vistaOperacion" width="100%" height="100%" />
+	
+	<vistas:PlantillaInterlocutor width="100%" height="100%" id="plantilla" />
+	
+</s:Group>

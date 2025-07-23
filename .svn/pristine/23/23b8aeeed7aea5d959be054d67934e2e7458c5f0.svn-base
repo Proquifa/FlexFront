@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" creationComplete="init()" xmlns:acordeon="skins.skin.acordeon.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark">
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoAccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Accion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.ReferenciasIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.seleccionador;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			
+			[Bindable]
+			private var _accion:Accion = new Accion();
+			
+			private var _accionAntesDCambios:Accion = new Accion();
+			[Bindable]
+			private var _usuario:String = "";
+			
+			public var referenciasActuales:ArrayCollection = new ArrayCollection();
+			public var referenciasEliminadas:ArrayCollection = new ArrayCollection();			
+			private var _cmbSeleccionador:seleccionador = null;
+			
+			private var productorAcciones:Producer = new Producer();
+			private var canalAcciones:AMFChannel;
+			private var canalesAcciones:ChannelSet;
+			
+			
+			private function init():void{
+				this.productorAcciones.destination = "actualizacionService";
+				this.productorAcciones.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalAcciones = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAcciones = new ChannelSet();
+				this.canalesAcciones.addChannel(canalAcciones);
+				this.productorAcciones.channelSet = this.canalesAcciones;
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de acciones","Error");
+			}
+			
+			public function set recibir_Accion(datos:Object):void{
+				if(datos == null){
+					return;
+				}
+				this._accion = datos.accion as Accion;
+				this._usuario = datos.usuario;
+				this.btnguardar.enabled = true;
+				this.btnfinalizar.enabled = false;
+				this.cargarComboNavegacion();
+				/*if(this._accion.fechaRealizacion == null){
+				this._accion.fechaRealizacion = new Date();
+				}*/
+			}
+			
+			/**
+			 * Metodo que carga el Combo de Navegacion
+			 */ 
+			private function cargarComboNavegacion():void{
+				if( this._cmbSeleccionador == null ){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				if( this._accion.referencias == null  ){
+					this._accion.referencias = new ArrayCollection();
+				}
+				if( this._accion.referencias != null ){
+					for( var i:int=0 ; i < this._accion.referencias.source.length ; i++ ){
+						( this._accion.referencias.getItemAt( i ) as Referencia ).numFila = i + 1;
+						( this._accion.referencias.getItemAt( i ) as Referencia ).nombreArchivo = ( this._accion.referencias.getItemAt( i ) as Referencia ).folio;
+					}
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;				
+				}
+				this._cmbSeleccionador.empleadoLogueado = new Empleado();
+				this._cmbSeleccionador.empleadoLogueado.usuario = this._usuario;
+				this._cmbSeleccionador.idIncidente = this._accion.incidente;
+				this._cmbSeleccionador.folioIncidente = this._accion.incidenteFolio;
+				this._cmbSeleccionador.origen = "Acción";
+				this._cmbSeleccionador.vieneDe = "url";
+				this.parent.stage.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE_ACCIONES,agregarreferencias);
+				this.contenedorCombo.addChild( this._cmbSeleccionador );
+			}
+			public function set recibir_Ejecutar(_accion:Accion):void{
+				if(_accion == null || _accion.idAccion.toString() == "NaN" ){
+					return;
+				}
+				if(this._accion.idAccion == _accion.idAccion){
+					this.btnguardar.enabled = false;
+					this.btnfinalizar.enabled = false;
+					this._accion.fechaRealizacion = _accion.fechaRealizacion;
+					var mensaje:AsyncMessage = new AsyncMessage();
+					mensaje.headers["Destino"] = "Verificacion"
+					mensaje.headers["Usuario"] = _accion.nombreProgramo;
+					mensaje.headers["Nivel"] = "Gerente";
+					mensaje.body = "Mensaje";
+					this.productorAcciones.send(mensaje);
+				}
+				this.dispatchEvent(new EventoEsperar(EventoEsperar.TERMINA_ESPERA));
+				salir();
+			}
+			
+			private function salir():void{
+				var event:EventoAccion = new EventoAccion(EventoAccion.TRAER_ACCIONES);
+				event._usuario = this._usuario;
+				this.dispatchEvent(event);
+				this._cmbSeleccionador.listaReferencias = new ArrayCollection();
+			}
+			
+			
+			private function validar():void{
+				/*if(txtcomentarios.text == ""){
+				Alert.show("Escriba comentarios para la Acción");
+				return;
+				}*/
+				if(this.referenciasEliminadas.length> 0){
+					var evento:EventoAccion = new EventoAccion(EventoAccion.ELIMINAR_REFERENCIA);
+					evento._referenciasEliminadas = this.referenciasEliminadas;
+					this.dispatchEvent(evento);
+				}
+				else{
+					guardar();
+				}
+			}
+			
+			private function guardar():void{
+				var event:EventoAccion = new EventoAccion(EventoAccion.ACTUALIZAR_ACCION);
+				event._accion = this._accion;
+				event._accion.comentarios = this.txtcomentarios.text;
+				this._accion.comentarios = this.txtcomentarios.text;
+				this.dispatchEvent(new EventoEsperar(EventoEsperar.INICIA_ESPERA));
+				this.dispatchEvent(event);
+			}
+			
+			
+			private function alertEjecutar():void{
+				Alert.yesLabel = "Si";
+				Alert.noLabel = "No";
+				Alert.show("Una vez confirmada su 'ACCIÓN' no podrá modificarla posteriormente, ¿Desea continuar?","¡Atención!",Alert.NO|Alert.YES,this,validarejecucion);
+			}
+			
+			private function validarejecucion(event:CloseEvent):void{
+				trace(event.type);
+				if(event.detail == 1){
+					//Alert.show("Ejecutar");
+					ejecutar();
+				}
+			}
+			
+			private function ejecutar():void{
+				var event:EventoAccion = new EventoAccion(EventoAccion.EJECUTAR_ACCION);
+				event._accion = this._accion;
+				event._accion.fechaRealizacion = new Date();
+				this.dispatchEvent(new EventoEsperar(EventoEsperar.INICIA_ESPERA));
+				this.dispatchEvent(event);
+			}
+			
+			
+			private var PopUpRef:PopUpReferencias;
+			private var numInvocaiones:int = 0;
+			
+			/* private function referencias():void{
+			for(var m:int=0;m<this._accion.referencias.length;m++){
+			this._accion.referencias[m].nombreArchivo = this._accion.referencias[m].folio;
+			this._accion.referencias[m].numFila = m + 1;
+			}
+			PopUpRef = new PopUpReferencias();
+			this.PopUpRef = PopUpManager.createPopUp(this,PopUpReferencias,true) as PopUpReferencias;
+			this.PopUpRef.listaReferencias = this._accion.referencias;
+			this.PopUpRef.referenciasEliminadas = new ArrayCollection();
+			this.PopUpRef.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTIO_DE_REFERENCIAS_INCIDENTE,agregarreferencias);
+			this.PopUpRef.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE,cerrarpopup);
+			this.PopUpRef.Origen = "Acción";
+			this.PopUpRef.vieneD = "url";
+			} */
+			
+			private function agregarreferencias(event:EventoIncidente):void{
+				//this.PopUpRef.removeEventListener(EventoIncidente.RECIBIR_ARRAY_COLLECTIO_DE_REFERENCIAS_INCIDENTE,agregarreferencias);
+				var referencias:ArrayCollection = new ArrayCollection();
+				var antesreferencias:ArrayCollection = new ArrayCollection();
+				var indices:int = 0;
+				for(var m:int = 0; m<event.listaDeArchivos.length;m++){
+					if(event.listaDeArchivos[m].folio == "" || event.listaDeArchivos[m].folio == null){
+						referencias.addItem(event.listaDeArchivos[m]);
+					}
+					else{
+						antesreferencias.addItem(event.listaDeArchivos[m]);
+					}
+				}
+				if(antesreferencias.length > 0){
+					var ordenar:SortField = new SortField();
+					ordenar.name = "folio";
+					var orden:Sort = new Sort();
+					orden.fields=[ordenar];
+					antesreferencias.sort = orden;
+					antesreferencias.refresh();
+					indices = int(String(antesreferencias[antesreferencias.length -1].folio).substr(16,17));
+				}
+				
+				for(var r:int = 0; r<referencias.length; r++){
+					referencias[r].idIncidente = this._accion.incidente;
+					referencias[r].folio = "AMP-" + this._accion.incidenteFolio.substring(4,15);
+					if(indices == 0){
+						referencias[r].folio = "AMP-" + this._accion.incidenteFolio.substring(4,15);
+						if(r<10){
+							referencias[r].folio = referencias[r].folio + "-0" + r.toString();
+						}
+						else{
+							referencias[r].folio = referencias[r].folio + "-" + r.toString();
+						}
+					}else{
+						referencias[r].folio = "AMP-" + this._accion.incidenteFolio.substring(4,15);
+						if((indices + 1) <10){
+							referencias[r].folio = referencias[r].folio + "-0" + (indices + 1 ).toString();
+							indices = indices + 1;
+						}
+						else{
+							referencias[r].folio = referencias[r].folio + "-" + (indices + 1 ).toString();
+							indices = indices + 1;
+						}
+					}
+					antesreferencias.addItem(referencias[r]);
+				}
+				this.referenciasActuales = antesreferencias;
+				this.referenciasEliminadas = event.listaDeArchivosEliminados;
+				this._accionAntesDCambios = ObjectUtil.copy(this._accion) as Accion;
+				this._accion.referencias = antesreferencias;
+				this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;
+				//this._accion.referencias = referencias;
+				/*var evento:EventoAccion = new EventoAccion(EventoAccion.ACTUALIZAR_ACCION);
+				evento._accion = this._accion;
+				this.dispatchEvent(evento);*/
+			}
+			
+			private function cerrarpopup(event:EventoIncidente):void{
+				this.PopUpRef.removeEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE,cerrarpopup);
+				this.PopUpRef.visible = false;
+				this.PopUpRef = null;
+			}
+			
+			
+			public function set recibir_EliminarAcciones(resultado:Boolean):void{
+				if(resultado == true){
+					this.guardar();	
+				}
+			}
+			/**
+			 * Funcion publica que recibe del mapa la confirmacion que se a guardado la Accion
+			 * Ademas actualiza la accion para obtener las referencias guardadas con su nuevo ID.
+			 * los datos son obtenidos en la funion actualizaAccionRefrencias();
+			 */ 
+			public function set recibir_Actualizacion(actualizacion:Accion):void{
+				if(this._accion.comentarios != ""){
+					this.btnfinalizar.enabled = true;
+				}else{
+					this.btnfinalizar.enabled = false;
+				}
+				var evento:EventoAccion = new EventoAccion(EventoAccion.ACTUALIZA_ACCION_Y_REFERENCIAS);
+				evento._usuario = DatosGlobales.getInstance()._usuario.usuario;
+				evento.idAccion = this._accion.idAccion;
+				dispatchEvent( evento );  
+				this.dispatchEvent(new EventoEsperar(EventoEsperar.TERMINA_ESPERA));
+				trace("hola");
+			}
+			/**
+			 * Funcion publica que trea la accion guardad y las referencias con su ID
+			 */ 
+			public function set actualizaAccionRefrencias(datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}
+				for( var i:int = 0; i < datos.length; i++ ){
+					if( this._accion.folio == ( datos.getItemAt( i ) as Accion).folio ){
+						this._accion = datos.getItemAt( i ) as Accion;
+					}
+				}
+				if( this._cmbSeleccionador != null ){
+					this._cmbSeleccionador.listaReferencias = ObjectUtil.copy( this._accion.referencias ) as ArrayCollection;
+				}
+			} 
+		]]>
+	</mx:Script>
+	<mx:VBox  width="100%" height="100%">
+		<mx:VBox id="vdatos"  width="100%">
+			
+			<mx:HBox fontSize="30" paddingTop="10" paddingBottom="10" width="100%" fontWeight="normal">
+				<!--<mx:Label width="50%" text="{this._accion.folio}" fontWeight="bold" fontSize="40"/>-->
+				<label:labelTitulo_Otros  width="50%" text="{this._accion.folio}" />
+				<mx:Label doubleClickEnabled="true"  width="50%" text="COMBO" textAlign="right" visible="false"/>
+				<!--doubleClick="referencias();"-->
+				<mx:Label id="lblIncidente" fontSize="40" color="red" text="{this._accion.incidenteFolio}" visible="false"/>
+				<mx:HBox id="contenedorCombo"/>
+			</mx:HBox>
+			
+			
+			<!--<mx:HRule width="100%" />-->
+			<otros:division width="100%"/>
+			
+			<!--<mx:Label width="100%" fontSize="25" text="Datos generales" fontWeight="bold"/>-->
+			<label:labelSubtitulo width="100%"  text="Datos generales" />
+			<mx:HBox horizontalAlign="center" horizontalCenter="0"  width="100%">
+				<mx:Form width="32%" >
+					<mx:FormItem label="Fecha:" fontWeight="bold">
+						<mx:Label text="{this._accion.fecha.getDate() + '/' + (this._accion.fecha.getMonth() + 1).toString() + '/' + this._accion.fecha.getFullYear() }" fontWeight="normal"/>
+					</mx:FormItem>
+					<mx:FormItem   label="FER:" fontWeight="bold">
+						<mx:Label text="{this._accion.fechaEstimadaRealizacion.getDate() + '/' + (this._accion.fechaEstimadaRealizacion.getMonth() + 1).toString() + '/' + this._accion.fechaEstimadaRealizacion.getFullYear()}" 
+								  fontWeight="normal"/>
+					</mx:FormItem>
+				</mx:Form>
+				<mx:Form horizontalCenter="0" width="36%">
+					<mx:FormItem    label="Programó:" required="false" fontWeight="bold">
+						<mx:Label  text="{this._accion.nombreProgramo}" fontWeight="normal"/>
+					</mx:FormItem>
+					<mx:FormItem   label="Realización" fontWeight="bold">
+						<mx:Label text="{this._usuario}" fontWeight="normal"/>
+					</mx:FormItem>
+				</mx:Form>
+				<mx:Form width="32%">
+					<mx:FormItem  label="Tipo:" fontWeight="bold">
+						<mx:Label text="{this._accion.tipo}" fontWeight="normal"/>
+					</mx:FormItem>
+					<!--<mx:FormItem    label="Eficacia Esperada" fontWeight="bold">
+						<mx:Label text="{this._accion.eficacia + '%'}" fontWeight="normal"/>
+					</mx:FormItem>-->
+				</mx:Form>
+			</mx:HBox>
+			<!--<mx:Label width="100%" text="Realización" fontSize="25" fontWeight="bold"/>-->
+			<label:labelSubtitulo text="Realización"/>
+		</mx:VBox>
+		<acordeon:acordeonPqNet height="100%" width="100%" openDuration="250">
+			<!--{this.height - (this.barrabotones.height + this.lbfecha.height + this.vdatos.height + 50)}-->
+			<mx:HBox width="100%" height="100%" label="INSTRUCCIONES">
+				<mx:TextArea width="100%" height="100%" text="{this._accion.descripcion}" editable="false">
+					
+				</mx:TextArea>
+			</mx:HBox>
+			<mx:HBox width="100%" height="100%" label="COMENTARIOS ADICIONALES DE LA EJECUCIÓN">
+				<mx:TextArea  id="txtcomentarios" width="100%" height="100%" text="{this._accion.comentarios}">
+					
+				</mx:TextArea>
+			</mx:HBox>
+		</acordeon:acordeonPqNet>
+		
+		<mx:Label id="lbfecha" width="100%"  textAlign="right" text="{UtilsFecha.formatoFechaDDMMMYYYY( this._accion.fechaRealizacion ) }"/>
+		<!--text="{this._accion.fechaRealizacion.getDate() + '/' + (this._accion.fechaRealizacion.getMonth() + 1).toString() + '/' + this._accion.fechaRealizacion.getFullYear()}"-->
+		<mx:HBox width="100%" id="barrabotones">
+			<!--<mx:Button  label="Salir" click="salir()" width="80"/>-->
+			<s:Button styleName="botonNegroOld" label="Salir" click="salir()" width="80"/>
+			<mx:HRule width="100%" strokeWidth="0"/>
+			<!--<mx:Button id="btnguardar" click="validar()" horizontalCenter="0" label="Guardar" width="80"/>-->
+			<s:Button styleName="botonNegroOld" id="btnguardar" click="validar()" horizontalCenter="0" label="Guardar" width="80"/>
+			<mx:HRule strokeWidth="0" width="100%"/>
+			<!--<mx:Button enabled="false"  click="alertEjecutar()" id="btnfinalizar" label="Finalizar" width="80"/>-->
+			<s:Button styleName="botonNegroOld" enabled="false"  click="alertEjecutar()" id="btnfinalizar" label="Finalizar" width="80"/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:Canvas>

@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								   xmlns:s="library://ns.adobe.com/flex/spark" 
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+								   xmlns:mx="library://ns.adobe.com/flex/mx" 
+								   xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+								   xmlns:label="skins.skin.label.*" 
+								   xmlns:otros="skins.otros.*" 
+								   xmlns:pqNet="skins.botones.pqNet.*" 
+								   xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+								   xmlns:dateField="skins.skin.dateField.*"
+								   creationComplete="inicia()"
+								   width="100%" height="100%" 
+								   titulo="CONSULTA DOCUMENTOS RECIBIDOS" xmlns:chekbox="skins.skin.chekbox.*"
+								   >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.menu.EventoMenuContinuo;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.comun.documentosRecibidos.EventoDocumentosRecibidos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Parametros;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var urlreq:URLRequest;
+			private var ruta:String;
+			[Bindable] public var _cotizacionSeleccionada:Cotizacion;
+			private var _currenVista:String = "tablaGrid";
+			
+			[Bindable] private var _listaBotones:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1},{valor:'Rápida',llave:0}] );
+			
+			private function inicia():void
+			{
+				dtpFInicio.text  = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				dtpFInicio.selectedDate = new Date();
+				dtpFFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date );
+				dtpFFin.selectedDate = new Date();
+				vstBusqueda.selectedIndex = 1;
+				
+				var evt2:EventoDocumentosRecibidos = new EventoDocumentosRecibidos(EventoDocumentosRecibidos.MOSTRAR_OCULTAR_INFO_GRAFICAS)
+				evt2.tabGrafica = true;
+				dispatchEvent(evt2);
+				
+				realizarBusquedaInicial();
+			}
+			
+			private function realizarBusquedaInicial():void
+			{
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("BUSCAR_DOCUMENTOS_POR_BUSQUEDA_AVANZADA");
+				dispatchEvent(eventEspera);
+				
+				var evento:EventoDocumentosRecibidos;
+				evento = new EventoDocumentosRecibidos(EventoDocumentosRecibidos.BUSCAR_DOCUMENTOS_POR_BUSQUEDA_AVANZADA);			
+				
+				var parametros:Parametros =  new Parametros();
+				parametros.finicio = dtpFInicio.selectedDate;
+				parametros.ffin = dtpFFin.selectedDate;
+				parametros.empresa = "--TODOS--";
+				parametros.referencia = "";
+				parametros.destinatario = "--TODOS--";
+				parametros.tipo = "--TODOS--";
+				parametros.cPago = "--TODOS--";
+				parametros.abiertoCerrado = "--TODOS--";
+				
+				evento.parametros = parametros;
+				dispatchEvent(evento);
+				
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = parametros.finicio
+				currentFFin = parametros.ffin
+				currentEmpresa = parametros.empresa;
+				currentReferencia =parametros.referencia;
+				currentDestinatario= parametros.destinatario;
+				currentTipo= parametros.tipo;
+				currentTipo= parametros.cPago;
+				currentAbiertoCerrado=parametros.abiertoCerrado;
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+				
+				/*_tipo = "Folio";
+				txtBuscaRapida.text = "";*/
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar){
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar){
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			private function regresaMenu():void{
+				var evento:EventoMenuContinuo = new EventoMenuContinuo(EventoMenuContinuo.REGRESA_MENU);
+				dispatchEvent( evento );
+			}
+			
+			public function set recibirLaVistaSeleccionada($vista:String):void
+			{
+				if($vista == null) return;
+				_currenVista = $vista;	
+			}
+			
+			
+			public function realizarBusqueda():void{
+				
+				//configurar Espera
+				var eventEspera:EventoEsperar;
+				eventEspera= new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("BUSCAR_DOCUMENTOS_POR_BUSQUEDA_AVANZADA");
+				dispatchEvent(eventEspera);
+				
+				var event:EventoDocumentosRecibidos = new EventoDocumentosRecibidos(EventoDocumentosRecibidos.BUSCAR_DOCUMENTOS_POR_BUSQUEDA_AVANZADA);
+								
+				var parametros:Parametros =  new Parametros();
+				parametros.finicio = dtpFInicio.selectedDate;
+				parametros.ffin = dtpFFin.selectedDate;
+				cmbCliente.selectedItem.valor == "--TODOS--" ? parametros.empresa = "--TODOS--" : parametros.empresa = cmbCliente.selectedItem.llave;
+				parametros.referencia = txtReferencia.text;
+				parametros.destinatario = cmbDestinatario.selectedItem.valor;
+				parametros.tipo = cmbTipo.selectedItem.valor;				 
+				parametros.cPago = cmbCPago.selectedItem.valor;
+				parametros.abiertoCerrado = cmbCerrado.selectedItem.valor;
+				
+				event.parametros = parametros;
+				dispatchEvent(event);
+				
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = parametros.finicio
+				currentFFin = parametros.ffin
+				currentEmpresa = parametros.empresa;
+				currentReferencia =parametros.referencia;
+				currentDestinatario= parametros.destinatario;
+				currentTipo= parametros.tipo;
+				currentCPago= parametros.cPago;
+				currentAbiertoCerrado=parametros.abiertoCerrado;
+			}
+			
+			private function realizarBusquedaRapida():void{
+				if(StringUtil.trim(txtBuscaRapida.text).length >0){
+					
+					//configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("BUSCAR_DOCUMENTOS_POR_FOLIO");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoDocumentosRecibidos = new EventoDocumentosRecibidos(EventoDocumentosRecibidos.BUSCAR_DOCUMENTOS_POR_FOLIO);
+					if(_tipo == "Folio")
+						evt.porFolio = true;
+					else if(_tipo == "Referencia")
+						evt.porFolio = false;
+					
+					evt.folio = txtBuscaRapida.text; 
+					currentFolio = txtBuscaRapida.text; 
+					dispatchEvent(evt);
+				}else{
+					dispatchEvent(new Event("LimpiarGridConsultaDocumentosRecibidos",true));
+				}
+			}
+			
+			/**
+			 * funcion que cambia el indice del stack 
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if((event.currentTarget as ButtonBar).selectedItem == null){
+					event.preventDefault();					
+				}else{
+					
+					vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoDocumentosRecibidos = new EventoDocumentosRecibidos(EventoDocumentosRecibidos.MOSTRAR_OCULTAR_INFO_GRAFICAS)
+					event.currentTarget.selectedItem.llave == 0 ? evt.tabGrafica = false : evt.tabGrafica = true;
+					dispatchEvent(evt);
+					
+					if(((event.currentTarget as ButtonBar).selectedItem as Object).valor == 'Rápida'){
+						realizarBusquedaRapida();
+					}else{
+						_currenVista = "tablaGrid"
+						realizarBusqueda();
+					}
+				}
+			} 
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentEmpresa:String;
+			private var currentReferencia:String;
+			private var currentDestinatario:String;
+			private var currentTipo:String;
+			private var currentCPago:String;
+			private var currentAbiertoCerrado:String;
+			private var currentFolio:String;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				var tempCliente:String;
+				cmbCliente.selectedItem.valor == "--TODOS--" ? tempCliente = "--TODOS--" : tempCliente = cmbCliente.selectedItem.llave;
+				
+				if(cmbTipo.selectedItem.valor == "Pago"){
+					spacerCPago.visible = true;
+					lbCPago.visible = true;
+					cmbCPago.visible = true;
+					spacerCPago.includeInLayout = true;
+					lbCPago.includeInLayout = true;
+					cmbCPago.includeInLayout = true;
+					
+				}else{
+					spacerCPago.visible = false;
+					lbCPago.visible = false;
+					cmbCPago.visible = false;
+					spacerCPago.includeInLayout = false;
+					lbCPago.includeInLayout = false;
+					cmbCPago.includeInLayout = false;
+					cmbCPago.selectedIndex = cmbCPago.seleccionarValor("--TODOS--");					
+				}
+				
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicio":{CompararYControlarBoton(event.newDate.time,currentFInicio.time,"dtpFInicio",btnBusqueda);break;}
+					case "dtpFFin":{CompararYControlarBoton(event.newDate.time,currentFFin.time,"dtpFFin",btnBusqueda);	break;}
+					case "cmbCliente":	{CompararYControlarBoton(tempCliente,currentEmpresa,"cmbCliente",btnBusqueda);break;}
+					case "cmbDestinatario":{CompararYControlarBoton(cmbDestinatario.selectedItem.valor,currentDestinatario,"cmbDestinatario",btnBusqueda);break;}
+					case "cmbTipo":{CompararYControlarBoton(cmbTipo.selectedItem.valor,currentTipo,"cmbTipo",btnBusqueda);break;}
+					case "cmbCPago":{CompararYControlarBoton(cmbCPago.selectedItem.valor,currentCPago,"cmbCPago",btnBusqueda);break;}
+					case "cmbCerrado":{CompararYControlarBoton(cmbCerrado.selectedItem.valor,currentAbiertoCerrado,"cmbCerrado",btnBusqueda);break;}
+					case "txtReferencia":{CompararYControlarBoton(txtReferencia.text,currentReferencia,"txtReferencia",btnBusqueda);break;}
+				}
+			} 
+			
+			protected function txtBuscaRapida_keyUpHandler(event:KeyboardEvent):void
+			{
+				var tempFolio:String = StringUtil.trim(txtBuscaRapida.text);
+				if(tempFolio.length >0){
+					if(tempFolio != currentFolio){
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(false);
+					}else{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+					}
+				}
+			}
+			
+			protected function spacerCPago_hideHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+			}
+			private function cambio():void{
+				if(_tipo == "Folio") _tipo="Referencia";
+				else if(_tipo == "Referencia") _tipo="Folio";
+			}
+			[Bindable] private var _tipo:String ="Folio";
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%" >
+			<pq:MobViewStack width="100%" height="100%" id="espacioInfoGenerales" creationPolicy="all" >
+				<s:NavigatorContent width="100%" height="100%">
+					<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+						<s:VGroup width="100%" gap="0">
+							<s:Spacer height="13"/>
+							<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" requireSelection="true" />
+							<s:Spacer height="30"/>
+							<otros:divisionHueca width="100%"/>
+						</s:VGroup>
+						<pq:MobViewStack width="100%" height="37%" id="vstBusqueda">
+							<s:NavigatorContent >
+								<s:VGroup width="100%">
+									<s:Spacer height="15"/>
+									<chekbox:CheckBoxPq click="cambio()"
+														selected="false" labelLeft="Folio" labelRight="Referencia" id="chk"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+									<s:Spacer height="15"/>
+									<label:Titulo_w100  text="{_tipo}" paddingTop="0" id="tipo" />
+									<s:TextInput id="txtBuscaRapida" width="100%" fontStyle="normal" enter="realizarBusquedaRapida()" toolTip="Folio de documento recibido" keyUp="txtBuscaRapida_keyUpHandler(event)"/>
+									<s:Spacer height="15"/>
+									<pqNet:botonPqNetLargo id="btnBusquedaRapida"	width="100%" click="realizarBusquedaRapida()" botonRedondo="true" icono="ojomordor" />
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" >
+									<s:HGroup width="100%" >
+										<s:VGroup width="50%">
+											<label:Titulo_w100  text="Del" paddingTop="0" />
+											<dateField:DatePickerSpanish id="dtpFInicio"  width="130" textAlign="center" fontStyle="normal" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+										<s:Spacer width="100%"/>
+										<s:VGroup width="50%">
+											<label:Titulo_w100  text="Al" paddingTop="0" />
+											<dateField:DatePickerSpanish id="dtpFFin" width="130" textAlign="center" fontStyle="normal" change="filtros_changeEvent(event)"/>
+										</s:VGroup>
+									</s:HGroup>	
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Cliente" paddingTop="0"/>
+									<comboPqNet:ComboCatalogos id="cmbCliente" creationComplete="cmbCliente.cargaClientes('--TODOS--') " width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Referencia" paddingTop="0"/>
+									<s:TextInput id="txtReferencia" width="100%" fontStyle="normal" keyUp="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Destinatario" paddingTop="0"/>
+									<comboPqNet:ComboCatalogos id="cmbDestinatario" creationComplete="cmbDestinatario.cargarEmpleadosActivos('--TODOS--')" labelField="valor"  width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Tipo" paddingTop="0"/>
+									<comboPqNet:ComboCatalogos id="cmbTipo" creationComplete="cmbTipo.cargaTipoDocumento('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1" visible="false" includeInLayout="false"  id="spacerCPago"/>
+									<label:Titulo_w100  text="Condiciones de Pago" paddingTop="0"  visible="false" includeInLayout="false" id="lbCPago"/>
+									<comboPqNet:ComboCatalogos id="cmbCPago" creationComplete="cmbCPago.cargaCreditoPago('--TODOS--')" width="100%" change="filtros_changeEvent(event)" visible="false" includeInLayout="false" />
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Estado" paddingTop="0"/>
+									<comboPqNet:ComboCatalogos id="cmbCerrado" creationComplete="cmbCerrado.cargaCerrado('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="15"/>
+									<pqNet:botonPqNetLargo	id="btnBusqueda" width="100%" click="realizarBusqueda()" botonRedondo="true" icono="iconoActualizarNormal"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+						</pq:MobViewStack>
+					</s:VGroup>
+				</s:NavigatorContent>
+			</pq:MobViewStack>
+		</s:VGroup>		
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

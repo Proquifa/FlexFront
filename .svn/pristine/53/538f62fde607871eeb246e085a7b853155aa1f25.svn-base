@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group  xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  implements="mx.core.IFlexDisplayObject, mx.core.IDataRenderer"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  height="60" width="100%" xmlns:label="skins.skin.label.*"
+		  >
+	<fx:Declarations>
+		<s:Fade id="fxFade" duration="200" alphaFrom="1" alphaTo="0"/>
+		<s:SolidColor id="s1" color="0x{catalogoColores.LABEL_NEGRO}"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.ColumnChart;
+			import mx.charts.HitData;
+			import mx.charts.series.ColumnSeries;
+			import mx.charts.series.items.ColumnSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			
+			import skins.catalogos.catalogoColores;
+			
+			private var _data:HitData;
+			
+			//Tamaño de la linea y el espacio entra cada una de ellas
+			private const SIZE_LINE:int = 8;
+			private const SPACE:int = 6;
+			private var sizeChart:Number = 0;
+			
+			private const wTRIANGULO:int = 40;
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				
+				graphics.clear();
+				if (_data){
+					
+					if (_data.item.indicador != undefined && _data.item.indicador > 0 ){
+						porcentaje.visible = true;
+						var yOrigen:Number = unscaledHeight/2;
+						graphics.beginFill(0x3399af);
+						graphics.moveTo(0,0);
+						graphics.lineTo(0, unscaledHeight);
+						graphics.lineTo(wTRIANGULO, yOrigen);
+						graphics.lineTo(0,0);
+						graphics.endFill();
+					}
+					else
+					{
+						porcentaje.visible = false;
+					}
+					buscarItemXMes();
+					
+				}
+			}
+			
+			private var _x:int = x;
+			private var _y:int = y;
+			private var yT:int;
+			private var xT:int;
+			private var primeraVez:Boolean = true;
+			private function buscarItemXMes():void
+			{
+				var array:Array = ((_data.element as ColumnSeries).automationOwner as ColumnChart).series;
+				for (var i:int = 0; i < array.length; i++) 
+				{
+					if (array[i] is ColumnSeries){
+						if ((array[i] as ColumnSeries).yField == "requisicion" ||  (array[i] as ColumnSeries).yField == "realizar"){
+							var items:Array =  (array[i] as ColumnSeries).items;
+							for each (var item:ColumnSeriesItem in items) 
+							{
+								if (item.item.mes == _data.item.mes && item.itemRenderer != null){
+									//Calculo para la posicion Y
+									var pt : Point = new Point(item.x, item.y);
+									var porcentajeMinimo:Number = (100 - item.item.indicador ); //Se obtiene el faltante del 100%
+									var moverPosicion:Number = (item.itemRenderer.height * porcentajeMinimo)/100;//Se calcula el porcentaje del faltante
+									//_y = item.y + moverPosicion; //Se recorre por el valor del faltante
+									
+									var xI:Number = ((_data.element as ColumnSeries).automationOwner as ColumnChart).contentToGlobal(pt).x;
+									var yI:Number = ((_data.element as ColumnSeries).automationOwner as ColumnChart).contentToGlobal(pt).y;
+									pt = new Point(item.itemRenderer.x, item.itemRenderer.y);
+									var xR:Number = ((_data.element as ColumnSeries).automationOwner as ColumnChart).contentToGlobal(pt).x;
+									var yR:Number = ((_data.element as ColumnSeries).automationOwner as ColumnChart).contentToGlobal(pt).y;
+									
+									
+									//_x = item.x - (item.x - item.itemRenderer.x); //Se Reste el tamaño de la grafica para posicionarlo al inicio de ella
+									porcentaje.text = UtilsFormatosNumericos.precisionSinDecimales(item.item.indicador) + "%";
+									_x = xI - (xI - xR) + 48;
+									
+									//Se obtiene el punto global apartir del Padre(Grafica) + El valor faltante - la mitad de lo alto del triangulo + 10 padding
+									_y = yI + moverPosicion - (this.height/2) + 10;
+									
+									//Posicionar ToolTip Gris
+									pt = new Point(_data.x,_data.y);
+									xT = (((_data.element as ColumnSeries).automationOwner as ColumnChart).contentToGlobal(pt).x -_x) - (tool.width/2); //x de la grafica - x de la nueva posicion - la mitad del tooltip
+									yT = ((_data.element as ColumnSeries).automationOwner as ColumnChart).contentToGlobal(pt).y - _y - 35;//y de la grafica - y de la nueva posicion
+									
+									move(_x,_y);
+									
+									if (primeraVez)
+									{
+										primeraVez = false;
+										invalidateSize();
+									}
+									break;
+								}
+							}
+							
+							break;
+						}
+					}
+				}
+				
+			}
+			
+			override public function move(x:Number, y:Number):void
+			{
+				super.move(_x, _y);//28
+				tool.x = xT;
+				tool.y = yT;
+			}
+			
+			public function set data(value:Object):void
+			{
+				// HitData data from chart
+				_data = value as HitData;
+				
+				if( value.element.yField == "realizar" ){
+					labelDisplay.text = String("Abiertas" + "\r" + value.item.realizar);
+				}
+				else if( value.element.yField == "realizadas" ){
+					labelDisplay.text = String("Cerradas" + "\r" + value.item.realizadas);
+				}
+				else if( value.element.yField == "diferencia" ){
+					labelDisplay.text = String("Diferencia" + "\r" + value.item.diferencia);
+				}
+			}
+			
+			public function get data():Object
+			{
+				// TODO Auto Generated method stub
+				return null;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup verticalAlign="bottom" gap="-5" id="tool" visible="false">
+		<s:Group width="100%" id="grpTituloGenerales">
+			<s:Rect id="rectangulo" width="100%" height="100%"  fill="{s1}" alpha=".6" radiusX="10" radiusY="10"/>
+			<s:Group id="grpTodo" top="10" bottom="10" right="10" left="10">
+				<s:HGroup verticalCenter="0" verticalAlign="bottom">
+					<label:TituloHelvetica_10_Blanco id="labelDisplay" />
+				</s:HGroup>
+			</s:Group>  
+		</s:Group>
+	</s:HGroup>
+	
+	<s:VGroup width="40" height="100%" verticalAlign="middle" horizontalAlign="center" paddingRight="10">
+		<label:TituloHelvetica_10_Blanco id="porcentaje" />
+	</s:VGroup>
+	
+</s:Group>

@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"  
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" xmlns:graficas="skins.skin.graficas.*" xmlns:grafica="skins.botones.grafica.*" xmlns:pqNet="skins.botones.pqNet.*"
+		 paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15" 
+		 width="100%" height="100%" xmlns:componentes="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			
+			private var cont:Number=0;
+			
+			private function init():void{
+				cont=0;
+				//validarLlenarGrid();
+				/*GridCancelacion.addEventListener("RegresarVistaPrincipal",regresaVistaPrincipal,false,0,true);
+				GridCancelacion.addEventListener("VistaGrafica",cambiarGrafica,false,0,true);
+				GridCancelacion.addEventListener("exportarGrid",cambiarGrafica,false,0,true);*/
+				//addEventListener(EventoTableroClientes.ENVIAR_ARREGLO_CANCELACION,setArregloCancelacion,false,0,true);
+				
+			}
+			
+			public function seleccionaTabla():void{			
+				this.stackGeneral.selectedChild = this.vistaTabla;
+				/*validarLlenarGrid();*/
+			}
+			
+			public function seleccionarGrafica():void{
+				this.stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			[Bindable]	private var _listaSeguimientoCotizacionCancelacion:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listaResumenConsultaCancelaciones:ArrayCollection = new ArrayCollection();
+			[Bindable] 	private var _arrayMarcas:ArrayCollection = new ArrayCollection();
+			private var _sql:Query;
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.VOLVER_A_TABLERO_PRODUCTOS);
+				dispatchEvent(evt);	
+			}
+			
+			private function cambiarGrafica(event:Event):void
+			{
+				stackGeneral.selectedChild = vistaGrafico
+			}
+			
+			public function set recibeSeguimientoCotizacionCancelacion($lista:ArrayCollection):void
+			{
+				if($lista == null ) 
+					return;
+				
+				_listaSeguimientoCotizacionCancelacion = $lista;
+				setValoresFooter($lista);
+				/*[0] = mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion (@3c681e51)*/	
+			}
+			
+			private function iniciarGrafica():void{
+				var arrT:ArrayCollection = UtilsGrid.queryQuitarRepetidos( _listaSeguimientoCotizacionCancelacion, "razon" );
+				for( var g:int = 0; g < arrT.length; g++ ){
+					var arrGrp:ArrayCollection = UtilsGrid.queryCampoX(_listaSeguimientoCotizacionCancelacion, "razon", (arrT[g] as SeguimientoCotizacion).razon);
+					(arrT[g] as SeguimientoCotizacion).piezas = UtilsGrid.sumatoria( arrGrp, "piezas" );
+					(arrT[g] as SeguimientoCotizacion).montoPartida = UtilsGrid.sumatoria( arrGrp, "montoPartida" );
+				}
+				_arrayMarcas = arrT;
+			} 
+			private function gridItemClickEvent(evento:EventoDataGrid):void{
+				var click:ListEvent = evento.itemClick;
+				if (click.columnIndex == 1 
+					&& (click.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion != null
+					&& (click.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion != ""
+				){
+					var urlreq:URLRequest;
+					var ruta:String;
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.COTIZACIONES_RUTA + (click.currentTarget.selectedItem as SeguimientoCotizacion).folioCotizacion + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}	 
+			}
+			
+			private function aplicarFormato($cantidad:Number):String{
+				var _stringRegreso:String;
+				_stringRegreso = '$ ' +UtilsFormatosNumericos.precisionADosDecimalesConComas($cantidad);
+				_stringRegreso = _stringRegreso.split(',').join('\'');
+				return _stringRegreso; 
+			}
+			
+			public function set recibeLinealCancelacionCot( $lista:ArrayCollection ):void{
+				if( $lista == null )
+					return;
+				myChart.dataProvider = myChart.aplicarFormatoTableroClientesSinPedidos( UtilsGrid.queryCampoX( $lista, "etiqueta", "CANCELACIONES_0" ),'CANCELACIÓN EN COTIZACIÓN');
+				/*myChart.dataProvider = myChart.aplicarFormatoTableroProductos( UtilsGrid.queryCampoX( $lista, "etiqueta", "CANCELACIONES_0" ),'CANCELACIÓN EN COTIZACIÓN' );*/
+				/*aplicarFormatoCancelacionesCotiza*/
+			}
+			
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				cont++;
+				
+				/*if (cont >1){
+					validarLlenarGrid();
+				}*/
+			}
+			
+			private var _keyAnterior:String = "";
+			
+			/*protected function validarLlenarGrid():void
+			{
+				if( stackGeneral.selectedChild == vistaTabla ){
+					if( _event != null)// && _event.keyConsulta != _keyAnterior ){
+					{
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.idButtons = [];
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("CONSULTA_GRID_CANCELACIONES_COT");
+						dispatchEvent(eventEspera);
+						
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_CANCELACIONES_COT);
+						evet.parametros = new ParametrosBusquedaCliente;
+						evet.parametros = _event.parametros;
+						dispatchEvent( evet );
+						
+						cont++;
+						_keyAnterior = _event.keyConsulta;
+					}
+				}
+			}*/
+			
+			private function compareFunctio_montoPartida(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.numericCompare(item1.montoPartida, item2.montoPartida);
+			}
+			
+			private function compareFunction_fechaCancelacion(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fechaCancelacion , item2.fechaCancelacion);
+			}
+			
+			/*private function setArregloCancelacion(evt:EventoTableroClientes):void
+			{
+				GridCancelacion.enviaArregloCancelacion(evt.arregloCancelacion);
+			}*/
+			private function generaArchivo():void{
+				if(!_listaSeguimientoCotizacionCancelacion){
+					alertaSingleton.show("No hay información para generar el archivo.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				var tmpArray:ArrayCollection = ObjectUtil.copy( gridCancelacion.dataProvider ) as ArrayCollection;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("F. Cotización");
+				fila1[2] = hoja.addItem("Marca");
+				fila1[3] = hoja.addItem("Nombre de producto");
+				fila1[4] = hoja.addItem("No. piezas");
+				fila1[5] = hoja.addItem("Monto");
+				fila1[6] = hoja.addItem("Nombre del cliente");
+				fila1[7] = hoja.addItem("Vendedor");
+				fila1[8] = hoja.addItem("Razón");
+				fila1[9] = hoja.addItem("Fecha siguiente seguimiento");
+				for(var i:int = 0 ; i< tmpArray.length ; i++ ){
+					fila1 = new Array();	
+					fila1[0] = (tmpArray[i] as SeguimientoCotizacion ).numFila;
+					fila1[1] = '"'+(tmpArray[i] as SeguimientoCotizacion).folioCotizacion+'"';
+					fila1[2] = '"'+(tmpArray[i] as SeguimientoCotizacion).fabrica+'"';
+					fila1[3] = '"'+(tmpArray[i] as SeguimientoCotizacion).nombreProducto+'"';
+					fila1[4] = '"'+(tmpArray[i] as SeguimientoCotizacion).piezas+'"';
+					fila1[5] = '"'+(tmpArray[i] as SeguimientoCotizacion).montoPartidaString+'"';
+					fila1[6] = '"'+(tmpArray[i] as SeguimientoCotizacion).nombreCliente+'"';
+					fila1[7] = '"'+(tmpArray[i] as SeguimientoCotizacion).nombreVendedor+'"';
+					fila1[8] = '"'+(tmpArray[i] as SeguimientoCotizacion).razon+'"';
+					fila1[9] = '"'+(tmpArray[i] as SeguimientoCotizacion).fechaCancelacionString+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Cancelacion_en_cotizacion.csv");
+				
+			}
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+			_sql = new Query($arreglo,["razon","fabrica","folioCotizacion","nombreProducto","nombreCliente","nombreVendedor"]);
+			
+			var _folios:Number = _sql.getPunteros([null,null,"folioCotizacion"],"folioCotizacion").length;
+			var _marcas:Number = _sql.getPunteros([null,"fabrica"],"fabrica").length;
+			var _productos:Number = _sql.getPunteros([null,null,null,"nombreProducto"],"nombreProducto").length;
+			var _piezas:Number = _sql.getSumarCampo("piezas",[],"",true);
+			var _clientes:Number = _sql.getPunteros([null,null,null,null,"nombreCliente"],"nombreCliente").length;
+			var _razones:Number = _sql.getPunteros(["razon"],"razon").length;
+			
+			lbl1_nototal.text = "";
+			lbl2_noFolio.text = _folios == 1 ? "1 Folio":_folios.toString()+" Folios";
+			lbl3_noMarcas.text = _marcas == 1 ? "1 Marca":_marcas.toString()+" Marcas";
+			lbl4_noProductos.text = _productos == 1 ? "1 Producto":_productos.toString()+" Productos";
+			lbl5_noPiezas.text = _piezas == 1 ? "1 Pieza":_piezas.toString()+" Piezas";
+			lbl6_noMonto.text = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas( _sql.getSumarCampo("montoPartida",[],"",true));
+			lbl7_noCliente.text = _clientes == 1 ? "1 Cliente":_clientes.toString()+" Clientes";
+			lbl8_noESAC.text = _sql.getPunteros([null,null,null,null,null,"nombreVendedor"],"nombreVendedor").length.toString() + " ESAC";
+			lbl9_noRazones.text = _razones == 1 ? "1 Razón":_razones.toString()+" Razones";
+			
+			}
+		]]>
+	</fx:Script>
+	
+	<!--<label:Titulo text="CANCELACIÓN EN COTIZACIÓN" fontSize="14" fontFamily="Helvetica"/>  paddingLeft="20"  paddingTop="15"-->
+	<componentes:TituloChartMaxTablero width="100%" text="CANCELACIÓN EN COTIZACIÓN" />
+	<!--<otros:divisionGruesa width="100%" />-->
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" > <!--change="validarLlenarGrid()"-->
+		
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<!--<cancelacion:CancelacionCotizacionGrid  id="GridCancelacion" width="100%" height="100%" paddingTop="-5" arreglo="{_listaSeguimientoCotizacionCancelacion}" />-->
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="0" gap="0">
+				<s:VGroup id="gvGrid" width="100%" height="100%" paddingBottom="0" horizontalAlign="center">
+					<otros:divisionGruesa width="100%" />
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridCancelacion" itemClickADG="gridItemClickEvent(event)" width="100%" height="100%" dataProvider="{this._listaSeguimientoCotizacionCancelacion}" tipoDeConsulta="vacio" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																 anchoColumnas="{['5%','10%','12%','20%','5%','10%','10%','10%','10%','=']}" mostrarFooter="false">
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila" />
+							<mx:AdvancedDataGridColumn headerText="Cotización" >
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<mx:LinkButton label="{(data as SeguimientoCotizacion).folioCotizacion }" color="0x257d92" toolTip="Ver cotización" textDecoration.selected="underline" horizontalCenter="0"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							
+							<mx:AdvancedDataGridColumn headerText="Marca">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<label:Texto text="{(data as SeguimientoCotizacion).fabrica}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Nombre de producto">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<s:HGroup width="100%" horizontalAlign="center">
+												<label:Texto text="{(data as SeguimientoCotizacion).nombreProducto}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+											</s:HGroup>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="No. piezas" dataField="piezas"/>
+							<mx:AdvancedDataGridColumn headerText="Monto" dataField="montoPartidaString" sortCompareFunction="compareFunctio_montoPartida">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>	
+											</s:states>
+											<label:Texto text="{(data as SeguimientoCotizacion).montoPartidaString}" fontSize="12" width="100%" textAlign="center"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Nombre del cliente">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>	
+											</s:states>
+											<label:Texto text="{(data as SeguimientoCotizacion).nombreCliente}" fontSize="12" width="100%" textAlign="center"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Vendedor" dataField="nombreVendedor"/>
+							<mx:AdvancedDataGridColumn headerText="Razón" dataField="razon">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<fx:Script>
+												<![CDATA[
+													import mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.ventas.SeguimientoCotizacion;
+												]]>
+											</fx:Script>
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>	
+											</s:states>
+											<label:Texto text="{(data as SeguimientoCotizacion).razon}" fontSize="12" width="100%" textAlign="center" maxDisplayedLines="2"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Fecha Sig. Seg." dataField="fechaCancelacionString" sortCompareFunction="compareFunction_fechaCancelacion"/>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				</s:VGroup>
+				<!-- ////////////////////  FOOTER  ////////////////////   -->
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="5%" textAlign="center" />
+					<label:Titulo_12_VerdeAzul_pTop10 id="lbl2_noFolio" paddingTop="0" width="10%" fontSize="14" textAlign="center"/>
+					<label:Titulo id="lbl3_noMarcas" paddingTop="0" width="12%" textAlign="center" />
+					<label:Titulo id="lbl4_noProductos" paddingTop="0" width="20%" textAlign="center" />
+					<label:Titulo id="lbl5_noPiezas" paddingTop="0" width="5%" textAlign="center" />
+					<label:Titulo id="lbl6_noMonto" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl7_noCliente" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl8_noESAC" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl9_noRazones" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl10_noFecha"  paddingTop="0" width="8%" textAlign="center" />
+				</s:HGroup>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>	
+			</s:VGroup>
+		</s:NavigatorContent>
+		
+		<!--    ESTA ES LA VISTA MAXIMIZADA CON GRAFICA   -->
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%" >
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20" paddingTop="-5">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" paddingTop="45" paddingBottom="20" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" >
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total"/>
+						</graficas:series>
+					</graficas:PieChartPqGris>
+					<s:Label width="100%" paddingBottom="10" paddingLeft="20" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()" />
+						<pqNet:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+				<!--<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_PRODUCTOS_CANCELACION_COTIZACION}" />-->
+			</s:HGroup>  
+		</s:NavigatorContent>
+	</pq:MobViewStack>	
+</s:VGroup>

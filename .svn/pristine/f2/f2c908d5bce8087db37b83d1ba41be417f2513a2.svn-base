@@ -1,0 +1,581 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.compras
+{
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.Archivo;
+
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.compras.Pieza")]
+	[Bindable]
+	public class Pieza
+	{
+		private var _idPieza:Number;
+		private var _idPCompra:Number;
+		private var _despachable:Boolean;
+		private var _codigo:String;
+		private var _fabrica:String;
+		private var _revisoCatalogo:Boolean = true;
+		private var _revisoDescripcion:Boolean = true;
+		private var _revisoPresentacion:Boolean = true;
+		private var _revisoFisicamenteC:Boolean = true;
+		private var _revisoCaducidad:Boolean = true;
+		private var _revisoLote:Boolean = true;
+		private var _revisoDocumentacion:Boolean = true;
+		private var _revisoEdicion:Boolean = true;
+		private var _revisoIdioma:Boolean = true;
+		private var _loteTxt:String;
+		private var _listArchivos:ArrayCollection;
+		private var _verificoPieza:Boolean;
+		private var _edoPieza:String;//Pendiente, Despachable, No Despachable
+		private var _comentarioRechazo:String;
+		private var _mesCaduca:String;
+		private var _anoCaduca:String;
+		private var _instrucciones:String;
+		private var _AStock:Boolean;
+		///// para manejo en renderers
+		private var _numFila:int;
+		private var _piezaNueva:Boolean = false;
+		private var _ultimo:String = "";
+		private var _lblPresentacion:String;
+		private var _lblEdicion:String;
+		private var _lblIdioma:String;
+		private var _lblCaducidad:String;
+		private var _lblCatalogo:String;
+		private var _lblLote:String;
+		private var _lblConcepto:String;
+		private var _tipoRechazo:String;
+		//private var _archivosRechazoVisibles:ArrayCollection = new ArrayCollection( [ true, true, true, true, true, true, true ] );
+		private var _archivosRechazoVisibles:ArrayCollection = new ArrayCollection( [ false, false, false, false, false, false, false ] );
+		private var _reporteRechazoCompleto:Boolean = true;
+		private var _tipoPartida:String;
+		private var _archivosRequeridos:Array;
+		private var _lblTipoDoc:String;
+		
+		
+		/*inspeccion Productos*/
+		private var _control:String;
+		private var _manejo:String;
+		private var _estado:String;
+		
+		
+		public function Pieza(){}
+
+		public function get estado():String
+		{
+			return _estado;
+		}
+
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+
+		public function get manejo():String
+		{
+			return _manejo;
+		}
+
+		public function set manejo(value:String):void
+		{
+			_manejo = value;
+		}
+
+		public function get control():String
+		{
+			return _control;
+		}
+
+		public function set control(value:String):void
+		{
+			_control = value;
+		}
+
+		public function get lblTipoDoc():String
+		{
+			return _lblTipoDoc;
+		}
+
+		public function set lblTipoDoc(value:String):void
+		{
+			_lblTipoDoc = value;
+		}
+
+		public function get archivosRequeridos():Array
+		{
+			return _archivosRequeridos;
+		}
+
+		public function set archivosRequeridos(value:Array):void
+		{
+			_archivosRequeridos = value;
+		}
+
+		public function get tipoPartida():String
+		{
+			return _tipoPartida;
+		}
+
+		public function set tipoPartida(value:String):void
+		{
+			_tipoPartida = value;
+		}
+
+		public function get lblIdioma():String
+		{
+			return _lblIdioma;
+		}
+
+		public function set lblIdioma(value:String):void
+		{
+			_lblIdioma = value;
+		}
+
+		public function get lblEdicion():String
+		{
+			return _lblEdicion;
+		}
+
+		public function set lblEdicion(value:String):void
+		{
+			_lblEdicion = value;
+		}
+
+		public function get reporteRechazoCompleto():Boolean
+		{
+			/*if( tipoPartida == "Est�ndares" || tipoPartida == "Biol�gicos" || tipoPartida == "Reactivos" ){// se requieren 6 archivos
+				if( listArchivos.length < 7 ) _reporteRechazoCompleto = false;
+			}
+			if( tipoPartida == "Publicaciones" ){// requiere 6
+				if( listArchivos.length < 7 ) _reporteRechazoCompleto = false;
+			}
+			if( tipoPartida == "Labware" ){// requiere 4
+				if( listArchivos.length < 5 ) _reporteRechazoCompleto = false;
+			}*/
+			// FIXME agregar validacion para cuando falte un archivo por llenar
+			if( edoPieza == "No Despachable" && comentarioRechazo != null ){
+				//archivosRequeridos ==
+				if( comentarioRechazo.length < 4 ) _reporteRechazoCompleto = false;
+			}
+			return _reporteRechazoCompleto;
+		}
+
+		public function set reporteRechazoCompleto(value:Boolean):void
+		{
+			_reporteRechazoCompleto = value;
+		}
+
+		public function get archivosRechazoVisibles():ArrayCollection
+		{
+			return _archivosRechazoVisibles;
+		}
+
+		public function set archivosRechazoVisibles(value:ArrayCollection):void
+		{
+			_archivosRechazoVisibles = value;
+		}
+
+		public function get AStock():Boolean
+		{
+			return _AStock;
+		}
+
+		public function set AStock(value:Boolean):void
+		{
+			_AStock = value;
+		}
+
+		public function get instrucciones():String
+		{
+			return _instrucciones;
+		}
+
+		public function set instrucciones(value:String):void
+		{
+			_instrucciones = value;
+		}
+
+		public function get anoCaduca():String
+		{
+			return _anoCaduca;
+		}
+
+		public function set anoCaduca(value:String):void
+		{
+			_anoCaduca = value;
+		}
+
+		public function get mesCaduca():String
+		{
+			return _mesCaduca;
+		}
+
+		public function set mesCaduca(value:String):void
+		{
+			_mesCaduca = value;
+		}
+
+		public function get comentarioRechazo():String
+		{
+			return _comentarioRechazo;
+		}
+
+		public function set comentarioRechazo(value:String):void
+		{
+			_comentarioRechazo = value;
+		}
+
+		public function get verificoPieza():Boolean
+		{
+			return _verificoPieza;
+		}
+
+		public function set verificoPieza(value:Boolean):void
+		{
+			_verificoPieza = value;
+		}
+
+		public function get revisoIdioma():Boolean
+		{
+			return _revisoIdioma;
+		}
+
+		public function set revisoIdioma(value:Boolean):void
+		{
+			_revisoIdioma = value;
+		}
+
+		public function get revisoEdicion():Boolean
+		{
+			return _revisoEdicion;
+		}
+
+		public function set revisoEdicion(value:Boolean):void
+		{
+			_revisoEdicion = value;
+		}
+
+		public function get tipoRechazo():String
+		{
+			var rechazoInsp:Boolean;
+			var rechazoDocumento:Boolean;
+			_tipoRechazo = "";
+			if( !revisoCaducidad 
+				|| !revisoCatalogo 
+				|| !revisoDescripcion
+				|| !revisoFisicamenteC
+				|| !revisoLote
+				|| !revisoPresentacion ){// RECHAZO INSPECCION
+				rechazoInsp = true;
+				_tipoRechazo = "Inspección";
+			}
+			if( revisoDocumentacion == false ){// RECHAZO DOCUMENTACION
+				rechazoDocumento = true;
+				_tipoRechazo = "Documentación";
+			}
+			if( rechazoDocumento && rechazoInsp){//AMBOS
+				_tipoRechazo = "Ambos";
+			}
+			return _tipoRechazo;
+		}
+
+		public function set tipoRechazo(value:String):void
+		{
+			_tipoRechazo = value;
+		}
+
+		public function get revisoCatalogo():Boolean
+		{
+			return _revisoCatalogo;
+		}
+
+		public function set revisoCatalogo(value:Boolean):void
+		{
+			_revisoCatalogo = value;
+		}
+
+		public function get lblConcepto():String
+		{
+			return _lblConcepto;
+		}
+
+		public function set lblConcepto(value:String):void
+		{
+			_lblConcepto = value;
+		}
+
+		public function get lblLote():String
+		{
+			return _lblLote;
+		}
+
+		public function set lblLote(value:String):void
+		{
+			_lblLote = value;
+		}
+
+		public function get lblCatalogo():String
+		{
+			return _lblCatalogo;
+		}
+
+		public function set lblCatalogo(value:String):void
+		{
+			_lblCatalogo = value;
+		}
+
+		public function get lblCaducidad():String
+		{
+			return _lblCaducidad;
+		}
+
+		public function set lblCaducidad(value:String):void
+		{
+			_lblCaducidad = value;
+		}
+
+		public function get lblPresentacion():String
+		{
+			return _lblPresentacion;
+		}
+
+		public function set lblPresentacion(value:String):void
+		{
+			_lblPresentacion = value;
+		}
+
+		public function get numFila():int
+		{
+			return _numFila;
+		}
+
+		public function set numFila(value:int):void
+		{
+			_numFila = value;
+		}
+
+		public function get edoPieza():String
+		{
+			if( piezaNueva ){
+						_edoPieza = "Pendiente";
+			}else{
+				if( tipoPartida == "Estándares" || tipoPartida == "Biológicos" || tipoPartida == "Reactivos" || tipoPartida == "Estandares" || tipoPartida == "Biologicos" ){
+							if( revisoDescripcion == false
+								|| revisoCatalogo == false
+								|| revisoPresentacion == false 
+								|| revisoFisicamenteC == false
+								|| revisoLote == false
+								|| revisoCaducidad == false
+								|| revisoDocumentacion == false	)
+								_edoPieza = "No Despachable";
+							else if(revisoDescripcion
+								&& revisoCatalogo
+								&& revisoPresentacion
+								&& revisoFisicamenteC
+								&& revisoLote
+								&& revisoCaducidad
+								&& revisoDocumentacion	)
+								_edoPieza = "Despachable";
+				}else if( tipoPartida == "Publicaciones" ){
+							if( revisoDescripcion == false
+								|| revisoCatalogo == false
+								|| revisoEdicion == false 
+								|| revisoFisicamenteC == false
+								|| revisoIdioma == false
+								|| revisoDocumentacion == false	)
+								_edoPieza = "No Despachable";
+							else if(revisoDescripcion
+								&& revisoCatalogo
+								&& revisoEdicion
+								&& revisoFisicamenteC
+								&& revisoIdioma
+								&& revisoDocumentacion	)
+								_edoPieza = "Despachable";
+				}else if( tipoPartida == "Labware" ){
+							if( revisoDescripcion == false
+								|| revisoCatalogo == false
+								|| revisoFisicamenteC == false
+								|| revisoPresentacion == false )
+								_edoPieza = "No Despachable";
+							else if(revisoDescripcion
+								&& revisoCatalogo
+								&& revisoFisicamenteC
+								&& revisoPresentacion	)
+								_edoPieza = "Despachable";
+				}
+					/*	if( revisoDescripcion == false
+						|| revisoCatalogo == false
+						|| revisoPresentacion == false 
+						|| revisoFisicamenteC == false
+						|| revisoLote == false
+						|| revisoCaducidad == false
+						|| revisoDocumentacion == false	)
+								_edoPieza = "No Despachable";
+					else if(revisoDescripcion
+						&& revisoCatalogo
+						&& revisoPresentacion
+						&& revisoFisicamenteC
+						&& revisoLote
+						&& revisoCaducidad
+						&& revisoDocumentacion	)
+								_edoPieza = "Despachable";*/
+			}
+			return _edoPieza;
+		}
+
+		public function get piezaNueva():Boolean
+		{
+			return _piezaNueva;
+		}
+
+		public function set piezaNueva(value:Boolean):void
+		{
+			_piezaNueva = value;
+		}
+		public function set edoPieza(value:String):void
+		{
+			edoPieza = value;
+		}
+
+		public function get ultimo():String
+		{
+			return _ultimo;
+		}
+
+		public function set ultimo(value:String):void
+		{
+			_ultimo = value;
+		}
+
+		public function get listArchivos():ArrayCollection
+		{
+			/*for(var f:int=0; f < _listArchivos.length; f++){
+				(_listArchivos[f] as Archivo).extension = "test";
+			}*/
+			return _listArchivos;
+		}
+
+		public function set listArchivos(value:ArrayCollection):void
+		{
+			_listArchivos = value;
+		}
+
+		public function get loteTxt():String
+		{
+			return _loteTxt;
+		}
+
+		public function set loteTxt(value:String):void
+		{
+			_loteTxt = value;
+		}
+
+		public function get revisoDocumentacion():Boolean
+		{
+			return _revisoDocumentacion;
+		}
+
+		public function set revisoDocumentacion(value:Boolean):void
+		{
+			_revisoDocumentacion = value;
+		}
+
+		public function get revisoLote():Boolean
+		{
+			return _revisoLote;
+		}
+
+		public function set revisoLote(value:Boolean):void
+		{
+			_revisoLote = value;
+		}
+
+		public function get revisoCaducidad():Boolean
+		{
+			return _revisoCaducidad;
+		}
+
+		public function set revisoCaducidad(value:Boolean):void
+		{
+			_revisoCaducidad = value;
+		}
+
+		public function get revisoFisicamenteC():Boolean
+		{
+			return _revisoFisicamenteC;
+		}
+
+		public function set revisoFisicamenteC(value:Boolean):void
+		{
+			_revisoFisicamenteC = value;
+		}
+
+		public function get revisoPresentacion():Boolean
+		{
+			return _revisoPresentacion;
+		}
+
+		public function set revisoPresentacion(value:Boolean):void
+		{
+			_revisoPresentacion = value;
+		}
+
+		public function get revisoDescripcion():Boolean
+		{
+			return _revisoDescripcion;
+		}
+
+		public function set revisoDescripcion(value:Boolean):void
+		{
+			_revisoDescripcion = value;
+		}
+
+		public function get fabrica():String
+		{
+			return _fabrica;
+		}
+
+		public function set fabrica(value:String):void
+		{
+			_fabrica = value;
+		}
+
+		public function get codigo():String
+		{
+			return _codigo;
+		}
+
+		public function set codigo(value:String):void
+		{
+			_codigo = value;
+		}
+
+		public function get despachable():Boolean
+		{
+			return _despachable;
+		}
+
+		public function set despachable(value:Boolean):void
+		{
+			_despachable = value;
+		}
+
+		public function get idPCompra():Number
+		{
+			return _idPCompra;
+		}
+
+		public function set idPCompra(value:Number):void
+		{
+			_idPCompra = value;
+		}
+
+		public function get idPieza():Number
+		{
+			return _idPieza;
+		}
+
+		public function set idPieza(value:Number):void
+		{
+			_idPieza = value;
+		}
+
+	}
+}

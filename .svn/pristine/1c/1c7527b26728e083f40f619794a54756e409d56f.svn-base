@@ -1,0 +1,527 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								   xmlns:s="library://ns.adobe.com/flex/spark" 
+								   xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*" creationComplete="inicia()"
+								   xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+								   xmlns:comboCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+								   titulo="CONSULTA ENTREGAS" xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+								   xmlns:otros="skins.otros.*" xmlns:pqNet1="skins.botones.pqNet.*" xmlns:linkButton="skins.skin.linkButton.*" 
+								   xmlns:chekbox="skins.skin.chekbox.*" xmlns:panelCtaGenerales="skins.skin.comun.consultas.panelCtaGenerales.*"
+								   xmlns:label="skins.skin.label.*" xmlns:dateField="skins.skin.dateField.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.despachos.EventoConsultaEntregas;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			[Bindable] private var _listaBotones:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:0}, 
+				{valor:'Rápida',llave:1} ] );
+			[Bindable]
+			private var _factura:Factura;
+			private var _currenVista:String = "tablaGrid";
+			
+			private function inicia():void{
+				
+				btnGridToDetalle.addEventListener(MouseEvent.CLICK,btnRegresar_MouseEventClick,false,0,true);
+				
+				this.fechaFin.selectedDate = new Date();
+				this.fechaInicio.selectedDate = new Date();
+				this.fechaFin.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				this.fechaInicio.text = UtilsFecha.formatoFechaDDMMMYYYY( new Date() );
+				realizarBusquedaInicial();
+				var evt:EventoConsultaEntregas = new EventoConsultaEntregas( EventoConsultaEntregas.MUESTRA_BOTON_GRAFICAS )
+				evt.tabGrafica = true;
+				dispatchEvent(evt);
+			}
+			/**
+			 * funcion que cambia el indice del stack en el precio
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if((event.currentTarget as ButtonBar).selectedItem == null){
+					event.preventDefault();
+				}else{
+					
+					this.vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoConsultaEntregas = new EventoConsultaEntregas( EventoConsultaEntregas.MUESTRA_BOTON_GRAFICAS )
+					event.currentTarget.selectedItem.llave == 0 ? evt.tabGrafica = true : evt.tabGrafica = false; 
+					dispatchEvent(evt);
+					
+					if(((event.currentTarget as ButtonBar).selectedItem as Object).valor == 'Rápida'){
+						busqedaRapida();
+					}else{
+						_currenVista = "tablaGrid"
+						realizarBusqueda();
+					}
+				}
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				if($actualizarEstadoEspera == null ) return;
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar){
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar){
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			public function cambiaIndex( $indice:int ):void{
+				this.espacioInfoGenerales.selectedIndex = $indice;
+				
+				if($indice == 1)
+					this.btnGridToDetalle.visible = true;
+				else
+					this.btnGridToDetalle.visible = false;
+			}
+			
+			private function btnRegresar_MouseEventClick( e:MouseEvent):void{
+				cambiaIndex(0);
+				var evt:EventoConsultaEntregas = new EventoConsultaEntregas( EventoConsultaEntregas.MUESTRA_COLUMAS );
+				evt.idVista = 0;
+				dispatchEvent(evt);
+			}
+			
+			public function set recibirLaVistaSeleccionada($vista:String):void
+			{
+				if($vista == null) return;
+				_currenVista = $vista;	
+			}
+			
+			protected function realizarBusqueda():void{
+				var eventEspera:EventoEsperar;
+				var idCliente:int = 0;
+				var mensajero:String= '';
+				var ruta:String = '';
+				if(this.cmbCliente.dataProvider == null || this.cmbCliente.dataProvider.length == 0){
+					idCliente = 0;
+				}else{
+					idCliente =this.cmbCliente.selectedItem.llave;
+				}
+				if(this.cmbMensajeros.dataProvider == null || this.cmbMensajeros.dataProvider.length == 0 ){
+					mensajero = '--TODOS--';
+				}else{
+					mensajero = this.cmbMensajeros.selectedItem.valor;
+				}
+				if(this.cmbRutas.dataProvider == null || this.cmbRutas.dataProvider.length == 0 ){
+					ruta = '--TODOS--';
+				}else{
+					ruta = this.cmbRutas.selectedItem.valor;
+				}
+				
+				var settearValores:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.SETTEAR_VALORES_DE_LA_BUSQUEDA_ACTUAL);
+				var actualizarVistaCurrent:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.ACTUALIZAR_VISTA_ACTUAL);
+				if(_currenVista == "tablaGrid"){
+					
+					//configurar Espera
+					eventEspera= new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.tipoEventos.push("CONSULTA_ENTREGAS");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.CONSULTA_ENTREGAS);
+					settearValores.finicio = evt.finicio = this.fechaInicio.selectedDate;
+					settearValores.ffin = evt.ffin = this.fechaFin.selectedDate;
+					settearValores.idCliente = evt.idCliente = idCliente;
+					settearValores.estado = evt.estado = this.cmbEstado.selectedItem.valor;
+					settearValores.mensajero = evt.mensajero = mensajero;
+					settearValores.rutaCombo = evt.rutaCombo = ruta;
+					if( this.cmbConforme.selectedItem.valor == 'No aplica'){
+						settearValores.conforme = evt.conforme = 'NA';
+					}else{
+						settearValores.conforme = evt.conforme = this.cmbConforme.selectedItem.valor;
+					}
+					dispatchEvent( evt );
+					
+					actualizarVistaCurrent.actualizarVistaCurrent = true;
+					
+				}else{
+					
+					//configurar Espera
+					eventEspera= new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.idButtons.push("btnTotales");
+					eventEspera.tipoEventos.push("CONSULTA_ENTREGAS");
+					eventEspera.tipoEventos.push("OBTEN_COMPARATIVAS");
+					eventEspera.tipoEventos.push("OBTEN_TRES_GRAFICAS");
+					dispatchEvent(eventEspera);
+					
+					var evtEn:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.CONSULTA_ENTREGAS);
+					var evtComparrativas:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.OBTEN_COMPARATIVAS);
+					var evtGraficas:EventoConsultaEntregas = new EventoConsultaEntregas( EventoConsultaEntregas.OBTEN_TRES_GRAFICAS );
+					var evtEntregas:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.OBTENER_VALORES_GRAFICA_ETVSFT);
+					evtEn.finicio = settearValores.finicio = evtGraficas.finicio = evtComparrativas.finicio = evtEntregas.finicio =this.fechaInicio.selectedDate;
+					evtEn.ffin = settearValores.ffin = evtGraficas.ffin = evtComparrativas.ffin = evtEntregas.ffin = this.fechaFin.selectedDate;
+					evtEn.idCliente = settearValores.idCliente = evtGraficas.idCliente = evtComparrativas.idCliente = evtEntregas.idCliente = idCliente;
+					evtEn.estado = settearValores.estado = evtGraficas.estado = evtComparrativas.estado = evtEntregas.estado = this.cmbEstado.selectedItem.valor;
+					evtEn.mensajero = settearValores.mensajero = evtGraficas.mensajero = evtComparrativas.mensajero = evtEntregas.mensajero = mensajero;
+					evtEn.rutaCombo = settearValores.rutaCombo = evtGraficas.rutaCombo = evtComparrativas.rutaCombo = evtEntregas.rutaCombo = ruta;
+					if( this.cmbConforme.selectedItem.valor == 'No aplica'){
+						evtEn.conforme = settearValores.conforme = evtGraficas.conforme = evtComparrativas.conforme = evtEntregas.conforme = 'NA';
+					}else{
+						evtEn.conforme = settearValores.conforme = evtGraficas.conforme = evtComparrativas.conforme = evtEntregas.conforme = this.cmbConforme.selectedItem.valor;
+					}
+					evtGraficas.facturaString = evtEntregas.facturaString = null;
+					evtGraficas.cpedido = evtEntregas.cpedido = null;
+					evtComparrativas.individual = false;
+					dispatchEvent( evtComparrativas );
+					dispatchEvent(evtGraficas);
+					dispatchEvent(evtEn);
+					dispatchEvent( evtEntregas );
+					
+					actualizarVistaCurrent.actualizarVistaCurrent =false;
+					
+					
+				}
+				dispatchEvent(actualizarVistaCurrent);
+				dispatchEvent(settearValores);
+				
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = settearValores.finicio;
+				currentFFin = settearValores.ffin;
+				currentCliente = settearValores.idCliente;
+				currentEstado = settearValores.estado;
+				currentMensajero = settearValores.mensajero;
+				currentRutaCombo = settearValores.rutaCombo;
+				currentConforme = settearValores.conforme;
+			}
+			
+			private function realizarBusquedaInicial():void
+			{
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("CONSULTA_ENTREGAS");
+				dispatchEvent(eventEspera);
+				
+				var idCliente:int = 0;
+				var mensajero:String= '';
+				var ruta:String = '';
+				var estado:String = '';
+				var conforme:String = '--TODOS--';
+				if(this.cmbCliente.dataProvider == null || this.cmbCliente.dataProvider.length == 0){
+					idCliente = 0;
+				}else{
+					idCliente =this.cmbCliente.selectedItem.llave;
+				}
+				if(this.cmbMensajeros.dataProvider == null || this.cmbMensajeros.dataProvider.length == 0 ){
+					mensajero = '--TODOS--';
+				}else{
+					mensajero = this.cmbMensajeros.selectedItem.valor;
+				}
+				if(this.cmbRutas.dataProvider == null || this.cmbRutas.dataProvider.length == 0 ){
+					ruta = '--TODOS--';
+				}else{
+					ruta = this.cmbRutas.selectedItem.valor;
+				}
+				if(this.cmbEstado.dataProvider == null || this.cmbEstado.dataProvider.length == 0 || this.cmbEstado.selectedItem == null ){
+					estado = '--TODOS--';
+				}else{
+					estado = this.cmbEstado.selectedItem.valor;
+				}
+				var setValores:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.SETTEAR_VALORES_DE_LA_BUSQUEDA_ACTUAL);
+				var evt:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.CONSULTA_ENTREGAS);
+				setValores.finicio = evt.finicio = this.fechaInicio.selectedDate;
+				setValores.ffin = evt.ffin = this.fechaFin.selectedDate;
+				setValores.idCliente = evt.idCliente = idCliente;
+				setValores.estado = evt.estado = estado;
+				setValores.mensajero = evt.mensajero = mensajero;
+				setValores.rutaCombo = evt.rutaCombo = ruta;
+				setValores.conforme = evt.conforme = conforme;
+				dispatchEvent( evt );
+				dispatchEvent(setValores);
+				
+				var actualizarVistaCurrent:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.ACTUALIZAR_VISTA_ACTUAL);
+				actualizarVistaCurrent.actualizarVistaCurrent = true;
+				dispatchEvent(actualizarVistaCurrent);
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = setValores.finicio;
+				currentFFin = setValores.ffin;
+				currentCliente = setValores.idCliente;
+				currentEstado = setValores.estado;
+				currentMensajero = setValores.mensajero;
+				currentRutaCombo = setValores.rutaCombo;
+				currentConforme = setValores.conforme;
+			}
+			
+			private function busqedaRapida():void{
+				if( StringUtil.trim(txtFactura.text).length >0){
+					
+					//configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("CONSULTA_ENTREGAS");
+					dispatchEvent(eventEspera);
+					
+					var evt:EventoConsultaEntregas = new EventoConsultaEntregas(EventoConsultaEntregas.CONSULTA_ENTREGAS);
+					evt.idCliente = 0;
+					evt.estado = null;
+					evt.mensajero = null;
+					evt.rutaCombo = null;
+					evt.conforme = null;
+					evt.finicio = null;
+					evt.ffin = null;
+					
+					if( !checkBusqueda.selected ){
+						evt.facturaString = txtFactura.text;
+						evt.cpedido = null;
+					}else{
+						evt.cpedido = txtFactura.text;
+						evt.factura = null;
+					}
+					currentFacturaOPedido = txtFactura.text;
+					dispatchEvent( evt );
+				}else{
+					//evt.cpedido = "ProvocarBusquedaSinResultados";
+					dispatchEvent(new Event("LimpiarGridConsultaEntregas",true));
+					currentFacturaOPedido ="";
+				}
+			}
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			public function seleccionaInfoMenu( $id:int, $factura:Factura = null ):void{
+				if( $id == 1 ){
+					_factura = $factura;
+					var evt:EventoConsultaEntregas = new EventoConsultaEntregas( EventoConsultaEntregas.CONSULTA_RUTAS );
+					evt.idCliente = _factura.idCliente;
+					dispatchEvent( evt ); 
+				} 
+			} 
+			private function  verPDF():void{
+				var request:URLRequest = new URLRequest();
+				var path:Object = Util.rutaNueva(_factura.cpedido);
+				request.url = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + path.ruta + _factura.cpedido + '.pdf';
+				navigateToURL( request );
+			}
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentCliente:Number;
+			private var currentEstado:String;
+			private var currentMensajero:String;
+			private var currentRutaCombo:String;
+			private var currentConforme:String;
+			private var currentFacturaOPedido:String;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				var tempConforme:String;
+				var idCliente:int = 0;
+				var mensajero:String= '';
+				var ruta:String = '';
+				this.cmbConforme.selectedItem.valor == 'No aplica' ? tempConforme ="NA":tempConforme= this.cmbConforme.selectedItem.valor;
+				if(this.cmbCliente.dataProvider == null || this.cmbCliente.dataProvider.length == 0){
+					idCliente = 0;
+				}else{
+					idCliente =this.cmbCliente.selectedItem.llave;
+				}
+				if(this.cmbMensajeros.dataProvider == null || this.cmbMensajeros.dataProvider.length == 0 ){
+					mensajero = '--TODOS--';
+				}else{
+					mensajero = this.cmbMensajeros.selectedItem.valor;
+				}
+				if(this.cmbRutas.dataProvider == null || this.cmbRutas.dataProvider.length == 0 ){
+					ruta = '--TODOS--';
+				}else{
+					ruta = this.cmbRutas.selectedItem.valor;
+				}
+				switch(event.currentTarget.id)
+				{
+					case "fechaInicio":{CompararYControlarBoton(event.newDate.time,currentFInicio.time,"fechaInicio",btnBusqueda);break;}
+					case "fechaFin":{CompararYControlarBoton(event.newDate.time,currentFFin.time,"fechaFin",btnBusqueda);	break;}
+					case "cmbCliente":	{CompararYControlarBoton(idCliente,currentCliente,"cmbCliente",btnBusqueda);break;}
+					case "cmbEstado":{CompararYControlarBoton(cmbEstado.selectedItem.valor,currentEstado,"cmbEstado",btnBusqueda);break;}
+					case "cmbMensajeros":{CompararYControlarBoton(mensajero,currentMensajero,"cmbMensajeros",btnBusqueda);break;}
+					case "cmbRutas":{CompararYControlarBoton(ruta,currentRutaCombo,"cmbRutas",btnBusqueda);break;}
+					case "cmbConforme":{CompararYControlarBoton(tempConforme,currentConforme,"cmbConforme",btnBusqueda);break;}
+				}
+			} 
+			
+			protected function txtBuscaRapida_keyUpHandler(event:KeyboardEvent):void
+			{
+				var tempFolio:String = StringUtil.trim(txtFactura.text);
+				if(tempFolio.length >0){
+					if(tempFolio != currentFacturaOPedido){
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(false);
+					}else{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%"  >
+			<pq:MobViewStack width="100%" height="100%"  id="espacioInfoGenerales">
+				<s:NavigatorContent width="100%" height="100%">
+					<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+						<s:VGroup width="100%" gap="0">
+							<s:Spacer height="13"/>
+							<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" requireSelection="true" />
+							<s:Spacer height="30"/>
+							<s:VGroup width="100%">
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:VGroup>	
+						<pq:MobViewStack width="100%" height="37%" id="vstBusqueda">
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" height="100%">
+									<s:HGroup width="100%">
+										<label:Titulo_w100  text="Del" paddingTop="0" />
+										<s:Spacer width="15"/>
+										<label:Titulo_w100  text="Al" paddingTop="0" />
+									</s:HGroup>
+									<s:HGroup width="100%">
+										<dateField:DatePickerSpanish width="50%" id="fechaInicio" change="filtros_changeEvent(event)"/>
+										<s:Spacer width="15"/>
+										<dateField:DatePickerSpanish width="50%" id="fechaFin" change="filtros_changeEvent(event)"/>
+									</s:HGroup>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Cliente" paddingTop="0" />
+									<comboCat:ComboCatalogos width="100%" id="cmbCliente" creationComplete="cmbCliente.cargaClientes('--TODOS--')" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>
+									<label:Titulo_w100  text="Estado" paddingTop="0" />
+									<comboCat:ComboCatalogos width="100%" id="cmbEstado" creationComplete="cmbEstado.cargaEstado('--TODOS--')" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>	
+									<label:Titulo_w100  text="Mensajero" paddingTop="0" />
+									<comboCat:ComboCatalogos width="100%" id="cmbMensajeros" creationComplete="cmbMensajeros.cargarEmpleadosXTipoTablero('RT','--TODOS--')" labelField="valor" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>	
+									<label:Titulo_w100  text="Ruta" paddingTop="0" />
+									<comboCat:ComboCatalogos width="100%" id="cmbRutas" creationComplete="cmbRutas.cargarRutas('--TODOS--')" labelField="valor"  change="filtros_changeEvent(event)"/>
+									<s:Spacer height="1"/>	
+									<label:Titulo_w100  text="Conforme" paddingTop="0" />
+									<comboCat:ComboCatalogos width="100%" id="cmbConforme" creationComplete="cmbConforme.cargarConformidad('--TODOS--')" change="filtros_changeEvent(event)"/>
+									<s:Spacer height="15"/>
+									<pqNet1:botonPqNetLargo id="btnBusqueda" width="100%" icono="iconoActualizarNormal" botonRedondo="true" click="realizarBusqueda()"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+							<s:NavigatorContent width="100%" height="100%">
+								<s:VGroup width="100%" height="100%">
+									<s:Spacer height="15"/>
+									<chekbox:CheckBoxPq id="checkBusqueda" selected="false" labelLeft="FOLIO DE FACTURA" labelRight="PEDIDO INTERNO"  change="checkBusqueda.selected == false ? lblFacturaPedido.text = 'Factura' : lblFacturaPedido.text = 'Pedido' "/>
+									<s:Spacer height="15"/>
+									<label:Titulo_w100 id="lblFacturaPedido" text="Factura" paddingTop="0" />
+									<s:TextInput width="100%" enter="busqedaRapida()" id="txtFactura" fontStyle="normal" restrict="0-9\-" keyUp="txtBuscaRapida_keyUpHandler(event)"/>
+									<s:Spacer height="15"/>
+									<pqNet1:botonPqNetLargo id="btnBusquedaRapida" width="100%" icono="ojomordor" botonRedondo="true" click="busqedaRapida()"/>
+									<s:Spacer height="15"/>
+									<otros:divisionHueca width="100%"/>
+								</s:VGroup>
+							</s:NavigatorContent>
+						</pq:MobViewStack>
+					</s:VGroup>
+				</s:NavigatorContent>
+				<s:NavigatorContent width="100%" height="100%">
+					<s:VGroup width="100%" height="100%">
+						<panelCtaGenerales:Titulo text="{_factura.nombre_Cliente}"/>
+						<label:Titulo_w100  text="Nivel de Ingreso:" />
+						<label:Texto_w100  text="{ _factura.nivelIngresocliente }" />
+						<label:Titulo_w100  text="Factura:" />
+						<label:Texto_w100  text="{ _factura.numeroFactura }" />
+						<label:Titulo_w100  text="Vendió:" />
+						<label:Texto_w100  text="{ _factura.facturadoPor }" />
+						<label:Titulo_w100  text="P.Interno:" />
+						<linkButton:LinkButtonPQNet2 label="{_factura.cpedido }" click="verPDF()"/>
+						<label:Titulo_w100  text="Ruta:" />
+						<label:Texto_w100  text="{ _factura.rutaRelacionada.rutaMensajeria }" />
+						<label:Titulo_w100  text="{(_factura.rutaRelacionada.rutaMensajeria == 'Local' ? 'Zona' : 'Mensajería:')}" />
+						<label:Texto_w100  text="{ _factura.rutaRelacionada.zonaMensajeria }" />
+						<label:Titulo_w100  text="Monto pedido:" />
+						<label:Texto_w100  text="${ _factura.montoTotalPedido + ' '  + _factura.monedaPedido }" />
+						<label:Titulo_w100  text="Total de piezas:" />
+						<label:Texto_w100  text="{ _factura.numeroPiezasPedidoRelacionado }" />
+						<s:Spacer height="15"/>
+						<otros:divisionHueca width="100%"/>
+						<s:HGroup horizontalAlign="right" width="100%">
+<!--							<s:Image id="imgGrid" source="{catalogoIconosBotoneras.getInstance().gridgris}" click="cambiaIndices(0)"
+									 mouseOver="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgrisover}"
+									 mouseOut="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgris}"/>-->
+						</s:HGroup>
+					</s:VGroup>
+				</s:NavigatorContent>
+			</pq:MobViewStack>
+		</s:VGroup>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

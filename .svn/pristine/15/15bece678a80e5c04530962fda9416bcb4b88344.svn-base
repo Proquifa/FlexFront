@@ -1,0 +1,775 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%" creationComplete="init()" xmlns:sinicono="skins.botones.largocolor.sinicono.*" xmlns:botonNegroCuadrado="skins.botones.botonNegroCuadrado.*" xmlns:pqNet="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:StringValidator id="validaque" source="{que}" property="text" minLength="1"  requiredFieldError="{catalogoAlertas.ADV_que}"/>
+		<mx:StringValidator id="validadonde" source="{donde}" property="text" minLength="1" required="true" requiredFieldError="{catalogoAlertas.ADV_donde}"/>
+		<mx:StringValidator id="validacuando" source="{cuando}" property="text" minLength="1" required="true" requiredFieldError="{catalogoAlertas.ADV_cuando}"/>
+		<!--<mx:StringValidator id="validacomentario" source="{comentarios}" property="text" minLength="2" requiredFieldError=""/>-->
+		<mx:StringValidator id="validaqueref" source="{quereformulacion}" property="text" minLength="1" required="true" requiredFieldError="{catalogoAlertas.ADV_que}"/>
+		<mx:StringValidator id="validadonderef" source="{dondereformulacion}" property="text" minLength="1" required="true" requiredFieldError="{catalogoAlertas.ADV_donde}"/>
+		<mx:StringValidator id="validacuandoref" source="{cuandoreformulacion}" property="text" minLength="1" required="true" requiredFieldError="{catalogoAlertas.ADV_cuando}"/>
+		
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaContactoService;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoReferencias;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoReformulaIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.BodyMensajes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Reformulacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.contactos.BuscaContacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.contactos.ObtenerContacto;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.ResizeEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.validators.StringValidator;
+			import mx.validators.Validator;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var palabras:uint;
+			private var palabrasreformula:uint;
+			private var fechaHoy:Date = new Date();
+			private var listasReferencias:CargaReferencias = new CargaReferencias();
+			private var validarTextArea:Array;
+			[Bindable]
+			public var _incidente:Incidente = null;
+			[Bindable]
+			public var _reformulacion:Reformulacion;
+			[Bindable]
+			public var _guardaReformulacion:Reformulacion = null;
+			[Bindable]
+			public var validarArr:Array;
+			[Bindable]
+			public var validarArrReformula:Array;
+			[Bindable]
+			private var _listaReformulacion:ArrayCollection;
+			[Bindable]
+			private var _listaReferencias:ArrayCollection;
+			[Bindable]
+			private var _referenciaReformulacion:ArrayCollection;
+			[Bindable]
+			private var vieneD:String;
+			[Bindable]
+			private var _guardaidIncidente:int;
+			[Bindable]
+			private var _marcadorBandera:Boolean = true;
+			[Bindable]
+			public var _registroReformulacion:ArrayCollection = new ArrayCollection([{icono:"registroInc", bandera:false},
+				{icono:"reformulacionInc", bandera:false}]);
+			private var _lineaDTiempo:LineaDelTiempo = null;
+			private var _registroIncidente:RegistroIncidente = null;
+			
+			[Bindable]
+			private var varDataGridValidadoraPedido:ArrayCollection;
+			[Bindable]
+			private var _arregloPendientesEnUso:ArrayCollection = null;
+			[Bindable]
+			private var _requerido:Boolean = true;
+			public var busqueda:Boolean;
+			
+			private var canalP:AMFChannel;
+			private var canalesP:ChannelSet;
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			private var productorDocSalientes:Producer = new Producer();
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				//Alert.show("Se ha producido un error en el Productor","Error");
+				alertaSingleton.show( catalogoAlertas.ERR_channelProductor, catalogoAlertas.TIT_ERR);
+			}
+			
+			private function init():void{
+				
+				///////////////////////
+				
+				this.canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesVerificacion = new ChannelSet();
+				this.canalesVerificacion.addChannel(canalVerificacion);
+				this.productorDocSalientes.destination = "actualizacionService";
+				this.productorDocSalientes.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.productorDocSalientes.channelSet = this.canalesVerificacion;
+				
+				///////////////////////
+				
+				this.addEventListener(EventoIncidente.CERRAR_COMPONENTE, cerrarComponente);
+				
+				this.buttonBarIncidente.selectedIndex = 0;
+				
+				validarArr = new Array();
+				validarArrReformula = new Array();
+				
+				validarArr.push(validaque);
+				validarArr.push(validadonde);
+				validarArr.push(validacuando);
+				//validarArr.push(validacomentario);
+				validarArrReformula.push(validaqueref);
+				validarArrReformula.push(validadonderef);
+				validarArrReformula.push(validacuandoref);
+				stage.addEventListener( ResizeEvent.RESIZE, recalculGrupo);
+			}
+			private function recalculGrupo( $:Event):void{
+				//grpTodo.percentHeight = grpTodo.percentWidth = 100;
+				//listaincidente.percentWidth = 100;
+				//_listaReformulacion.refresh();
+				//listaincidente.width = width * 0.25;
+				//qdcreformulacion.percentWidth = qdcreformulacion.percentHeight = 100;
+				qdcreformulacion.selectedChild.percentWidth = 100;
+				qdcreformulacion.selectedChild.percentHeight = 100;
+			}
+			private function cerrarComponente(evt:EventoIncidente):void{
+				this.espacioIncidente.removeAllChildren();
+				if(this._registroIncidente == null){
+					this._registroIncidente = new RegistroIncidente();
+				}
+				this.espacioIncidente.addChild(this._registroIncidente);
+				this.buttonBarIncidente.selectedItem=="Reformulacion";
+			}
+			
+			private function cargaLineaTiempo():void{
+				this.espacioIncidente.removeAllElements();
+				if(this._lineaDTiempo == null){
+					this._lineaDTiempo = new LineaDelTiempo();
+				}
+				this.espacioIncidente.addChild(this._lineaDTiempo);
+				
+				var evt:EventoGestionIncidente = new EventoGestionIncidente(EventoGestionIncidente.OBTENER_LINEA_DE_TIEMPO_X_INCIDENTE);
+				evt.idIncidente = this._guardaidIncidente;	
+				dispatchEvent(evt);
+				
+			}
+			
+			public function cambiarViewStack(event:IndexChangeEvent):void
+			{
+				
+				if (buttonBarIncidente.selectedItem.icono == "registroInc") {
+					this.viewStackIncidente.selectedChild = this.incidente;
+				}
+				else if (buttonBarIncidente.selectedItem.icono == "reformulacionInc") {
+					this.viewStackIncidente.selectedChild = this.reformulacion;
+					
+					var evt:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.REFORMULA_INCIDENTE);
+					evt.usuario = DatosGlobales.getInstance()._usuario.usuario; //"OCardona";  
+					dispatchEvent(evt);
+					
+					resetReformulacion();
+				}
+				
+			}
+			
+			private function cuantasPalabras(event:Event):void {
+				this.situacion.maxChars = new int();
+				var caracteres:uint = situacion.text.length;//event.target.length;
+				palabras = cuentaPalabras(situacion.text);
+				if(palabras == 51){
+					this.situacion.maxChars = caracteres;
+				}
+				else{
+					this.contadordpalabras.text = palabras.toString(10);
+				} 
+			} 
+			public static function cuentaPalabras(txt:String):uint {
+				var cuenta:uint = 0;
+				if (txt != null) {
+					//txt = StringUtil.trim(txt);
+					if (txt.length > 0 ) {
+						cuenta = txt.split(/\s+/g).length;
+					}	
+				}
+				return cuenta;
+			}
+			
+			private function alerta(evt:Event):void{
+				/* Alert.yesLabel = "SI";					
+				Alert.noLabel = "NO";
+				Alert.show("Está por REGISTRAR el INCIDENTE y no podrá modificarle posteriormente, ¿Desea continuar?","¡Aviso!",Alert.NO | Alert.YES ,this, alertaRegistroIncidente); */
+				alertaSingleton.show(catalogoAlertas.INCIDENTE_ADV_registraIncidente,catalogoAlertas.TIT_ADV_atencion,"RegistroIncidente","","","SI","NO");
+			}
+			
+			private function alertaReformula(evt:Event):void{
+				/* Alert.yesLabel = "SI";					
+				Alert.noLabel = "NO";
+				Alert.show("Está por REFORMULAR y no podrá modificarle posteriormente, ¿Desea continuar?","¡Aviso!",Alert.NO | Alert.YES ,this, alertaRegistroReformulacion); */
+				alertaSingleton.show(catalogoAlertas.INCIDENTE_ADV_reformulacionIncidente,catalogoAlertas.TIT_ADV_atencion,"RegistroReformulacion","","","SI","NO");
+			}
+			
+			public function set  recibeDelAlert(respuestaAlert:ResultAlert):void{
+				if(respuestaAlert.vieneD == "RegistroIncidente"){
+					alertaRegistroIncidente(respuestaAlert.botonSeleccionado)
+				}
+				if(respuestaAlert.vieneD == "RegistroReformulacion"){
+					alertaRegistroReformulacion(respuestaAlert.botonSeleccionado)
+				}
+			}
+			
+			public function alertaRegistroIncidente(evt:String):void{
+				if(evt == "SI"){
+					this._incidente = new Incidente();
+					this._incidente.descripcion = this.que.text;
+					this._incidente.lugar = this.donde.text;
+					this._incidente.cuando = this.cuando.text;
+					this._incidente.comentarios = this.comentarios.text;
+					this._incidente.situacionIdentificada = this.situacion.text;
+					this._incidente.fecha = this.fechaHoy;
+					this._incidente.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado; //91  
+					this._incidente.incidenteRelacionadoS = "nulo";
+					
+					for(var m:int=0 ; m<_listaReferencias.length ; m++){
+						if(_listaReferencias[m].ultimo != ""){
+							this._listaReferencias.removeItemAt(m);
+							m = m - 1;
+						}
+					}
+					
+					if(_listaReferencias == null){					
+						this._incidente.referencias = new ArrayCollection();
+					}else{					
+						this._incidente.referencias = this._listaReferencias;
+					}
+					
+					var evento:EventoIncidente = new EventoIncidente(EventoIncidente.REGISTRA_INCIDENTE);
+					evento.incidente = this._incidente;
+					dispatchEvent(evento);
+					
+					reset();
+					
+				}else{
+					//Alert.show("NO");
+					return ;
+				}
+				
+			}
+			
+			// función para registrar la reformulación 
+			public function alertaRegistroReformulacion(evt:String):void{
+				if(evt == "SI"){
+					_reformulacion = new Reformulacion();
+					
+					for(var m:int=0 ; m<_referenciaReformulacion.length ; m++){
+						if(_referenciaReformulacion[m].ultimo != ""){
+							this._referenciaReformulacion.removeItemAt(m);
+							m = m - 1;
+						}
+					}
+					_reformulacion.idReformulacion = this._guardaReformulacion.idReformulacion;
+					_reformulacion.situacionIdentificada = this.situacionreformulacion.text;
+					_reformulacion.descripcion = this.quereformulacion.text;
+					_reformulacion.lugar = this.dondereformulacion.text;
+					_reformulacion.cuando = this.cuandoreformulacion.text;
+					_reformulacion.comentarios = this.comentariosreformulacion.text;
+					_reformulacion.idIncidente = this._guardaReformulacion.idIncidente;
+					_reformulacion.justificacion = this.areajustificacion.text;
+					_reformulacion.referencias = this._referenciaReformulacion
+					_reformulacion.solicito = DatosGlobales.getInstance()._usuario.nombre;
+					
+					var evento:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.REGISTRAR_REFORMULACION);
+					evento.registraReformulacion = this._reformulacion;
+					dispatchEvent(evento);
+					
+					resetReformulacion();
+					
+				}else{
+					//Alert.show("NO");
+					return ;
+				}
+				
+			}
+			
+			// funcion para guardar en BD cambios realizados a la reformulacion 
+			public function guardaReformulacion(event:Event):void{
+				_reformulacion = new Reformulacion();
+				_reformulacion.idReformulacion = this._guardaReformulacion.idReformulacion;
+				_reformulacion.situacionIdentificada = this.situacionreformulacion.text;
+				_reformulacion.descripcion = this.quereformulacion.text;
+				_reformulacion.lugar = this.dondereformulacion.text;
+				_reformulacion.cuando = this.cuandoreformulacion.text;
+				_reformulacion.comentarios = this.comentariosreformulacion.text;
+				_reformulacion.idIncidente = this._guardaReformulacion.idIncidente;
+				_reformulacion.justificacion = this.areajustificacion.text;
+				_reformulacion.referencias = this._referenciaReformulacion;
+				_reformulacion.solicito = DatosGlobales.getInstance()._usuario.nombre;
+				
+				var evento:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.ACTUALIZAR_REFORMULACION);
+				evento.actualizareformulacion = _reformulacion;
+				dispatchEvent(evento);
+				
+				//resetReformulacion();
+			}
+			
+			private function reset():void{
+				this.que.text = "";
+				this.donde.text = "";
+				this.cuando.text = "";
+				this.comentarios.text = "";
+				this.situacion.text = "";
+				this._listaReferencias = new ArrayCollection();
+				var evto:EventoIncidente = new EventoIncidente( EventoIncidente.RESET );
+				dispatchEvent( evto );
+			}
+			
+			private function resetReformulacion():void{
+				if(this.areajustificacion != null ){
+					this.quereformulacion.text = "";
+					this.dondereformulacion.text = "";
+					this.cuandoreformulacion.text = "";
+					this.comentariosreformulacion.text = "";
+					this.situacionreformulacion.text = "";
+					this.areajustificacion.text = "";
+					this.folioIncidente.label = "";
+					this._referenciaReformulacion = new ArrayCollection();
+					var evto:EventoReferencias = new EventoReferencias(EventoReferencias.RESET);
+					dispatchEvent(evto);
+				}
+			}
+			
+			//función para cargar las ubicaciones existentes en referencias 
+			private function cargaReferencias(vieneD:String):void{
+				
+				if(vieneD == "reformulacion"){
+					var evt:EventoReferencias = new EventoReferencias(EventoReferencias.CARGA_LISTA_REFERENCIA);
+					evt.listaReferencia = this._referenciaReformulacion;
+					evt.vieneD = "Reformulación";
+					dispatchEvent(evt);		
+					
+					var evento:EventoReferencias = new EventoReferencias(EventoReferencias.OBTENER_ID_INCIDENTE);
+					evento.idIncidente = _guardaidIncidente;
+					dispatchEvent(evento);
+					//listasReferencias._idIncidente = _guardaidIncidente;
+				}else if (vieneD == "incidente"){
+					//listasReferencias.vieneD = "incidente";
+					/* if(this._listaReferencias.length != 0){	 */
+					var evto:EventoReferencias = new EventoReferencias(EventoReferencias.CARGA_LISTA_REFERENCIA);
+					evto.listaReferencia = this._listaReferencias;
+					evto.vieneD = "Registro";
+					dispatchEvent(evto);	
+					/* } */
+				}
+				
+				listasReferencias = CargaReferencias(PopUpManager.createPopUp(alertaSingleton.elDisplayObject, CargaReferencias,true)); 
+				/* PopUpManager.centerPopUp(listasReferencias); */
+				
+				/* var evt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.HAS_VISIBLE_POPUP_CONTACTOS);
+				evt.consulta = "cliente";
+				evt.vieneD = "DocumentosSalientesInspectorMail";
+				dispatchEvent(evt); */     
+				
+			}
+			
+			//funcion para validar el tabNavigator en que? , donde? , cuando ?
+			private function validarTapNavigator(evt:MouseEvent):void{
+				validarTextArea = []; 
+				validarTextArea =  Validator.validateAll(validarArr) ;
+				var textAreaCompleto:Boolean = validarTextArea.length == 0;
+				if(textAreaCompleto){
+					var events:Event;
+					alerta(events);
+				}else{
+					var error:ValidationResultEvent
+					var mensajerror:ArrayCollection = new ArrayCollection();
+					
+					for(var n:int = 0 ; n<validarTextArea.length ; n++){
+						mensajerror.addItem(validarTextArea[n].message);	
+					}
+					
+					/* Alert.show(mensajerror.join("\n\n"),"¡Importante ...!", Alert.OK); */
+					//alertaSingleton.show("Información incompleta","Error",'','','','','', _arregloMensajesAlerta);
+					alertaSingleton.show("",catalogoAlertas.TIT_ADV_atencion,"","","","","",mensajerror);
+				}
+			}
+			
+			private function validarTapNavigatorReformula(evt:MouseEvent):void{
+				validarTextArea = []; 
+				validarTextArea =  Validator.validateAll(validarArrReformula) ;
+				var textAreaCompleto:Boolean = validarTextArea.length == 0;
+				if(textAreaCompleto){
+					var events:Event;
+					alertaReformula(events);
+				}else{
+					var error:ValidationResultEvent
+					var mensajerror:ArrayCollection = new ArrayCollection();
+					
+					for(var n:int = 0 ; n<validarTextArea.length ; n++){
+						mensajerror.addItem(validarTextArea[n].message);	
+					}
+					
+					//Alert.show(mensajerror.join("\n\n"),"¡Importante ...!", Alert.OK);
+					alertaSingleton.show("",catalogoAlertas.TIT_ADV_atencion,"","","","","",mensajerror);
+				}
+			}
+			
+			public function set muestraRegistroGuardado(dato:Incidente):void{
+				//Alert.show( "El incidente " + dato.folio + " fue registrado","Operación exitosa");
+				alertaSingleton.show("El incidente " + dato.folio + " fue registrado",catalogoAlertas.TIT_CONF_operacionExitosa,"","","","","");
+				
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Usuario"] = DatosGlobales.getInstance()._usuario.usuario;
+				mensaje.body = "eventoIncidente";
+				this.productorDocSalientes.send( mensaje );
+			}
+			
+			public function set actualizacionReformulacion(actualiza:Boolean):void{
+				if(actualiza == true){
+					//Alert.show( "Tu cambios fueron guardados","Operación exitosa");
+					alertaSingleton.show(catalogoAlertas.INCIDENTE_CONF_cambiosGuardados,catalogoAlertas.TIT_CONF_operacionExitosa,"","","","","");
+					
+					var evt:EventoReformulaIncidente = new EventoReformulaIncidente(EventoReformulaIncidente.REFORMULA_INCIDENTE);
+					evt.usuario = DatosGlobales.getInstance()._usuario.usuario; //"OCardona";   
+					dispatchEvent(evt);
+					
+				}else{
+					return;
+				}
+			}
+			
+			public function set registroReformulacion(registro:Boolean):void{
+				if(registro == true){
+					//Alert.show( "La REFORMUACION fue registrada","Operación exitosa");
+					alertaSingleton.show(catalogoAlertas.INCIDENTE_CONF_registraIncidente,catalogoAlertas.TIT_CONF_operacionExitosa,"","","","","");
+					//resetReformulacion();
+					
+					var refrescaReformulacion:IndexChangeEvent = new IndexChangeEvent("",false,false,-1,0);
+					refrescaReformulacion.newIndex = 1;
+					cambiarViewStack(refrescaReformulacion);
+					
+					var mensaje:AsyncMessage = new AsyncMessage();
+					mensaje.headers["Usuario"] = DatosGlobales.getInstance()._usuario.usuario;
+					mensaje.body = "eventoReformulacion";
+					this.productorDocSalientes.send( mensaje );
+					
+				}else{
+					return;
+				}
+			}
+			
+			public function set listaReformulacion(lista:ArrayCollection):void{
+				this._listaReformulacion = new ArrayCollection();
+				this._listaReformulacion = lista;
+				this.listaincidente.selectedIndex = 0;
+				
+				this.areajustificacion.text = (_listaReformulacion[0].reformulaciones[0].justificacion as String).toUpperCase();
+				this.situacionreformulacion.text = _listaReformulacion[0].reformulaciones[0].situacionIdentificada;
+				this.quereformulacion.text = _listaReformulacion[0].reformulaciones[0].descripcion;
+				this.dondereformulacion.text = _listaReformulacion[0].reformulaciones[0].lugar;
+				this.cuandoreformulacion.text = _listaReformulacion[0].reformulaciones[0].cuando;
+				this.comentariosreformulacion.text = _listaReformulacion[0].reformulaciones[0].comentarios;
+				this.folioIncidente.label =_listaReformulacion[0].folio;	
+				this._guardaReformulacion = _listaReformulacion[0].reformulaciones[0];
+				this._referenciaReformulacion = _listaReformulacion[0].referencias;
+				this._guardaidIncidente = _listaReformulacion[0].idIncidente;
+				
+				if(this._marcadorBandera == true ){
+					_registroReformulacion[1].bandera = this._listaReformulacion.length > 0 ? true : false;
+					this._registroReformulacion.refresh();
+					this.buttonBarIncidente.selectedIndex = 0;
+					this._marcadorBandera = false
+				}
+			}
+			
+			// función para extraer información de  incidente seleccionado 
+			private function clickReformula(event:Event):void{
+				
+				if(event.currentTarget.selectedIndex == this._listaReformulacion.length - 1 ){
+					return;
+				}
+				
+				if(event.currentTarget.selectedItems.length != 0){
+					this.areajustificacion.text = (event.currentTarget.selectedItem.reformulaciones[0].justificacion as String).toUpperCase();
+					this.situacionreformulacion.text = event.currentTarget.selectedItem.reformulaciones[0].situacionIdentificada;
+					this.quereformulacion.text = event.currentTarget.selectedItem.reformulaciones[0].descripcion;
+					this.dondereformulacion.text = event.currentTarget.selectedItem.reformulaciones[0].lugar;
+					this.cuandoreformulacion.text = event.currentTarget.selectedItem.reformulaciones[0].cuando;
+					this.comentariosreformulacion.text = event.currentTarget.selectedItem.reformulaciones[0].comentarios;
+					this.folioIncidente.label = event.currentTarget.selectedItem.folio;	
+					this._guardaReformulacion = event.currentTarget.selectedItem.reformulaciones[0];
+					this._referenciaReformulacion = event.currentTarget.selectedItem.referencias;
+					this._guardaidIncidente = event.currentTarget.selectedItem.idIncidente;
+					
+					cuantasPalabrasRefor(event);
+				}else{
+					return;
+				}
+			}
+			
+			public function set recibeListaReferencia(referencias:Object):void{
+				_listaReferencias = new ArrayCollection();
+				_referenciaReformulacion = new ArrayCollection();
+				
+				if(referencias.vieneD == "Reformulación"){
+					this._referenciaReformulacion = referencias.referencia;
+				}else if(referencias.vieneD == "Registro"){
+					this._listaReferencias = referencias.referencia;
+				}
+			}
+			
+			private function cuantasPalabrasRefor(event:Event):void {
+				this.situacionreformulacion.maxChars = new int();
+				//var caracteres:uint = event.target.length;
+				var caracteres:uint = situacionreformulacion.text.length;
+				palabrasreformula = cuentaPalabras(situacionreformulacion.text);
+				if(palabrasreformula == 51){
+					this.situacionreformulacion.maxChars = caracteres;
+				}else{
+					this.contadordpalabras2.text = palabrasreformula.toString(10);
+				} 
+			}
+			
+			private function desactivaStringValidator(event:Event):void{
+				if(this.que.text.length > 1){
+					this.validaque.enabled = false;	
+				}else{
+					this.validaque.enabled = true;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<mx:VBox height="100%" width="100%" id="espacioIncidente">
+		
+		<s:HGroup width="100%">
+			<label:labelTitulo_Otros text="Incidente" width="100%"/>
+			<s:ButtonBar id="buttonBarIncidente" change="cambiarViewStack(event)" skinClass="skins.botoneras.botoneraGris.skinbotoneraGris" selectedIndex="0"  dataProvider="{_registroReformulacion}"/> 
+		</s:HGroup>
+		
+		<mx:ViewStack id="viewStackIncidente" borderStyle="none" width="100%" height="100%" color="0x323232">
+			
+			<s:NavigatorContent id="incidente" width="100%" height="100%" fontWeight="bold"  >
+				<s:VGroup width="100%" height="100%">	 
+					
+					<otros:divisionHueca width="100%" height="2%"/>
+					
+					<s:HGroup>
+						<s:Image id="lapizregistro" source="@Embed('skins/imagenes/iconos/etiquetas/registro.png')"/>
+						<label:labelSubtitulo text="Registro" width="100%"/>
+					</s:HGroup>
+					<s:Spacer width="100%" height="2%"/>
+					<otros:divisionHueca width="100%" height="2%"/>
+					<pqNet:botonPqNetLargo colorBase="FF9900" label="Referencias" click="cargaReferencias('incidente')"/>
+					<s:Spacer width="100%" height="2%"/>
+					<otros:divisionHueca width="100%" height="2%"/>
+					<label:labelSubtitulo text="Situación Identificada"/>
+					<s:Spacer width="100%" height="2%"/>
+					<otros:divisionGruesa width="100%"/>
+					
+					<s:TextArea width="{this.width}" height="30%" id="situacion" change="cuantasPalabras(event)" fontFamily="Tahoma" fontStyle="normal" fontSize="12"  
+								skinClass="skins.skin.textarea.TextAreaSinBordeSkin"
+								prompt="En este 'cuadro de texto' sólo pueden ser registradas cincuenta palabras. De lo contrario corremos el riesgo de que el fantasma de la chaqueta mental invada nuestras almas y mentes y nos pierda en el bosque de nuestros pensamientos. Por ello, hermanos, les invito a ser precisos, consizos y macizos."/>
+					
+					<otros:divisionHueca width="100%" height="2%"/>
+					
+					<s:HGroup width="100%">
+						<s:Label text="Palabras:  " color="#999999" fontFamily="Bank Gothic" fontSize="12"/>
+						<s:Label id="contadordpalabras" text="0" color="#999999" fontFamily="Bank Gothic" fontSize="12"/>
+						<s:Label text="/  50" color="#999999" fontFamily="Bank Gothic" fontSize="12"/>
+					</s:HGroup>
+					
+					<otros:division width="100%" height="2%"/>
+					<label:labelSubtitulo text="QDC"/>
+					
+					<!--<mx:TabNavigator id="qdc" width="100%" height="100%" horizontalAlign="right" creationPolicy="all" >-->
+					<s:VGroup width="100%" gap="0">
+						<s:HGroup width="100%">
+							<s:Spacer width="100%"/>
+							<s:TabBar dataProvider="{this.qdcIncidente}" />
+						</s:HGroup>
+						<otros:division width="100%"/>
+					</s:VGroup>
+					
+					<mx:ViewStack id="qdcIncidente" width="100%" height="100%" creationPolicy="all">
+						
+						<s:NavigatorContent label="¿Qué?"> <!--click="cuantasPalabrasQue(event)"-->
+							<!--<s:RichEditableText width="100%" height="100%" id="que" fontFamily="Tahoma" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasQue(event)"-->
+							
+							<s:TextArea width="{this.width}" height="100%" id="que" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+										prompt="CONTEXTUALIZA EL PROBLEMA IDENTIFICADO" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+										skinClass="skins.skin.textarea.TextAreaSinBordeSkin" change="desactivaStringValidator(event)"/>
+							
+						</s:NavigatorContent>
+						
+						<s:NavigatorContent label="¿Dónde?" > <!--click="cuantasPalabrasDonde(event)"-->
+							<!--<s:RichEditableText width="100%" height="100%" id="donde" fontFamily="Tahoma" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasDonde(event)"-->
+							
+							<s:TextArea width="{this.width}" height="100%" id="donde" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+										prompt="ESPECIFICA EL LUGAR DONDE SE LOCALIZO EL PROBLEMA" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+										skinClass="skins.skin.textarea.TextAreaSinBordeSkin" />
+							
+						</s:NavigatorContent>
+						
+						<s:NavigatorContent label="¿Cuándo?" > <!--click="cuantasPalabrasCuando(event)"-->
+							<!--<s:RichEditableText width="100%" height="100%"  id="cuando" fontFamily="Tahoma" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasCuando(event)"-->
+							
+							<s:TextArea width="{this.width}" height="100%" id="cuando" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+										prompt="ANOTA CUANDO IDENTIFICASTE EL POSIBLE ERROR" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+										skinClass="skins.skin.textarea.TextAreaSinBordeSkin" />
+							
+						</s:NavigatorContent>
+						
+						<s:NavigatorContent label="COMENTARIOS ADICIONALES"  > <!--click="cuantasPalabrasComentario(event)"-->
+							<!--<s:RichEditableText width="100%" height="100%" id="comentarios" fontFamily="Tahoma" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasComentario(event)"-->
+							
+							<s:TextArea width="{this.width}" height="100%" id="comentarios" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+										prompt="ESCRIBE TUS COMENTARIOS" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+										skinClass="skins.skin.textarea.TextAreaSinBordeSkin" />
+							
+						</s:NavigatorContent>
+					</mx:ViewStack>		
+					<!--</mx:TabNavigator>-->
+					
+					<otros:divisionGruesa width="100%" height="2%"/>
+					
+					<s:HGroup width="100%">
+						<s:Spacer width="100%"/>
+						<!--<s:Button styleName="botonNegroOld" label="Registrar"  id="registraincidente" click="validarTapNavigator(event)"/>-->
+						<botonNegroCuadrado:botonNegroCuadrado label="Registrar" icono="registrarIncidentedown" click="validarTapNavigator(event)"/>
+						<!--<botonesToggle:toggleGrisconLabelSolo icono="globito"  id="btnArgumentos" label="Argumentos" visible="true" click="seleccionaOpcion(6); this.btnBarra.selectedIndex=-1"/>-->
+					</s:HGroup>
+					<s:Spacer width="100%" height="2%"/>
+				</s:VGroup>
+			</s:NavigatorContent>
+			
+			<s:NavigatorContent id="reformulacion" width="100%" height="100%" fontWeight="bold" >
+				
+				<s:VGroup height="100%" width="100%">
+					
+					<otros:divisionGruesa width="100%" height="2%"/>
+					<s:HGroup width="100%">
+						<s:Image id="imagenreformulacion"/>
+						<label:labelSubtitulo text="Reformulación" width="100%"/>
+					</s:HGroup>
+					<otros:divisionGruesa width="100%" height="2%"/>
+					
+					<s:HGroup width="100%" height="100%" paddingBottom="10">
+						
+						<!--<s:VGroup height="100%" width="40%">-->						
+						<s:List height="100%" width="40%" id="listaincidente" minWidth="295" borderVisible="false" dataProvider="{this._listaReformulacion}" click="clickReformula(event)"
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.incidente.vistaincidente.ListaIncidenteReformular"/>
+						<!--					<s:Label id="totalincidentes" width="100%" fontSize="14" textAlign="center" color="#999999"/>
+						<s:Label text="Total" color="#999999" fontSize="14" width="100%" textAlign="center"/>-->
+						<!--</s:VGroup>-->
+						<otros:VDivisionClaro height="100%"/>
+						<s:VGroup height="100%" width="100%" id="grpTodo">
+							<s:HGroup width="100%">
+								<pqNet:botonPqNetLargo  id="folioIncidente"  width="200" fontFamily="Bank Gothic" fontSize="15" click="cargaLineaTiempo()" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" botonRedondo="true"/>
+								<!--<s:Button styleName="botonNegroOld" id="folioIncidente"  width="200" click="cargaLineaTiempo()"/>-->
+								<s:Spacer width="100%"/>
+								<pqNet:botonPqNetLargo colorBase="FF9900" label="Referencias" click="cargaReferencias('reformulacion')"/>
+							</s:HGroup>
+							<s:Spacer width="100%" height="2%"/>
+							<otros:divisionGruesa width="100%" height="2%"/>
+							
+							<s:HGroup width="100%" height="100%">
+								<s:VGroup height="100%" width="40%">
+									<label:labelSubtitulo text="Justificación" color="red"/>
+									<otros:division width="100%" color="red"/>
+									<s:RichEditableText id="areajustificacion" width="100%" height="100%" color="red" fontFamily="Tahoma" fontStyle="normal" fontSize="12" editable="false"/>
+								</s:VGroup>
+								
+								<otros:VDivisionClaro height="100%"/>
+								
+								<s:VGroup height="100%" width="100%">
+									<s:Label text="SITUACIÓN IDENTIFICADA" fontFamily="Tahoma" fontSize="20" fontWeight="bold" width="100%"/>
+									<otros:divisionGruesa width="100%" />
+									<s:TextArea width="100%" height="30%" id="situacionreformulacion" change="cuantasPalabrasRefor(event)" fontFamily="Tahoma" fontStyle="normal" fontSize="12"
+												skinClass="skins.skin.textarea.TextAreaSinBordeSkin" 
+												prompt="En este 'cuadro de texto' sólo pueden ser registradas cincuenta palabras. De lo contrario corremos el riesgo de que el fantasma de la chaqueta mental invada nuestras almas y mentes y nos pierda en el bosque de nuestros pensamientos. Por ello, hermanos, les invito a ser precisos, consizos y macizos."/>
+									<otros:division width="100%" height="2%"/>
+									
+									<s:HGroup width="100%">
+										<s:Label text="Palabras:  " color="#999999" fontFamily="Bank Gothic" fontSize="12"/>
+										<s:Label id="contadordpalabras2" text="0" color="#999999" fontFamily="Bank Gothic" fontSize="12"/>
+										<s:Label text="/  50" color="#999999" fontFamily="Bank Gothic" fontSize="12"/>
+									</s:HGroup>
+									
+									<otros:divisionGruesa width="100%" height="2%"/>
+									<s:Label text="QDC" fontFamily="Tahoma" fontSize="20" fontWeight="bold"/>
+									<!--<mx:TabNavigator id="qdcreformulacion" creationPolicy="all" width="100%" height="100%" horizontalAlign="right" borderVisible="false" >-->
+									
+									<s:VGroup width="100%" gap="0">
+										<s:HGroup width="100%">
+											<s:Spacer width="100%"/>										
+											<s:TabBar dataProvider="{this.qdcreformulacion}"/>
+										</s:HGroup>
+										<otros:division width="100%"/>
+									</s:VGroup>
+									
+									<mx:ViewStack width="100%" height="100%" id="qdcreformulacion" creationPolicy="all" >
+										
+										<s:NavigatorContent label="¿Qué?" width="100%">  <!-- click="cuantasPalabrasQueReformula(event)"-->
+											<!--<s:RichEditableText id="quereformulacion" width="100%" height="100%"  fontFamily="Tahoma" fontStyle="normal" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasQueReformula(event)"-->
+											<s:TextArea width="100%" height="100%" id="quereformulacion" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+														prompt="CONTEXTUALIZA EL PROBLEMA IDENTIFICADO" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+														skinClass="skins.skin.textarea.TextAreaSinBordeSkin" borderVisible="true" horizontalCenter="0"/>
+											
+										</s:NavigatorContent>
+										
+										<s:NavigatorContent label="¿Dónde?" width="100%"> <!--click ="cuantasPalabrasDondeReformula(event)"-->
+											<!--<s:RichEditableText width="100%" height="100%" id="dondereformulacion"  fontFamily="Tahoma" fontStyle="normal" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasDondeReformula(event)"-->
+											<s:TextArea width="100%" height="100%" id="dondereformulacion" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+														prompt="ESPECIFICA EL LUGAR DONDE SE LOCALIZO EL PROBLEMA" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+														skinClass="skins.skin.textarea.TextAreaSinBordeSkin" />
+											
+										</s:NavigatorContent>
+										
+										<s:NavigatorContent label="¿Cuándo?" width="100%" > <!--click="cuantasPalabrasCuandoReformula(event)"-->
+											<!--<s:RichEditableText width="100%" height="100%"  id="cuandoreformulacion"  fontFamily="Tahoma" fontStyle="normal" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasCuandoReformula(event)"-->
+											<s:TextArea width="100%" height="100%" id="cuandoreformulacion" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+														prompt="ANOTA CUANDO IDENTIFICASTE EL POSIBLE ERROR" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+														skinClass="skins.skin.textarea.TextAreaSinBordeSkin" />
+											
+										</s:NavigatorContent>
+										
+										<s:NavigatorContent label="COMENTARIOS ADICIONALES" width="100%" > <!--click="cuantasPalabrasComentarioReformula(event)"--> 
+											<!--<s:RichEditableText width="100%" height="100%" id="comentariosreformulacion" fontFamily="Tahoma" fontStyle="normal" fontSize="12" fontWeight="normal"/>--> <!--change="cuantasPalabrasComentarioReformula(event)"-->
+											<s:TextArea width="100%" height="100%" id="comentariosreformulacion" fontFamily="Tahoma" fontSize="12" fontWeight="normal"
+														prompt="ESCRIBE TUS COMENTARIOS" paddingLeft="20" paddingRight="20" paddingTop="15" paddingBottom="15"
+														skinClass="skins.skin.textarea.TextAreaSinBordeSkin" />
+											
+										</s:NavigatorContent>
+										
+									</mx:ViewStack>	
+									<!--</mx:TabNavigator>-->
+								</s:VGroup>
+							</s:HGroup>
+							<otros:division width="100%" height="2%"/>
+							<s:HGroup width="100%">
+								<!--<s:Button styleName="botonNegroOld" label="Guardar" click="guardaReformulacion(event)"/>-->
+								<pqNet:botonPqNetLargo label="Guardar"  icono="guardar" click="guardaReformulacion(event)"/>
+								<s:Spacer width="100%"/>
+								<pqNet:botonPqNetLargo label="Registrar"  icono="registrarpeque" click="validarTapNavigatorReformula(event)"/>
+								<!--<s:Button styleName="botonNegroOld" label="Registrar" click="validarTapNavigatorReformula(event)"/>-->
+							</s:HGroup>
+						</s:VGroup>	
+					</s:HGroup>
+				</s:VGroup>
+			</s:NavigatorContent>
+			
+		</mx:ViewStack>
+		
+	</mx:VBox>
+</s:Group>

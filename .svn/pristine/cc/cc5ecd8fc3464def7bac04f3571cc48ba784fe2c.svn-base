@@ -1,0 +1,713 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:CatClientes="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.*"
+		 xmlns:carteras="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.carteras.*" 
+		 xmlns:btnToggleEstados="skins.botonesToggle.btnToggleEstados.*"
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:catalogos="skins.skin.comun.catalogos.*"
+		 xmlns:botonesToggle="skins.botonesToggle.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:lstscrl="skins.spark.components.*"  
+		 xmlns:grafica="skins.botones.grafica.*"
+		 xmlns:evento="skins.botones.evento.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:layouts="skins.layouts.*" 
+		 xmlns:otros="skins.otros.*" 
+		 creationComplete="consumerInit()" 
+		 width="100%" height="100%"  
+		 >
+	<!--creationComplete="inicia()" -->
+	
+	<fx:Metadata>
+		[Event(name="btnParaConfigurarPrecionado", type="flash.events.Event")]
+	</fx:Metadata>
+	
+	<fx:Declarations>
+		<s:Parallel id="fxShowMenuConfiguracion" duration="300" effectEnd="fxShowMenuConfiguracion_effectEndHandler(event)">
+			<s:Resize target="{rectFondoMenuConfiguracion}" heightFrom="0" heightTo="150" />
+			<s:Fade target="{rectFondoMenuConfiguracion}" duration="30" alphaFrom="0" alphaTo=".9"/>		
+			<s:Resize target="{grpBotonesMenuConfig}" heightFrom="0" heightTo="150" />
+			<s:Fade target="{grpBotonesMenuConfig}" startDelay="200" alphaFrom="0" alphaTo="1"/>		
+		</s:Parallel>
+		
+		<s:Parallel id="fxHideMenuConfiguracion" duration="200" effectEnd="fxHideMenuConfiguracion_effectEndHandler(event)">
+			<s:Resize target="{rectFondoMenuConfiguracion}" heightFrom="150" heightTo="0" />
+			<s:Fade target="{rectFondoMenuConfiguracion}" duration="0" alphaFrom="30" alphaTo=".9"/>		
+			<s:Resize target="{grpBotonesMenuConfig}" heightFrom="150" heightTo="0" />
+			<s:Fade target="{grpBotonesMenuConfig}" alphaFrom="1" alphaTo="0" duration="100"/>		
+		</s:Parallel>
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.carteras.EventoCatClientes_Carteras;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.CatClientes_Empresa;
+			import mx.events.EffectEvent;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import spark.components.DataGroup;
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			private var _arregloSinImagenes:ArrayCollection;
+			private var _habilitados:ArrayCollection;
+			private var _deshabilitados:ArrayCollection;
+			private var _universoClientes:ArrayCollection;
+			private var _currentItem:Cliente;
+			private var _idAgente:int = 0;
+			private var seConstruyoDeshabilitados:Boolean = false;
+			private var cambioNumItems:Boolean = false;
+			private var findOneImagen:Boolean = false;
+			private var pasoDivideAgente:Boolean;
+			private var getDeshabilitado:Boolean = false;
+			private var _clienteSeleccionado:Cliente;
+			private var arrayKeyConImagenes:Object;
+			private var isShowConfigurationMenu:Boolean;
+			private var roles:ArrayCollection = DatosGlobales.getInstance()._usuario.roles;
+			[Bindable] private var _clickeado:String = "";
+			
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection( [  { valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+				{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }] );
+			
+			
+			private var _componenteZonaTrabajo:CatClientes_ZonaTrabajo = null;
+			
+			private var consumidorActualizar:Consumer = new Consumer();
+			private var consumidorBloquea:Consumer = new Consumer();
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			private var productorBloquea:Producer = new Producer();
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet;
+			
+			[Bindable]
+			public static var arrayEditables:ArrayCollection = null;
+			
+			protected function consumerInit():void
+			{
+				consumidorActualizar.destination = "catalogoClienteActualizaSecciones";
+				consumidorBloquea.destination = "catalogoClienteBloqueaSecciones";
+				grpCarteras.addEventListener("vistaPricipalOcultarCarteras",ocultarCarteras,false,0,true);
+				lstCorporativo.addEventListener("corpSelected",reubicarCorp,false,0,true);
+				
+				consumidorActualizar.addEventListener(MessageEvent.MESSAGE, messageUpdate);
+				consumidorBloquea.addEventListener(MessageEvent.MESSAGE, messageBlock);
+				
+				/*_componenteZonaTrabajo.generales.addEventListener(EventoCatClientes_General.VALIDA_NOMBRE_CLIENTE_NUEVO,validaNombreClienteNuevo);*/
+				
+				canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				canalesVerificacion = new ChannelSet();
+				canalesVerificacion.addChannel(canalVerificacion);
+				
+				consumidorActualizar.channelSet = canalesVerificacion;
+				consumidorActualizar.subscribe();
+				
+				consumidorBloquea.channelSet = canalesVerificacion;
+				consumidorBloquea.subscribe();
+				btnBusqueda.addEventListener(EventoCatClientes_General.ENVIO_CLIENTES_BUSCADOS,recibeBusqueda,false,0,true);
+				btnBusqueda.addEventListener(EventoCatClientes_General.ENVIO_CORPORATIVOS_BUSCADOS,recibeCorporativos,false,0,true);
+				producerInit();
+			}
+			
+			
+			private function validaNombreClienteNuevo(event:EventoCatClientes_General):void
+			{
+				if(event.editar){
+					if ((!mapClientes.hasOwnProperty(event.nombre) && !mapRazonSocial.hasOwnProperty(event.razonSocial)) || (event.nombre == event.nombreAnterior && event.razonSocial == event.razonSocialAnterior))
+						_componenteZonaTrabajo.generales.guardaCambios();
+					else
+						alertaSingleton.show('El Alias o Razón Social introducidas ya se encuentran registradas');
+					
+				}else{
+					if (!mapClientes.hasOwnProperty(event.nombre) && !mapRazonSocial.hasOwnProperty(event.razonSocial)) 
+						_componenteZonaTrabajo.generales.guardaCambios();
+					else
+						alertaSingleton.show('El Alias o Razón Social introducidas ya se encuentran registradas');
+				}
+			}
+			
+			/**
+			 * al crearse el componente se solicitan todos los proveedores
+			 */ 
+			public function iniciarVistaTodosLosClientes():void
+			{
+				botoneraClientesHabDeshabilitados.selectedIndex = 0;
+				_arregloSinImagenes = null;
+				_habilitados = null;
+				_deshabilitados = null;
+				_universoClientes = null;
+				_currentItem = null;
+				_idAgente = 0;
+				seConstruyoDeshabilitados = false;
+				cambioNumItems = false;
+				findOneImagen = false;
+				pasoDivideAgente = false;
+				getDeshabilitado = false;
+				_clienteSeleccionado = null;
+				arrayKeyConImagenes = null;
+				isShowConfigurationMenu = false;
+				
+				addEventListener( EventoCatClientes_General.CAMBIA_VISTA_MENU_CLIENTES , cambiaVista,false,0,true );
+				addEventListener( EventoCatClientes_General.REFRESCAR_CLIENTES, resfrecarCliente,false,0,true );
+				
+				var cambio:Boolean = false;
+				{
+					for (var j:Number=0; j<roles.length; j++)
+					{
+						if (roles[j]=="CatCliente_Master" || roles[j]=="CatCliente_Senior" )
+						{
+							cambio = true;
+							break;
+						}
+					}
+					
+					if (cambio)
+					{
+						grpMenuConfig.visible = true;
+						btnCar.visible = btnCar.includeInLayout = false;
+					}
+					else
+					{
+						if(DatosGlobales.getInstance()._usuario.idFuncion == 39 || DatosGlobales.getInstance()._usuario.idFuncion == 37 ){
+							btnObjetivosCrecimiento.visible = btnObjetivosCrecimiento.includeInLayout = false;
+							btnIntervalosNI.visible = btnIntervalosNI.includeInLayout = false;
+							grpMenuConfig.visible = true;
+							btnCar.visible = btnCar.includeInLayout = false;
+						}
+						else{
+							grpMenuConfig.visible = false;
+							btnCar.visible = btnCar.includeInLayout = true;
+						}
+						
+					}
+				}
+				var $evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES);
+				$evt.user = DatosGlobales.getInstance()._usuario;
+				$evt.habilitado = 1;
+				dispatchEvent($evt);
+			}
+			
+			private function obtenerComentarios($cliente:Cliente):void{
+				var evento:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_COMENTARIO_CLIENTE);
+				evento.clienteSeleccionado = $cliente;
+				dispatchEvent(evento);
+			}
+			
+			public function set recibeComentarios($cliente:Cliente):void{
+				if ($cliente == null ) return;
+				var evento:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_DIRECCION_CLIENTE);
+				evento.clienteSeleccionado = $cliente;
+				dispatchEvent(evento);
+				
+			}
+			
+			public function set recibeDireccion($cliente:Cliente):void{
+				if ($cliente == null ) return;
+				
+				var cliente:Cliente = $cliente;
+				_componenteZonaTrabajo.oferta.recibeClienteSeleccionado( $cliente );
+				
+				var evgt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIA_CLIENTE);
+				evgt.clienteSeleccionado = $cliente;
+				evgt.vieneDe = '';
+				dispatchEvent( evgt );
+			}
+			
+			/**
+			 * al recibirse los proveedores, se solicitan las imagenes
+			 */ 
+			[Bindable] var mapClientes:Object = new Object;
+			[Bindable] var mapRazonSocial:Object = new Object;
+			public function set recibeClientes($datos:ArrayCollection):void{
+				if( $datos == null || $datos.length == 0 ){
+					lstHabilitados.dataProvider = new ArrayCollection();
+					return;
+				}
+				
+				for(var i:int = 0; i < $datos.length; i++){
+					if (!mapClientes.hasOwnProperty($datos.getItemAt(i).nombre) ) {
+						mapClientes[$datos.getItemAt(i).nombre] = new Object;
+					}
+					if (!mapRazonSocial.hasOwnProperty($datos.getItemAt(i).razonSocial) ) {
+						mapRazonSocial[$datos.getItemAt(i).razonSocial] = new Object;
+					}
+				}
+				
+				if (_clienteSeleccionado != null)
+				{
+					var _clie:ArrayCollection = new ArrayCollection();
+					_clie = UtilsGrid.queryCampoXLike( $datos, 'nombre', _clienteSeleccionado.nombre );
+					if (_clie.length > 0)
+					{
+						obtenerComentarios(_clie[0] as Cliente);
+					} 
+				}
+				var current:Cliente = $datos.getItemAt(0) as Cliente;
+				
+				if(current.habilitado)
+				{
+					botoneraClientesHabDeshabilitados.selectedIndex = 0;
+					_habilitados = new ArrayCollection();
+				}
+				else
+				{
+					botoneraClientesHabDeshabilitados.selectedIndex = 1;
+					_deshabilitados = new ArrayCollection();
+				}
+				
+				_universoClientes = new ArrayCollection();
+				_universoClientes = ObjectUtil.copy( $datos ) as ArrayCollection;
+				divideTipoAgente(); 
+			}
+			
+			
+			
+			private function divideTipoAgente():void{
+				pasoDivideAgente = false;
+				for( var i:int = 0; i < _universoClientes.length ; i++ ){
+					if( (_universoClientes[i] as Cliente).habilitado == false ){  
+						_deshabilitados.addItem( _universoClientes[i] );
+					}else {
+						_habilitados.addItem( _universoClientes[i] );
+					}
+				}	
+				if(botoneraClientesHabDeshabilitados.selectedIndex == 0)
+					btnBusqueda.recibeClientes(_habilitados);
+				else
+					btnBusqueda.recibeClientes(_deshabilitados);
+			}
+			
+			private function generaRenglones( $listas:ArrayCollection ):void
+			{
+				lstHabilitados.dataProvider = new ArrayCollection();
+				lstHabilitados.dataProvider = ObjectUtil.copy( $listas ) as ArrayCollection;
+				$listas.length == 1 ? lblHabilitados.text = '1 Cliente' : lblHabilitados.text = $listas.length + ' Clientes';
+			}
+			
+			/**
+			 * agregamos o reutilizamos la seccion de trabajo
+			 */ 
+			private function cambiaVista( $evt:EventoCatClientes_General ):void{ 
+				grpClientes.visible = grpClientes.includeInLayout = false;
+				zonaTrabajo.visible = zonaTrabajo.includeInLayout = false; 
+				if( _componenteZonaTrabajo == null ){
+					_componenteZonaTrabajo = new CatClientes_ZonaTrabajo();
+					zonaTrabajo.addElement( _componenteZonaTrabajo );
+					_componenteZonaTrabajo.generales.addEventListener(EventoCatClientes_General.VALIDA_NOMBRE_CLIENTE_NUEVO,validaNombreClienteNuevo);
+				}
+				_componenteZonaTrabajo._contDes = false;
+				if( $evt.vieneDe == 'clienteSeleccionado' ){
+					var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_CLIENTE_X_ID);
+					evt.clienteSeleccionado = _clienteSeleccionado = $evt.clienteSeleccionado;
+					evt.vieneDe = '';
+					zonaTrabajo.visible = zonaTrabajo.includeInLayout = true; 
+					_componenteZonaTrabajo.recibeCliente( $evt.clienteSeleccionado );
+					_componenteZonaTrabajo.oferta.recibeClienteSeleccionado( $evt.clienteSeleccionado );
+					_componenteZonaTrabajo.credito.recibeClienteSeleccionado = $evt.clienteSeleccionado ;
+					_componenteZonaTrabajo.deSeleccion();
+					dispatchEvent( evt );
+				}else{
+					grpClientes.visible = grpClientes.includeInLayout = true;
+				}
+			}
+			
+			
+			public function set actualizaClienteOferta($datos:ArrayCollection ):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+			}
+			
+			private function resfrecarCliente( $evt:EventoCatClientes_General ):void{
+				
+				var $evto:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES);
+				$evto.user = DatosGlobales.getInstance()._usuario;
+				$evto.habilitado = 1;
+				dispatchEvent($evto);
+				getDeshabilitado = false;
+				
+				_clienteSeleccionado = $evt.clienteSeleccionado;
+				
+				var evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.CAMBIA_VISTA_MENU_CLIENTES );
+				evt.clienteSeleccionado = _clienteSeleccionado;
+				evt.vieneDe = 'clienteSeleccionado';
+				dispatchEvent( evt );	
+			}
+			
+			
+			protected function agregarNuevoCliente(event:MouseEvent):void{
+				var evt:EventoCatClientes_General = new EventoCatClientes_General( EventoCatClientes_General.CAMBIA_VISTA_MENU_CLIENTES );
+				evt.clienteSeleccionado = new Cliente();
+				evt.vieneDe = 'clienteSeleccionado';
+				dispatchEvent( evt );				
+			}
+			
+			
+			protected function botoneraBarra_changingHandler(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBarColores).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					if( botoneraClientesHabDeshabilitados.selectedItem != undefined )
+					{
+						var $dato:String = '';
+						botoneraClientesHabDeshabilitados.selectedItem.valor == 'Habilitados' ? $dato = 'habilitados' : $dato = 'deshabilitados' ;
+						
+						if( $dato == 'deshabilitados' )
+						{
+							if(!getDeshabilitado)
+							{
+								getDeshabilitado=true;
+								pasoDivideAgente = true;
+								var eve:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_CLIENTES);
+								eve.user = DatosGlobales.getInstance()._usuario;
+								eve.habilitado = 0;
+								dispatchEvent(eve);
+							}
+							
+							if( !seConstruyoDeshabilitados )
+							{
+								if(_deshabilitados == null)
+									btnBusqueda.recibeClientes(new ArrayCollection());
+								else
+									btnBusqueda.recibeClientes(_deshabilitados);
+								
+								btnBusqueda.switchClientes();
+							}
+						}
+						else
+						{
+							if( !seConstruyoDeshabilitados )
+							{
+								if(_habilitados == null)
+									btnBusqueda.recibeClientes(new ArrayCollection());
+								else
+									btnBusqueda.recibeClientes(_habilitados);
+								btnBusqueda.switchClientes();
+							}
+						}
+					}
+				}
+			}
+			
+			
+			protected function btnConfiguracion_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("btnParaConfigurarPrecionado",true));
+			}
+			
+			protected function grpBotonesConfiguracion_mouseOverHandler(event:MouseEvent):void
+			{
+				if(!fxShowMenuConfiguracion.isPlaying && !isShowConfigurationMenu)
+				{
+					fxShowMenuConfiguracion.play();
+				}
+			}
+			
+			
+			protected function fxShowMenuConfiguracion_effectEndHandler(event:EffectEvent):void
+			{
+				rectFondoMenuConfiguracion.alpha = 0.9;
+				isShowConfigurationMenu = true;
+				setTimeout(comprobarIsMouseOverEnMenuConfig,700);
+			}
+			
+			private function comprobarIsMouseOverEnMenuConfig():void
+			{
+				if(isShowConfigurationMenu)
+				{
+					if(!(grpMenuConfig.contentMouseX > 0 && grpMenuConfig.contentMouseX <= grpMenuConfig.width) ||
+						!(grpMenuConfig.contentMouseY > 0 && grpMenuConfig.contentMouseY <= grpMenuConfig.height))
+					{
+						if(!fxHideMenuConfiguracion.isPlaying)
+						{
+							fxHideMenuConfiguracion.play();
+						}
+					}
+					else
+					{
+						setTimeout(comprobarIsMouseOverEnMenuConfig,500);
+					}
+				}
+			}
+			
+			protected function fxHideMenuConfiguracion_effectEndHandler(event:EffectEvent):void
+			{
+				rectFondoMenuConfiguracion.alpha = 0;
+				rectFondoMenuConfiguracion.height =0;
+				grpBotonesMenuConfig.alpha = 0;
+				grpBotonesMenuConfig.height = 0;
+				grpMenuConfig.invalidateSize();
+				isShowConfigurationMenu = false;
+			}
+			
+			public var currentButonClick:botonPopUp;
+			protected function btnesOpcionesConfig_clickHandler(event:MouseEvent):void
+			{
+				if(isShowConfigurationMenu)
+				{
+					
+				}
+				currentButonClick = event.currentTarget as botonPopUp;
+				dispatchEvent(new Event("btnParaConfigurarPrecionado"));
+			}
+			
+			protected function producerInit():void
+			{
+				productorBloquea.destination = "catalogoClienteBloqueaSecciones";
+				
+				canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				canalesAsociado = new ChannelSet();
+				canalesAsociado.addChannel(canalAsociado);
+				productorBloquea.channelSet = canalesAsociado;
+				
+				var object:Object = new Object();
+				object.body = 'bloqueaSecciones';
+				object.nuevo = true;
+				object.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorBloquea.send(mensaje);
+			}
+			
+			private function messageBlock(message:MessageEvent):void
+			{
+				if(message.message.body.body == "bloqueaSecciones" ){
+					//SI es usuario nuevo Envia el arreglo de editables
+					if (message.message.body.nuevo){
+						if (DatosGlobales.getInstance()._usuario.idEmpleado != message.message.body.usuario){
+							comunicaInfo();
+						}
+					}else{
+						//Bloquea o DesBloquea Seccion Editar
+						arrayEditables = message.message.body.block as ArrayCollection;
+					}
+				}
+			}
+			
+			private function comunicaInfo():void
+			{
+				var object:Object = new Object();
+				object.body = 'bloqueaSecciones';
+				object.block = arrayEditables;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = object;
+				productorBloquea.send(mensaje);
+			}
+			
+			
+			public static var bloqueo:Boolean = false;
+			private function messageUpdate(message:MessageEvent):void
+			{
+				if(message.message.body.body == "actualizaSecciones" && 
+					_clienteSeleccionado != null && !isNaN(_clienteSeleccionado.idCliente) &&
+					message.message.body.cliente == _clienteSeleccionado.idCliente){
+					var evt:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.OBTENER_CLIENTE_X_ID);
+					evt.clienteSeleccionado = _clienteSeleccionado;
+					evt.vieneDe = '';
+					dispatchEvent( evt );
+				}
+			}
+			
+			private function recibeBusqueda(evt:EventoCatClientes_General):void
+			{
+				if(evt.clientesResultantes)
+				{
+					grpHabilitados.visible = grpHabilitados.includeInLayout = true;
+					grpCorporativo.visible = grpCorporativo.includeInLayout = false;
+					var _clientes:ArrayCollection = Util.sortArray(evt.clientesResultantes,"nombre");
+					_clientes.source = (Util.sortArray(evt.clientesResultantes,"nombre") as ArrayCollection).toArray();
+					generaRenglones( _clientes );
+				}
+			}
+			
+			private function recibeCorporativos(evt:EventoCatClientes_General):void
+			{
+				if (evt.corporativosResultantes == null)
+					return;
+				
+				
+				grpHabilitados.visible = grpHabilitados.includeInLayout = false;
+				grpCorporativo.visible = grpCorporativo.includeInLayout = true;
+				var _listaCorporativos:ArrayCollection = ordenarArreglo(ObjectUtil.copy( evt.corporativosResultantes ) as ArrayCollection);
+				lstCorporativo.dataProvider = _listaCorporativos;
+				_listaCorporativos.length == 1 ? lblCorporativos.text = '1 Corporativo' : lblCorporativos.text = _listaCorporativos.length + ' Corporativos';
+			}
+			
+			private function ordenarArreglo($lista:ArrayCollection):ArrayCollection
+			{
+				var sortField:SortField = new SortField();
+				sortField.name = "nombre";
+				var sort:Sort = new Sort();
+				sort.fields = [sortField];
+				$lista.sort = sort;
+				$lista.refresh();
+				return $lista;
+			}
+			
+			protected function generaArchivo(event:MouseEvent):void
+			{
+				btnBusqueda.crearExportacion();
+			}
+			
+			protected function cambiaCarteras(event:MouseEvent):void
+			{
+				var emp:Empleado = DatosGlobales.getInstance()._usuario;
+				var ev:EventoCatClientes_Carteras = new EventoCatClientes_Carteras(EventoCatClientes_Carteras.SOLICITAR_LISTA_CARTERAS);
+				ev.idNivel = emp.nivel;
+				ev.idResponsable = emp.clave;
+				dispatchEvent(ev);
+				
+				grpClientes.visible = zonaTrabajo.visible = false;
+				grpCarteras.visible = true;
+			}
+			
+			public function ocultarCarteras(evt:Event):void
+			{
+				grpClientes.visible = grpClientes.includeInLayout = true;
+				zonaTrabajo.visible = zonaTrabajo.includeInLayout = false; 
+				grpCarteras.visible = false;
+			}
+			
+			private function reubicarCorp(event:Event):void
+			{
+				//lstCorporativo.ensureIndexIsVisible(lstCorporativo.selectedIndex+1);
+				scrollToIndex(lstCorporativo,lstCorporativo.selectedIndex);
+				
+			}
+			
+			private function scrollToIndex(list:spark.components.List,index:int):void
+			{
+				if (!list.layout)
+					return;
+				
+				var dataGroup:DataGroup = list.dataGroup;
+				
+				var spDelta:Point = dataGroup.layout.getScrollPositionDeltaToElement(index);
+				
+				if (spDelta)
+				{
+					dataGroup.horizontalScrollPosition += spDelta.x;
+					//move it to the top if the list has enough items
+					if(spDelta.y > 0)
+					{
+						var maxVSP:Number = dataGroup.contentHeight - dataGroup.height;
+						var itemBounds:Rectangle = list.layout.getElementBounds(index);
+						var newHeight:Number = dataGroup.verticalScrollPosition + spDelta.y 
+							+ dataGroup.height - itemBounds.height;
+						dataGroup.verticalScrollPosition = Math.min(maxVSP, newHeight);
+					}
+					else
+					{
+						dataGroup.verticalScrollPosition += spDelta.y;
+						
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup  width="100%" height="100%" id="grpClientes" paddingTop="20" paddingBottom="20">
+		<s:VGroup width="100%" paddingLeft="20" paddingRight="20">
+			<catalogos:TituloParaVistaDefaultEnCatalogos id="btnRegresarVistaDefaultCatalogos" labelIzquierdo="CLIENTES" labelDerecho="[CATÁLOGOS]"/>
+		</s:VGroup>
+		
+		<s:Group width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="10" horizontalAlign="center" paddingBottom="45">
+				<s:VGroup width="100%" gap="0" paddingRight="20">
+					<s:Group width="100%" >
+						<botonesToggle:ButtonBarColores width="350" height="30" id="botoneraClientesHabDeshabilitados" changing="botoneraBarra_changingHandler(event)" dataProvider="{_arrButton}" selectedIndex="0" requireSelection="true" horizontalCenter="1"/>
+						<evento:botonColoresConImagenEventoDefault id="btnDescargar" icono="exportarEvento" color="0x{catalogoColores.BTN_VERDE_AZUL}" width="30" height="30" click="generaArchivo(event)" toolTip="Exportar" right="1"/>
+					</s:Group>
+				</s:VGroup>
+				
+				<s:Group width="100%" height="100%">
+					<s:VGroup id="grpHabilitados" width="100%" height="100%" paddingTop="130" horizontalAlign="center" gap="10" >
+						<lstscrl:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstHabilitados" 
+									  itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.vistaPrincipal.CatClientes_IR_RenglonCliente">
+							<lstscrl:layout>
+								<layouts:LayoutListaGrid id="layoutLista"  numColumnas="7" numFilas="4" horizontalGap="0" verticalGap="0" useVirtualLayout="true" 
+														 paddingTop="0" paddingBottom="0" widthMin="230" heightMin="230"/>
+							</lstscrl:layout>
+						</lstscrl:List>
+						<s:VGroup width="100%" horizontalAlign="center" gap="10">
+							<label:TituloGris  id="lblHabilitados" paddingTop="0"/>
+							<label:TituloGris text="TOTAL" paddingTop="0"/>
+						</s:VGroup>
+						<otros:divisionGruesa width="100%" />
+					</s:VGroup>
+					<s:VGroup id="grpCorporativo" width="100%" height="100%" paddingTop="130" horizontalAlign="center" gap="10" >
+						<s:List id="lstCorporativo" borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%" 
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.itemRenderer.vistaPrincipal.IRListaCorporativo"/>
+						<label:TituloGris  id="lblCorporativos" paddingTop="0"/>
+						<label:TituloGris text="TOTAL" paddingTop="0"/>
+						<otros:divisionGruesa width="100%" />
+					</s:VGroup>
+					<CatClientes:CatClientes_BotoneraBusqueda id="btnBusqueda" width="100%"/>
+				</s:Group>
+				
+			</s:VGroup>  
+			
+			<s:Group width="100%" bottom="0">
+				<s:HGroup width="100%" gap="0" paddingLeft="20" paddingRight="20">
+					
+					<s:Group width="100%" bottom="0">
+						<s:Group id="grpMenuConfig" width="38" bottom="0">
+							<s:Image id="imgEngraneConfigUp" source="{catalogoIconosGrid.getInstance().render_engraneGris20x20}" horizontalCenter="0" bottom="10" mouseOver="grpBotonesConfiguracion_mouseOverHandler(event)"/>
+							<s:Rect id="rectFondoMenuConfiguracion" width="100%" height="0" visible="false" alpha="0" bottom="0">
+								<s:fill>
+									<s:SolidColor color="0x595959"/>
+								</s:fill>
+							</s:Rect>
+							<s:VGroup id="grpBotonesMenuConfig" width="100%" height="0" alpha="0" gap="3" horizontalAlign="center" bottom="0">
+								<grafica:botonPopUp width="100%" height="100%" icono="objetivosCrecimiento" id="btnObjetivosCrecimiento" fondoPq="false" click="btnesOpcionesConfig_clickHandler(event)" toolTip="Objetivos de crecimiento"/>
+								<grafica:botonPopUp width="100%" height="100%" icono="nivelIngresoBlanco20x20px" id="btnIntervalosNI" fondoPq="false" click="btnesOpcionesConfig_clickHandler(event)" toolTip="Intervalos nivel ingreso"/>
+								<grafica:botonPopUp width="100%" height="100%" icono="corporativoblanco20x20px" id="btnCorporativos" fondoPq="false" click="btnesOpcionesConfig_clickHandler(event)" toolTip="Corporativos"/>
+								<grafica:botonPopUp width="100%" height="100%" icono="carteras_clientes" id="btnCarteras" fondoPq="false" click="cambiaCarteras(event)" toolTip="Carteras"/>
+								<s:Spacer height="{imgEngraneConfigUp.height + 15}" width="100%"/>
+							</s:VGroup>  
+						</s:Group>  
+						
+					</s:Group>
+					<s:HGroup  height="100%" width="100%" horizontalAlign="right" verticalAlign="bottom">
+						<pqNet:botonPqNetLargo id="btnCar" icono="ico_cartera" label="Carteras" click="cambiaCarteras(event)" right="0" bottom="0"/>				
+						<pqNet:botonPqNetLargo id="btnAgregar" icono="agregar" label="Agregar" click="agregarNuevoCliente(event)" right="0" bottom="0"/>
+					</s:HGroup>
+				</s:HGroup>
+			</s:Group>
+		</s:Group>
+		
+	</s:VGroup>  
+	
+	<s:HGroup width="100%" height="100%" id="zonaTrabajo"/>
+	
+	<carteras:Carteras_VistaDefault id="grpCarteras" visible="false" />
+</s:Group>

@@ -1,0 +1,535 @@
+package mx.com.proquifa.proquifanet.rsl.vista.utils
+{
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DatosTiempoEntrega;
+	import mx.formatters.DateFormatter;
+	import mx.utils.ObjectUtil;
+	
+	public class UtilsFecha
+	{
+		public function UtilsFecha()
+		{
+		}
+		
+		public static function formatoFechaDDMMMYYYYHHMM(fecha:Date,valorDefault:String="Pendiente"):String
+		{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD/MMM/YYYY HH:NN"
+			if(fecha == null)
+			{
+				fechaConFormato = valorDefault;	
+			}
+			else
+			{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFechaDDMMYYYY(fecha:Date,valorDefault:String="Pendiente"):String
+		{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD/MM/YYYY"
+			if(fecha == null)
+			{
+				fechaConFormato = valorDefault;	
+			}
+			else
+			{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoPAraGuardarFechaDDMMMYYYYHHMM(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DDMMMYYYY_HH_NN"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFechaADosRenglones(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD/MMM/YYYY \nHH:NN"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFecha_dia_mes_Anio(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD MMM YYYY"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFechaDiaMesAnioConGuion(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD - MM - YY"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFechaDDMMMYYYY(fecha:Date,valorDefault:String="Pendiente"):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD/MMM/YYYY"
+			if(fecha == null){
+				fechaConFormato = valorDefault;				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFechaDDMMMYY(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD / MMM / YY"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		
+		public static function formatoFechaYYYYMMDD(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "YYYYMMDD"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		public static function formatoFechaDDMMYY(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DDMMYY"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		} 
+		public static function formatoFechaMM(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "MM"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		} 
+		public static function formatoFechaYY(fecha:Date):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "YY"
+			if(fecha == null){
+				fechaConFormato = "Pendiente";				
+			}else{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		} 
+		
+		public static function formatoHoraAyerFecha(fecha:Date):String
+		{
+			var fechaConFormato:String;
+			var fechaHoy:Date = new Date();
+			var tiem:Boolean = false;
+			
+			var formatoFecha:DateFormatter = new DateFormatter();
+			if(fecha.date == fechaHoy.date && fecha.month == fechaHoy.month && fecha.fullYear == fechaHoy.fullYear)
+			{
+				formatoFecha.formatString = "H:NN ";
+				tiem = true;
+			}
+			else if(fecha.fullYear == fechaHoy.fullYear && fecha.month == fechaHoy.month && ((fechaHoy.date - fecha.date) == 1)  )
+			{
+				return "Ayer";
+			}
+			else 
+			{
+				formatoFecha.formatString = "DD / MMM / YY"
+			}
+			
+			
+			if(fecha == null)
+				fechaConFormato = "Pendiente";				
+			else
+				fechaConFormato = formatoFecha.format( fecha );	
+			
+			if (tiem)
+				return fechaConFormato + " Hrs.";
+			else
+				return fechaConFormato;
+		} 
+		
+		public static function regresaDiferenciaEntreFechasEnDias(fechaMasPequenia:Date, fechaMasGrande:Date):int{
+			var diferenciaDias:int = 0;
+			if(fechaMasPequenia == null || fechaMasGrande == null){
+				return diferenciaDias;
+			}
+			diferenciaDias = (fechaMasPequenia.getTime()-fechaMasGrande.getTime())/(1000*60*60*24)
+			return -diferenciaDias;
+		}
+		
+		/**
+		 * Metodo publico que determina si esta fuera de tiempo o en tiempo. Recibe como parametro la fecha a evaluar.
+		 * Se compara con la fecha del dia. Regresa un string si esta en tiempo o fuera de tiempo;
+		 */ 
+		public static function determinarFechaEnTiempo(fechaAComparar:Date):String{
+			var resultado:String = "";
+			if(ObjectUtil.compare( fechaAComparar, new Date() ) == 0){ //verde
+				resultado = "enTiempo"
+			}else if (ObjectUtil.compare( new Date(), fechaAComparar ) > -1){ //rojo
+				resultado = "fueraDeTiempo";
+			}
+			return resultado;
+		}
+		
+		/**
+		 * Metodo publico que determina si esta fuera de tiempo o en tiempo. Recibe como parametro la fecha a evaluar.
+		 * Se compara con la fecha del dia. Regresa un string si esta en tiempo o fuera de tiempo;
+		 */ 
+		public static function  determinarFechaEnTiempoDeUnDiaAOtro( value:Date ):String{
+			var _resultado:String = "";
+			if(UtilsFecha.formatoFechaDDMMYY(new Date()) == UtilsFecha.formatoFechaDDMMYY(value) ){
+				_resultado = "enTiempo";
+			}
+			else{
+				_resultado = "fueraDeTiempo";
+			}
+			return _resultado;
+		}
+		
+		/**
+		 * Metodo publico que determina si la fecha esta fuera de tiempo o en tiempo. Recibe como parametro la
+		 * fecha en minutos y la compara con el dia de actual.Regresa La diferencia En minutos.
+		 */ 
+		/*public static function diferenciaEnMinutosDeDosFechas( minutosAComprar:int ):int{
+		var resultado:int = 0;
+		resultado = minutosAComprar - ( (new Date).getTime() / 3600000);
+		return resultado;
+		}*/
+		
+		/**
+		 * Metodo publico que determina si un diferencial de dias (fecha en minutos) se encuentra Fuera de tiempo o En tiempo
+		 * Recibe un entere (la fecha en minutos y la compara)
+		 * Regresa un string informando el estatus de la fecha
+		 */ 
+		/*public static function estatusFechaXDiferencialDeMinutos( minutosAComprar:int ):String{
+		var resultado:String = "";
+		var _diferenciaEnMinutosVsDiaActual:int = 0;
+		_diferenciaEnMinutosVsDiaActual = diferenciaEnMinutosDeDosFechas( minutosAComprar );
+		if( _diferenciaEnMinutosVsDiaActual  <= -440   ){
+		resultado = "fueraDeTiempo";
+		}else{
+		resultado = "enTiempo"
+		}
+		return resultado;
+		}*/
+		
+		/**
+		 *Metodo publico q regresa el nombre del Dia de la semana al recibir una fecha (si la fecha lleva mas de 
+		 * 4 dias se regresa un simple formato de fecha de tipo String
+		 */
+		public static function obtenDiaSemana( fecha:Date, diasAtraso:int ):String{
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "DD/MMM/YYYY"
+			var fechaConFormato:String = "";
+			var diaEnNumero:String = "";
+			if(diasAtraso == 0){
+				fechaConFormato = "Hoy";
+			}else if(diasAtraso == 1){
+				fechaConFormato = "Ayer";
+			}else if(diasAtraso <= 5 ){
+				diaEnNumero = fecha.getDay().toString( );
+				switch(diaEnNumero.toString()){
+					case "1":
+						fechaConFormato = "Lunes";
+						break;
+					case "2":
+						fechaConFormato = "Martes";
+						break;
+					case "3":
+						fechaConFormato = "Miercoles";
+						break;
+					case "4":
+						fechaConFormato = "Jueves";
+						break;
+					case "5":
+						fechaConFormato = "Viernes";
+						break;
+					case "6":
+						fechaConFormato = "Sabado";
+						break;
+					case "0":
+						fechaConFormato = "Domingo";
+						break;
+				}
+				
+			}else if( diasAtraso > 5 ){
+				fechaConFormato = formatoFecha.format( fecha );				
+			}
+			return fechaConFormato;
+		}
+		/**
+		 * Método publico que obtiene una fecha respecto a una dada como referencia, se envía el tipo requerido que puede ser
+		 * [AYER, MAÑANA], omitiendo los fines de semana
+		 * */
+		public static function regresaFechaRespectoAOtra(_fechaOrigen:Date,_tipo:String):Date
+		{
+			var temp:Date = new Date(_fechaOrigen.fullYear,_fechaOrigen.month,_fechaOrigen.date);
+			switch(_tipo){
+				case "AYER":
+					if(_fechaOrigen.day == 1){
+						temp.setDate(_fechaOrigen.getDate() - 3);
+						return temp;
+					}else{
+						temp.setDate(_fechaOrigen.getDate() - 1);
+						return temp;
+					}
+					break;
+				case "MAÑANA":
+					if(_fechaOrigen.day == 5){
+						temp.setDate(_fechaOrigen.getDate() + 3);
+						return temp;
+					}else{
+						temp.setDate(_fechaOrigen.getDate() + 1);
+						return temp;
+					}
+					break;
+			}
+			return null;
+		}
+		
+		/**
+		 * Metodo publico que recibe dos fechas y te regresa la diferencia de dias Restando Sabado y Domingos
+		 * La primer fecha sera la fecha mas sercana al dia Actual o el dia Actual.
+		 * La segunda fecha es la mas lejana al dia Actual (obviamente).
+		 */ 
+		public static function regresaDiferenciaEntreFechasEnDiasRestandoFines( fechaMasActual:Date, fechaMasLejana:Date ):int{
+			var diasHabiles:int = 0;
+			if(fechaMasActual == null || fechaMasLejana == null){
+				return diasHabiles;
+			}
+			var diferenciaDiasConFines:int = 0;
+			var diaSemana:int = fechaMasLejana.getDay();  /*se obtiene el dia de la semana  de la segunda fecha, como se pretende que es la fecha2 sea la mas lejana
+			apartir de ese dia se empieza a contar*/
+			diferenciaDiasConFines = ( fechaMasActual.getTime() - fechaMasLejana.getTime() ) / ( 1000 * 60 * 60 * 24 ); /*se obtiene la diferencia de los en bruto
+			contando sabados y domingos*/
+			for(var i:int = 0; i < diferenciaDiasConFines; i++ ){ 
+				//se hace un recorrido de los dias en bruto, sumando cada vez un dia a los dias habiles, validando que
+				//si el dia es 7 como tope maximo, el contador se regresa a 0 y la segunda validacion es para que, el dia  6 (sabado) o 0 (domingo)  no sean contados
+				if (diaSemana == 7) {
+					diaSemana = 0;
+				}
+				if ( diaSemana != 6 && diaSemana != 0 ) {
+					diasHabiles++;
+				}
+				diaSemana++;
+			}
+			return diasHabiles;
+		}
+		
+		public static function regresaDiferenciaEntreFechasEnDiasRestandoFinesConSigno(fechaMasActual:Date, fechaMasLejana:Date ):int{
+			var diasHabiles:int = 0;
+			if(fechaMasActual == null || fechaMasLejana == null){
+				return diasHabiles;
+			}
+			var diferenciaDiasConFines:int = 0;
+			var diaSemana:int = 0; /*se obtiene el dia de la semana  de la segunda fecha, como se pretende que es la fecha2 sea la mas lejana
+			
+			apartir de ese dia se empieza a contar*/
+			var resultadoBruto:int = (fechaMasLejana.getTime() - fechaMasActual.getTime()  ) / ( 1000 * 60 * 60 * 24 ); 
+			
+			if(resultadoBruto <0){
+				diferenciaDiasConFines = resultadoBruto * (-1);
+				diaSemana = fechaMasActual.getDay();
+			}
+			else{
+				diferenciaDiasConFines = resultadoBruto;
+				diaSemana = fechaMasLejana.getDay(); 
+			}
+			
+			/*se obtiene la diferencia de los en bruto
+			
+			
+			contando sabados y domingos*/
+			
+			/*for(var i:int = 0; i < diferenciaDiasConFines; i++ ){
+			//se hace un recorrido de los dias en bruto, sumando cada vez un dia a los dias habiles, validando que
+			//si el dia es 7 como tope maximo, el contador se regresa a 0 y la segunda validacion es para que, el dia  6 (sabado) o 0 (domingo)  no sean contados
+			if (diaSemana == 7) {
+			diaSemana = 0;
+			}
+			if ( diaSemana != 6 && diaSemana != 0 ) {
+			diasHabiles++;
+			}
+			diaSemana++;
+			}*/
+			for( var e:int = diferenciaDiasConFines; e > 0; e-- ){
+				if( diaSemana < 0 ) diaSemana = 6;
+				if ( diaSemana > 0 && diaSemana < 6 ){
+					diasHabiles++;
+				}
+				diaSemana--;
+			}
+			
+			if(resultadoBruto < 0){
+				diasHabiles = diasHabiles * (-1)
+			}
+			return diasHabiles;
+		}
+		/**
+		 * indicale cuantos numeros quieres sumar o restar a la fecha actual
+		 */ 
+		public static function regresaNombreDia(dias:int):String{ 
+			var fecha:Date = new Date();
+			fecha.date = fecha.date + dias;
+			var valor:String = "";
+			switch(fecha.day)
+			{
+				case 0:{ valor = "Domingo"; break;}
+				case 1:{ valor = "Lunes"; break; }
+				case 2:{ valor = "Martes"; break; }
+				case 3:{ valor = "Miercoles"; break; }
+				case 4:{ valor = "Jueves"; break; }
+				case 5:{ valor = "Viernes"; break; }
+				case 6:{ valor = "Sabado"; break; }
+			}
+			valor = valor + " " + fecha.date.toString();
+			return valor;
+		}
+		/**
+		 * indicale cuantos numeros quieres sumar o restar a la fecha actual
+		 */ 
+		public static function regresaNombreMes(dias:int):String{ 
+			var valor:String = "";
+			switch(dias)
+			{
+				case 0:{ valor = "ENERO"; break;}
+				case 1:{ valor = "FEBRERO"; break; }
+				case 2:{ valor = "MARZO"; break; }
+				case 3:{ valor = "ABRIL"; break; }
+				case 4:{ valor = "MAYO"; break; }
+				case 5:{ valor = "JUNIO"; break; }
+				case 6:{ valor = "JULIO"; break; }
+				case 7:{ valor = "AGOSTO"; break; }
+				case 8:{ valor = "SEPTIEMBRE"; break; }
+				case 9:{ valor = "OCTUBRE"; break; }
+				case 10:{ valor = "NOVIEMBRE"; break; }
+				case 11:{ valor = "DICIEMBRE"; break; }
+					
+			}
+			
+			return valor;
+		}
+		
+		public static function regresaNombreMesPrimeraMayuscula(dias:int):String{ 
+			var valor:String = "";
+			switch(dias)
+			{
+				case 0:{ valor = "Enero"; break;}
+				case 1:{ valor = "Febrero"; break; }
+				case 2:{ valor = "Marzo"; break; }
+				case 3:{ valor = "Abril"; break; }
+				case 4:{ valor = "Mayo"; break; }
+				case 5:{ valor = "Junio"; break; }
+				case 6:{ valor = "Julio"; break; }
+				case 7:{ valor = "Agosto"; break; }
+				case 8:{ valor = "Septiembre"; break; }
+				case 9:{ valor = "Octubre"; break; }
+				case 10:{ valor = "Noviembre"; break; }
+				case 11:{ valor = "Diciembre"; break; }
+					
+			}
+			
+			return valor;
+		}
+		
+		public static function obtenerDias($arreglo:String):DatosTiempoEntrega
+		{
+			var strDias:Array = $arreglo.toLowerCase().split(' ');
+			var obj:DatosTiempoEntrega = new DatosTiempoEntrega();
+			
+			if(strDias.length > 0){
+				if (strDias[1] == 'a')
+				{
+					obj.dia1 = parseInt( strDias[0] );
+					obj.dia2 = parseInt( strDias[2] );
+					obj.fijo = true;
+				}
+				else
+				{
+					obj.dia1 = parseInt( strDias[0] );
+					obj.fijo = false;
+				}
+				
+				if (strDias[strDias.length - 1] == 'meses')
+				{
+					obj.meses = 1;
+				}
+				else
+				{
+					obj.meses = 0;
+				}
+				return obj;
+			}
+			return null;
+		}
+		
+		public static function formatoFechaHHNN(fecha:Date,valorDefault:String="Pendiente"):String
+		{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = "HH:NN"
+			if(fecha == null)
+			{
+				fechaConFormato = valorDefault;	
+			}
+			else
+			{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			return fechaConFormato;
+		}
+		
+		public static function formatoFechaGenerico(fecha:Date,formato:String = "DD/MMMM/YYYY", valorDefault:String="Pendiente"):String{
+			var fechaConFormato:String;
+			var formatoFecha:DateFormatter = new DateFormatter();
+			formatoFecha.formatString = formato;
+			if(fecha == null)
+			{
+				fechaConFormato = valorDefault;	
+			}
+			else
+			{
+				fechaConFormato = formatoFecha.format( fecha );	
+			}
+			fechaConFormato = fechaConFormato.replace(/January/gi,"Enero").replace(/February/gi,"Febrero").replace(/March/gi,"Marzo").replace(/April/gi,"Abril").replace(/May/gi,"Mayo").replace(/June/gi,"Junio").replace(/July/gi,"Julio").replace(/August/gi,"Agosto").replace(/September/gi,"Septiembre").replace(/October/gi,"Octubre").replace(/November/gi,"Noviembre").replace(/December/gi,"Diciembre");
+			return fechaConFormato;
+		}
+	}
+}

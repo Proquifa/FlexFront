@@ -1,0 +1,1320 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+		  xmlns:mapaEvento="mx.com.proquifa.proquifanet.rsl.vista.mapas.evento.*"
+		  xmlns:barratituloevento="skins.plantillaproquifa.barratituloevento.*"
+		  xmlns:menu="skins.plantillaproquifa.menu.buttonbar.evento.menu.*" 
+		  xmlns:firstButton="skins.plantillaproquifa.menu.boton.evento.*" 
+		  xmlns:evento="skins.plantillaproquifa.menu.buttonbar.evento.*" 
+		  xmlns:AdvancedDataGrid1="skins.skin.AdvancedDataGrid.*"
+		  xmlns:grid="skins.skin.AdvancedDataGrid.evento.*"  
+		  xmlns:checkbox="skins.skin.chekbox.evento.*"
+		  xmlns:txt="skins.skin.textinput.evento.*"
+		  xmlns:vendedor="mx.com.proquifa.proquifanet.rsl.vista.vistas.evento.*"
+		  gap="5"
+		  contentBackgroundColor="#eaeaea"
+		  width="100%" height="100%"
+		  paddingTop="10" paddingBottom="15" 
+		  paddingLeft="10" paddingRight="10"
+		  creationComplete="inicio()" xmlns:header="skins.skin.header.*" xmlns:label="skins.skin.label.*" 
+		  >
+	
+	<fx:Declarations>
+		<mapaEvento:MapaEventoProquifa />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.evento.EventoEventoProquifa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.evento.Participantes;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.FlexHTMLLoader;
+			import mx.core.FlexLoader;
+			import mx.core.UIComponent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.FlexClient;
+			import mx.messaging.channels.HTTPChannel;
+			import mx.rpc.http.HTTPMultiService;
+			import mx.rpc.http.HTTPService;
+			import mx.utils.ObjectUtil;
+			
+			import skins.skin.popUpEvento.popupEvento;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]
+			public var arrayBotonesEvento:ArrayCollection = new ArrayCollection([
+				{id:'proxEventos',etiqueta:'PROX EVENTOS'},
+				{id:'eventosPasados', etiqueta: 'EVENTOS PASADOS'}]);
+			
+			//{id:'uspGDL2014',etiqueta:'USP USER FORUM GDL 2014', color:'0xD6933C'},
+			[Bindable]
+			public var arrayBotonesMenuEvento:ArrayCollection = new ArrayCollection([
+				{id:'uspdf2014',etiqueta:'USP USER FORUM MX 2014',color:'0xD1543E',valor:'USP USER FORUM MX 2014'},
+				{id:'expoFarma2014',etiqueta:'EXPO FARMA 2014',color:'0xBA3459', valor:'EXPO FARMA 2014'},
+				{id:'clinicoHC',etiqueta:'CLÍNICO H & C100',color:'0x813462',valor:'CLÍNICO H & C100'},
+				{id:'seminarioMicroBiologics',etiqueta:'SEMINARIO MICROBIOLOGICS',color:'0x56334B',valor:'SEMINARIO MICROBIOLOGICS'}]);
+			
+			public var colores:ArrayCollection = new ArrayCollection(['ND','0xD1543E','0xBA3459','0x813462','0x56334B']);
+			
+			[Bindable]
+			private var participantes:ArrayCollection = new ArrayCollection;
+			
+			private var popUp:popupEvento;
+			
+			private var proxIndex:int = -1;
+			private var pasadoIndex:int = -1;
+			
+			private var participantePre:ArrayCollection;
+			private var participanteRegistro:ArrayCollection;
+			private var participantePreUniverso:ArrayCollection;
+			private var participanteRegistroUniverso:ArrayCollection;
+			
+			private var firstPasados:Object;
+			private var firstProximo:Object;
+			private var eventosPasados:ArrayCollection;
+			private var proximosEventos:ArrayCollection;
+			[Bindable]
+			private var eventoProquifa:ArrayCollection;
+			[Bindable]
+			private var firstEvento:Object;
+			
+			private var origen:String;
+			private var mostrarGrafica:Boolean = false;
+			
+			/*  INICIO */
+			
+			private function inicio():void{
+				alertaSingleton.elDisplayObject = UIComponent(this.parentApplication); 
+				addEventListener(EventoEventoProquifa.ENVIAR_BOTON_PULSADO_CONSULTA_EVENTO,botonConsultaRegistro,false,0,true);
+				addEventListener(EventoEventoProquifa.ENVIAR_BOTON_PULSADO_EDITAR_EVENTO,botonEditarConsultaRegistro,false,0,true);
+				addEventListener(EventoEventoProquifa.ENVIAR_BOTON_PULSADO_GUARDAR_EVENTO,botonGuardarConsultaRegistro,false,0,true);
+				this.addEventListener( ResizeEvent.RESIZE, redimensiona );
+				addEventListener(EventoEventoProquifa.ESCUCHAR_PARA_POPUP_EVENTO,indexSelectedCheck,false,0,true);
+				addEventListener(EventoEventoProquifa.ESCUCHAR_ELIMINAR_PARA_POPUP_EVENTO,indexClickDelete,false,0,true);
+				addEventListener(EventoEventoProquifa.ENVIAR_CADENA_TEXTO_SEARCH_EVENTO,buscarParticipante,false,0,true);
+				addEventListener(EventoEventoProquifa.EXPORTAR_GRID_EVENTO,exportarGrid,false,0,true);
+				addEventListener(EventoEventoProquifa.CAMBIAR_VISATA_GRAFICA_EXPO_EVENTO,cambiaVistaGrafica,false,0,true);
+				/* addEventListener(EventoEventoProquifa.PULSO_CANCELAR_POPUP_EVENTO,closePopUp,false,0,true); */
+				
+				participantes = new ArrayCollection;
+				participantePre = new ArrayCollection;
+				participanteRegistro = new ArrayCollection;
+				participantePreUniverso = new ArrayCollection;
+				participanteRegistroUniverso = new ArrayCollection;
+				
+				dispatchEvent(new EventoEventoProquifa(EventoEventoProquifa.OBTENER_LISTA_EVENTOS_PROQUIFA));
+				
+				if( popUp == null ){
+					popUp = popupEvento( PopUpManager.createPopUp( this, popupEvento, true ) );
+					popUp.addEventListener(EventoEventoProquifa.PULSO_CANCELAR_POPUP_EVENTO,closePopUp,false,0,true);
+				}
+				PopUpManager.centerPopUp( popUp );
+				PopUpManager.removePopUp( popUp );
+				
+				grpPRERegistro.visible = grpPRERegistro.includeInLayout = true;
+				gridConsultaPreRegistro.visible = gridConsultaPreRegistro.includeInLayout = true;
+				gridConsultaPreRegistroEdit.visible = gridConsultaPreRegistroEdit.includeInLayout = false;
+				grpRegistro.visible = grpRegistro.includeInLayout = false;
+				
+				setearDataProvider();
+			}
+			
+			private function cambiaVistaGrafica($evt:EventoEventoProquifa):void{
+				vendedorExpo.muestraGraficaExpo($evt.boton);
+			}
+			
+			private function redimensiona( $evt:Event ):void{
+				PopUpManager.centerPopUp( popUp );
+			}
+			
+			private var index:int;
+			private var identificador:String;
+			public function indexSelectedCheck(event:EventoEventoProquifa):void
+			{
+				
+				index = gridConsultaPreRegistro.selectedIndex;
+				identificador = event.identificador;
+				popUp.cadena = event.cadena;
+				popUp.eliminar = false;
+				popUp.btnRegistrar.label = event.boton;
+				mostrarPopUp();
+			}
+			
+			public function indexClickDelete(event:EventoEventoProquifa):void{
+				index = gridConsultaPreRegistro.selectedIndex;
+				identificador = event.identificador;
+				popUp.cadena = event.cadena;
+				popUp.eliminar = true;
+				popUp.btnRegistrar.label = 'Eliminar';
+				mostrarPopUp();
+			}
+			
+			public function mostrarPopUp():void
+			{
+				PopUpManager.addPopUp( popUp, this, true);
+				PopUpManager.centerPopUp( popUp );
+			}
+			
+			public function closePopUp(event:EventoEventoProquifa):void{
+				dispatchEvent(new Event('QuitaPalomitaCheckBoxEventoProquifa'));
+				PopUpManager.removePopUp( popUp );
+			}
+			
+			public function set recibirListaEventos($array:ArrayCollection):void{
+				if ($array == null)
+					return;
+				
+				eventosPasados = new ArrayCollection;
+				proximosEventos = new ArrayCollection;
+				for (var i:int = 0; i < $array.length; i++){
+					if ($array[i].concepto == 'EventosPasados' ){
+						eventosPasados.addItem($array[i]);
+						if (eventosPasados.length > 1)
+							$array[i].color = colores[eventosPasados.length-1]
+					}else{
+						proximosEventos.addItem($array[i]);
+						if (proximosEventos.length > 1 )
+							$array[i].color = colores[proximosEventos.length-1]
+					}
+				}
+				
+				eventosPasados.length > 0 ? firstPasados = eventosPasados.removeItemAt(0) : false;;
+				proximosEventos.length > 0 ? firstProximo = proximosEventos.removeItemAt(0): false;;
+				mostrarEvento();
+				
+				origen = firstProximo.tipo;
+				if (firstEvento.tipo != null && firstEvento.tipo != 'expoFarma2014'){
+					var evento:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.OBTENER_PARTICIPANTES_REGISTRO_EVENTO);
+					//origen = firstProximo.tipo;
+					evento.origen = firstProximo.tipo;
+					//barraTitulo.origen = origen;
+					dispatchEvent(evento);
+					//barraTitulo.evento = firstProximo.valor;
+					/* vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = true;
+					vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = false; */
+					/* mostrarGrafica = false; */
+					habilitarBotonesRegistro(true);
+				}
+				else{
+					/* vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = false;
+					vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = true; */
+					
+					/* vendedorExpo.validaOrigen('expoMed');
+					dispatchEvent( new EventoEventoProquifa(EventoEventoProquifa.CARGAR_TODOS_LOS_CONTACTOS_HABILITADOS));  */
+					 
+					//vendedorExpo.validaOrigen('expoPharma');
+					vendedorExpo.validaOrigen(firstEvento.tipo);
+					var evtExpo:EventoEventoProquifa = new EventoEventoProquifa( EventoEventoProquifa.CARAGAR_CONTACTOS );
+					evtExpo.idEmpleado = 0;
+					dispatchEvent( evtExpo ); 
+					//barraTitulo.origen = origen;
+					/* mostrarGrafica = true; */
+					habilitarBotonesRegistro(false);
+				}
+				barraTitulo.origen = origen;
+				barraTitulo.evento = firstProximo.valor;
+				barraTitulo.conGrafica = mostrarGrafica;
+			}
+			
+			private function habilitarBotonesRegistro(habilitar:Boolean):void{
+				barraTitulo.btnConsultaRegistro.visible = habilitar;
+				barraTitulo.btnConsultaRegistro.includeInLayout = habilitar;
+				vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = habilitar;
+				vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = !habilitar;
+				mostrarGrafica = !habilitar;
+			}
+			
+			private function mostrarEvento():void{
+				if (btnEvento.selectedIndex == 0)
+				{
+					firstEvento = ObjectUtil.copy(firstProximo) as Object;
+					eventoProquifa = ObjectUtil.copy(proximosEventos) as ArrayCollection;
+				}else
+				{
+					firstEvento = ObjectUtil.copy(firstPasados) as Object;
+					eventoProquifa = ObjectUtil.copy(eventosPasados) as ArrayCollection;
+				}
+				
+				if (firstEvento != null ){
+					first.visible = first.includeInLayout = true;
+				}
+				else{
+					first.visible = first.includeInLayout = false;
+				}
+			}
+			
+			/* Cambia de vista el Grid con los botones de Pre y Registro  */
+			private function botonConsultaRegistro($event:EventoEventoProquifa):void
+			{
+				
+				ocultarBotonSorteo();
+				
+				if($event.selectedIndex == 0 )
+				{
+					grpRegistro.visible = grpRegistro.includeInLayout = false;
+					grpPRERegistro.visible = grpPRERegistro.includeInLayout = true;
+					gridConsultaPreRegistro.visible = gridConsultaPreRegistro.includeInLayout = true;
+					gridConsultaPreRegistroEdit.visible = gridConsultaPreRegistroEdit.includeInLayout = false;
+				}
+				else
+				{
+					grpPRERegistro.visible = grpPRERegistro.includeInLayout = false;
+					grpRegistro.visible = grpRegistro.includeInLayout = true;
+					gridConsultaRegistro.visible = gridConsultaRegistro.includeInLayout = true;
+					gridConsultaRegistroEdit.visible = gridConsultaRegistroEdit.includeInLayout = false;
+				}
+			}
+			
+			
+			private var arrayCambiosGrid:ArrayCollection;
+			private function botonGuardarConsultaRegistro($event:EventoEventoProquifa):void
+			{
+				arrayCambiosGrid = new ArrayCollection;
+				for (var i:int = 0; i < participantePre.length; i++) 
+				{
+					if (object.hasOwnProperty(participantePre[i].idRegistro)){
+						arrayCambiosGrid.addItem(object[participantePre[i].idRegistro]);
+					}
+				}
+				
+				var evt:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.GUARDA_CAMBIOS_DATAGRID_EVENTO);
+				evt.participante = arrayCambiosGrid;
+				dispatchEvent(evt);
+				botonEditarConsultaRegistro($event);
+			}
+			
+			/* Cambia de vista el grid entre la consulta y Editar  */
+			private function botonEditarConsultaRegistro($event:EventoEventoProquifa):void
+			{
+				if (grpPRERegistro.visible){
+					/* PreRegistro.selectedIndex = $event.selectedIndex; */
+					if ($event.selectedIndex == 0 ){
+						gridConsultaPreRegistroEdit.visible = gridConsultaPreRegistroEdit.includeInLayout = false;
+						gridConsultaPreRegistro.visible = gridConsultaPreRegistro.includeInLayout = true;
+						gridConsultaPreRegistro.dataProvider = participantePre;
+					}
+					else{
+						gridConsultaPreRegistro.visible = gridConsultaPreRegistro.includeInLayout = false;
+						gridConsultaPreRegistroEdit.visible = gridConsultaPreRegistroEdit.includeInLayout = true;
+						gridConsultaPreRegistroEdit.dataProvider = participantePre;
+					}
+					
+				}
+				else{
+					/* Registro.selectedIndex = $event.selectedIndex; */
+					if ($event.selectedIndex == 0 ){
+						gridConsultaRegistroEdit.visible = gridConsultaRegistroEdit.includeInLayout = false;
+						gridConsultaRegistro.visible = gridConsultaRegistro.includeInLayout = true;
+						gridConsultaRegistro.dataProvider = participanteRegistro;
+					}
+					else{
+						gridConsultaRegistro.visible = gridConsultaRegistro.includeInLayout = false;
+						gridConsultaRegistroEdit.visible = gridConsultaRegistroEdit.includeInLayout = true;
+						gridConsultaRegistroEdit.dataProvider = participanteRegistro;
+					}
+					
+				}
+			}
+			
+			private var item:*;
+			public function set recibirRespuesta($registrado:Boolean):void{
+				var event:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.GUARDAR_A_REGISTRADO_EVENTO);
+				event.idRegistro = this[identificador].selectedItem.idRegistro;
+				index = this[identificador].selectedIndex;
+				item = this[identificador].selectedItem;
+				event.registrar = $registrado;
+				dispatchEvent(event);
+				index = this[identificador].selectedIndex;
+				dispatchEvent(new Event('QuitaPalomitaCheckBoxEventoProquifa'));
+				PopUpManager.removePopUp( popUp );
+			}
+			
+			private function AddDeleteArray():void{
+				if (identificador == 'gridConsultaPreRegistro' ){
+					participantePre.removeItemAt(index);
+					participanteRegistro.addItem(item);
+					participantePreUniverso.removeItemAt(index);
+					participanteRegistroUniverso.addItem(item);
+				}else if (identificador == 'gridConsultaPreRegistroEdit' ){
+					participantePre.removeItemAt(index);
+					participantePreUniverso.removeItemAt(index);
+				}else if (identificador == 'gridConsultaRegistroEdit' ){
+					participanteRegistro.removeItemAt(index);
+					participantePre.addItem(item);
+					participanteRegistroUniverso.removeItemAt(index);
+					participantePreUniverso.addItem(item);
+				}else{
+					
+				}
+				
+				participantePre.source.sortOn('folio',Array.NUMERIC);
+				participanteRegistro.source.sortOn('folio',Array.NUMERIC);
+				participantePreUniverso.source.sortOn('folio',Array.NUMERIC);
+				participanteRegistroUniverso.source.sortOn('folio',Array.NUMERIC);
+				setearDataProvider();
+			}
+			
+			public function setearDataProvider():void{
+				gridConsultaPreRegistro.dataProvider = participantePre;
+				gridConsultaPreRegistroEdit.dataProvider = participantePre;
+				gridConsultaRegistro.dataProvider = participanteRegistro;
+				gridConsultaRegistroEdit.dataProvider = participanteRegistro;
+			}
+			
+			
+			public function set recibirRespuestaEliminar($eliminar:Boolean):void{
+				if ($eliminar ){
+					var event:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.ELIMINAR_A_PREREGISTRADO_EVENTO);
+					event.idRegistro = this[identificador].selectedItem.idRegistro;
+					index = this[identificador].selectedIndex;
+					dispatchEvent(event);
+				}
+				PopUpManager.removePopUp( popUp );
+			}
+			
+			protected function buttonbardefaultevento1_changingHandler(event:IndexChangeEvent):void
+			{
+				first.positionSelect = first.positionSelect == 'left' ? 'right' : 'left';
+				
+				mostrarEvento();
+				ocultarBotonSorteo();
+				
+				if (btnEvento.selectedIndex == 0 ){
+					btnMenu.selectedIndex = proxIndex;
+					proxIndex != -1 ? btnMenu.dispatchEvent(new MouseEvent(MouseEvent.CLICK)) : first.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+				}else{
+					btnMenu.selectedIndex = pasadoIndex;
+					pasadoIndex != -1 ? btnMenu.dispatchEvent(new MouseEvent(MouseEvent.CLICK)) : first.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+				}
+				
+				//barraTitulo.btnSorteo.visible = btnEvento.selectedIndex == 0 ? true : false;
+			}
+			
+			private function ocultarBotonSorteo():void{
+				if (btnEvento.selectedIndex == 1){
+					barraTitulo.btnSorteo.visible = false;
+				}
+				else{
+					if (barraTitulo.btnConsultaRegistro.selectedIndex == 1 ){
+						barraTitulo.btnSorteo.visible = true;
+					}else{
+						barraTitulo.btnSorteo.visible = false;
+					}
+				}
+			}
+			
+			
+			/* Se obtienen los participantes y se Divide para los grid */
+			public function set obtenerListaParticipantes($participantes:ArrayCollection):void{
+				if ($participantes == null)
+					return;
+				participantes = ObjectUtil.copy($participantes) as ArrayCollection;
+				participantePre = new ArrayCollection;
+				participanteRegistro = new ArrayCollection;
+				participantePreUniverso = new ArrayCollection;
+				participanteRegistroUniverso = new ArrayCollection;
+				divideParticipantes($participantes);
+				gridConsultaPreRegistro.dataProvider = participantePre;
+				gridConsultaRegistro.dataProvider = participanteRegistro;
+				
+			}
+			
+			private function divideParticipantes($array:ArrayCollection):void{
+				
+				for (var i:int = 0; i < $array.length; i++) 
+				{
+					if ( ($array[i] as Participantes).registro ){
+						participanteRegistro.addItem($array[i]);
+						participanteRegistroUniverso.addItem($array[i]);
+						
+					}
+					else{
+						participantePre.addItem($array[i]);
+						participantePreUniverso.addItem($array[i]);
+					}
+				}
+				
+				participantePre.source.sortOn('folio',Array.NUMERIC);
+				participanteRegistro.source.sortOn('folio',Array.NUMERIC);
+				participantePreUniverso.source.sortOn('folio',Array.NUMERIC);
+				participanteRegistroUniverso.source.sortOn('folio',Array.NUMERIC);
+			}
+			
+			
+			public function set seGuardoRegistro(guardo:Boolean):void{
+				if (guardo ){
+					AddDeleteArray();
+				}
+			}
+			
+			public function set seEliminoRegistro(elimino:Boolean):void{
+				if (elimino ){
+					AddDeleteArray();
+				}
+			}
+			
+			public function set seGuardoGridRegistro(guardo:Boolean):void{
+				if (guardo ){
+					var evento:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.OBTENER_PARTICIPANTES_REGISTRO_EVENTO);
+					evento.origen = origen;
+					barraTitulo.origen = origen;
+					dispatchEvent(evento);
+				}
+			}
+			
+			private var object:Object = new Object;
+			
+			public function almacenarCambiosGrid($participante:Participantes,dataField:String):void{
+				
+				if (!object.hasOwnProperty($participante.idRegistro ) ){
+					object[$participante.idRegistro] = $participante;
+					object[$participante.idRegistro][dataField] = $participante[dataField];
+				}
+				else{
+					object[$participante.idRegistro][dataField] = $participante[dataField];
+				}
+				
+			}
+			
+			
+			/* Busqueda de Participante por nombre y/o empresa */
+			private var textoBusqueda:String;
+			private function buscarParticipante( $evt:EventoEventoProquifa ):void{
+				
+				if (origen != 'expoFarma2014'){
+					var listaAFiltrar:ArrayCollection = new ArrayCollection();
+					var _listaVisual:ArrayCollection = new ArrayCollection();
+					
+					if ($evt.selectedIndex == 0 ){
+						listaAFiltrar = ObjectUtil.copy( participantePreUniverso ) as ArrayCollection;
+					}else{
+						listaAFiltrar = ObjectUtil.copy( participanteRegistroUniverso ) as ArrayCollection;
+					}
+					
+					textoBusqueda = $evt.search;
+					if( textoBusqueda != '' )
+					{
+						_listaVisual  = new ArrayCollection(listaAFiltrar.source.filter(buscarCoincidencias));
+					}
+					else{
+						_listaVisual = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection;
+					}
+					
+					_listaVisual.source.sortOn('folio',Array.NUMERIC);
+					
+					if ($evt.selectedIndex == 0 ){
+						participantePre = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+					}else{
+						participanteRegistro = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+					}
+					setearDataProvider();
+				}
+				else{
+					//vendedorExpo._compBusquedaCliente.txtBusqueda = $evt.search;
+					vendedorExpo.buscarCliente($evt.search);
+				}
+			}
+			
+			protected function buscarCoincidencias($item:Participantes,id:uint, array:Array):Boolean
+			{
+				if( $item.nombre.toUpperCase().indexOf(textoBusqueda.toUpperCase()) != -1 )
+				{
+					return true; 
+				}
+				else if( $item.empresa.toUpperCase().indexOf(textoBusqueda.toUpperCase()) != -1 )
+				{
+					return true;
+				}
+				else{
+					return false;
+				}
+			}
+			
+			protected function first_clickHandler():void
+			{
+				limpiarSearch();
+				
+				if (firstEvento.tipo != null && firstEvento.tipo != 'expoFarma2014'){
+					/* vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = true; 
+					vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = false; */
+					var evento:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.OBTENER_PARTICIPANTES_REGISTRO_EVENTO);
+					evento.origen = firstEvento.tipo;
+					/* barraTitulo.origen = firstEvento.tipo;
+					origen = firstEvento.tipo; */
+					dispatchEvent(evento);
+					if (btnEvento.selectedIndex == 0 ){
+						proxIndex = -1;
+					}
+					else{
+						pasadoIndex = -1;
+					}
+					mostrarGrafica = false;
+					habilitarBotonesRegistro(true);
+				}
+				else{
+					/* vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = false;
+					vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = true; */
+					/*  vendedorExpo.validaOrigen('expoMed');
+					dispatchEvent( new EventoEventoProquifa(EventoEventoProquifa.CARGAR_TODOS_LOS_CONTACTOS_HABILITADOS));  */
+					
+					 vendedorExpo.validaOrigen('expoPharma');
+					var evtExpo:EventoEventoProquifa = new EventoEventoProquifa( EventoEventoProquifa.CARAGAR_CONTACTOS );
+					evtExpo.idEmpleado = 0;
+					dispatchEvent( evtExpo );
+					/* mostrarGrafica = true; */
+					habilitarBotonesRegistro(false);
+				}
+				barraTitulo.evento = firstEvento.valor;
+				barraTitulo.origen = firstEvento.tipo;
+				origen = firstEvento.tipo;
+				barraTitulo.conGrafica = mostrarGrafica;
+			}
+			
+			protected function btnMenu_changingHandler(event:MouseEvent):void
+			{
+				//if (btnMenu.selectedIndex == 0){
+				if (btnMenu.selectedItem.tipo != 'expoFarma2014' ){
+					/* vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = true;
+					vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = false; */
+					var evento:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.OBTENER_PARTICIPANTES_REGISTRO_EVENTO);
+					evento.origen = btnMenu.selectedItem.tipo;
+					/* barraTitulo.origen = btnMenu.selectedItem.tipo;
+					origen = btnMenu.selectedItem.tipo; */
+					dispatchEvent(evento);
+					limpiarSearch();
+					//}
+					
+					if (btnEvento.selectedIndex == 0 ){
+						proxIndex = btnMenu.selectedIndex;
+					}
+					else{
+						pasadoIndex = btnMenu.selectedIndex;
+					}
+					/* mostrarGrafica = false; */
+					habilitarBotonesRegistro(true);
+				}
+				else{
+					/* vgpGridsRegistrados.visible = vgpGridsRegistrados.includeInLayout = false;
+					vgpVendedorExpo.visible = vgpVendedorExpo.includeInLayout = true; */
+					//vendedorExpo.validaOrigen('expoFarma2014');
+					
+					/*  vendedorExpo.validaOrigen('expoMed');
+					dispatchEvent( new EventoEventoProquifa(EventoEventoProquifa.CARGAR_TODOS_LOS_CONTACTOS_HABILITADOS));  */
+					
+					vendedorExpo.validaOrigen(btnMenu.selectedItem.tipo);
+					var evtExpo:EventoEventoProquifa = new EventoEventoProquifa( EventoEventoProquifa.CARAGAR_CONTACTOS );
+					evtExpo.idEmpleado = 0;
+					dispatchEvent( evtExpo ); 
+					/* mostrarGrafica = true; */
+					habilitarBotonesRegistro(false);
+				}
+				barraTitulo.origen = btnMenu.selectedItem.tipo;
+				barraTitulo.evento = btnMenu.selectedItem.valor;
+				origen = btnMenu.selectedItem.tipo;
+				
+			}
+			
+			 public function set limpiarTexto($flag:Boolean):void{
+				limpiarSearch();
+			} 
+			
+			public function limpiarSearch():void{
+				barraTitulo.txtSearch.textDisplay.text = "";
+			}
+			
+			private function exportarGrid(event:EventoEventoProquifa):void{
+				if (origen == 'expoFarma2014' ){
+					vendedorExpo.exportarClientes()
+				}else{
+					var array:Object = new Object;
+					if (grpPRERegistro.visible ){
+						array = gridConsultaPreRegistro.dataProvider;
+					}
+					else{
+						array = gridConsultaRegistro.dataProvider;
+					}
+					
+					var file2:File = new File();
+					var hoja:ArrayCollection = new ArrayCollection();
+					var fila1:Array = null;
+					fila1 = new Array();
+					fila1[0] = hoja.addItem("#");
+					fila1[1] = hoja.addItem("Codigo");
+					fila1[2] = hoja.addItem("Nombre");
+					fila1[3] = hoja.addItem("Empresa");
+					fila1[4] = hoja.addItem("Puesto");
+					fila1[5] = hoja.addItem("Correo");
+					fila1[6] = hoja.addItem("Teléfono");
+					for(var i:int = 0 ; i< array.length ; i++ ){
+						fila1 = new Array();	
+						fila1[0] = i +1;
+						fila1[1] = '"'+( array[i] as Participantes ).folioString+'"';
+						fila1[2] = '"'+( array[i] as Participantes ).nombre+'"';
+						fila1[3] = '"'+( array[i] as Participantes ).empresa+'"';
+						fila1[4] = '"'+( array[i] as Participantes ).puesto+'"';
+						fila1[5] = '"'+( array[i] as Participantes ).correo+'"';
+						fila1[6] = '"'+( array[i] as Participantes ).telefono+'"';
+						hoja.addItem('\r' + fila1 );
+					}
+					file2.save( hoja, 'EventoProquifa-'+ UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM( new Date() )+'.csv');
+				}
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<barratituloevento:tituloEvento id="barraTitulo"  width="100%" height="30" evento="USP USER FORUM GDL 2014" />
+	
+	<s:HGroup width="100%" height="100%" gap="0" paddingTop="0" >
+		<s:VGroup width="100%" height="100%" gap="10" id="vgMenu" >
+			<s:HGroup width="100%" height="100%" gap="15" depth="10">
+				<s:VGroup height="100%" >
+					<evento:buttonBarDefaultEvento id="btnEvento" requireSelection="true" labelField="etiqueta" dataProvider="{arrayBotonesEvento}" height="50" width="300" selectTraingle="true" changing="buttonbardefaultevento1_changingHandler(event)" />
+					<s:VGroup height="100%" gap="5" depth="0">
+						<firstButton:buttonDefaulEvento id="first" color="0xD6933C" label="{firstEvento.valor}" positionSelect="left" holeTriangle="true" height="112" width="300" click="first_clickHandler()"/>
+						<menu:buttonBarDefaultMenuEvento id="btnMenu" requireSelection="true" labelField="valor" dataProvider="{eventoProquifa}" height="{eventoProquifa.length * 113}" width="300" click="btnMenu_changingHandler(event)" />
+					</s:VGroup>
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" id="vgpGridsRegistrados" visible="false" includeInLayout="false">
+					<s:Group width="100%" height="100%" >
+						<s:Group width="100%" height="100%" id="grpPRERegistro">
+							
+							
+							<!--Consulta Pre-Registro-->
+							<grid:AdvancedDataGridDefaultEvento id="gridConsultaPreRegistro" width="100%" height="100%" rowHeightData="50" 
+																sortExpertMode="true" draggableColumns="false" 
+																anchoColumnas="[90,150,21.66%,21.66%,21.66%,20%,15%]" 
+																disableResizableColumns="{[0]}" disableSortableColumns="{[0]}" 
+																>
+								<grid:columns>
+									<mx:AdvancedDataGridColumn headerText="Check In" paddingLeft="20" textAlign="left"  >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%" creationComplete="mxadvanceddatagriditemrenderer1_creationCompleteHandler(event)">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.eventos.evento.EventoEventoProquifa;
+															import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+															import mx.events.FlexEvent;
+															import mx.managers.PopUpManager;
+															
+															import skins.catalogos.catalogoAlertas;
+															import skins.skin.popUpEvento.popupEvento;
+															
+															override public function set data(value:Object):void{
+																super.data = value;
+																if (outerDocument.btnEvento.selectedIndex == 1 ){
+																	check.visible = check.includeInLayout = false;
+																}
+																else{
+																	check.visible = check.includeInLayout = true;
+																}
+															}
+															
+															protected function checkboxcuadradodefaultevento1_clickHandler(event:MouseEvent):void
+															{
+																if (check.selected ){
+																	var evt:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.ESCUCHAR_PARA_POPUP_EVENTO);
+																	evt.identificador = 'gridConsultaPreRegistro';
+																	evt.cadena = 'REGISTRO_EVENTO';
+																	evt.boton = 'Registrar';
+																	outerDocument.dispatchEvent(evt);
+																}
+															}
+															
+															private function quitarPalomita($vent:Event):void
+															{
+																check.selected = false;
+															}
+															
+															protected function mxadvanceddatagriditemrenderer1_creationCompleteHandler(event:FlexEvent):void
+															{
+																outerDocument.addEventListener("QuitaPalomitaCheckBoxEventoProquifa",quitarPalomita,false,0,true);
+															}
+															
+														]]>
+													</fx:Script>
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="center" horizontalAlign="center" paddingLeft="20" paddingRight="10" horizontalCenter="0">
+														<checkbox:checkBoxCuadradoDefaultEvento id="check" click="checkboxcuadradodefaultevento1_clickHandler(event)"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Código" dataField="folioString" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.folioString}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Nombre" dataField="nombre" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.nombre}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Empresa" dataField="empresa" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.empresa}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Puesto" dataField="puesto" fontFamily="MyriadProProqui"  >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.puesto}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Correo" dataField="correo" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.correo}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Teléfono" dataField="telefono" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.telefono}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+								</grid:columns>
+							</grid:AdvancedDataGridDefaultEvento>
+							
+							
+							
+							
+							
+							<!--Editar Pre-Registro-->
+							<grid:AdvancedDataGridDefaultEvento id="gridConsultaPreRegistroEdit"  width="100%" height="100%" rowHeightData="50" 
+																sortExpertMode="true" draggableColumns="false" isFirstGrid="false"
+																anchoColumnas="[90,150,21.66%,21.66%,21.66%,20%,15%]" 
+																disableResizableColumns="{[0]}" disableSortableColumns="{[0]}" 
+																>
+								<grid:columns>
+									<mx:AdvancedDataGridColumn headerText="Check In" paddingLeft="20" textAlign="left" editable="false" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.eventos.evento.EventoEventoProquifa;
+															
+															[Bindable]
+															[Embed (source='skins/imagenes/iconos/etiquetas/borrar.png')]
+															public var palomita:Class;
+															
+															protected function image1_clickHandler(event:MouseEvent):void
+															{
+																/* var evt:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.ESCUCHAR_ELIMINAR_PARA_POPUP_EVENTO);
+																evt.identificador = 'gridConsultaPreRegistroEdit';
+																evt.cadena = 'ELIMINAR_EVENTO';
+																evt.boton = 'Eliminar';
+																outerDocument.dispatchEvent(evt); */
+															}
+															
+														]]>
+													</fx:Script>
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<!--<s:Image source="{palomita}" click="image1_clickHandler(event)"  />-->
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Código" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.folioString}" id="lblHeader" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Nombre" dataField="nombre" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.modelo.evento.Participantes;
+															
+															import spark.events.TextOperationEvent;
+															
+															private var participante:Participantes;
+															protected function txtinputsinbordeevento2_changeHandler(event:TextOperationEvent):void
+															{
+																participante = new Participantes;
+																participante.idRegistro = data.idRegistro;
+																participante.correo = data.correo;
+																participante.empresa = data.empresa;
+																participante.folio = data.folio;
+																participante.puesto = data.puesto;
+																participante.telefono = data.telefono;
+																participante.nombre = txtField.text;
+																outerDocument.almacenarCambiosGrid(participante,'nombre');
+															}
+															
+														]]>
+													</fx:Script>
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" >
+														<txt:txtInputSinBordeEvento id="txtField" width="100%" fontFamily="MyriadProProqui" fontWeight="bold" fontStyle="normal" fontSize="14" text="{data.nombre}" change="txtinputsinbordeevento2_changeHandler(event)" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Empresa" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.modelo.evento.Participantes;
+															import spark.events.TextOperationEvent;
+															
+															private var participante:Participantes;
+															protected function txtinputsinbordeevento2_changeHandler(event:TextOperationEvent):void
+															{
+																participante = new Participantes;
+																participante.idRegistro = data.idRegistro;
+																participante.correo = data.correo;
+																participante.folio = data.folio;
+																participante.nombre = data.nombre;
+																participante.puesto = data.puesto;
+																participante.telefono = data.telefono;
+																participante.empresa = txtField.text;
+																outerDocument.almacenarCambiosGrid(participante,'empresa');
+															}
+															
+														]]>
+													</fx:Script>
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" >
+														<txt:txtInputSinBordeEvento id="txtField" width="100%" fontFamily="MyriadProProqui" fontWeight="bold" fontStyle="normal" fontSize="14" text="{data.empresa}" change="txtinputsinbordeevento2_changeHandler(event)" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+										
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Puesto" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.modelo.evento.Participantes;
+															import spark.events.TextOperationEvent;
+															
+															private var participante:Participantes;													
+															protected function txtinputsinbordeevento2_changeHandler(event:TextOperationEvent):void
+															{
+																participante = new Participantes;
+																participante.idRegistro = data.idRegistro;
+																participante.correo = data.correo;
+																participante.empresa = data.empresa;
+																participante.nombre = data.nombre;
+																participante.folio = data.folio;
+																participante.telefono = data.telefono;
+																participante.puesto = txtField.text;
+																outerDocument.almacenarCambiosGrid(participante,'puesto');
+															}
+															
+														]]>
+													</fx:Script>
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" >
+														<txt:txtInputSinBordeEvento id="txtField" width="100%" fontFamily="MyriadProProqui" fontWeight="bold" fontStyle="normal" fontSize="14" text="{data.puesto}" change="txtinputsinbordeevento2_changeHandler(event)" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Correo" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.modelo.evento.Participantes;
+															import spark.events.TextOperationEvent;
+															
+															private var participante:Participantes;
+															protected function txtinputsinbordeevento2_changeHandler(event:TextOperationEvent):void
+															{
+																participante = new Participantes;
+																participante.idRegistro = data.idRegistro;
+																participante.folio = data.folio;
+																participante.empresa = data.empresa;
+																participante.nombre = data.nombre;
+																participante.puesto = data.puesto;
+																participante.telefono = data.telefono;
+																participante.correo = txtField.text;
+																outerDocument.almacenarCambiosGrid(participante,'correo');
+															}
+															
+														]]>
+													</fx:Script>
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" >
+														<txt:txtInputSinBordeEvento id="txtField" width="100%"  fontFamily="MyriadProProqui" fontWeight="bold" fontStyle="normal" fontSize="14" text="{data.correo}" change="txtinputsinbordeevento2_changeHandler(event)" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Teléfono" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.modelo.evento.Participantes;
+															import spark.events.TextOperationEvent;
+															
+															private var participante:Participantes;
+															protected function txtinputsinbordeevento2_changeHandler(event:TextOperationEvent):void
+															{
+																participante = new Participantes;
+																participante.idRegistro = data.idRegistro;
+																participante.correo = data.correo;
+																participante.empresa = data.empresa;
+																participante.nombre = data.nombre;
+																participante.puesto = data.puesto;
+																participante.folio = data.folio;
+																participante.telefono = txtField.text;
+																outerDocument.almacenarCambiosGrid(participante,'telefono');
+															}
+															
+														]]>
+													</fx:Script>
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" >
+														<txt:txtInputSinBordeEvento id="txtField" width="100%"  fontFamily="MyriadProProqui" fontWeight="bold" fontStyle="normal" fontSize="14" text="{data.telefono}" change="txtinputsinbordeevento2_changeHandler(event)" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+								</grid:columns>
+							</grid:AdvancedDataGridDefaultEvento>
+							
+						</s:Group>
+						
+						
+						
+						<!--Consulta Registro-->
+						<s:Group width="100%" height="100%" id="grpRegistro" >
+							<grid:AdvancedDataGridDefaultEvento id="gridConsultaRegistro" width="100%" height="100%" rowHeightData="50" 
+																sortExpertMode="true" draggableColumns="false" isFirstGrid="false"
+																anchoColumnas="[50,150,21.66%,21.66%,21.66%,20%,15%]" 
+																disableResizableColumns="{[0]}" disableSortableColumns="{[0]}"
+																>
+								<grid:columns>
+									<mx:AdvancedDataGridColumn paddingLeft="20" textAlign="left"  >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															
+															[Bindable]
+															[Embed (source='skins/imagenes/iconos/etiquetas/registroEvento.png')]
+															public var registro:Class;
+															
+														]]>
+													</fx:Script>
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<s:Image source="{registro}" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Código" dataField="folioString" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.folioString}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Nombre" dataField="nombre" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.nombre}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Empresa" dataField="empresa" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.empresa}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Puesto" dataField="puesto" fontFamily="MyriadProProqui"  >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.puesto}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Correo" dataField="correo" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.correo}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Teléfono" dataField="telefono" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.telefono}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+								</grid:columns>
+							</grid:AdvancedDataGridDefaultEvento>
+							
+							
+							
+							<!--Editar Registro-->
+							<grid:AdvancedDataGridDefaultEvento id="gridConsultaRegistroEdit" width="100%" height="100%" rowHeightData="50" 
+																sortExpertMode="true" draggableColumns="false" isFirstGrid="false"
+																anchoColumnas="[50,150,21.66%,21.66%,21.66%,20%,15%]" 
+																disableResizableColumns="{[0]}" disableSortableColumns="{[0]}"
+																>
+								<grid:columns>
+									<mx:AdvancedDataGridColumn paddingLeft="20" textAlign="left"  >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<fx:Script>
+														<![CDATA[
+															import mx.com.proquifa.proquifanet.rsl.vista.eventos.evento.EventoEventoProquifa;
+															
+															[Bindable]
+															[Embed (source='skins/imagenes/iconos/etiquetas/borrar.png')]
+															public var palomita:Class;
+															
+															protected function image2_clickHandler(event:MouseEvent):void
+															{
+																var evt:EventoEventoProquifa = new EventoEventoProquifa(EventoEventoProquifa.ESCUCHAR_PARA_POPUP_EVENTO);
+																evt.identificador = 'gridConsultaRegistroEdit';
+																evt.cadena = 'ELIMINAR_EVENTO';
+																evt.boton = 'Eliminar';
+																outerDocument.dispatchEvent(evt);
+															}
+															
+															override public function set data(value:Object):void{
+																super.data = value;
+																if (outerDocument.btnEvento.selectedIndex == 1 ){
+																	hgpEliminar.visible = hgpEliminar.includeInLayout = false;
+																}
+																else{
+																	hgpEliminar.visible = hgpEliminar.includeInLayout = true;
+																}
+															}
+															
+														]]>
+													</fx:Script>
+													
+													<s:HGroup id="hgpEliminar" width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<s:Image source="{palomita}" click="image2_clickHandler(event)" />
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Código" dataField="folioString" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.folioString}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+									<mx:AdvancedDataGridColumn headerText="Nombre" dataField="nombre" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.nombre}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Empresa" dataField="empresa" fontFamily="MyriadProProqui" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.empresa}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Puesto" dataField="puesto" fontFamily="MyriadProProqui"  >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.puesto}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Correo" dataField="correo" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.correo}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									<mx:AdvancedDataGridColumn headerText="Teléfono" dataField="telefono" >
+										<mx:itemRenderer>
+											<fx:Component>
+												<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+													
+													<s:HGroup width="100%" verticalAlign="middle" textAlign="left" horizontalAlign="left" paddingLeft="20" paddingRight="10">
+														<label:TituloMyriadPro_14 text="{data.telefono}" id="lblHeader" width="100%"/>
+													</s:HGroup>
+												</s:MXAdvancedDataGridItemRenderer>
+											</fx:Component>
+										</mx:itemRenderer>
+									</mx:AdvancedDataGridColumn>
+									
+								</grid:columns>
+							</grid:AdvancedDataGridDefaultEvento>
+							
+						</s:Group>
+					</s:Group>
+				</s:VGroup>
+			
+				<s:VGroup width="100%" height="100%" id="vgpVendedorExpo" gap="0">
+					<header:ContenedorVGroupConHeader width="100%" height="50" />
+					<vendedor:VendedorExpoEventos id="vendedorExpo" width="100%" height="100%" />
+				</s:VGroup>
+				
+			</s:HGroup>
+		</s:VGroup>
+	</s:HGroup>
+	
+</s:VGroup>

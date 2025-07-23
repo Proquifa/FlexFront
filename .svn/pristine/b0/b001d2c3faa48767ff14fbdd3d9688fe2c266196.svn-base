@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:contenedores="skins.skin.contenedores.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:textinput="skins.skin.textinput.*"
+		  width="100%" height="100%"  
+		  creationComplete="init(event)"
+		  >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.comerciales.oferta.EventoCatClientes_Oferta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] public var _proveedores:ArrayCollection;
+			[Bindable] public var _proveedoresResp:ArrayCollection;
+			public var _listaVisual:ArrayCollection = new ArrayCollection();
+			public var _listaPrincipal:ArrayCollection = new ArrayCollection();
+			
+			
+			private function inicia():void
+			{
+				if (lstProveedores.dataProvider!=null)
+					lstProveedores.selectedIndex = 0;
+				
+				if (lstProveedores.selectedItem && lstProveedores.dataProvider.length > 1){
+					var eve:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.ENVIAR_ID_PROVEEDOR_SELECCIONADO);
+					eve.provSeleccionado = lstProveedores.selectedItem;
+					eve.idProveedor = lstProveedores.selectedItem.idProveedor;
+					dispatchEvent( eve);
+				}
+			}
+			
+			
+			public function set recibeProveedores( $proveedores:ArrayCollection):void{
+				var final:Object = new Object();
+				final.nombre = 'ultimo';
+				
+				if (_proveedores && _proveedores.length > 0)
+					final.tamano = _proveedores.length;
+				else
+					final.tamano = 0;
+				
+				if ($proveedores == null || $proveedores.length == 0) {
+					var eve:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.ENVIAR_ID_PROVEEDOR_SELECCIONADO);
+					eve.provSeleccionado = new Proveedor();
+					eve.idProveedor = 0;
+					dispatchEvent( eve);
+					_proveedores = new ArrayCollection();
+					_proveedores.addItem(final);
+					_proveedoresResp = new ArrayCollection();
+					busquedaAsociadas.text='';
+					_listaVisual = new ArrayCollection();
+					_listaPrincipal = new ArrayCollection();
+					return;
+				}
+				
+				busquedaAsociadas.text='';
+				_proveedores = ObjectUtil.copy($proveedores) as ArrayCollection;
+				_proveedoresResp = ObjectUtil.copy($proveedores) as ArrayCollection;
+				_proveedores.addItem(final);
+				inicia();
+				var etiqueta:String = _proveedores.length > 1 ? ' Proveedores':' Proveedor';
+				
+			}
+			
+			/**
+			 * funcion que busca las conincidencias en el universo de contactos segun el texto ingresado al Textinput
+			 */ 
+			private var _sql:Query;
+			public function filtroPorTexto():void{
+				
+				var punteroProveedor:Array = new Array();
+				var nom:String;
+				var parecidos:Array = new Array();
+				var arreTemp:Array = new Array();
+				var arregloTe:ArrayCollection = new ArrayCollection();
+				_listaVisual = new ArrayCollection();
+				_listaPrincipal = new ArrayCollection();
+				var _final:Object = new Object();
+				
+				_listaPrincipal = ObjectUtil.copy( _proveedoresResp ) as ArrayCollection;
+				_sql = new Query(_listaPrincipal,["nombre"],true);
+				punteroProveedor = new Array();
+				nom = StringUtil.trim( busquedaAsociadas.text).toLowerCase();
+				parecidos = _sql.getCampoLikeLowerCase("nombre",nom);
+				
+				if (parecidos.length > 0)
+				{
+					for ( var i:int = 0; i<parecidos.length; i++)
+					{
+						punteroProveedor.push(_sql.getPunteros([parecidos[i],null]));
+					}
+				}
+				
+				//  ---------------------------------- ORDENA Y ELIMINA REPETIDOS  ----------------------------------
+				arreTemp = generateArrayBiToArrayUni(punteroProveedor);
+				arregloTe = _sql.armarLista(StringFunciones.removerDuplicados(arreTemp));
+				
+				_final.nombre = 'ultimo';
+				_final.tamano = arregloTe.length;
+				arregloTe.addItem(_final);
+				lstProveedores.dataProvider = new ArrayCollection(); 
+				this.lstProveedores.dataProvider = ObjectUtil.copy( arregloTe ) as ArrayCollection;
+				var etiqueta:String = _listaVisual.length > 1 ? ' Proveedores':' Proveedor';
+			}
+			
+			
+			private function generateArrayBiToArrayUni($collection:Array):Array
+			{
+				var arreTemp:Array = new Array()
+				for ( var i:int=0;i<$collection.length;i++)
+				{
+					if ($collection[i].length > 1)
+					{
+						for(var j:int=0; j<$collection[i].length; j++)
+						{
+							arreTemp.push($collection[i][j]);
+						}
+					}
+					else
+						arreTemp.push($collection[i][0]);
+				}
+				return arreTemp;
+			}
+			
+			
+			protected function lstProveedores_changingHandler(event:IndexChangeEvent):void
+			{
+				if (lstProveedores.selectedItem && lstProveedores.selectedItem.nombre != 'ultimo'){
+					var itemProveedor:Proveedor = (this.lstProveedores.selectedItem as Proveedor)
+					
+					var eve:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.ENVIAR_ID_PROVEEDOR_SELECCIONADO);
+					eve.provSeleccionado = itemProveedor;
+					eve.idProveedor = itemProveedor.idProveedor;
+					dispatchEvent( eve);
+					
+				}else{
+					event.preventDefault();
+					event.stopImmediatePropagation();
+				}
+			}
+			
+			public function set recibeIdMinMax( $id:Number):void{
+				if ($id > 0)
+					inicia();
+			}
+			
+			protected function list_mouseWheelHandler(event:MouseEvent):void
+			{
+				event.delta = event.delta > 0 ? 5 : -5;
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				lstProveedores.addEventListener(MouseEvent.MOUSE_WHEEL, list_mouseWheelHandler, true);
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<!--<s:layout>
+		<s:VerticalLayout/>
+	</s:layout>-->
+	<s:Group width="100%" height="100%" >
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="#eaeaea"/>
+			</s:fill>
+		</s:Rect>
+		<s:Rect id="fondo" width="100%" height="100%" >
+			<s:filters>
+				<s:DropShadowFilter alpha="1" angle="-180" blurX="9" blurY="1"
+									color="#424242" distance="1" hideObject="false" inner="false"
+									knockout="false" quality="3" strength="1"/>
+			</s:filters>
+			<s:fill>
+				<s:SolidColor color="#eaeaea" />
+			</s:fill>
+		</s:Rect>
+		<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" gap="10">
+			<s:VGroup width="100%" horizontalAlign="center" gap="10">
+				<label:Titulo_16_pTop10 text="PROVEEDORES" backgroundAlpha="0" backgroundColor="#e9e9e9" />
+				<textinput:txtInputBlancoDefaultPQNet id="busquedaAsociadas"  skinClass="skins.textinput.busqueda.skinTextInputBusqueda" width="100%" prompt="Proveedor" fontStyle="normal" change="filtroPorTexto()" enter="filtroPorTexto()" />
+			</s:VGroup>
+			<s:List id="lstProveedores" borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"
+					changing="lstProveedores_changingHandler(event)" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.agenteAduanal.itemRenderer.operativos.CatAgenteIR_Proveedores" 
+					dataProvider="{_proveedores}" useVirtualLayout="true">
+				<s:layout>
+					<s:VerticalLayout gap="0"
+									  horizontalAlign="contentJustify"
+									  useVirtualLayout="true"
+									  requestedRowCount="6" />
+				</s:layout>
+			</s:List>
+		</contenedores:VGroupConPaddingStandardPqNet>
+	</s:Group>
+	
+</s:VGroup>

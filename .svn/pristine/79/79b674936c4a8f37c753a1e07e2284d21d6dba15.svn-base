@@ -1,0 +1,639 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009"
+									  xmlns:s="library://ns.adobe.com/flex/spark" 
+									  xmlns:mx="library://ns.adobe.com/flex/mx"  
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:pqNet1="skins.botones.pqNet.*" 
+									  xmlns:label="skins.skin.label.*"
+									  xmlns:otros="skins.otros.*" 
+									  creationComplete="completeHandler()"
+									  width="100%" height="100%" 
+									  >
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.compras.EventoConsultasCompraNuevo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaAbiertoVSCerrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaAvisoDCambios;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaCompradores;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaEstado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaFabrica;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.ComprasGraficaTipo;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.GraficaComprasETVsFT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.graficosETvsFT.GraficaComprasAbiertasVsCerradas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.graficosETvsFT.GraficaComprasETVsFTSecundaria;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.graficosETvsFT.GraficaComprasEstado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.graficosETvsFT.GraficaComprasMarcas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.graficosETvsFT.GraficaComprasProveedores;
+			import mx.core.IVisualElement;
+			import mx.events.CalendarLayoutChangeEvent;
+			import mx.graphics.SolidColor;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			[Bindable] private var _finicio:String;
+			[Bindable] private var _ffin:String;
+			[Bindable] public var _objetoTotalCompras:EventoConsultasCompraNuevo;
+			[Bindable] private var _imgPiezas:Class;
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgCompras:Class;
+			
+			/**
+			 * variables para llevar el control de las comparativas tienen que estar de manera global para poder actualizar los comparativos
+			 * de diferentes rangos, seleccionados de forma individual
+			 * */
+			private var _montoTotal:Number = 0;
+			private var _piezasTotal:int = 0;
+			private var _compraTotal:int = 0;
+			private var _montoPasado:Number = 0;
+			private var _piezaPasado:int = 0;
+			private var _compraPasado:int = 0;
+			private var _montoPosPasado:Number = 0;
+			private var _piezaPosPasado:int = 0;
+			private var _compraPosPasado:int = 0;
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var graficasIerNivel:ContenedorGraficas = new ContenedorGraficas();
+			private var keys:Object;
+			
+			
+			public function set obtenerListaCompras($compras:ArrayCollection):void
+			{
+				if( $compras == null ){ return;}
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = $compras.source;
+				
+				keys = new Object();
+				var infogrid:Array;
+				infogrid = arrayTemp.filter(quitarDuplicados);
+				
+				gridCompras.dataProvider = new ArrayCollection();
+				var temp:ArrayCollection = new ArrayCollection();
+				
+				for(var i:uint; i<infogrid.length; i++)
+				{
+					temp.addItem(infogrid[i]);
+					temp[i].numFila = i+1;
+				}
+				
+				gridCompras.dataProvider = temp;
+				
+				//Para liberar memoria;
+				arrayTemp = new Array();
+				infogrid =  new Array();
+				
+				if ($compras.length > 0 ){
+					headGrid.btnExportar.enabled = true;
+				}
+				else{
+					headGrid.btnExportar.enabled = false;
+				}
+			}
+			
+			private function quitarDuplicados(item:Compra, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.clave))
+				{
+					return false;
+				}
+				else
+				{
+					keys[item.clave] = item.clave;
+					return true;
+				}
+			}
+			
+			public function set obtenerTotalCompras($infoTotal:ArrayCollection):void
+			{
+				if($infoTotal == null) return;
+				
+				var currentItem:ResumenConsulta;
+				
+				for(var d:int = 0; d<$infoTotal.length ; d++)
+				{
+					currentItem =  $infoTotal[d] as ResumenConsulta;
+					if(currentItem.etiqueta == "Actual")
+					{
+						_montoTotal = currentItem.total;
+						_piezasTotal = currentItem.piezasTotal; 	
+						_compraTotal = currentItem.totalFolios;
+						_finicio = UtilsFecha.formatoFecha_dia_mes_Anio(currentItem.fechaInicio);
+						_ffin = UtilsFecha.formatoFecha_dia_mes_Anio(currentItem.fechaFinal);
+					}
+					else if(currentItem.etiqueta == "Pasado")
+					{
+						_montoPasado = currentItem.total;
+						_piezaPasado = currentItem.piezasTotal;	
+						_compraPasado = currentItem.totalFolios;
+						currentDatePasadoIni  = dtpFInicioPasado.selectedDate = currentItem.fechaInicio;
+						currentDatePasadoFin = dtpFFinPasado.selectedDate = currentItem.fechaFinal;
+					}
+					else if(currentItem.etiqueta == "Postpasado")
+					{
+						_montoPosPasado =  currentItem.total;
+						_piezaPosPasado =  currentItem.piezasTotal;
+						_compraPosPasado =  currentItem.totalFolios;
+						currentDatePostpasadoIni =  dtpFInicioPosPasado.selectedDate = currentItem.fechaInicio;
+						currentDatePostpasadoFin = dtpFFinPosPasado.selectedDate = currentItem.fechaFinal;
+					}
+				}
+				
+				lbMonto.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoTotal);
+				lbMontoPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPasado);
+				lbMontoPosPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPosPasado);
+				lbNumCompras.text = _compraTotal.toString();
+				lbNumComprasPasado.text = _compraPasado.toString();
+				lbNumComprasPosPasado.text = _compraPosPasado.toString();
+				lbNumPiezas.text = _piezasTotal.toString();
+				lbNumPiezasPasado.text = _piezaPasado.toString();
+				lbNumPiezasPosPasado.text = _piezaPosPasado.toString();
+				
+				var _promedioCompras:int = (_compraPasado + _compraPosPasado)/2;
+				var _promedioMonto:Number = (_montoPasado + _montoPosPasado)/2;
+				var _promedioPiezas:Number = (_piezaPasado + _piezaPosPasado)/2;
+				
+				if(_compraTotal > _promedioCompras) 
+					_imgCompras = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				else if(_compraTotal < _promedioCompras) 
+					_imgCompras = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				else if(_compraTotal == _promedioCompras) 
+					_imgCompras = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_montoTotal > _promedioMonto) 
+					_imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				else if(_montoTotal < _promedioMonto) 
+					_imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				else if(_montoTotal == _promedioMonto) 
+					_imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_piezasTotal > _promedioPiezas) 
+					_imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				else if(_piezasTotal < _promedioPiezas) 
+					_imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				else if(_piezasTotal == _promedioPiezas) 
+					_imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			}
+			
+			private function encuentraTotalesXPeriodo():void
+			{
+				//Configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnTotales");
+				eventEspera.tipoEventos.push("OBTENER_TOTALES_PASADO");
+				eventEspera.tipoEventos.push("OBTENER_TOTALES_POSPASADO");
+				dispatchEvent(eventEspera);
+				
+				var event:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_TOTALES_PASADO);
+				event.finicio = this.dtpFInicioPasado.selectedDate;
+				event.ffin = this.dtpFFinPasado.selectedDate;
+				event.idProveedor = _objetoTotalCompras.idProveedor;
+				event.estado = _objetoTotalCompras.estado;
+				event.coloco = _objetoTotalCompras.coloco;
+				event.usuario = _objetoTotalCompras.usuario;
+				event.ordenCompra = _objetoTotalCompras.ordenCompra;
+				event.individual = true;
+				dispatchEvent(event);
+				
+				var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_TOTALES_POSPASADO);
+				evento.finicio = this.dtpFInicioPosPasado.selectedDate;
+				evento.ffin = this.dtpFFinPosPasado.selectedDate;
+				evento.idProveedor = _objetoTotalCompras.idProveedor;
+				evento.estado = _objetoTotalCompras.estado;
+				evento.coloco = _objetoTotalCompras.coloco;
+				evento.usuario = _objetoTotalCompras.usuario;
+				evento.ordenCompra = _objetoTotalCompras.ordenCompra
+				evento.individual = true;
+				dispatchEvent(evento);
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			public function set mostrarOcultarTab(tabGrafica:Boolean):void
+			{
+				imgTab.visible = tabGrafica;
+				if(vistaSelected == _GRAFICAS)
+				{
+					compararVistas();
+				}
+			}
+			[Bindable]
+			public var filtrosConsultaActual:Object = new Object();
+			[Bindable]
+			public var actualizarVistaActual:Boolean=false;
+			private function solicitarInfoGraficas(eve:MouseEvent):void
+			{
+				if(imgTab.visible)
+				{
+					compararVistas();
+					var seleccionarVista:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.SETTEAR_CURRENT_VISTA_SELECTED);
+					
+					//Configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					
+					if( vistaSelected == _TABLA_GRID )
+					{
+						seleccionarVista.selectedVista = _GRAFICAS;
+						
+						if(actualizarVistaActual)
+						{
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnTotales");
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_INFO_GRAFICAS");
+							eventEspera.tipoEventos.push("OBTENER_TOTALES_COMPRAS");
+							dispatchEvent(eventEspera);
+							
+							var evt:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_INFO_GRAFICAS );
+							var event:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_TOTALES_COMPRAS);
+							event.finicio = evt.finicio = filtrosConsultaActual.finicio;
+							event.ffin = evt.ffin = filtrosConsultaActual.ffin;
+							event.idProveedor = evt.idProveedor = filtrosConsultaActual.idProveedor;
+							event.estado = evt.estado = filtrosConsultaActual.estado;
+							event.coloco = evt.coloco = filtrosConsultaActual.coloco;		
+							event.usuario = evt.usuario = filtrosConsultaActual.usuario;
+							event.ordenCompra = evt.ordenCompra = filtrosConsultaActual.ordenCompra;
+							event.individual = false;
+							dispatchEvent(event);
+							dispatchEvent(evt);
+							
+						}
+					}
+					else
+					{
+						seleccionarVista.selectedVista = _TABLA_GRID;
+						if(actualizarVistaActual)
+						{
+							actualizarVistaActual = false;		
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_COMPRAS");
+							dispatchEvent(eventEspera);
+							
+							var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_COMPRAS );
+							evento.finicio = filtrosConsultaActual.finicio;
+							evento.ffin =  filtrosConsultaActual.ffin;
+							evento.idProveedor =  filtrosConsultaActual.idProveedor;
+							evento.estado =  filtrosConsultaActual.estado;
+							evento.coloco =  filtrosConsultaActual.coloco;	
+							evento.usuario = filtrosConsultaActual.usuario;;
+							evento.ordenCompra =  filtrosConsultaActual.ordenCompra;;
+							dispatchEvent(evento); 
+							
+						}
+					}
+					//Para Researt filtros
+					resetControlDeCambiosEnFiltros();
+					dispatchEvent(seleccionarVista);
+				}
+			}
+			
+			
+			protected function completeHandler():void
+			{
+				headGrid.btnExportar.enabled = false;
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				
+				var graficas:ArrayCollection = new ArrayCollection();
+				var graficaEncimada:ArrayCollection = new ArrayCollection();
+				
+				graficas.addItem(new ComprasGraficaProveedores());
+				graficas.addItem(new ComprasGraficaProductos());
+				graficas.addItem(new ComprasGraficaAvisoDCambios());
+				graficas.addItem(new ComprasGraficaTipo());
+				graficas.addItem(new ComprasGraficaCompradores());
+				graficas.addItem(new ComprasGraficaFabrica());
+				graficas.addItem(new ComprasGraficaAbiertoVSCerrado()); 
+				graficas.addItem(new ComprasGraficaEstado());
+				
+				graficaEncimada.addItem(new GraficaComprasETVsFT);
+				
+				graficasIerNivel.insertarGraficas(graficas,graficaEncimada);
+				agregarEspacioTrabajo(graficasIerNivel);
+				
+				var graficas2doNivel:ContenedorGraficas = new ContenedorGraficas();
+				graficas2doNivel.tipoDeBotonBack = "flecha";
+				graficas2doNivel.addEventListener("btnRegresarConsultasGraficasPrincipal",buttonRegresar_clickEventListener,false,0,true);
+				var arrayGraficas:ArrayCollection = new ArrayCollection();
+				
+				arrayGraficas.addItem(new GraficaComprasAbiertasVsCerradas);
+				arrayGraficas.addItem(new GraficaComprasEstado);
+				arrayGraficas.addItem(new GraficaComprasProveedores);
+				arrayGraficas.addItem(new GraficaComprasMarcas);
+				arrayGraficas.addItem(new GraficaComprasETVsFTSecundaria);
+				
+				graficas2doNivel.insertarGraficasInverso(arrayGraficas);
+				espacioSelectedGrafica.addElement( graficas2doNivel );
+				
+				this.addEventListener(EventoConsultasCompraNuevo.MOSTRAR_SELECTED_GRAFICA,muestraOcultaSelectedGafica);
+				
+				//Resetaer
+				resetControlDeCambiosEnFiltros();
+			}
+			
+			
+			private function muestraOcultaSelectedGafica(evt:EventoConsultasCompraNuevo):void
+			{
+				conceptoPie.text = evt.tipo.toUpperCase();
+				
+				if(evt.valorAdicional =="grafETVsFT")
+				{
+					stack.selectedIndex=evt.seleccionarGraficas; 
+					
+					var eventoSetFiltro:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+					eventoSetFiltro.tipo = evt.tipo; 
+					dispatchEvent(eventoSetFiltro); 
+				}
+			}
+			
+			private function buttonRegresar_clickEventListener(event:Event):void
+			{
+				stack.selectedIndex=0;
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void
+			{
+				if(espacio == null)
+				{
+					return;
+				}
+				
+				this.graficos.addItem(espacio);
+				if(graficos.length == 1)
+				{
+					this.espacioGraficas.removeAllElements();
+					this.espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			public function limpiarGrid():void
+			{
+				gridCompras.dataProvider = new ArrayCollection();
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons"))
+				{
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnTotales":
+							{
+								if(btnTotales.isCurrentButtonActualizar)
+								{
+									btnTotales.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}
+								else if(!$actualizarEstadoEspera.isBusy)
+								{
+									btnTotales.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private var currentDatePasadoIni:Date;
+			private var currentDatePasadoFin:Date;
+			private var currentDatePostpasadoIni:Date;
+			private var currentDatePostpasadoFin:Date;
+			protected function fechasPasadas_changeHandler(event:CalendarLayoutChangeEvent):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicioPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoIni.time,"dtpFInicioPasado",btnTotales);break;}
+					case "dtpFFinPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoFin.time,"dtpFFinPasado",btnTotales);	break;}
+					case "dtpFInicioPosPasado":	{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoIni,"dtpFInicioPosPasado",btnTotales);break;}
+					case "dtpFFinPosPasado":{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoFin,"dtpFFinPosPasado",btnTotales);break;}
+				}
+			}
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2)
+				{
+					if(!keyModificados.hasOwnProperty($currentFiltroModif))
+					{
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}
+				else
+				{
+					if(numFiltrosModificados==1)
+					{
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}
+					else
+					{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function headGrid_clickHandler(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("OC");
+				fila[2] = hoja.addItem("Proveedor");
+				fila[3] = hoja.addItem("Colocó");
+				fila[4] = hoja.addItem("Comprador");
+				fila[5] = hoja.addItem("Estado");
+				
+				for(var i:int = 0; i < gridCompras.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = gridCompras.dataProvider[i].numFila;
+					fila[1] = '"' + (gridCompras.dataProvider[i] as Compra).clave + '"';
+					fila[2] = '"' + (gridCompras.dataProvider[i] as Compra).nombreProveedor + '"';
+					fila[3] = '"' + (gridCompras.dataProvider[i] as Compra).colocarDesde + '"';
+					fila[4] = '"' + (gridCompras.dataProvider[i] as Compra).comprador + '"';
+					fila[5] = '"' + (gridCompras.dataProvider[i] as Compra).abierto_cerrado + '"';
+					hoja.addItem('\r' + fila);
+				}
+				file.save(hoja,"ConsultaCompras-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+		<s:VGroup width="100%" height="100%" id="gridConsultaCompras" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<consultas:HeaderParaGridConsultas id="headGrid" mostrarBtnExportar="true" clickExportar="headGrid_clickHandler(event)" />
+			<otros:divisionGruesa width="100%"/>
+			<AdvancedDataGrid:PQNetAdvanceDataGridFooter  id="gridCompras" width="100%" height="100%"  anchoColumnas="{['45','=','30%','=','=','=','=','50']}" tipoDeConsulta="Compras"
+														  disableSortableColumns="{[6]}" disableDragableColumns="{[0,6]}" disableResizableColumns="{[0,6]}">
+				<AdvancedDataGrid:columns>
+					<mx:AdvancedDataGridColumn  headerText="#" dataField="numFila"/>
+					<mx:AdvancedDataGridColumn  headerText="OC" dataField="clave"/>
+					<mx:AdvancedDataGridColumn  headerText="Proveedor" dataField="nombreProveedor"/>
+					<mx:AdvancedDataGridColumn  headerText="Compró" dataField="empresa"/>	
+					<mx:AdvancedDataGridColumn  headerText="Colocó" dataField="colocarDesde"/>							
+					<mx:AdvancedDataGridColumn  headerText="Comprador" dataField="comprador"/>
+					<mx:AdvancedDataGridColumn  headerText="Estado" dataField="abierto_cerrado"/>
+					<mx:AdvancedDataGridColumn  headerText=" ">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.compras.EventoConsultasCompraNuevo;
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											public function verCompra():void{
+												var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.MOSTRAR_DATOS_COMPRA_GENERAL );
+												evento.ordenCompra = (data as Compra).clave;
+												evento.compra = data as Compra;
+												dispatchEvent(evento);
+											}
+										]]>
+									</fx:Script>
+									<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="verCompra()" id="imgInfo" horizontalCenter="0"/>
+								</s:MXAdvancedDataGridItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:AdvancedDataGridColumn>
+				</AdvancedDataGrid:columns>
+			</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+		</s:VGroup>
+	</comun:espacioA>
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas" /> 
+					<s:BorderContainer width="260" height="100%" backgroundColor="#363636" borderVisible="false">
+						<s:Scroller height="100%">
+							<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" >
+								
+								<s:Label width="100%" text="TOTALES" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal" paddingTop="20"/> 
+								<otros:divisionGruesa color="0x{catalogoColores.LABEL_BLANCO}"/>
+								
+								<s:HGroup width="100%" paddingTop="30" paddingBottom="15">
+									<s:Image source="{this._imgMonto}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Monto USD:"  color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbMonto" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbMontoPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbMontoPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15"> <!--paddingBottom="70"-->
+									<s:Image source="{this._imgCompras}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="No. Compras:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="lbNumCompras" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="lbNumComprasPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="lbNumComprasPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15">
+									<s:Image source="{this._imgPiezas}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Total piezas:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbNumPiezas" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbNumPiezasPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbNumPiezasPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								
+								<otros:divisionHueca color="#{catalogoColores.LABEL_NEGRO}"/>
+								<s:Label text="{this._finicio == null ? '' : this._finicio} - {this._ffin == null ? '' : this._ffin}" width="100%" color="0x{catalogoColores.LABEL_BLANCO}" fontSize="14" paddingTop="15" paddingBottom="25" textAlign="center"/>
+								<s:HGroup paddingBottom="30">
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_AZUL_REY}"/>
+												</s:fill>		
+											</s:Ellipse>									
+											<mx:DateField id="dtpFInicioPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+									</s:VGroup>
+								</s:HGroup>
+								
+								<s:HGroup paddingBottom="30" >
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_MORADO_FUERTE}"/>
+												</s:fill>		
+											</s:Ellipse>
+											<mx:DateField id="dtpFInicioPosPasado"  width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPosPasado" width="100" textAlign="center" fontStyle="normal" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}" change="fechasPasadas_changeHandler(event)"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<pqNet1:botonPqNetLargo id="btnTotales"	 width="100%" click="encuentraTotalesXPeriodo()" botonRedondo="true" icono="iconoActualizarNormal"/>
+							</s:VGroup>
+						</s:Scroller>	
+					</s:BorderContainer>				
+				</s:HGroup>
+			</s:VGroup>	
+			<s:VGroup height="100%" width="100%" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" gap="0" paddingTop="28" paddingLeft="10" paddingRight="20">
+				<label:Titulo id="conceptoPie" maxWidth="{this.width}" paddingTop="0" paddingBottom="6"/>
+				<otros:divisionGruesa width="100%"/>
+				<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica"/>
+			</s:VGroup>
+		</pq:MobViewStack>
+	</comun:espacioB>
+</comun:ContenedorComparacionConsultas>

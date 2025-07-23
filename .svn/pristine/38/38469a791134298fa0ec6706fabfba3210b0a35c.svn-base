@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas  
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx" 
+	xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*" 
+	xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+	xmlns:panelCtaGenerales="skins.skin.comun.consultas.panelCtaGenerales.*" 
+	xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+	xmlns:linkButton="skins.skin.linkButton.*" 
+	xmlns:dateField="skins.skin.dateField.*"
+	xmlns:pqNet="skins.botones.pqNet.*" 
+	xmlns:tabla="skins.botones.tabla.*" 
+	xmlns:label="skins.skin.label.*" 
+	xmlns:otros="skins.otros.*" 
+	titulo="CONSULTA COMPRAS"
+	width="100%" height="100%"
+	creationComplete="inicia()" 
+	>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.menu.EventoMenuContinuo;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.compras.EventoConsultasCompraNuevo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.comprasNuevo.componentesGraficas.GraficaXCompraETvsFT;
+			import mx.core.IVisualElement;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			[Bindable]
+			public var _compraSeleccionada:Compra;
+			[Bindable]
+			private var _listaBotones:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:1}, 
+				{valor:'Rápida',llave:0} ] );
+			[Bindable]
+			private var _coloco:ArrayCollection = new ArrayCollection([{valor:"--TODOS--",llave:0},
+				{valor:'Ciudad de México',llave:1},
+				{valor:'Laredo',llave:2}]);
+			public var _currentType:String = new String();
+			private var _currenVista:String = "tablaGrid";
+			
+			public var graficos:ArrayCollection = new ArrayCollection();
+			private var _grafica:ContenedorGraficas = new ContenedorGraficas();
+			
+			private function inicia():void{
+				
+				btnGridToDetalle.addEventListener(MouseEvent.CLICK,btnRegresar_MouseEventClick,false,0,true);
+				
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new GraficaXCompraETvsFT());
+				this._grafica.insertarGraficas(graficas);
+				agregarEspacioTrabajo(_grafica);
+				
+				this.dtpFInicio.text  = UtilsFecha.formatoFecha_dia_mes_Anio( new Date );
+				this.dtpFInicio.selectedDate = new Date();
+				this.dtpFFin.text = UtilsFecha.formatoFecha_dia_mes_Anio( new Date );
+				this.dtpFFin.selectedDate = new Date();
+				this.vstBusqueda.selectedIndex=1;
+				
+				if( DatosGlobales.getInstance()._usuario.nivel == 12 ){
+					cmbProveedor.cargaProveedores( DatosGlobales.getInstance()._usuario.idEmpleado .toString() )
+				}else{
+					cmbProveedor.cargaProveedores('--TODOS--');
+				}
+				var evt:EventoConsultasCompraNuevo= new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.MOSTRAR_OCULTAR_TAB_INFO_GRAFICAS)
+				evt.tabGrafica = true;
+				dispatchEvent(evt);
+				retardo();
+				//========================================================================
+				//Para que se ejecute la busqueda de compras del día actual automáticamente
+				realizarBusquedaInicial();				
+			}
+			
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void{
+				if(espacio == null){
+					return;
+				}
+				this.graficos.addItem(espacio);
+				if(graficos.length == 1){
+					this.espacioSelectedGrafica.removeAllElements();
+					this.espacioSelectedGrafica.addElement(espacio);
+				}
+			}
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+				}
+			}
+			
+			
+			protected function retardo():void{
+				if(cmbProveedor.dataProvider != null && (cmbProveedor.dataProvider as ArrayCollection).length > 1){
+					if( DatosGlobales.getInstance()._usuario.nivel == 12 ){
+						var temporal:ArrayCollection = new ArrayCollection();
+						temporal = ObjectUtil.copy( cmbProveedor.dataProvider ) as ArrayCollection;
+						cmbProveedor.dataProvider  = new ArrayCollection();
+						var todos:CatalogoItem = new CatalogoItem();
+						todos.valor = "--TODOS--"; todos.llave = 0;
+						cmbProveedor.dataProvider.addItem( todos );
+						for( var i:int = 0; i < temporal.length; i++ ){
+							cmbProveedor.dataProvider.addItem( temporal[i] ); 
+						}
+						cmbProveedor.selectedIndex = 0;
+					}
+				}else{
+					setTimeout( retardo, 200 );
+				}
+			} 
+			
+			public function cambiaIndex( $indice:int ):void{
+				
+				this.espacioInfoGenerales.selectedIndex = $indice;
+				
+				if($indice == 1){
+					this.btnGridToDetalle.visible = true;
+					
+					var eventoCompras:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_GRAFICA_X_COMPRAS );
+					if (btnBarra.selectedIndex == 0 ){
+						eventoCompras.finicio = this.dtpFInicio.selectedDate;
+						eventoCompras.ffin = this.dtpFFin.selectedDate;
+						eventoCompras.idProveedor = this.cmbProveedor.selectedItem.llave;
+						eventoCompras.estado = this.cmbEstado.selectedItem.llave;
+						eventoCompras.compro = this.cmbCompro.selectedItem.valor == "--TODOS--" ? "":cmbCompro.selectedItem.valor;
+						if( DatosGlobales.getInstance()._usuario.nivel == 12){
+							eventoCompras.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+						}else{
+							eventoCompras.usuario = 0;
+						}
+					}
+					eventoCompras.ordenCompra = _compraSeleccionada.clave;
+					dispatchEvent(eventoCompras);
+					
+				}
+				else
+					this.btnGridToDetalle.visible = false;
+			}
+			
+			private function btnRegresar_MouseEventClick(e:MouseEvent):void{
+				cambiaIndex(0);
+				var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.CAMBIA_INDICE_MENU);
+				evento.indiceVistas = 0;
+				
+				if( DatosGlobales.getInstance()._usuario.nivel == 12){
+					evento.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				}else{
+					evento.usuario = 0;
+				}
+				dispatchEvent( evento );
+			}
+			
+			
+			public function realizarBusqueda():void{
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				
+				
+				var actualizarVistaCurrent:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.ACTUALIZAR_VISTA_ACTUAL);
+				var settearValores:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.SETTEAR_VALORES_DE_LA_BUSQUEDA_ACTUAL);
+				if(_currenVista == "tablaGrid"){
+					
+					//configurar Espera
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.tipoEventos.push("OBTENER_COMPRAS");
+					dispatchEvent(eventEspera);
+					
+					var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_COMPRAS );
+					settearValores.finicio = evento.finicio = this.dtpFInicio.selectedDate;
+					settearValores.ffin = evento.ffin = this.dtpFFin.selectedDate;
+					settearValores.idProveedor = evento.idProveedor = this.cmbProveedor.selectedItem.llave;
+					settearValores.estado = evento.estado = this.cmbEstado.selectedItem.llave;
+					settearValores.compro = evento.compro = cmbCompro.selectedItem.valor == "--TODOS--" ? "":cmbCompro.selectedItem.valor;
+					if( DatosGlobales.getInstance()._usuario.nivel == 12){
+						settearValores.usuario = evento.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+					}else{
+						settearValores.usuario = evento.usuario = 0;
+					}
+					settearValores.ordenCompra = evento.ordenCompra = "";
+					dispatchEvent(evento); 
+					dispatchEvent(settearValores); 
+					
+					actualizarVistaCurrent.actualizarVistaCurrent = true;
+					
+				}else{
+					
+					//configurar Espera
+					eventEspera.idButtons.push("btnBusqueda");
+					eventEspera.idButtons.push("btnTotales");
+					eventEspera.tipoEventos.push("OBTENER_COMPRAS");
+					eventEspera.tipoEventos.push("OBTENER_INFO_GRAFICAS");
+					eventEspera.tipoEventos.push("OBTENER_TOTALES_COMPRAS");
+					dispatchEvent(eventEspera);
+					
+					var eventoCompras:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_COMPRAS );
+					var evt:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_INFO_GRAFICAS );
+					var event:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_TOTALES_COMPRAS);
+					eventoCompras.finicio = settearValores.finicio = event.finicio = evt.finicio = this.dtpFInicio.selectedDate;
+					eventoCompras.ffin = settearValores.ffin = event.ffin = evt.ffin = this.dtpFFin.selectedDate;
+					eventoCompras.idProveedor = settearValores.idProveedor = event.idProveedor = evt.idProveedor = this.cmbProveedor.selectedItem.llave;
+					eventoCompras.estado = settearValores.estado = event.estado = evt.estado = this.cmbEstado.selectedItem.llave;
+					eventoCompras.compro = settearValores.compro = event.compro = evt.compro = this.cmbCompro.selectedItem.valor == "--TODOS--" ? "":cmbCompro.selectedItem.valor;
+					if( DatosGlobales.getInstance()._usuario.nivel == 12){
+						eventoCompras.usuario = settearValores.usuario = event.usuario = evt.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+					}else{
+						eventoCompras.usuario = settearValores.usuario = event.usuario = evt.usuario = 0;
+					}
+					eventoCompras.ordenCompra = settearValores.ordenCompra = event.ordenCompra = evt.ordenCompra = "";
+					event.individual = false;
+					dispatchEvent(event);
+					dispatchEvent(evt); 
+					dispatchEvent(settearValores); 
+					dispatchEvent(eventoCompras);
+					
+					actualizarVistaCurrent.actualizarVistaCurrent = false;
+				}
+				dispatchEvent(actualizarVistaCurrent);
+				/**
+				 * Es necesario setear el filtro desde esta busqueda porque el servicio que llena el GRID trae también toda la info para las
+				 * gráficas ET y FT
+				 * */
+				var eventoSetFiltro:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+				eventoSetFiltro.tipo =  _currentType;
+				dispatchEvent(eventoSetFiltro);
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = dtpFInicio.selectedDate;
+				currentFFin = dtpFFin.selectedDate;
+				currentProveedor = settearValores.idProveedor;
+				currentColoco= settearValores.coloco
+				currentEstado =settearValores.estado;
+				currentOrdenCompra = settearValores.ordenCompra;
+				
+			} 
+			public function set recibirLaVistaSeleccionada($vista:String):void
+			{
+				if($vista == null) return;
+				_currenVista = $vista;	
+			}
+			private function realizarBusquedaInicial():void{
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("btnBusqueda");
+				eventEspera.tipoEventos.push("OBTENER_COMPRAS");
+				dispatchEvent(eventEspera);
+				
+				var settearValores:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.SETTEAR_VALORES_DE_LA_BUSQUEDA_ACTUAL);
+				var evento:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_COMPRAS );
+				settearValores.finicio = evento.finicio = this.dtpFInicio.selectedDate;
+				settearValores.ffin = evento.ffin = this.dtpFFin.selectedDate;
+				settearValores.idProveedor = evento.idProveedor = 0;
+				settearValores.estado = evento.estado =0;
+				settearValores.compro = evento.compro ="";
+				if( DatosGlobales.getInstance()._usuario.nivel == 12){
+					settearValores.usuario = evento.usuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				}else{
+					settearValores.usuario = evento.usuario = 0;
+				}
+				settearValores.ordenCompra = evento.ordenCompra = "";
+				dispatchEvent(settearValores);
+				dispatchEvent(evento); 
+				
+				var actualizarVistaCurrent:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.ACTUALIZAR_VISTA_ACTUAL);
+				actualizarVistaCurrent.actualizarVistaCurrent = true;
+				dispatchEvent(actualizarVistaCurrent);
+				
+				
+				/**
+				 * Es necesario setear el filtro desde esta busqueda porque el servicio que llena el GRID trae también toda la info para las
+				 * gráficas ET y FT
+				 * */
+				var eventoSetFiltro:EventoConsultasCompraNuevo = new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+				eventoSetFiltro.tipo =  "ET";
+				dispatchEvent(eventoSetFiltro);
+				
+				//Para Researt filtros
+				resetControlDeCambiosEnFiltros();
+				
+				//Para verificar si los datos cambian
+				currentFInicio = dtpFInicio.selectedDate;
+				currentFFin = dtpFFin.selectedDate;
+				currentProveedor = settearValores.idProveedor;
+				currentColoco= settearValores.coloco
+				currentEstado =settearValores.estado;
+				currentOrdenCompra = settearValores.ordenCompra;
+			} 
+			
+			
+			private function realizarBusquedaRapida():void{
+				if( StringUtil.trim(txtBuscaRapida.text).length >0){
+					
+					//configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnBusquedaRapida");
+					eventEspera.tipoEventos.push("OBTENER_COMPRAS");
+					dispatchEvent(eventEspera);
+					
+					var evento:EventoConsultasCompraNuevo= new EventoConsultasCompraNuevo( EventoConsultasCompraNuevo.OBTENER_COMPRAS );
+					evento.ordenCompra = this.txtBuscaRapida.text;
+					currentOrdenCompra = this.txtBuscaRapida.text;
+					dispatchEvent(evento);
+				}else{
+					dispatchEvent(new Event("LimpiarGridConsultaCompras",true));
+					currentOrdenCompra ="";
+				}
+			} 
+			
+			/**
+			 * funcion que cambia el indice del stack en el precio
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if((event.currentTarget as ButtonBar).selectedItem == null){
+					event.preventDefault();					
+				}else{
+					this.vstBusqueda.selectedIndex = event.currentTarget.selectedItem.llave;
+					var evt:EventoConsultasCompraNuevo= new EventoConsultasCompraNuevo(EventoConsultasCompraNuevo.MOSTRAR_OCULTAR_TAB_INFO_GRAFICAS)
+					event.currentTarget.selectedItem.llave == 0 ? evt.tabGrafica = false : evt.tabGrafica = true;
+					dispatchEvent(evt);
+					
+					if(((event.currentTarget as ButtonBar).selectedItem as Object).valor == 'Rápida'){
+						realizarBusquedaRapida();
+					}else{
+						_currenVista = "tablaGrid"
+						realizarBusqueda();
+					}
+				}
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnBusqueda":
+							{
+								if(btnBusqueda.isCurrentButtonActualizar){
+									btnBusqueda.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusqueda.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+							case "btnBusquedaRapida":
+							{
+								if(btnBusquedaRapida.isCurrentButtonActualizar){
+									btnBusquedaRapida.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			
+			private var currentFInicio:Date;
+			private var currentFFin:Date;
+			private var currentProveedor:int;
+			private var currentColoco:int;
+			private var currentEstado:int;
+			private var currentOrdenCompra:String;
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicio":{CompararYControlarBoton(event.newDate.time,currentFInicio.time,"dtpFInicio",btnBusqueda);break;}
+					case "dtpFFin":{CompararYControlarBoton(event.newDate.time,currentFFin.time,"dtpFFin",btnBusqueda);	break;}
+					case "cmbProveedor":	{CompararYControlarBoton(cmbProveedor.selectedItem.llave,currentProveedor,"cmbProveedor",btnBusqueda);break;}
+					case "cmbCompro":{CompararYControlarBoton(cmbCompro.selectedItem.valor,currentColoco,"cmbCompro",btnBusqueda);break;}
+					case "cmbEstado":{CompararYControlarBoton(cmbEstado.selectedItem.llave,currentEstado,"cmbEstado",btnBusqueda);break;}
+				}
+			} 
+			
+			protected function txtBuscaRapida_keyUpHandler(event:KeyboardEvent):void
+			{
+				var tempFolio:String = StringUtil.trim(txtBuscaRapida.text);
+				if(tempFolio.length >0){
+					if(tempFolio != currentOrdenCompra){
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(false);
+					}else{
+						btnBusquedaRapida.CambiarToActualizarTipoBoton(true);
+					}
+				}
+			}
+			
+			private function regresaMenu():void{
+				var evento:EventoMenuContinuo = new EventoMenuContinuo(EventoMenuContinuo.REGRESA_MENU);
+				dispatchEvent( evento );
+			}
+			/**
+			 * muestra el pdf del pedido
+			 */ 
+			private function muestraCompra():void{
+				var _url:URLRequest = new URLRequest();
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.COMPRAS_RUTA + _compraSeleccionada.clave + "-P.pdf";
+				navigateToURL(_url );
+			}
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<pq:MobViewStack width="100%"  id="espacioInfoGenerales" creationPolicy="all" ><!--height="100%"-->
+			<s:NavigatorContent ><!--width="100%" height="100%"-->
+				<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+					<s:VGroup width="100%" gap="0">
+						<s:Spacer height="13"/>
+						<s:ButtonBar changing="seleccionaBoton(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" requireSelection="true" />
+						<s:Spacer height="30"/>
+						<otros:divisionHueca width="100%"/>
+					</s:VGroup>	
+					<pq:MobViewStack width="100%" height="37%" id="vstBusqueda">
+						<s:NavigatorContent >
+							<s:VGroup width="100%" height="100%">
+								<s:Spacer height="15"/>
+								<label:Titulo_w100  text="Orden Compra:" paddingTop="0" />
+								<s:TextInput id="txtBuscaRapida" width="100%" toolTip="# OC" enter="realizarBusquedaRapida()" fontStyle="normal" keyUp="txtBuscaRapida_keyUpHandler(event)"/>
+								<s:Spacer height="15"/>
+								<pqNet:botonPqNetLargo id="btnBusquedaRapida"	width="100%" click="realizarBusquedaRapida()" botonRedondo="true" icono="ojomordor" />
+								<s:Spacer height="15"/>
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:NavigatorContent>
+						<s:NavigatorContent width="100%" height="100%">
+							<s:VGroup width="100%" height="100%" horizontalAlign="center">
+								<s:HGroup width="100%" >
+									<s:VGroup width="50%">
+										<label:Titulo_w100  text="Del" paddingTop="0" />
+										<dateField:DatePickerSpanish id="dtpFInicio" change="filtros_changeEvent(event)"/>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<label:Titulo_w100  text="Al" paddingTop="0" />
+										<dateField:DatePickerSpanish id="dtpFFin" change="filtros_changeEvent(event)"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Proveedor" paddingTop="0" />
+								<comboPqNet:ComboCatalogos id="cmbProveedor"  width="100%" change="filtros_changeEvent(event)"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Compró" paddingTop="0" />
+								<comboPqNet:ComboCatalogos id="cmbCompro" labelField="valor" creationComplete="{cmbCompro.cargaCompro(true,'--TODOS--')}" width="100%" change="filtros_changeEvent(event)"/>
+								<s:Spacer height="1"/>
+								<label:Titulo_w100  text="Estado" paddingTop="0" />
+								<comboPqNet:ComboCatalogos id="cmbEstado" creationComplete="cmbEstado.cargaEstado('--TODOS--')" width="100%" change="filtros_changeEvent(event)"/>
+								<s:Spacer height="15"/>
+								<pqNet:botonPqNetLargo id="btnBusqueda"	width="100%" click="realizarBusqueda()" botonRedondo="true" icono="iconoActualizarNormal"/>
+								<s:Spacer height="15"/>
+								<otros:divisionHueca width="100%"/>
+							</s:VGroup>
+						</s:NavigatorContent>
+					</pq:MobViewStack>
+				</s:VGroup>
+			</s:NavigatorContent>
+			<s:NavigatorContent>
+				<s:VGroup width="100%" height="100%">
+					<panelCtaGenerales:Titulo text="{ this._compraSeleccionada.nombreProveedor }" />
+					<label:Titulo_w100  text="OC:" />
+					<linkButton:LinkButtonPQNet2 id="lnkIdCompra" label="{this._compraSeleccionada.clave }" click="muestraCompra()"/>
+					<label:Titulo_w100  text="Colocó:" />
+					<label:Texto_w100 id="lblColoco" text="{this._compraSeleccionada.colocarDesde}" />
+					<label:Titulo_w100  text="Compró:" />
+					<label:Texto_w100 id="lblCondiciones" text="{this._compraSeleccionada.empresa}" />
+					<label:Titulo_w100  text="Fecha de confirmación:" />
+					<label:FechaYHora id="lblFRecepcion" fecha="{this._compraSeleccionada.fechaConfirmacion}" />
+					<label:Titulo_w100  text="Fecha de colocación:" />
+					<label:FechaYHora id="lblFRegistro" fecha="{this._compraSeleccionada.fecha}" />
+					<label:Titulo_w100  text="Comprador:" />
+					<label:Texto_w100 id="lblComprador" text="{this._compraSeleccionada.comprador}" />
+					<label:Titulo_w100  text="Monto total de compra:" />
+					<label:Texto_w100 id="lblCompra" text="$ { UtilsFormatosNumericos.precisionADosDecimalesConComas(this._compraSeleccionada.montoTotalDolares) + ' USD' }" />
+					<label:Titulo_w100  text="Total de piezas:" />
+					<label:Texto_w100 id="lblParciales" text="{this._compraSeleccionada.totalPiezas}" />
+					<s:Spacer height="15"/>
+					<otros:divisionHueca width="100%"/>
+					<s:HGroup width="100%" horizontalAlign="right">
+						<!--<s:Image id="imgGrid" source="{catalogoIconosBotoneras.getInstance().gridgris}" click="cambiaIndices(0)"
+						mouseOver="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgrisover}"
+						mouseOut="{ this.imgGrid.source = catalogoIconosBotoneras.getInstance().gridgris}"/>-->
+					</s:HGroup>
+					
+					<s:VGroup id="grpSelectedGrafica" height="100%" width="100%" gap="0" >
+						<s:Group height="100%" width="100%">
+							<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica" />
+						</s:Group>	
+					</s:VGroup>
+					
+				</s:VGroup>
+			</s:NavigatorContent>
+		</pq:MobViewStack>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

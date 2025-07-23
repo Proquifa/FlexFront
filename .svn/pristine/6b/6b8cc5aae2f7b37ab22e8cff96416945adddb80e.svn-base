@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Scroller xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			xmlns:combo="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+			xmlns:sinicono="skins.botones.largocolor.sinicono.*" 
+			xmlns:btnAmparar="skins.botones.colores.amparar.*"
+			xmlns:btnOrigen="skins.botones.colores.origen.*" 
+			xmlns:s="library://ns.adobe.com/flex/spark" 
+			xmlns:btnVer="skins.botones.colores.ver.*" 
+			xmlns:mx="library://ns.adobe.com/flex/mx" 
+			xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+			xmlns:graficas="skins.skin.graficas.*"
+			xmlns:btnLargo="skins.botones.largo.*"
+			xmlns:pqNet1="skins.botones.pqNet.*"
+			xmlns:shaders="skins.skin.shaders.*"
+			xmlns:label="skins.skin.label.*" 
+			xmlns:otros="skins.otros.*" 
+			width="100%" height="100%" xmlns:dateField="skins.skin.dateField.*" xmlns:numericStepper="skins.skin.numericStepper.*" xmlns:textinput="skins.skin.textinput.*" xmlns:chekbox="skins.skin.chekbox.*" 
+			>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoDocumentosPendientesAEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPopUpContactos;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.componentes.popUpAutorizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoParaCatalogoService;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoRecibido;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.contacto.BusquedaContactos;
+			import mx.formatters.DateFormatter;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable]
+			private var _contactoSeleccionadoComponenteContacto:Contacto = new Contacto();
+			
+			private var contacto:BusquedaContactos = null;
+			private var autoriza:popUpAutorizacion = new popUpAutorizacion(); //Autorizaciones = new Autorizaciones();
+			[Bindable]	public var _DocumentoR:DocumentoRecibido;
+			
+			public var _rutaPDF:String;
+			[Bindable]
+			private var guardarFecha:String;
+			[Bindable]
+			private var ComboMedio:ArrayCollection = new ArrayCollection([{id:0, medio:"--NINGUNO--"},
+				{id:1, medio:"Mail"},
+				{id:2, medio:"Fax"},
+				{id:3, medio:"Mensajero Interno"},
+				{id:4, medio:"Mensajero Externo"},
+				{id:5, medio:"EV"},
+				{id:6, medio:"Cliente"}]);
+			[Bindable]
+			private var ComboTipo:ArrayCollection = new ArrayCollection([{id:0, tipo:"--NINGUNO--"},
+				{id:1, tipo:"Otros"},
+				{id:2, tipo:"Pago"},
+				{id:3, tipo:"Pedido"},
+				{id:4, tipo:"Requisición"}]);
+			[Bindable]
+			public var file:File = new File();
+			private var pdfByteArray:ByteArray = null;
+			
+			[Bindable]
+			public var _rutaDoc:String;
+			private var date:Date;
+			[Bindable]		 
+			public var _empleados:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var idEmpresa:Number;
+			[Bindable]
+			private var idContacto:Number;
+			private var _valorAnteriorReferencia:String;
+			private var _nombreEmpresa:String;
+			private var habilitadoCliente:Boolean;
+			private var Cliente:Boolean;
+			private var _generarPendiente:Boolean = false;
+			public var _canalizado:Boolean = false;
+			
+			[Bindable]
+			private var fechaOrigen:Date;
+			
+			
+			public function set pendienteHabilitando(Pen:Boolean):void{
+				
+			}
+			
+			public function initia():void{
+				//limpiarCampos();
+				date = new Date();
+				var _tipo:String = '';
+				var evento2:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.OBTENER_EMPLEADOS_DESTINOS_DOCUMENTOS );
+				evento2.valorAdicional = "--NINGUNO--";
+				//dispatchEvent( evento2 );
+				this.dtpFOrigenDoc.enabled = false;
+				//fomartFecha();
+				cmbMedio.dataProvider=ComboMedio;
+				cmbTipo.dataProvider = ComboTipo;
+				if(_DocumentoR.existeReferencia == true){
+					chkHabilitaReferencia.selected = true;
+					txtReferencia.enabled = false;
+				}else{
+					chkHabilitaReferencia.selected = false;
+					txtReferencia.enabled = true;
+				}
+				
+				cmbMedio.selectedIndex = cmbMedio.seleccionarValor((_DocumentoR as DocumentoRecibido).medio,"medio");
+				cmbTipo.selectedIndex = cmbTipo.seleccionarValor((_DocumentoR as DocumentoRecibido).tipo,"tipo");
+				cmbEmpleados.selectedIndex = cmbEmpleados.seleccionarValor((_DocumentoR as DocumentoRecibido).RPor,"valor");
+				
+				
+				/* 				for(var d:int = 0; d<cmbMedio.dataProvider.length ; d++){
+				if(cmbMedio.dataProvider[d].medio == (_DocumentoR as DocumentoRecibido).medio){
+				cmbMedio.selectedIndex = d;
+				}
+				}
+				for(var k:int = 0; k<cmbTipo.dataProvider.length ; k++){
+				if(cmbTipo.dataProvider[k].tipo == (_DocumentoR as DocumentoRecibido).tipo){
+				cmbTipo.selectedIndex = k;
+				}
+				}
+				for(var i:int = 0; i<cmbEmpleados.dataProvider.length ; i++){
+				if(cmbEmpleados.dataProvider[i].valor == (_DocumentoR as DocumentoRecibido).RPor){
+				cmbEmpleados.selectedIndex = i;
+				}
+				} */ 
+				
+				/* cmbMedio.selectedItem = (_DocumentoR as DocumentoRecibido).medio;
+				cmbTipo.selectedItem = (_DocumentoR as DocumentoRecibido).tipo;
+				cmbEmpleados.selectedItem = (_DocumentoR as DocumentoRecibido).RPor; */ 
+				
+				validaReferencia();
+				if(_DocumentoR.numero == "Ninguna")
+					_DocumentoR.numero = "";
+				_nombreEmpresa = _DocumentoR.nombreEmpresa;
+				
+				idContacto = _DocumentoR.idContacto;
+				fechaOrigen = _DocumentoR.fechaOrigen;
+			}
+			/**
+			 *Metodo que recibe a los Empleados del mapa
+			 */
+			public function set empleadosParaCombo(datos:ArrayCollection):void{
+				if(datos == null){
+					return;
+				}
+				this._empleados = datos;
+				cmbEmpleados.dataProvider = _empleados;
+			}
+			
+			private function mostrarDocumento(ruta:String):void
+			{
+				var request:URLRequest = new URLRequest( ruta.indexOf('http') == -1 ? "file://"+ encodeURI(ruta) : ruta);//"file://"+ 
+				navigateToURL(request);
+			}
+			
+			private function cancelar():void{
+				limpiarCampos();
+				//	Evento q escucha DocEntraViewYEdita.mxml en la funcion ejecucion
+				var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.EDICION_DOC);
+				evento.idOpcionSeleccionada = "cancela";
+				dispatchEvent(evento);
+			}
+			public function limpiarCampos():void{
+				this.lblEmpresa.text = "";
+				this.lblContacto.text = "";
+				_nombreEmpresa = "";
+				this.cmbMedio.selectedIndex = 0;
+				this.cmbTipo.selectedIndex = 0;
+				this.txtReferencia.text = "";
+				this.cmbEmpleados.selectedIndex = 0;
+				this._rutaPDF = "";
+				this.dtpFOrigenDoc.text = "";
+				this.boxMontoDls.visible = false;
+				this.boxMontoDls.includeInLayout = false;
+				this.txtMontoDls.text = '00.0';
+				habilitadoCliente = true;
+				cmbTipo.enabled = true;
+				_generarPendiente = false;
+				cmbEmpleados.enabled = true;
+			}
+			private function saveChange():void{
+				abrirAutorizacion(true);
+			}
+			private function abrirAutorizacion(accionValidacion:Boolean):void{
+				
+				var validarMonto:Boolean = true;
+				var bivent:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.MUESTRA_AUTORIZACION);
+				_DocumentoR.nombreEmpresa = lblEmpresa.text;
+				(_DocumentoR as DocumentoRecibido).medio = this.cmbMedio.selectedItem.medio;
+				(_DocumentoR as DocumentoRecibido).docto = this.cmbTipo.selectedItem.tipo;
+				(_DocumentoR as DocumentoRecibido).tipo = this.cmbTipo.selectedItem.tipo;
+				(_DocumentoR as DocumentoRecibido).habilitadoCliente = Cliente;
+				_DocumentoR.existeReferencia = this.chkHabilitaReferencia.selected;
+				_DocumentoR.montoDocumento = parseFloat(txtMontoDls.text);
+				if( this.cmbTipo.selectedItem.tipo == "Pago" || this.cmbTipo.selectedItem.tipo == "Pedido" ){
+					if(this.txtMontoDls.text == "" || Number(this.txtMontoDls.text) <= 0){
+						_DocumentoR.montoDocumento = 0;
+						validarMonto = false;
+					}else{
+						_DocumentoR.montoDocumento = parseFloat( this.txtMontoDls.text );
+					}
+				}
+				_DocumentoR.numero = this.txtReferencia.text;
+				_DocumentoR.RPor = this.cmbEmpleados.selectedItem.valor;
+				_DocumentoR.nombreContacto = lblContacto.text;
+				_DocumentoR.emailContacto = _contactoSeleccionadoComponenteContacto.EMail;
+				_DocumentoR.idContacto = idContacto;
+				_DocumentoR.observaciones = "";
+				_DocumentoR.fechaOrigen = fechaOrigen;
+				if (validarMonto){
+					bivent.documentoRecibido = _DocumentoR;
+					dispatchEvent(bivent);
+					
+				}
+				else{
+					alertaSingleton.show( catalogoAlertas.ADV_montoMayorCero, catalogoAlertas.TIT_ADV_atencion, "");
+				}
+				
+			}
+			private function validaReferencia():void{
+				if(this.txtReferencia.text != "" && this.txtReferencia.text != "Ninguna") _valorAnteriorReferencia = this.txtReferencia.text;
+				this.boxMontoDls.visible = false;
+				this.boxMontoDls.includeInLayout = false;
+				chkHabilitaReferencia.includeInLayout = false;
+				chkHabilitaReferencia.visible = false;
+				chkHabilitaReferencia.selected =false;
+				if( this.cmbTipo.selectedItem.tipo == "Pago" || this.cmbTipo.selectedItem.tipo == "Pedido" ){
+					chkHabilitaReferencia.includeInLayout = true;
+					this.boxMontoDls.visible = true;
+					this.boxMontoDls.includeInLayout = true;
+					this.txtReferencia.enabled = true;
+					this.txtReferencia.text = _valorAnteriorReferencia;
+					chkHabilitaReferencia.visible = true;
+					if(_DocumentoR.existeReferencia == true){
+						chkHabilitaReferencia.selected = true;
+						txtReferencia.enabled = false;
+					}else{
+						chkHabilitaReferencia.selected = false;
+						txtReferencia.enabled = true;
+					}
+				}else if(this.cmbTipo.selectedItem.tipo != "Requisición" && this.cmbTipo.selectedItem.tipo != "Otros" && this.cmbTipo.selectedItem.tipo == "--NINGUNO--"){
+					this.txtReferencia.enabled = true;
+					this.txtReferencia.text = _valorAnteriorReferencia;
+				}else {
+					this.txtReferencia.text = "";
+					this.txtReferencia.enabled = false;
+				}
+			}
+			/**
+			 * Recibe la inyeccion q trae todos los datos de la llamada GUARDADA
+			 */
+			public function set recibeDocumentosModificado ( datos:Boolean ):void{
+				if(datos == false){
+					return;
+				}
+				var evt:EventoPopUpContactos = new EventoPopUpContactos( EventoPopUpContactos.CARAGAR_CONTACTOS );
+				dispatchEvent( evt ); 
+				if(datos == true){					
+					if(this.pdfByteArray != null ){
+						var evento:EventoGenerico = new EventoGenerico( EventoGenerico.SUBIR_DOCUMENTO_PDF );
+						evento.bytes = this.pdfByteArray;
+						evento.tipoArchivo = "documentorecibido";
+						evento.folioDocumento = this._DocumentoR.folio.toString();
+						dispatchEvent( evento );
+						
+					}
+					if(_generarPendiente){
+						var pend:EventoPendientesPorEnviar = new EventoPendientesPorEnviar(EventoPendientesPorEnviar.CREAR_PENDIENTE_HABILITAR_CLIENTE);
+						pend.folio =  this._DocumentoR.folio.toString();
+						dispatchEvent(pend);
+					}
+					//Alert.show("Documento modificado", "Operación exitosa");					
+					this.limpiarCampos();
+					this.pdfByteArray = null;
+					//								RELLENAR GRID DOC RECIBIDOS
+					var eventt:EventoDocumentosPendientesAEnviar = new EventoDocumentosPendientesAEnviar(EventoDocumentosPendientesAEnviar.LIMPIA_GRID_DOC_RECIB);
+					eventt.idOpcionSeleccionada = "LIMPIA";
+					dispatchEvent(eventt);
+					_canalizado = true;
+				}
+			}
+			private function consultaContactos():void{ 
+				/*  var evt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.HAS_VISIBLE_POPUP_CONTACTOS);
+				evt.asociar = true;
+				evt.consulta = "cliente";
+				evt.vieneD = "stageEditDoc";
+				dispatchEvent(evt);  */
+				var evt:EventoPopUpContactos = new EventoPopUpContactos(EventoPopUpContactos.MUESTRA_POP_UP);
+				evt.vieneDE_PopUp = 'stageEditDoc';
+				evt.canalizado = _canalizado;
+				dispatchEvent( evt );
+				if (_canalizado){
+					_canalizado = false;
+				}
+			}
+			/**
+			 * Recibe la inyeccion q trae todos al Vendedor buscado por la empresa
+			 */
+			public function set recibeVendedorDeLaEmpresa( datos:CatalogoItem ):void{
+				if(datos.llave.toString() == "NaN"){
+					return;
+				}
+				this.cmbEmpleados.selectedIndex = Util.indiceSeleccionado( this.cmbEmpleados.dataProvider as ArrayCollection,  datos.llave );
+			}
+			/**
+			 * Recibe la inyeccion q confirma que el documento se subio correctamente
+			 */
+			public function set recibeDocumentosGuardadasUP ( datos:Boolean ):void{
+				if(datos == false){
+					return;
+				}
+				if(datos == true){
+					this.pdfByteArray = null;					
+					//Alert.show("El documento se subio correctamente al servidor", "Aviso");
+				}
+			}	
+			public function browseFileSystem():void {
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				var docFilter:FileFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter]);
+			}
+			
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				/*  Alert.show((file.data is ByteArray).toString()); */ 
+				this.pdfByteArray = this.file.data;
+				this._rutaDoc = file.nativePath;
+				this.lblAmpa.text = file.nativePath;
+				this._rutaPDF = this._rutaDoc;
+				mostrarDocumento(this._rutaPDF);
+			}
+			private function formatRender(value:Number):String {
+				var time:String = Number(value).toString();
+				if (time.length==1) {
+					time = "0" + time;
+				}
+				return time;
+			}
+			private function fomartFecha():void{
+				var formatoFecha:DateFormatter = new DateFormatter();
+				formatoFecha.formatString = "DD/MMM/YYYY";
+				this.dtpFOrigenDoc.text = formatoFecha.format( this.dtpFOrigenDoc.selectedDate );
+			}
+			
+			
+			/**
+			 * para recibir el contacto seleccionado del mapa MapaPopUp.mxml
+			 */
+			public function set contactoSeleccionado(conta:Contacto):void{
+				//[seleccion] y [vieneD] en ModeloPopUp en metodo setContactoSeleccionado
+				this.cmbEmpleados.enabled = true;
+				if(conta != null){
+					this._contactoSeleccionadoComponenteContacto = conta;
+					Cliente = conta.estadoCliente;
+					if (conta.estadoCliente == false && conta.titulo != "nuevoContacto"){
+						_generarPendiente = true;
+						cmbEmpleados.enabled = true;
+						cmbTipo.enabled = true;
+						cmbTipo.selectedIndex = 4;
+						habilitadoCliente = false;
+					}else{
+						habilitadoCliente = true;
+						cmbTipo.enabled = true;
+						_generarPendiente = false;
+					}
+					lblEmpresa.text = (_contactoSeleccionadoComponenteContacto as Contacto).empresa;//(conta.seleccion[0] as Contacto).empresa; //contacto.empresaSelect;
+					lblContacto.text = this._contactoSeleccionadoComponenteContacto.nombre;
+					idContacto = this._contactoSeleccionadoComponenteContacto.idContacto;
+					var eventoC:EventoParaCatalogoService = null;		   		
+					eventoC = new EventoParaCatalogoService( EventoParaCatalogoService.OBTENER_EMPLEADOS_POR_EMPRESA );
+					eventoC.nombreEmpresa = (_contactoSeleccionadoComponenteContacto as Contacto).fk02_Cliente == null ? (_contactoSeleccionadoComponenteContacto as Contacto).idEmpresa.toString() : (_contactoSeleccionadoComponenteContacto as Contacto).fk02_Cliente ;//contacto.empresaSelect;
+					dispatchEvent( eventoC );
+				}
+			}  
+			
+			/**
+			 * para recibir el cliente y contacto seleccionado del mapa MapaPopUp.mxml
+			 */
+			public function set contactoSeleccionadoConCLiente( conta:Contacto ):void{
+				if(conta != null){
+					this._contactoSeleccionadoComponenteContacto = conta;
+					lblEmpresa.text = (_contactoSeleccionadoComponenteContacto as Contacto).empresa;//(conta.seleccion[0] as Contacto).empresa; //contacto.empresaSelect;
+					lblContacto.text = this._contactoSeleccionadoComponenteContacto.nombre;
+					idContacto = this._contactoSeleccionadoComponenteContacto.idContacto;
+					cmbEmpleados.selectedIndex = 0;
+					this.cmbEmpleados.enabled = true;
+				}else{
+					this.cmbEmpleados.enabled = true;
+				}
+			}
+			protected function chkHabilitaReferencia_changeHandler(event:Event):void
+			{
+				if( chkHabilitaReferencia.selected ){
+					this.txtReferencia.text = "";
+					this.txtReferencia.enabled = false;
+				}else{
+					this.txtReferencia.enabled = true;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:Group width="100%" height="100%" >	
+		<s:filters>
+			<shaders:sombraBevelFilter direccion="right"/>
+			<shaders:sombraBevelFilter direccion="left"/>
+		</s:filters>
+		<s:Rect height="100%" width="100%">
+			<s:fill>
+				<s:SolidColor color="0xF3F3F3"/>
+			</s:fill>
+		</s:Rect>
+		
+		<s:Scroller width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" horizontalAlign="center" paddingLeft="20" paddingRight="20" >
+				<label:TituloBankGothic_24 text="{_DocumentoR.folio}" width="100%" textAlign="center" id="lblTitulo" paddingTop="30" paddingBottom="25"/>
+				<otros:divisionHueca width="100%"/>
+				<s:HGroup width="100%" horizontalAlign="center" paddingBottom="15" paddingTop="15">
+					<btnAmparar:botonAmparar id="btnAmparo" width="100%" click="this.browseFileSystem()" />
+					<btnVer:botonVer id="btnVerAmparo0" click="mostrarDocumento(this._rutaPDF)" width="100%" />
+					<s:Label id="lblAmpa" width="0" height="0" visible="false" includeInLayout="false"/>
+				</s:HGroup>
+				<s:HGroup width="100%" horizontalAlign="center" paddingBottom="15">
+					<btnOrigen:botonOrigen click="consultaContactos()" width="100%"/>
+				</s:HGroup>
+				<otros:divisionHueca width="100%"/>
+				<s:VGroup width="100%" height="130" horizontalAlign="center" verticalAlign="middle">
+					<label:Titulo_16_pTop10 id="lblEmpresa" textAlign="center" text="{_DocumentoR.nombreEmpresa}" paddingTop="0"/>
+					<!--<s:Label id="lblEmpresa" fontSize="18" fontWeight="bold" textAlign="center" text="{_DocumentoR.nombreEmpresa}"/>-->
+					<label:Titulo_16_pTop10 id="lblContacto" textAlign="center" text="{_DocumentoR.nombreContacto}" paddingTop="0"/>
+					<!--<s:Label id="lblContacto" fontSize="18" fontWeight="bold" textAlign="center" text="{_DocumentoR.nombreContacto}"/>-->
+				</s:VGroup>
+				
+				<!--<s:Label id="lblEmpresa" width="100%" fontSize="18" text="{_DocumentoR.nombreEmpresa}\n{_DocumentoR.nombreContacto}" textAlign="center" paddingTop="30" paddingBottom="30"/>-->
+				<otros:divisionHueca width="100%"/>
+				
+				<s:HGroup width="100%" paddingBottom="15" paddingTop="15" >
+					<s:VGroup width="100%">
+						<label:Titulo_12 text="Fecha de Origen:" width="100%" paddingTop="0" fontWeight="bold"/>
+						<!--<s:Label width="100%" paddingLeft="0" text="Fecha de Origen:" fontSize="10" fontWeight="bold"/>-->
+						<!--<mx:DateField width="150" id="dtpFOrigenDoc" selectedDate="{_DocumentoR.fechaOrigen}" fontStyle="normal"/>-->
+						<dateField:DatePickerSpanish id="dtpFOrigenDoc"  width="150" selectedDate="{_DocumentoR.fechaOrigen}" formatString="DD/MM/YYYY"  />
+					</s:VGroup>
+					<s:Spacer width="50%"/>
+					<s:VGroup width="100%">
+						<!--<s:Label width="100%" paddingLeft="0" text="Hrs." fontSize="10" fontWeight="bold"/>-->
+						<label:Titulo_12 text="Hrs." width="100%" paddingTop="0" fontWeight="bold"/>
+						<s:NumericStepper id="horaSelect" minimum="0" maximum="23" stepSize="1" value="{this._DocumentoR.fechaOrigen.hours}" valueFormatFunction="formatRender" enabled="false" fontStyle="normal"/>
+					</s:VGroup>		
+					<label:Titulo_12 text=":" height="100%" verticalAlign="bottom" paddingBottom="5" fontWeight="bold"/>
+					<s:VGroup width="100%" >
+						<!--<s:Label width="100%" paddingLeft="0" text="Min." fontSize="10" fontWeight="bold"/>-->
+						<label:Titulo_12 text="Min." width="100%" paddingTop="0" fontWeight="bold"/>
+						<s:NumericStepper id="minuteSelect" minimum="0" maximum="59" stepSize="1" value="{this._DocumentoR.fechaOrigen.minutes}" valueFormatFunction="formatRender" enabled="false" fontStyle="normal"/>
+					</s:VGroup>
+				</s:HGroup>
+				<otros:divisionHueca width="100%"/>
+				<s:VGroup width="100%" paddingBottom="15" paddingTop="15" gap="10">
+					<s:VGroup width="100%">
+						<label:Titulo_12 text="Tipo:"  fontWeight="bold" paddingTop="0" />
+						<!--<s:Label width="100%" height="100%" text="Tipo" fontSize="10" fontWeight="bold" textAlign="left" verticalAlign="middle"/>-->
+						<combo:ComboCatalogos id="cmbTipo" width="100%" change="validaReferencia();" dataProvider="{this.ComboTipo}" labelField="tipo"/>
+						<!--<s:ComboBox id="cmbTipo" width="100%" change="validaReferencia();" dataProvider="{this.ComboTipo}" labelField="tipo"/>-->
+						
+					</s:VGroup>
+					<s:VGroup width="100%" >
+						<label:Titulo_12 text="#REF:" fontWeight="bold" paddingTop="10"/>
+						<!--<s:Label height="100%" text="#REF" fontSize="10" fontWeight="bold" textAlign="right" verticalAlign="middle"/>-->
+						<s:HGroup width="100%">
+							<textinput:txtInputBlancoDefaultPQNet id="txtReferencia"  text="{_DocumentoR.numero}" width="100%"/>
+							<!--			<s:CheckBox  label="Sin Referencia" layoutDirection="rtl" change="chkHabilitaReferencia_changeHandler(event)" id="chkHabilitaReferencia" 
+							includeInLayout="{_DocumentoR.tipo == 'Pedido' || _DocumentoR.tipo == 'Pago' ? true : false }"
+							visible="{_DocumentoR.tipo == 'Pedido' || _DocumentoR.tipo == 'Pago' ? true : false }" />-->
+							
+							<chekbox:CheckRadioDefaultPQNet label="Sin Referencia" layoutDirection="rtl" change="chkHabilitaReferencia_changeHandler(event)" id="chkHabilitaReferencia" 
+															tipoCheck="cuadrado" verticalCenter="1" height="100%" fontSize="9"/>
+							
+							
+							
+						</s:HGroup>
+					</s:VGroup>
+					<s:VGroup width="100%" id="boxMontoDls" visible="{_DocumentoR.tipo == 'Pedido' || _DocumentoR.tipo == 'Pago' ? true : false }"
+							  includeInLayout="{_DocumentoR.tipo == 'Pedido' || _DocumentoR.tipo == 'Pago' ? true : false}" verticalAlign="middle">
+						<!--<s:Label width="100%" height="100%" text="Monto (USD)"  fontSize="10" fontWeight="bold" textAlign="left" />-->
+						<label:Titulo_12  text="Monto: (USD)"  fontWeight="bold"  paddingTop="10" />
+						<textinput:txtInputBlancoDefaultPQNet id="txtMontoDls"  restrict="0-9." text="{UtilsFormatosNumericos.precisionADosDecimales(  _DocumentoR.montoDocumento )}" width="100%"/>
+					</s:VGroup>
+					<s:VGroup width="100%">
+						<!--<s:Label width="100%" height="100%" text="Medio"  fontSize="10" fontWeight="bold" textAlign="left" verticalAlign="middle"/>-->
+						<label:Titulo_12  text="Medio:"  fontWeight="bold"  paddingTop="10"/>
+						<combo:ComboCatalogos id="cmbMedio" width="100%"  labelField="medio"/>
+						<!--<s:ComboBox id="cmbMedio" width="100%" dataProvider="{this.ComboMedio}" labelField="medio" /> -->
+					</s:VGroup>
+					<s:VGroup width="100%">
+						<label:Titulo_12  text="Destino:" fontWeight="bold"  paddingTop="10"/>
+						<!--<s:Label width="100%" height="100%" text="Destino" fontSize="10" fontWeight="bold" textAlign="left" verticalAlign="middle" />-->
+						<combo:ComboCatalogos id="cmbEmpleados" width="100%" labelField="valor" paddingLeft="10"/>
+					</s:VGroup>
+				</s:VGroup>
+				<otros:divisionHueca width="100%"/>
+				<s:HGroup width="100%" horizontalAlign="center" paddingTop="15">
+					<pqNet1:botonPqNetLargo colorBase="c71212" label="CANCELAR" width="100%" click="cancelar()"/>
+					<pqNet1:botonPqNetLargo id="btnGuarMod" icono="guardar" width="100%" label="GUARDAR" click="saveChange()"/>
+				</s:HGroup>
+			</s:VGroup>			
+		</s:Scroller>	
+		
+	</s:Group>	
+</s:Scroller>

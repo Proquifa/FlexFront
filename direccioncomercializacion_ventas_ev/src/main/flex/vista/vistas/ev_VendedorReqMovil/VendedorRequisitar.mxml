@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" gap="15"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" xmlns:otros="skins.otros.*"  xmlns:textarea="skins.skin.textarea.*" xmlns:pqNet1="skins.skin.datagrid.pqNet.*"
+		 xmlns:textoBorde="skins.skin.textInputBordeadopPQNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.PRequisicion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.Requisicion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			import vista.evento.EventoEVReqMovil;
+			import vista.vistas.popUp.VendedorAgregaPartidaRequisicionPopUp;
+			[Bindable]
+			public var _contactoCliente:Contacto;
+			
+			[Bindable]
+			public var objeto:Object;
+			
+			private var _popUpPartida:VendedorAgregaPartidaRequisicionPopUp = null;
+			
+			[Bindable]
+			public var _listaRequisiciones:ArrayCollection = new ArrayCollection(); 
+			
+			private var _totalImporte:Number = 0;
+			
+			public function inicia( $contacto:Contacto):void{
+				_contactoCliente = new Contacto();
+				_contactoCliente = $contacto;
+				this.addEventListener( ResizeEvent.RESIZE, acomodaPopUp );
+				this.addEventListener( ResizeEvent.RESIZE, acomodaVentana );
+				this.txtComentarios.prompt = 'Registra aquí comentarios adicionales para tu requisición.';
+			}
+			private function acomodaPopUp( evt:Event ):void{
+				if( _popUpPartida != null ){
+					setTimeout(retraso, 500);
+				}
+			}
+			private function retraso():void{
+				_popUpPartida.x = ( this.stage.width / 2 ) - 190;
+				if( this.stage.height <= 1100){
+					_popUpPartida.y = 70 ;
+				}else{
+					_popUpPartida.y = ( this.stage.height / 2 ) - 300;
+				}
+			}
+			private function acomodaVentana( evt:Event ):void{
+				if( _popUpPartida != null ){
+					setTimeout(retraso2, 500);
+				}
+			}
+			private function retraso2():void{
+				this.percentWidth = 100;
+				
+			}
+			protected function botonpqnetlargo1_clickHandler():void{
+				/* limpiar(); */
+				var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.MUESTRA_VISTA );
+				evt.ubicacion = '_compBusquedaCliente';
+				dispatchEvent( evt );
+			}
+			
+			private function limpiar():void{
+				this.txtComentarios.text = '';
+				btnEnviar.enabled = false;
+				_listaRequisiciones = new ArrayCollection;
+				grdRequisicion.dataProvider = new ArrayCollection();
+				grdRequisicion.dataProvider = ObjectUtil.copy( _listaRequisiciones ) as ArrayCollection;
+			}
+			
+			public function cargaPopUPRequisitarPartida( $accion:String ):void{
+				if( this._popUpPartida == null ){
+					_popUpPartida = VendedorAgregaPartidaRequisicionPopUp( PopUpManager.createPopUp( this, VendedorAgregaPartidaRequisicionPopUp, true ) );
+					_popUpPartida.addEventListener( EventoEVReqMovil.CANCELA_PARTIDA_REQUISICION, cierraPopUP );
+					_popUpPartida.addEventListener( EventoEVReqMovil.RECIBE_PARTIDA_REQUISICION, guardaPartida );
+					_popUpPartida.addEventListener( EventoEVReqMovil.EDITA_PARTIDA_REQUISICION, editaPartida );
+				}else{	
+					PopUpManager.addPopUp( _popUpPartida, this, true);
+				}
+				if( $accion == 'crea'){
+					_popUpPartida.inicia();
+				}else{
+					_popUpPartida.edita( this.grdRequisicion.selectedItem as PRequisicion ); 
+				}
+				_popUpPartida.x = ( this.stage.width / 2 ) - 190;
+				_popUpPartida.y = ( this.stage.height / 2 ) - 300;
+			}
+			private function guardaPartida( $evt:EventoEVReqMovil ):void{
+				btnEnviar.enabled = true;
+				if( _listaRequisiciones!= null && _listaRequisiciones.length > 0 ){ 
+					_listaRequisiciones.removeItemAt( _listaRequisiciones.length - 1 );
+				}
+				( $evt.partidaReq as PRequisicion ).numFila = _listaRequisiciones.length + 1;
+				_listaRequisiciones.addItem( $evt.partidaReq );
+				calculaTotales();
+			}
+			private function calculaTotales():void{
+				var totalPiezas:int = 0;
+				var totalDolares:Number = 0;
+				objeto = new Object();
+				objeto.finArray = "0 partidas · 0 pzs · $0 dls (estimados)";
+				for(var i:int = 0; i < _listaRequisiciones.length; i++ ){
+					totalPiezas = totalPiezas + ( _listaRequisiciones[i] as PRequisicion ).piezasACotizar;
+					totalDolares = totalDolares + (( _listaRequisiciones[i] as PRequisicion ).piezasACotizar * ( _listaRequisiciones[i] as PRequisicion ).precioU);
+				}
+				if (_listaRequisiciones.length > 0 ){
+					objeto.finArray = "";
+					_listaRequisiciones.length  == 1 ? objeto.finArray = _listaRequisiciones.length + ' Partida · ' : objeto.finArray =  objeto.finArray = _listaRequisiciones.length + ' Partidas · ';
+					totalPiezas == 1 ? objeto.finArray= objeto.finArray + totalPiezas + ' Pza · $' : objeto.finArray = objeto.finArray + totalPiezas + ' Pzas · $';
+					totalDolares == 1 ? objeto.finArray = objeto.finArray + totalDolares +' Dolar (estimado)' : objeto.finArray =  objeto.finArray + totalDolares +' Dolares (estimado)' ;
+				}
+				_listaRequisiciones.addItem( objeto );
+				grdRequisicion.dataProvider = new ArrayCollection();
+				grdRequisicion.dataProvider = ObjectUtil.copy( _listaRequisiciones ) as ArrayCollection;
+				if( _listaRequisiciones.length > 1 ){
+					btnEnviar.enabled = true;
+				}else{
+					btnEnviar.enabled = false;
+				}
+				_totalImporte = totalDolares;
+			}
+			private function editaPartida( $evt:EventoEVReqMovil ):void{
+				if( _listaRequisiciones!= null && _listaRequisiciones.length > 1 ){ 
+					_listaRequisiciones.removeItemAt( _listaRequisiciones.length - 1 );
+				}
+				for(var i:int = 0; i < _listaRequisiciones.length; i++ ){
+					if( ( _listaRequisiciones[i] as PRequisicion ).numFila == $evt.partidaReq.numFila ){
+						_listaRequisiciones[i] = $evt.partidaReq;
+						i = _listaRequisiciones.length;
+					}
+				}
+				calculaTotales();
+			}
+			public function eliminaPartida():void{
+				if( _listaRequisiciones!= null && _listaRequisiciones.length > 1 ){ 
+					_listaRequisiciones.removeItemAt( _listaRequisiciones.length - 1 );
+				}
+				if(_listaRequisiciones != null && _listaRequisiciones.length > 0){
+					var seElimino:Boolean = false;
+					for(var i:int = 0; i < _listaRequisiciones.length; i++ ){
+						( _listaRequisiciones[i] as PRequisicion ).numFila = i + 1;
+						if( ( _listaRequisiciones[i] as PRequisicion ).numFila == ( grdRequisicion.selectedItem as PRequisicion ).numFila && !seElimino ){
+							_listaRequisiciones.removeItemAt( i );
+							seElimino = true;
+							i--;
+						}
+					}
+				}
+			calculaTotales();
+			}
+			private function cierraPopUP($evt:EventoEVReqMovil ):void{
+				PopUpManager.removePopUp( _popUpPartida );
+			}
+			
+			private var _soloUnaVez:Boolean;
+			
+			private function warningGuardar():void{
+				
+				if( _contactoCliente.direccion == null || isNaN(_contactoCliente.direccion.idLugar) || _contactoCliente.direccion.idLugar == 0){
+					alertaSingleton.show('Es necesario que el contacto este asociado a una dirección', catalogoAlertas.TIT_ADV_operacionImposible );
+					return;
+				}
+				_soloUnaVez = true;
+				alertaSingleton.show( 'Se va a generar la Requisición \n ¿Aceptar?' ,catalogoAlertas.TIT_ADV_atencion,'EVGeneraFactura','','','SI','NO')
+			}
+			
+			public function set recibeDelAlert( $dato:ResultAlert ):void{
+				if( $dato == null || $dato.vieneD == null ){
+					return;
+				}
+				if( _soloUnaVez ){
+					if( $dato.vieneD == "EVGeneraFactura" && $dato.botonSeleccionado == "SI"){
+						var evt:EventoEVReqMovil = new EventoEVReqMovil( EventoEVReqMovil.GENERA_REQUISICION );
+						evt.requisicion = new Requisicion();
+						evt.requisicion.importe = _totalImporte;
+						evt.requisicion.idCliente = _contactoCliente.idEmpresa;
+						evt.requisicion.nombreEsac = _contactoCliente.nombreEsac;
+						evt.requisicion.idEmpleadoEsac = _contactoCliente.idEmpleadoEsac;
+						evt.requisicion.idEmpleadoEv = DatosGlobales.getInstance()._usuario.idEmpleado;
+						evt.requisicion.nombreEmpleadoEv = DatosGlobales.getInstance()._usuario.usuario;
+						evt.requisicion.nombreContacto = _contactoCliente.nombre;
+						evt.requisicion.idContacto = _contactoCliente.idContacto;
+						evt.requisicion.fecha = new Date();
+						evt.requisicion.comentarios = this.txtComentarios.text;
+						evt.requisicion.nombreCliente = _contactoCliente.empresa;
+						evt.nuevoContacto = new Contacto();
+						evt.nuevoContacto  = _contactoCliente;
+						evt.nuevoContacto.tipo  = "Clientes";
+						evt.nuevoContacto.habilitado  = true;
+						evt.listaPRequisicion = new ArrayCollection();
+						evt.listaPRequisicion = ObjectUtil.copy( _listaRequisiciones ) as ArrayCollection;
+						evt.listaPRequisicion.removeItemAt( evt.listaPRequisicion.length -1 );
+						dispatchEvent( evt );
+						_soloUnaVez = false;
+					}
+				}
+				
+			}
+			public function set confirmaRequisicion( $dato:String ):void{
+				if($dato == null){
+					return;
+				}
+				
+				limpiar();
+				this.txtComentarios.prompt = 'Registra aquí comentarios adicionales para tu requisición.';
+				var rutaUrl:URLRequest = new URLRequest();
+				var path:Object = Util.rutaFecha(new Date());
+				rutaUrl.url = RutasPdF.GENERAL_RUTA +RutasPdF.DOCTOSR_RUTA + path.ruta + $dato + '.pdf';
+				navigateToURL( rutaUrl );
+			}
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" verticalAlign="middle" >
+		<label:labelSubtitulo fontSize="19" color="0x{catalogoColores.LABEL_CASI_NEGRO}" width="100%"
+				text="{ _contactoCliente.nombre + ' · ' + _contactoCliente.departamento + ' · '+ _contactoCliente.empresa }"/>
+		
+		<pqNet:botonPqNetLargo icono="agregar"  colorBase="0x2e99b4" gradientePqnet="true" click="cargaPopUPRequisitarPartida('crea')"/>
+	</s:HGroup>
+	<otros:division width="100%"/>	
+	
+	<pqNet1:advancedGridPqNet id="grdRequisicion" width="100%" height="100%"  textAlign="center" 
+							  rowHeight="60" variableRowHeight="true" porcentajesColumnasPq="{[3,30,17,17,17,8,8]} ">  
+		<pqNet1:columns>
+			<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+			<mx:AdvancedDataGridColumn headerText="Concepto"  >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.PRequisicion;
+									override public function set data(value:Object):void{
+										super.data = value;
+									}
+								]]>
+							</fx:Script>
+							<s:Label width="100%" maxDisplayedLines="2" text="{(data as PRequisicion).concepto + ' ' + ( (data as PRequisicion).unidad == 'No Disponible' ?  '' : (data as PRequisicion).cantidad + ' ' + (data as PRequisicion).unidad ) }" 
+									 toolTip="{(data as PRequisicion).concepto + ' ' + ( (data as PRequisicion).unidad == 'No Disponible' ?  '' : (data as PRequisicion).cantidad + ' ' + (data as PRequisicion).unidad ) }"  />
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn headerText="Piezas"  dataField="numFila">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" >
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.PRequisicion;
+									override public function set data(value:Object):void{
+										super.data = value;
+									}
+								]]>
+							</fx:Script>
+							<s:Label width="100%" fontSize="15" text="{(data as PRequisicion).piezasACotizar + ((data as PRequisicion).piezasACotizar==1 ? ' Pza' : ' Pzas')  }" />
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn headerText="Importe U">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" >
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.PRequisicion;
+									import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+									override public function set data(value:Object):void{
+										super.data = value;
+									}
+								]]>
+							</fx:Script>
+							<s:Label width="100%" fontSize="15" text="$ { UtilsFormatosNumericos.precisionADosDecimalesConComas( (data as PRequisicion).precioU ) }" />
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn headerText="Total">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.requisicion.PRequisicion;
+									import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+									override public function set data(value:Object):void{
+										super.data = value;
+									}
+								]]>
+							</fx:Script>
+							<s:Label width="100%" fontSize="15" text="$ { UtilsFormatosNumericos.precisionADosDecimalesConComas( ( (data as PRequisicion).precioU * (data as PRequisicion).piezasACotizar ) ) }" />
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn headerText="">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoIconosGrid;
+									
+								]]>
+							</fx:Script>
+							<s:Image source="{catalogoIconosGrid.getInstance().render_flechaCircularVerdeAzul}" click="outerDocument.cargaPopUPRequisitarPartida('edita')"/>
+						</s:MXAdvancedDataGridItemRenderer>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+			<mx:AdvancedDataGridColumn headerText="">
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+							<fx:Script>
+								<![CDATA[
+									import skins.catalogos.catalogoIconosGrid;
+								]]>
+							</fx:Script>
+							<s:Image source="{catalogoIconosGrid.getInstance().render_tacheRojoSmall}" click="outerDocument.eliminaPartida()"/>
+						</s:MXAdvancedDataGridItemRenderer>					
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:AdvancedDataGridColumn>
+		</pqNet1:columns>
+		<pqNet1:rendererProviders >
+			<mx:AdvancedDataGridRendererProvider id="prueba" 
+												 dataField="finArray"
+												 columnIndex="0"
+												 columnSpan="0"
+												 renderer="vista.vistas.ev_VendedorReqMovil.itemR.VendedorTotalRequisicionesIR"
+				>
+			</mx:AdvancedDataGridRendererProvider>
+		</pqNet1:rendererProviders>
+	</pqNet1:advancedGridPqNet>
+	<!--<s:TextArea width="100%" id="txtComentarios" skinClass="skins.skin.textarea.TextAreaPunteadoAlargadoSkin" height="155"  fontStyle="normal"/>-->
+	<textoBorde:TextInputConBordePunteado id="txtComentarios" height="155"  width="100%"  fontStyle="normal"/>
+	<!--<textarea:TextAreaPunteadoAlargadoSkin />-->
+	<otros:division width="100%"/>
+	<s:HGroup width="100%" verticalAlign="middle" gap="15">
+		<pqNet:botonPqNetLargo icono="flechaBlancaIzquierda"  gradientePqnet="true" click="botonpqnetlargo1_clickHandler()"/>
+		<s:Spacer width="100%"/>
+		<pqNet:botonPqNetLargo label="Enviar"  gradientePqnet="true" click="warningGuardar()" id="btnEnviar" enabled="false"/>
+	</s:HGroup>
+</s:VGroup>

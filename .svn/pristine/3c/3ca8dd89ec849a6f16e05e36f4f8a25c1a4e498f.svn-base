@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:corporativo="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.corporativo.*"
+		  width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:pqNet="skins.botones.pqNet.*"
+		  creationComplete="vgroup1_creationCompleteHandler(event)"
+		  >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Corporativo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.corporativo.popup.Corporativo_popUpConcepto;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			
+			private var dummy:Corporativo;
+			private var _listaCorporativos:ArrayCollection;
+			private var fechaMasProxima:Date;
+			private var _popUpConcepto:Corporativo_popUpConcepto;
+			private var _nombresCorporativos:Array;
+			private var _industrias:ArrayCollection;
+			private var _seEdito:Boolean=false;
+			private var _indexCorp:Number;
+			
+			public function iniciarVista():void
+			{
+				limpiarContenido();
+				//habilitarEdicionDeContenido(false);
+				/* grpSlidersEdit.visible = false;
+				grpGuardarCancelar.includeInLayout = grpGuardarCancelar.visible = false;
+				btnEditar.includeInLayout = btnEditar.visible = true;*/
+				modificarCorp.addEventListener("cambiaVistaPrincipalCorporativo",cambiarVistaCorporativo,false,0,true);
+				lstCorporativo.addEventListener("seCambiaVistaMoficacion", modificacionCorporativo,false,0,true);
+				dispatchEvent(new EventoCatClientes_General(EventoCatClientes_General.OBTENER_CORPORATIVOS_CLIENTE)); 
+			}
+			
+			private function modificacionCorporativo(evt:Event):void
+			{
+				_seEdito = true;
+				var corpo:Corporativo = lstCorporativo.selectedItem as Corporativo;
+				modificarCorp.recibeCorporativo(corpo );
+				_indexCorp = corpo.indexSel;
+				stackConfiguracion.selectedIndex = 1;
+				
+			}
+			
+			public function set recibeCorporativos($corporativos:ArrayCollection):void
+			{
+				if ($corporativos == null)
+				{return}
+				
+				_nombresCorporativos = new Array();
+				busqueda.text = "";
+				_listaCorporativos = ObjectUtil.copy( $corporativos ) as ArrayCollection;
+				lstCorporativo.dataProvider = _listaCorporativos;
+				obtenerFechaMasProxima( _listaCorporativos );
+				
+				
+				for (var i:int=0; i<_listaCorporativos.length; i++)
+				{
+					var corp:Corporativo = _listaCorporativos[i] as Corporativo;
+					_nombresCorporativos.push((_listaCorporativos[i] as Corporativo).nombre);
+				}
+				
+				var sendFua:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_FUA_A_LA_VISTA_DEFAULT_DE_CONFIGURACION);
+				sendFua.fua = fechaMasProxima;
+				dispatchEvent( sendFua );
+				
+				if(_seEdito)
+				{
+					lstCorporativo.selectedIndex = _indexCorp;
+					_seEdito = false;
+					empiezaTimer();
+				}
+				
+				_listaCorporativos.length == 1 ? lblCorporativos.text = '1 Corporativo' : lblCorporativos.text = _listaCorporativos.length + ' Corporativos';
+			}
+			
+			private	var temporizador:Timer;
+			private function empiezaTimer():void
+			{
+				temporizador = new Timer(500,0);
+				temporizador.addEventListener(TimerEvent.TIMER,reubicarPanel,false,0,true);
+				temporizador.start();
+			}
+			
+			private function reubicarPanel(event:TimerEvent):void
+			{
+				temporizador.stop();
+				lstCorporativo.ensureIndexIsVisible(lstCorporativo.selectedIndex);
+			}
+			
+			
+			public function cambiarVistaCorporativo($vista:String):void
+			{
+				stackConfiguracion.selectedIndex = 0;
+				var sendFua:EventoCatClientes_General = new EventoCatClientes_General(EventoCatClientes_General.ENVIAR_FUA_A_LA_VISTA_DEFAULT_DE_CONFIGURACION);
+				sendFua.fua = fechaMasProxima;
+				dispatchEvent( sendFua );
+			}
+			
+			private function limpiarContenido():void
+			{
+				busqueda.text = "";
+			}
+			
+			
+			/* protected function agregarCorporativo():void
+			{
+			obtenerClientesDisponibles();
+			modificarCorp.limpiarFormulario();
+			modificarCorp.btnElimCorp.visible = false;
+			modificarCorp.btnElimCorp.includeInLayout = false;
+			stackConfiguracion.selectedIndex = 1;
+			} */
+			
+			private  function obtenerClientesDisponibles():void
+			{
+				dispatchEvent( new EventoCatClientes_General( EventoCatClientes_General.OBTENER_CLIENTES_DISPONIBLES));
+			}
+			
+			public function set confirmacionInsercionCorporativo($valor:Boolean):void
+			{
+				if ($valor)
+					actualizarPrincipal();
+			}
+			
+			public function set confirmacionBorradoCorporativo($valor:Boolean):void
+			{
+				if ($valor)
+					actualizarPrincipal();
+			}
+			
+			private function filtrarCorporativo():void{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaHab:ArrayCollection = new ArrayCollection();
+				
+				listaAFiltrar = ObjectUtil.copy( _listaCorporativos ) as ArrayCollection;
+				if( this.busqueda.text  != ""){
+					_listaHab = UtilsGrid.queryCampoXLike( _listaCorporativos, 'nombre', busqueda.text );
+				}else{
+					_listaHab = ObjectUtil.copy( _listaCorporativos ) as ArrayCollection; 
+				}
+				lstCorporativo.dataProvider = _listaHab;
+			}
+			
+			private function actualizarPrincipal():void
+			{
+				dispatchEvent(new EventoCatClientes_General(EventoCatClientes_General.OBTENER_CORPORATIVOS_CLIENTE)); 
+				stackConfiguracion.selectedIndex = 0;
+				
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = "Corporativo";
+				this.productorAsociado.send(mensaje);
+			}
+			
+			
+			private function obtenerFechaMasProxima($lista:ArrayCollection):void
+			{
+				var keyFechasEvaluadas:Object = new Object;
+				fechaMasProxima = null;
+				
+				if($lista != null && $lista.length >0){
+					
+					var fechaPivote:Number = 0;
+					var current:Corporativo = $lista[0] as Corporativo;
+					
+					if(current.fua != null){
+						fechaMasProxima = current.fua;
+						keyFechasEvaluadas[current.fua] = current.fua;
+						fechaPivote = fechaPivote = current.fua.time;
+					}
+					
+					if($lista.length > 1){
+						
+						for (var k:int = 1; k < $lista.length; k++) 
+						{
+							current = $lista[k] as Corporativo;
+							
+							if(current.fua != null){
+								
+								if(!keyFechasEvaluadas.hasOwnProperty(current.fua)){
+									if(fechaPivote < current.fua.time){
+										fechaPivote = current.fua.time;
+										fechaMasProxima = current.fua;
+									}
+									keyFechasEvaluadas[current.fua] = current.fua;
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			private var productorAsociado:Producer = new Producer();
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet;
+			
+			protected function vgroup1_creationCompleteHandler(event:FlexEvent):void
+			{
+				this.productorAsociado.destination = "corporativoUpdate";
+				this.productorAsociado.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAsociado = new ChannelSet();
+				this.canalesAsociado.addChannel(canalAsociado);
+				this.productorAsociado.channelSet = this.canalesAsociado;
+				dispatchEvent(new EventoCatClientes_General(EventoCatClientes_General.OBTENER_INDUSTRIAS));
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+			}
+			
+			protected function abrirPopUp():void
+			{
+				var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+				if (_popUpConcepto == null)
+				{
+					_popUpConcepto = Corporativo_popUpConcepto( PopUpManager.createPopUp( app, Corporativo_popUpConcepto,true ));
+					_popUpConcepto.addEventListener("cerrandoPopUp_corporativoConcepto",cerrarPopUp_Concepto,false,0,true);
+					_popUpConcepto.addEventListener(EventoCatClientes_General.ENVIAR_CONCEPTO_CORPORATIVO,enviaConcepto,false,0,true);
+				}
+				else
+				{
+					PopUpManager.addPopUp( _popUpConcepto, app, true);
+				}
+				PopUpManager.centerPopUp(_popUpConcepto);
+			}
+			
+			protected function cerrarPopUp_Concepto(eve:Event = null):void
+			{
+				PopUpManager.removePopUp(_popUpConcepto );
+				_popUpConcepto = null;
+			}
+			protected function enviaConcepto($evt:EventoCatClientes_General):void
+			{
+				obtenerClientesDisponibles();
+				modificarCorp.limpiarFormulario();
+				//modificarCorp.recibeConcepto($evt.conceptoCorporativo,$evt.industrias);
+				//modificarCorp.btnElimCorp.visible = false;
+				//modificarCorp.btnElimCorp.includeInLayout = false;
+				_popUpConcepto.cerrarPop();
+				stackConfiguracion.selectedIndex = 1;
+			}
+			
+			public function set recibeIndustrias($industrias:ArrayCollection):void
+			{
+				if ($industrias!=null)
+				{
+					_industrias = new ArrayCollection();
+					_industrias = $industrias;
+					modificarCorp.recibeIndustrias(_industrias);
+				}
+			}
+			
+			private function mostrarPopUp():void
+			{
+				abrirPopUp();
+				_popUpConcepto.recibeNombresCorp(_nombresCorporativos);
+				_popUpConcepto.recibeIndustrias(_industrias);
+			}
+			
+			private function agregarNuevo():void
+			{
+				obtenerClientesDisponibles();
+				modificarCorp.limpiarFormulario();
+				modificarCorp.recibeConcepto();
+				stackConfiguracion.selectedIndex = 1;
+			}
+			
+		]]>
+	</fx:Script>
+	<vistas:MobViewStack id="stackConfiguracion" width="100%" height="100%">
+		
+		<!--ESTA ES LA VISTA PRINCIPAL-->
+		<s:VGroup width="100%" height="100%" id="grpNormal" horizontalAlign="center" gap="10" visible="false"> 
+			<label:Titulo text="CORPORATIVOS" />
+			<s:TextInput fontStyle="normal" id="busqueda" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Corporativo" text=""  change="filtrarCorporativo()" enter="filtrarCorporativo()" />
+			<s:HGroup width="100%" height="100%">
+				<s:Spacer width="20%" />
+				<s:VGroup width="100%" height="100%">
+					<s:List id="lstCorporativo" borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%" 
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.corporativo.itemRenderer.IRListaCorporativo_Cliente"/>
+					<s:VGroup width="100%" horizontalAlign="center" gap="10">
+						<label:TituloGris  id="lblCorporativos" paddingTop="0"/>
+						<label:TituloGris text="TOTAL" paddingTop="0"/>
+					</s:VGroup>
+					
+				</s:VGroup>
+				<s:Spacer width="20%" />
+			</s:HGroup>
+			<pqNet:botonPqNetLargo id="btnAgregar" icono="agregar" label="Agregar" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}" click="agregarNuevo()" />
+		</s:VGroup>
+		
+		
+		<!--ESTA ES LA VISTA PARA AGREGAR-->
+		<corporativo:CorporativosAgregar_Cliente id="modificarCorp" width="100%" visible="false" />
+		
+		
+		
+	</vistas:MobViewStack>
+	
+</s:VGroup>

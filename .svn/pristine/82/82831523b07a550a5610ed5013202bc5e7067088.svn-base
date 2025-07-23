@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:boton="mx.com.proquifa.vista.vistas.skin.boton.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 xmlns:label="skins.skin.label.*"
+		 width="100%" height="100%"
+		 creationComplete="init(event)"
+		 >
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.charts.events.ChartItemEvent;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoOrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.events.FlexEvent;
+			
+			private var _dataProvider:ArrayCollection;
+			private var _sql:Query;
+			
+			protected function init(event:FlexEvent):void
+			{
+				
+			}
+			
+			private var file:File;
+			protected function cargarImagen(event:MouseEvent):void
+			{
+				var docFilter:FileFilter;
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				docFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter]);
+			}
+			
+			private function selectHandler(event:Event):void
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void
+			{
+				trace("ARCHIVO CARGADO: " + event);
+				
+				var tmpAdicional:DocumentoOrdenDespacho = new DocumentoOrdenDespacho();
+				try
+				{
+					tmpAdicional.archivo = event.target.data;
+					tmpAdicional.tipo = "Adicional";
+					tmpAdicional.usuario = DatosGlobales.getInstance()._usuario.usuario.toUpperCase();
+					tmpAdicional.nombreDocumento = event.target.name; 
+					tmpAdicional.tituloDocumento = event.target.name; 
+					
+					enviarAdicional(tmpAdicional);
+				}
+				catch (error:*){
+					alertaSingleton.show("No se encontro archivo");
+				}
+			}
+			
+			private function enviarAdicional($adicional:DocumentoOrdenDespacho):void
+			{
+				var ert:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ENVIAR_ARCHIVO_ADICIONAL);
+				ert.documentoDespacho = $adicional;
+				dispatchEvent(ert);
+				
+				dispatchEvent(new Event("EnviarDocumentosConArchivosCargados",true));
+			}
+			
+			[Bindable]
+			public function get dataProvider():ArrayCollection
+			{
+				return _dataProvider;
+			}
+			
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				_dataProvider = value;
+				lblTitulo.text = "TODOS";
+				_sql = new Query(value,["tipo"]);
+				armarGrafica();
+			}
+			
+			private var arrayPie:ArrayCollection;
+			private function armarGrafica():void
+			{
+				if(_sql)
+				{
+					var tipos:Array = _sql.getPunteros(["tipo"]);
+					
+					if(tipos.length > 0)
+					{
+						arrayPie = new ArrayCollection();
+						
+						for(var i:int = 0; i < tipos.length; i++)
+						{
+							var resumen:ResumenConsulta = new ResumenConsulta();
+							var tmpPunteros:Array = _sql.getPunteros([tipos[i]]);
+							
+							switch(tipos[i])
+							{
+								case "Pakinglist":
+								{
+									resumen.etiqueta = "PACKING LIST"; 
+									resumen.totalPacking = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+									
+								case "CartaUso":
+								{
+									resumen.etiqueta = "CARTA DE USO";
+									resumen.totalCartaUso = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+									
+								case "CartaUsoQuimicos":
+								{
+									resumen.etiqueta = "CARTA DE USO QUIMICOS";
+									resumen.totalCartaUsoQuimicos = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+									
+								case "Certificado":
+								{
+									resumen.etiqueta = (tipos[i] as String).toUpperCase();
+									resumen.totalCertificado = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+									
+								case "Nafta":
+								{
+									resumen.etiqueta = (tipos[i] as String).toUpperCase();
+									resumen.totalNafta = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+									
+								case "Factura":
+								{
+									resumen.etiqueta = (tipos[i] as String).toUpperCase();
+									resumen.totalfactura = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+									
+								case "Adicional":
+								{
+									resumen.etiqueta = (tipos[i] as String).toUpperCase();
+									resumen.totalAdicional = tmpPunteros.length;
+									resumen.totalDocumentos = tmpPunteros.length;
+									break;
+								}
+							}
+							
+							
+							resumen.monto = _sql.getSumarCampo("monto",tmpPunteros);
+							
+							arrayPie.addItem(resumen);
+						}
+						
+						myChart.dataProvider = myChart.aplicarFormatoGestorComprasDocumentacion(arrayPie);
+					}
+				}
+			}
+			
+			protected function selectDocument(event:ChartItemEvent):void
+			{
+				var evtf:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ENVIO_DOCUMENTO_SELECT_PIE);
+				evtf.seleccionado = (event.hitData.item as ResumenConsulta).etiqueta.toLowerCase();
+				dispatchEvent(evtf);
+				
+				lblTitulo.text = event.hitData.item.etiqueta;
+			}
+			
+			protected function resetFiltro(event:MouseEvent):void
+			{
+				lblTitulo.text = "TODOS";
+				dispatchEvent( new Event("resetFiltrosPieGestor",true));
+			}
+			
+			[Bindable] private var posicion:Number;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				
+				posicion = (unscaledWidth / 1.8);
+				
+			}
+		]]>
+	</fx:Script>
+	
+	
+	
+	
+	<s:VGroup width="100%" height="100%" gap="0">
+		<graficas:PieChartPqGestor id="myChart" width="100%" height="100%" horizontalCenter="0" verticalCenter="0" itemClick="selectDocument(event)"
+								   lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" esConRealse="true" 
+								   showDataTips="false" innerRadius=".5"  icono="todos_mundo" clickImagen="resetFiltro(event)"
+								   >   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="totalDocumentos"/>
+			</graficas:series>
+		</graficas:PieChartPqGestor>
+	</s:VGroup>
+	<label:Titulo_15_Helvetica id="lblTitulo" text="TODOS" fontSize="30" horizontalCenter="0" verticalCenter="{-(posicion)}"/>
+	
+	<boton:botonTextoGris id="lblTodos" width="100%"  horizontalCenter="0" verticalCenter="{+(posicion)}"
+						  label="CARGAR ADICIONALES" autosize="true" soloClic="true" sizeAutoDisplay="285"
+						  colorBase="0xe65f1e" colorTextoDown="0xe65f1e" colorDown="0xffffff" imagen="agregar" click="cargarImagen(event)" />
+	
+</s:Group>

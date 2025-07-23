@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:arribo="mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.*" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:label="skins.skin.label.*"
+		 width="100%" height="100%" 
+		 creationComplete="group1_creationCompleteHandler(event)" 
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComun;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.modelo.gestorCompras.arriba.ModeloArriboGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.GraficaBarrasArriboGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.GraficaProveedoresArriboGestorCompra;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			private var graficaProveedor:GraficaProveedoresArriboGestorCompra;
+			private var graficaBarras:GraficaBarrasArriboGestorCompras;
+			public static var proveedor:Boolean;
+			public var universoProvee:ArrayCollection = new ArrayCollection();
+			[Bindable] public var sizeFontAgente:Number;
+			
+			protected function vistaAnterior(event:EventoGestorCompras):void
+			{
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ESCONDER_POPUP_ABC); 
+				evento.habilitado = true;
+				dispatchEvent(evento);
+				
+			}
+			protected function vistaAnteriorVacio():void
+			{
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				
+				var evento:EventoGestorCompras = new EventoGestorCompras(EventoGestorCompras.ESCONDER_POPUP_ABC); 
+				evento.habilitado = true;
+				dispatchEvent(evento);
+				
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				addEventListener(EventoGestorCompras.IR_LISTA_ARRIBO, mostrarListaArribo);
+				addEventListener(EventoGestorCompras.ACTUALIZAR_ESTADO, CamiarEstado);
+				cmpGridProveedores.addEventListener(EventoComun.ORDENAR_PROVEE_LETRA,ordenarProveedor);
+				addEventListener("volverVistaAnterior",vistaAnteriorVacio);
+				cargarPlantilla();
+			}
+			
+			public function CamiarEstado(Event:EventoGestorCompras):void
+			{
+				vgpGenerarArribo.ActualizarEstadoDAD = true;
+			}
+			
+			private function ordenarProveedor(evt:EventoComun):void
+			{
+				cmpGridProveedores.dataProvider = ordenarLista(universoProvee,evt.current.text);
+				calcularTotales(cmpGridProveedores.dataProvider);  
+			}
+			
+			private function ordenarLista(array:ArrayCollection, letra:String):ArrayCollection
+			{
+				if(letra != "TODOS")
+					array = UtilsGrid.queryCampoXLike(array,"sortCharProvee",letra);
+				else
+					array = universoProvee;
+				return array;
+			}
+			
+			protected function mostrarListaArribo(evet:EventoGestorCompras):void
+			{
+				plantilla.indice = 1;
+				vgpGenerarArribo.grupoB.enabled = false;
+				vgpGenerarArribo.grupoBlbl.color = 0xc2c3ca;
+				vgpGenerarArribo.limpiarDocPakingList();
+				cmpTitulo.isVisble = true;
+				
+				vgpGenerarArribo.lblProveedor.text = evet.partida.nombreProveedor;
+				if(evet.partida.nombreProveedor=="USP")
+				{
+					proveedor = true;
+				}
+				else{
+					proveedor = false;
+				}
+				enviarOrdenDeCompra(evet.partida);
+			}
+			
+			private function enviarOrdenDeCompra(partida:PartidaCompra):void
+			{
+				var array:ArrayCollection = new ArrayCollection();
+				var query:Query = ModeloArriboGestorCompras.query;
+				var indice:int;
+				var diferencia:int;
+				var diferenciaAux:int;
+				for (var i:int = 0; i < partida.object.oc.length; i++) 
+				{
+					indice= 0;
+					var punteros:Array = query.getPunteros([partida.nombreProveedor,query.universo[partida.object.oc[i]].compra]);
+					diferencia = (ObjectUtil.copy((query.universo.getItemAt(punteros[0]) )) as PartidaCompra).diferenciaDias;
+					for(var k:int=0;k<punteros.length;k++){
+						diferenciaAux = (ObjectUtil.copy((query.universo.getItemAt(punteros[k]) )) as PartidaCompra).diferenciaDias;
+						if(diferenciaAux < diferencia){
+							diferencia = diferenciaAux;
+							indice = k;
+						}
+					}
+					var part:PartidaCompra = ObjectUtil.copy((query.universo.getItemAt(punteros[indice]) )) as PartidaCompra;
+					part.precioTotal = query.getSumarCampo('montoTotalReal',punteros);
+					part.totalPartidas = punteros.length;
+					part.totalPiezas = query.getSumarCampo('cantidadCompra',punteros);
+					part.numFila = i + 1;
+					part.abierto = false;
+					part.object = new Object();
+					part.object.partidas = punteros;
+					if (i == (partida.object.oc.length-1))
+					{
+						part.abierto = true; //Es el ultimo reutilizando variables
+					}
+					array.addItem(part);
+				}
+				vgpGenerarArribo.tipoProductoPublicaciones = false;
+				vgpGenerarArribo.listaAsociar.headerGridPartidas.publicaciones = false;
+				vgpGenerarArribo.dataProvider = array;
+				
+			}
+			
+			public function set obtenerListadoDeArribo(data:ArrayCollection):void
+			{
+				if(data == null)
+					return;
+				var noEncontrado:Boolean = false;
+				cmpGridProveedores.dataProvider = data;
+				universoProvee = data;
+				if(GenerarListadoArribo.generarLista == true)
+				{
+					for (var i:int = 0; i < data.length; i++) 
+					{
+						if (data[i].nombreProveedor.toUpperCase() == vgpGenerarArribo.lblProveedor.text.toUpperCase())
+						{
+							var evento:EventoGestorCompras = new EventoGestorCompras("");
+							evento.partida = data[i];
+							enviarOrdenDeCompra(evento.partida);
+							noEncontrado = false;
+							break;
+						}
+						else{
+							noEncontrado = true;
+						}
+					}
+					if(noEncontrado)
+						vistaAnteriorVacio();
+					
+					
+				}
+			}
+			
+			public function set recibetotales(data:Object):void
+			{
+				if(data == null)
+					return;
+				
+				cmpGridProveedores.totales = data;
+			}
+			
+			private function calcularTotales(array:ArrayCollection):Object
+			{
+				var i:int;
+				var total:Object = new Object();
+				total.totalOC = 0;
+				total.totalPiezas = 0;
+				total.totalMontos = 0;
+				total.et = 0;
+				total.ft = 0;
+				total.urgente = 0;
+				
+				total.etPartida = 0;
+				total.ftPartida = 0;
+				total.urgentePartida = 0;
+				total.listaArribo = true;
+				
+				for(var k:int = 0;k < array.length; k++){
+					
+					total.totalPiezas += array[k].totalPiezas;
+					total.totalMontos += array[k].precioTotal;
+					total.et += array[k].object.et;
+					total.ft += array[k].object.ft;
+					total.urgente += array[k].object.urgente;
+					
+					total.totalOC += array[k].object.oc.length;
+					
+				}	
+				total.totalProveedores = array.length;
+				
+				cmpGridProveedores.totales = total;
+				return total;
+			}
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				
+				sizeFontAgente = (20 / 2005) * ($width);
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+			}
+			public function cargarPlantilla():void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpGridProveedores);
+				plantilla.cargarGraficas(hgpGraficas);
+				plantilla.cargarOperacion(vgpGenerarArribo);
+				plantilla.cargarLeyenda(footer);
+			}
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" gap="0" visible="false" includeInLayout="false">
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="DECLARAR ARRIBO TRÁNSITO · MATERIALES" vistaAnterior="vistaAnterior(event)" />
+		
+		<arribo:GridListadoArribo id="cmpGridProveedores" width="100%" height="100%"/>
+		
+		<s:VGroup id="hgpGraficas" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" gap="0" paddingBottom="43" paddingTop="44" >
+			<s:VGroup width="100%" height="50%"  verticalAlign="middle" horizontalAlign="center" gap="30">
+				<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="PROVEEDORES" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+				<arribo:GraficaProveedoresArriboGestorCompra width="100%" height="100%" maxHeight="465" maxWidth="457"/>
+			</s:VGroup>
+			<s:Spacer width="100%" maxHeight="138" height="10%"/>
+			<s:VGroup width="100%" height="50%"  verticalAlign="middle" horizontalAlign="center" gap="30">
+				<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="SEMÁFORO DE ENTREGA" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+				<arribo:GraficaBarrasArriboGestorCompras width="100%" height="100%" maxHeight="349" maxWidth="734"/>
+			</s:VGroup>
+		</s:VGroup>  
+		<arribo:GenerarListadoArribo id="vgpGenerarArribo" width="100%" height="100%" />
+		<s:VGroup width="100%" height="100%" gap="0" id="footer" verticalAlign="middle">
+			<s:VGroup width="100%" paddingLeft="-14" >
+				<otros:division width="100%" height="1" />
+			</s:VGroup>  
+			<s:HGroup width="100%" height="100%" horizontalAlign="center" gap="30" verticalAlign="middle">
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#de0014"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="Fuera de Tiempo" fontSize="16"/>
+				</s:HGroup>  
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#f09500"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="Urgente" fontSize="16"/>
+				</s:HGroup>
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#4fa834"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="En Tiempo" fontSize="16"/>
+				</s:HGroup>
+			</s:HGroup>
+		</s:VGroup>  
+		
+	</s:VGroup>  
+	<plantilla:Plantilla_VistaInicial id="plantilla" width="100%" height="100%"/>
+</s:Group>

@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%" xmlns:shaders="skins.skin.shaders.*" 
+		 >
+
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPopUpContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.managers.PopUpManager;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable] private var _universoContactos:ArrayCollection;
+			[Bindable] private var _idClienteSeleccionado:int = 0;
+			[Bindable] private var _contactoSeleccionado:int = 0;
+			[Bindable] public var _contacto:Contacto; 
+			[Bindable] public var _listaContactos:AIESC_1ListaContacto_PopUpListaContactos;
+			private var _contactoEnviado:Object;
+			private var _popUpContacto:AIESC_AgregaContactoNuevo_PopUp = null; 
+			private var _estatusContacto:String = "";
+			public var _procedencia:String;
+			
+			public function set recibirContactoSeleccionado ($contacto:Object):void{
+				if ($contacto == null){
+					return;
+				}
+				_contactoEnviado = $contacto;
+			}
+			
+			public function set recibirContactosBusqueda( $datos:ArrayCollection ):void
+			{
+				if( $datos == null )
+					return;
+				
+				var arr:ArrayCollection = Util.sortArray($datos,"nombre");
+				arr.refresh();
+				
+				for (var i:int=0; i<arr.length;i++) 
+				{
+					(arr[i] as Contacto).numFila = i+1;
+				}
+				
+				var contactoTemp:Contacto = new Contacto();
+				contactoTemp.totalContactosPorEmpresa = arr.length;
+				
+				lstContacto.dataProvider = new ArrayCollection();
+				lstContacto.dataProvider = arr;
+				lstContacto.dataProvider.addItem( contactoTemp );
+				lstContacto.selectedIndex=0;
+				_contacto = lstContacto.selectedItem;
+				estableceTitulo();
+				enviarContacto();
+			}
+			
+			private function estableceTitulo():void
+			{
+				lblNombreCliente.text = (lstContacto.selectedItem as Contacto).empresa;
+				lblGiroCliente.text = (lstContacto.selectedItem as Contacto).rol == null ? "" : (lstContacto.selectedItem as Contacto).rol + " · " + (lstContacto.selectedItem as Contacto).sector; 
+				enviarContacto();
+			}
+			
+			
+			private function cargaDatosContacto():void
+			{
+				_contacto = new Contacto();
+				_contactoSeleccionado = 0;
+				if( lstContacto.dataProvider.length > 1 && lstContacto.selectedItem.nombre != null){
+					_contacto = lstContacto.selectedItem;
+					enviarContacto();
+				}	
+			}
+			
+			
+			private function guardaContactoPopUp( $evt:EventoPopUpContactos ):void
+			{
+				_estatusContacto = $evt.estatusContacto;
+			}
+			
+			private function cierraPopUpContactos( $evt:EventoPopUpContactos ):void
+			{
+				_estatusContacto = $evt.estatusContacto;
+				PopUpManager.removePopUp( _popUpContacto ); 
+			} 
+			
+			private function seleccionaContacto( $evt:EventoPopUpContactos):void
+			{
+				_contacto = $evt.nuevoContacto;
+				enviarContacto();
+				botonpqnetlargo1_clickHandler();
+			}
+			
+			protected function botonpqnetlargo1_clickHandler():void
+			{
+				//En el modelo de PopUp al tener el dato Viene De se analiza a donde se regresan los datos
+				var evt:EventoPopUpContactos = new EventoPopUpContactos( EventoPopUpContactos.ENVIA_CONTACTO_ASOCIADO );
+				evt.nuevoContacto = _contacto;
+				evt.vieneDE_PopUp = _procedencia;
+				dispatchEvent( evt );
+			}
+			
+			private function enviarContacto():void
+			{
+				var cont:EventoPopUpContactos = new EventoPopUpContactos( EventoPopUpContactos.ENVIO_DE_CONTACTO_SELECCIONADO );
+				cont.objeto = _contacto;
+				dispatchEvent(cont); 
+				
+			}
+			
+			private function abrirPopUpContacto( $accion:String = '' ):void
+			{
+				if( _contacto == null ){
+					alertaSingleton.show( "Es necesario seleccionar un cliente", catalogoAlertas.TIT_ADV_operacionImposible	 );
+					return;
+				}
+				if( _popUpContacto == null ){
+					_popUpContacto = AIESC_AgregaContactoNuevo_PopUp( PopUpManager.createPopUp( this, AIESC_AgregaContactoNuevo_PopUp, true ) );
+					_popUpContacto.addEventListener( EventoPopUpContactos.RECIBE_DATOS_CONTACTO_POUP, guardaContactoPopUp );
+					_popUpContacto.addEventListener( EventoPopUpContactos.CANCELA_DATOS_CONTACTO_POUP, cierraPopUpContactos );
+					_popUpContacto.addEventListener( EventoPopUpContactos.SELECCIONA_CONTACTO, seleccionaContacto );
+				}else{	
+					PopUpManager.addPopUp( _popUpContacto, this, true );
+				}	
+				_contacto.vieneDE_PopUp = _procedencia;
+				_popUpContacto.creaContacto(  _contacto );
+				_popUpContacto.x = ( stage.width / 2 ) - 250;
+				_popUpContacto.y = ( stage.height / 2 ) - 355;
+				PopUpManager.centerPopUp( _popUpContacto );
+				
+				// Si el PopUp no se visualizo se carga de nuevo.
+				if (!_popUpContacto.isPopUp){
+					abrirPopUpContacto('nuevo');
+				}
+			}
+			
+			
+		]]>
+		
+	</fx:Script>
+	<s:filters>
+		<shaders:sombraBevelFilter direccion="right"/>
+		<shaders:sombraBevelFilter direccion="left"/>
+	</s:filters>
+	<s:Rect height="100%" width="100%">
+		<s:fill>
+			<s:SolidColor color="0xF3F3F3"/>
+		</s:fill>
+	</s:Rect>
+	<s:VGroup height="100%" width="100%" gap="0" horizontalAlign="center" paddingLeft="10" paddingRight="10" paddingBottom="20" >
+		<s:Spacer height="15"/>
+		<otros:division width="100%"/>
+		<s:Spacer height="15"/>
+		<s:Label id="lblNombreCliente" fontWeight="bold" fontSize="19" width="100%" maxDisplayedLines="3" textAlign="center"/>
+		<s:Spacer height="10"/>
+		<s:Label id="lblGiroCliente" color="0x{catalogoColores.LABEL_GRIS}" fontWeight="bold" fontSize="13" width="100%" maxDisplayedLines="2" textAlign="center"/>
+		<s:Spacer height="15"/>
+		<otros:division width="100%"/>
+		<s:List id="lstContacto" height="100%" width="100%" borderVisible="false" horizontalScrollPolicy="off" 
+				itemRenderer="mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.popUpContactos.ItemRenderer.AiescContactosIR" mouseDown="cargaDatosContacto()"/>  <!---->
+		<s:Spacer height="15"/>
+		<pqNet:botonPqNetLargo width="100%" botonRedondo="true" label="NUEVO CONTACTO"  id="btnNuevoCont" click="abrirPopUpContacto('nuevo')" /> <!--click="abrirPopUpContacto('nuevo')"-->
+	</s:VGroup>
+</s:Group>

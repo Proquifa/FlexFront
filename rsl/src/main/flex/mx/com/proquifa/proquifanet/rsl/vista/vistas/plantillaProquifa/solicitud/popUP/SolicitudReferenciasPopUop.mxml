@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:textInputBordeadopPQNet="skins.skin.textInputBordeadopPQNet.*"
+		 skinClass="skins.titleWindow.skinTitleWindowBlanca"
+		 implements="mx.managers.IFocusManagerContainer" 
+		 creationComplete="group1_creationCompleteHandler( lstReferencias.dataProvider as ArrayCollection )"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="992" height="550" 
+		 xmlns:popUp="skins.popUp.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:otros="skins.otros.*"> <!--height="515"-->
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.soliciud.EventoSolicitudGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.IFlexDisplayObject;
+			import mx.events.FlexEvent;
+			import mx.managers.ISystemManager;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			protected function botonpqnetlargo1_clickHandler(event:MouseEvent):void{
+				var evt:EventoSolicitudGeneral;
+				evt = new EventoSolicitudGeneral( EventoSolicitudGeneral.ENVIA_REFERENCIAS);
+				evt.listaReferencias = this.lstReferencias.dataProvider as ArrayCollection;
+				dispatchEvent( evt );
+				evt = new EventoSolicitudGeneral( EventoSolicitudGeneral.CERRAR_POP_UP);
+				dispatchEvent( evt );
+			}
+			
+			//public function get defaultButton():IFlexDisplayObject{
+				// TODO Auto Generated method stub
+			//	return txtJudtificacion; // <-- PLACE THE REFERENCE FOR SOME DEFAULT FOCUSABLE COMPONENT HERE (DEFAULT BUTTON OR WHATEVER)
+			//}
+			//public function set defaultButton(value:IFlexDisplayObject):void{
+				// TODO Auto Generated method stub
+				
+			//}
+			override public function get systemManager():ISystemManager{
+				return super.systemManager;
+				// TODO Auto Generated method stub
+				//return null;
+			}
+			
+			
+			[Bindable]
+			private var referencia:Referencia = null;
+			[Bindable]
+			private var file:File = null;
+			[Bindable] public var _modoConsulta:String;
+			
+			
+			/**
+			 * En este metodo se abre el Finder para seleccionar el archivo y en sus SubFunciones se obtienen los atributos del File:
+			 * nativePath o ruta (donde se podra obtener el nombre del archivo)  y el ByteArray)
+			 */ 
+			private function buscarArchivo():void{
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				file.browse();
+			}
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				creaReferencia();
+			}
+			/**
+			 * Hasta aqui termina el metodo para obtener los datos del archivo a cargar
+			 */ 
+			/**
+			 * Metodo para crear una referencia (un renglon)
+			 */ 
+			private function creaReferencia():void{
+				referencia = new Referencia();
+				referencia.nombreArchivo = this.file.name;
+				referencia.bytes = this.file.data;
+				referencia.folio = "";
+				referencia.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado; 
+				referencia.nombreResponsable = DatosGlobales.getInstance()._usuario.usuario;
+				referencia.idReferencia = 0;   	 	  
+				referencia.urlArchivo = file.nativePath;
+				referencia.extensionArchivo = file.extension;
+				if( file.extension.toLowerCase() == "pdf" ){
+					referencia.tipo = lblTipo.text = "DOCUMENTO";              	 	  	
+				}else if ( file.extension.toLowerCase() == "jpg" || file.extension.toLowerCase() =="jpeg" || file.extension.toLowerCase() == "png" ){
+					referencia.tipo = lblTipo.text =  "IMAGEN";
+				} else if( file.extension.toLowerCase() == "mov" ){
+					referencia.tipo = lblTipo.text = "VIDEO/AUDIO";
+				}else{
+					alertaSingleton.show("Formato de archivo no permitido","¡Atención!");
+					referencia = null;
+					lblTipo.text = "";
+					return;
+				} 
+				this.file = null;
+				activaBotonCargar();
+			}
+			private function evaluaReferencia():Boolean{
+				var valida:Boolean = true;
+				if( this.referencia == null ){
+					valida = false;
+					return valida;	
+				}
+				if( txtNombreArchivo.text == ""){
+					valida = false;
+					return valida;	
+				}
+				if( txtJudtificacion.text == ""){
+					valida = false;
+					return valida;	
+				}
+				return valida;
+
+			}
+			public function vizualizarDoctoAntesDeAgregar():void{
+				if( referencia  != null ){
+					var carpetaLocal:URLRequest = new URLRequest("file://" + this.referencia.urlArchivo);
+					navigateToURL( carpetaLocal );		
+				}else{
+					alertaSingleton.show( 'No se ha cargado nigun documento', catalogoAlertas.TIT_ADV_operacionImposible );
+				}						
+			}
+			private function activaBotonCargar():void{
+				this.btnCargar.enabled = evaluaReferencia();
+			}
+			private function cargaReferencia():void{
+				if( lstReferencias.dataProvider == null ){
+					lstReferencias.dataProvider = new ArrayCollection();
+				}
+				if( lstReferencias.dataProvider.length > 0 ){
+					lstReferencias.dataProvider.removeItemAt( lstReferencias.dataProvider.length - 1 );
+				}
+				this.referencia.numFila =  lstReferencias.dataProvider.length + 1;
+				this.referencia.nombre = this.txtNombreArchivo.text;
+				this.referencia.justificacion = this.txtJudtificacion.text;
+				lstReferencias.dataProvider.addItem( this.referencia );
+				var totalReferencias:Referencia = new Referencia();
+				totalReferencias.totalReferencias = lstReferencias.dataProvider.length;
+				lstReferencias.dataProvider.addItem( totalReferencias );
+				this.referencia = null;
+				this.lblTipo.text = "";
+				this.txtJudtificacion.text = "";
+				this.txtNombreArchivo.text = "";
+				this.btnCargar.enabled = false;
+			}
+			
+			 public function set obtenerConsultaReferencia($consulta:String):void{
+				if($consulta == null) return;
+				_modoConsulta = $consulta;
+			} 
+			
+			public function set recibeReferencias($referencias:ArrayCollection):void{
+				if($referencias == null){
+					return;
+				}
+				if(_modoConsulta == 'consulta'){
+					var arrTemp:ArrayCollection = ObjectUtil.copy($referencias) as ArrayCollection;
+					lstReferencias.dataProvider = arrTemp;	
+				}else{
+					lstReferencias.dataProvider = new ArrayCollection();
+				}
+			}
+			
+			public function group1_creationCompleteHandler( $lista:ArrayCollection ):void{
+				this.addEventListener( EventoSolicitudGeneral.ELIMINAR_REFERENCIAS, eliminaReferencias );
+				if( lstReferencias.dataProvider == null || lstReferencias.dataProvider.length == 0 ){
+					lstReferencias.dataProvider = new ArrayCollection();
+					var totalReferencias:Referencia = new Referencia();
+					totalReferencias.totalReferencias = lstReferencias.dataProvider.length;
+					lstReferencias.dataProvider.addItem( totalReferencias );
+				}else{
+					if(_modoConsulta == 'consulta'){
+						lstReferencias.dataProvider = new ArrayCollection();
+					}
+					if(_modoConsulta == ''){
+						lstReferencias.dataProvider = $lista;
+					}
+				}
+			}
+			
+			private function eliminaReferencias( $evt:EventoSolicitudGeneral ):void{
+				if( lstReferencias.dataProvider.length > 0 ){
+					lstReferencias.dataProvider.removeItemAt( lstReferencias.dataProvider.length - 1 );
+				}
+				var i:int = 0;
+				for( i = 0; i < lstReferencias.dataProvider.length ; i++ ){
+					if( ( lstReferencias.dataProvider[i] as Referencia ).numFila == $evt.idREferencia ){
+						lstReferencias.dataProvider.removeItemAt( i );
+						i = lstReferencias.dataProvider.length;
+					}
+				}
+				for( i = 0; i < lstReferencias.dataProvider.length ; i++ ){
+					 ( lstReferencias.dataProvider[i] as Referencia ).numFila = i + 1;
+				}
+				var totalReferencias:Referencia = new Referencia();
+				totalReferencias.totalReferencias = lstReferencias.dataProvider.length;
+				lstReferencias.dataProvider.addItem( totalReferencias );
+			}
+			
+			protected function txtJudtificacion_changeTextInputBordeadoHandler(event:EventoGenerico):void
+			{
+				// TODO Auto-generated method stub
+				activaBotonCargar();
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<popUp:PopUpBlanco width="100%" height="100%"/>
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingTop="15" paddingLeft="25" paddingRight="25">
+		<s:HGroup width="100%" verticalAlign="middle">
+			<s:Label fontSize="24" color="0x{catalogoColores.LABEL_NARANJA}" text="REFERENCIAS" width="100%" height="100%" verticalAlign="bottom"/>
+			<!--<pqNet:botonPqNetLargo icono="tache" width="30" click="botonpqnetlargo1_clickHandler(event)"/>-->
+		</s:HGroup>
+		<s:Spacer height="5"/>
+		<otros:divisionHueca width="100%"/>
+		<s:Spacer height="10"/>
+		<s:HGroup width="100%" height="100%">
+			<s:VGroup width="45%" horizontalAlign="center" height="100%" paddingLeft="17" paddingRight="17" paddingBottom="15" id="grpPrincipal">
+				<s:HGroup width="100%">
+					<pqNet:botonPqNetLargo width="100%" label="Amparar" click="buscarArchivo()" icono="amparo"
+										   colorBase="0xdd9c12" botonRedondo="true" gradientePqnet="true"/> <!--colorBase="0x00CC33"-->
+					<s:Spacer width="15"/>
+					<pqNet:botonPqNetLargo width="60" gradientePqnet="true" icono="ojoblanco" botonRedondo="true" click="vizualizarDoctoAntesDeAgregar()"/>
+				</s:HGroup>
+				<s:Spacer height="15"/>
+				<s:Label fontWeight="bold" text="Nombre:" width="100%" textAlign="left"/>	
+				<s:TextInput width="100%" id="txtNombreArchivo" change="activaBotonCargar()" fontStyle="normal" prompt="Nombre de la referencia"/>
+				<s:Spacer height="15"/>
+				<s:Label fontWeight="bold" text="Justificación:" width="100%" textAlign="left"/>
+				<!--<s:TextArea width="100%" height="100%" id="txtJudtificacion" change="activaBotonCargar()" fontStyle="normal"/>-->
+				<textInputBordeadopPQNet:TextInputConBordePunteado prompt="Registra aquí la justificación de la referencia" id="txtJudtificacion" fontStyle="normal" 
+																   changeTextInputBordeado="txtJudtificacion_changeTextInputBordeadoHandler(event)" obligatorio="true"/>
+
+				<s:Spacer height="15"/>
+				<s:HGroup width="100%">
+					<s:Label text="Tipo de archivo · " height="100%"  textAlign="left" verticalAlign="middle"/>
+					<s:Label id="lblTipo" width="100%" textAlign="left" verticalAlign="middle" />
+				</s:HGroup>
+				<s:Spacer height="20"/>
+				<pqNet:botonPqNetLargo width="100%" label="CARGAR" icono="registrarpeque" id="btnCargar" enabled="false" click="cargaReferencia()"/>
+			</s:VGroup>
+			<s:Spacer width="10"/>
+			<otros:VDivisionHueca height="100%"/>
+			<s:Spacer width="10"/>
+			<s:List width="55%" height="100%" borderVisible="false"  horizontalScrollPolicy="off" id="lstReferencias"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.solicitud.itemRenderer.SolicitudReferenciaPopUpIR" dataProvider="{null}"/>
+		</s:HGroup>
+		<otros:divisionHueca width="100%"/>
+		<pqNet:botonPqNetLargo  label="SALIR" icono="iconosalir" click="botonpqnetlargo1_clickHandler(event)" />
+	</s:VGroup>
+</s:TitleWindow>

@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"  
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*"
+		  xmlns:grafica="skins.botones.grafica.*" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" xmlns:label="skins.skin.label.*"
+		  width="100%" height="100%"
+		  creationComplete="init()" 
+		  >
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.EntregasCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ParametrosBusquedaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			private var cont:Number=0;
+			private var _bandera:Boolean = false;
+			[Bindable]	private var _listadoEntregasCliente:ArrayCollection;
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();
+			private var _sql:Query;
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			private function init():void
+			{
+				cont=0;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionaTabla():void
+			{			
+				stackGeneral.selectedChild = vistaTabla;
+				validarLlenarGrid();
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+			} 
+			
+			public function set recibeEntregasCliente($lista:ArrayCollection):void
+			{
+				if($lista == null ) 
+					return;
+				_listadoEntregasCliente = $lista;
+				btnExportar.enabled =  _listadoEntregasCliente.length < 1 ? false : true;
+				setValoresFooter($lista);
+				_bandera=false;
+			} 
+			
+			
+			public function set recibeLinealEntregas( $lista:ArrayCollection ):void
+			{
+				if( $lista == null ) 
+					return;
+				_linealArrGrafica = $lista;
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "ENTREGAS_0") );
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection
+			{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				var resumen:ResumenConsulta;
+				var m:int;
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					
+					objeto = new Object();
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.entregaAET = 0;
+					objeto.entregaAFT = 0;
+					objeto.entregaCET = 0;
+					objeto.entregaCFT = 0;
+					objeto.montoTotalA = 0;
+					objeto.montoTotalC = 0;
+					objeto.montoTotalAET = 0;
+					objeto.montoTotalAFT = 0;
+					objeto.montoTotalCET = 0;
+					objeto.montoTotalCFT = 0;
+					
+					for( m = 0; m < $lista.length;m++ )
+					{
+						resumen = $lista[m] as ResumenConsulta;
+						if( resumen.conceptoResultado == "FUERA DE TIEMPO ABIERTA" )
+						{
+							objeto.entregaAFT += resumen.piezasTotal;
+							objeto.montoTotalA += resumen.total;
+							objeto.montoTotalAFT += resumen.total;
+						}
+						else if( resumen.conceptoResultado == "EN TIEMPO ABIERTA" )
+						{
+							objeto.entregaAET += resumen.piezasTotal;
+							objeto.montoTotalA += resumen.total;
+							objeto.montoTotalAET += resumen.total;
+						}
+						else if( resumen.conceptoResultado == "FUERA DE TIEMPO CERRADA" )
+						{
+							objeto.entregaCFT += resumen.piezasTotal;
+							objeto.montoTotalC += resumen.total;
+							objeto.montoTotalCFT += resumen.total;
+						}
+						else if( resumen.conceptoResultado == "EN TIEMPO CERRADA" )
+						{
+							objeto.entregaCET += resumen.piezasTotal;
+							objeto.montoTotalC += resumen.total;
+							objeto.montoTotalCET += resumen.total;
+						}
+					}
+					
+					objeto.totalA = objeto.entregaAET + objeto.entregaAFT;
+					objeto.totalC = objeto.entregaCET + objeto.entregaCFT;
+					objeto.entregaAETLabel = objeto.entregaAET + "ET";
+					objeto.entregaAFTLabel = objeto.entregaAFT+ "FT";
+					objeto.entregaCETLabel = objeto.entregaCET + "ET";
+					objeto.entregaCFTLabel = objeto.entregaCFT+ "FT";
+					arrReturn.addItem(objeto);
+				}
+				else
+				{
+					while( cuenta < 13)
+					{
+						if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+						{
+							objeto = new Object();
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.entregaAET = 0;
+							objeto.entregaAFT = 0;
+							objeto.entregaCET = 0;
+							objeto.entregaCFT = 0;
+							objeto.montoTotalA = 0;
+							objeto.montoTotalC = 0;
+							objeto.montoTotalAET = 0;
+							objeto.montoTotalAFT = 0;
+							objeto.montoTotalCET = 0;
+							objeto.montoTotalCFT = 0;
+							
+							for( m = 0; m < $lista.length;m++ )
+							{
+								resumen = $lista[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{
+									if( resumen.conceptoResultado == "FUERA DE TIEMPO ABIERTA" )
+									{
+										objeto.entregaAFT += resumen.piezasTotal;
+										objeto.montoTotalA += resumen.total;
+										objeto.montoTotalAFT += resumen.total;
+									}
+									else if( resumen.conceptoResultado == "EN TIEMPO ABIERTA" )
+									{
+										objeto.entregaAET += resumen.piezasTotal;
+										objeto.montoTotalA += resumen.total;
+										objeto.montoTotalAET += resumen.total;
+									}
+									else if( resumen.conceptoResultado == "FUERA DE TIEMPO CERRADA" )
+									{
+										objeto.entregaCFT += resumen.piezasTotal;
+										objeto.montoTotalC += resumen.total;
+										objeto.montoTotalCFT += resumen.total;
+									}
+									else if( resumen.conceptoResultado == "EN TIEMPO CERRADA" )
+									{
+										objeto.entregaCET += resumen.piezasTotal;
+										objeto.montoTotalC += resumen.total;
+										objeto.montoTotalCET += resumen.total;
+									}
+								}
+							}
+							objeto.totalA = objeto.entregaAET + objeto.entregaAFT;
+							objeto.totalC = objeto.entregaCET + objeto.entregaCFT;
+							objeto.entregaAETLabel = objeto.entregaAET + "ET";
+							objeto.entregaAFTLabel = objeto.entregaAFT+ "FT";
+							objeto.entregaCETLabel = objeto.entregaCET + "ET";
+							objeto.entregaCFTLabel = objeto.entregaCFT+ "FT";
+							arrReturn.addItem(objeto);
+						}
+						cuenta++;
+					}
+				}
+				return arrReturn;
+			}
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				
+				cont++;
+				
+				if (cont >1)
+				{
+					validarLlenarGrid();
+				}
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "ENTREGAS_0") );
+			}
+			
+			private function generaArchivo():void
+			{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("P.Interno");
+				fila1[2] = hoja.addItem("Concepto");
+				fila1[3] = hoja.addItem("FEE");
+				fila1[4] = hoja.addItem("FR");
+				fila1[5] = hoja.addItem("Situación");
+				fila1[6] = hoja.addItem("En Tiempo");
+				
+				for(var i:int = 0 ; i< _listadoEntregasCliente.length ; i++ )
+				{
+					fila1 = new Array();	
+					fila1[0] = (_listadoEntregasCliente[i] as EntregasCliente).numFila;
+					fila1[1] = '"'+(_listadoEntregasCliente[i] as EntregasCliente).cpedido+'"';
+					fila1[2] = '"'+(_listadoEntregasCliente[i] as EntregasCliente).concepto+'"';
+					fila1[3] = '"'+(_listadoEntregasCliente[i] as EntregasCliente).FEEString+'"';
+					fila1[4] = '"'+(_listadoEntregasCliente[i] as EntregasCliente).FRString+'"';
+					fila1[5] = '"'+(_listadoEntregasCliente[i] as EntregasCliente).situacion+'"';
+					fila1[6] = '"'+(_listadoEntregasCliente[i] as EntregasCliente).enTiempo+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Entregas.csv");
+			}
+			
+			private function gridItemClickEvent(evento:EventoDataGrid):void
+			{
+				var urlreq:URLRequest;
+				var ruta:String;
+				var click:ListEvent = evento.itemClick;
+				if (click.columnIndex == 1 ){
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.PEDIDOS_RUTA + (click.currentTarget.selectedItem as EntregasCliente).cpedido + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}	 
+			}
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			private function formateoEje( $valor:Number, $valorPrevio:Object, $eje:Object ):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = String( $valor );
+				return strRegreso;
+			}
+			
+			private var _keyAnterior:String = "";
+			protected function validarLlenarGrid():void
+			{
+				lblTitulo.text = 'ENTREGAS';
+				if( stackGeneral.selectedChild == vistaTabla )
+				{
+					if( _event != null)
+					{
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.idButtons = [];
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("CONSULTA_GRID_ENTREGAS");
+						dispatchEvent(eventEspera);
+						
+						var parametros:ParametrosBusquedaCliente = new ParametrosBusquedaCliente();
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_ENTREGAS );
+						evet.rangoMinMes = _event.parametros.rangoMinMes;
+						evet.rangoMaxMes = _event.parametros.rangoMaxMes;
+						evet.parametros = _event.parametros;
+						dispatchEvent( evet );
+						cont++;
+						_keyAnterior = _event.keyConsulta;
+					}
+				}
+				else
+				{
+					lblTitulo.text += ' · ABIERTAS / CERRADAS';
+				}
+				
+			}
+			
+			public function compareFunction_Fee(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fee, item2.fee);
+			}
+			
+			public function compareFunction_fr(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.dateCompare(item1.fr, item2.fr);
+			}
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["cpedido","concepto","situacion","enTiempo"]);
+				
+				var _noPedidos:Number = _sql.getPunteros(["cpedido"],"cpedido").length;
+				var _noProductos:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("concepto").length;
+				var _noSituacion:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("situacion").length;
+				var _noTiempos:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("enTiempo").length;
+				
+				lbl1_nototal.text ="";
+				lbl2_noPedidos.text=_noPedidos == 1 ? "1 Pedido":_noPedidos.toString()+" Pedidos";
+				lbl3_noProductos.text = _noProductos == 1 ? "1 Producto":_noProductos.toString()+" Productos";
+				lbl4_fee.text= "";
+				lbl5_fr.text= "";
+				lbl6_noSituacion.text= _noSituacion == 1 ? "1 Situación":_noSituacion.toString()+" Situaciones";
+				lbl7_noTiempos.text= _noTiempos == 1 ? "1 Tiempo":_noTiempos.toString()+" Tiempos";
+				
+			}
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero width="100%" id="lblTitulo" />
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" change="validarLlenarGrid()">
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="0" gap="0">
+				<s:VGroup width="100%" height="100%" paddingBottom="0" horizontalAlign="center">
+					<otros:divisionGruesa width="100%"/>
+					<s:VGroup id="v1" height="100%" width="100%">
+						<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridDoctos" width="100%" height="100%" dataProvider="{this._listadoEntregasCliente}" itemClickADG="gridItemClickEvent(event)" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																	 anchoColumnas="{['7%','15%','36%','12.5%','12.5%','10%','=']}" mostrarFooter="false">
+							<AdvancedDataGrid:columns>
+								<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+								<mx:AdvancedDataGridColumn headerText="P. Interno">
+									<mx:itemRenderer>
+										<fx:Component>
+											<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+												<fx:Script>
+													<![CDATA[
+														import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.EntregasCliente
+													]]>
+												</fx:Script>
+												<s:states>
+													<s:State name="normal"/>
+													<s:State name="hovered"/>
+													<s:State name="selected"/>
+												</s:states>
+												<mx:LinkButton label="{(data as EntregasCliente).cpedido }" color="0x257d92" toolTip="Ver factura" textDecoration.selected="underline" horizontalCenter="0"/>
+											</s:MXAdvancedDataGridItemRenderer>
+										</fx:Component>
+									</mx:itemRenderer>
+								</mx:AdvancedDataGridColumn>
+								<mx:AdvancedDataGridColumn headerText="Concepto" dataField="concepto">
+									<mx:itemRenderer>
+										<fx:Component>
+											<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+												<s:states>
+													<s:State name="normal"/>
+													<s:State name="hovered"/>
+													<s:State name="selected"/>
+												</s:states>
+												<label:Texto text="{data.concepto}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+											</s:MXAdvancedDataGridItemRenderer>
+										</fx:Component>
+									</mx:itemRenderer>
+								</mx:AdvancedDataGridColumn>
+								<mx:AdvancedDataGridColumn headerText="FEE" dataField="FEEString" sortCompareFunction="compareFunction_Fee"/>
+								<mx:AdvancedDataGridColumn headerText="FR" dataField="FRString" sortCompareFunction="compareFunction_fr"/>
+								<mx:AdvancedDataGridColumn headerText="Situación" dataField="situacion"/>
+								<mx:AdvancedDataGridColumn headerText="En tiempo" dataField="enTiempo"/>
+							</AdvancedDataGrid:columns>
+						</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+					</s:VGroup>
+				</s:VGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0" >
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="7%" textAlign="center" />
+					<label:Titulo_12_VerdeAzul_pTop10 id="lbl2_noPedidos" paddingTop="0" width="15%"  textAlign="center" fontSize="14"/>
+					<label:Titulo id="lbl3_noProductos" paddingTop="0" width="36%" textAlign="center" />
+					<label:Titulo id="lbl4_fee" paddingTop="0" width="12.5%" textAlign="center" />
+					<label:Titulo id="lbl5_fr" paddingTop="0" width="12.5%" textAlign="center" />
+					<label:Titulo id="lbl6_noSituacion" paddingTop="0" width="10%" textAlign="center" />
+					<label:Titulo id="lbl7_noTiempos" paddingTop="0" width="7%" textAlign="center" />
+				</s:HGroup>	
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet1:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+			
+			<!--<s:VGroup width="100%" height="100%" gap="0">
+			<otros:divisionGruesa width="100%" />
+			<pqNet:dataGridPqNet id="tablaGrid" itemClick="gridItemClickEvent(event)"  rowHeight="40" width="100%" height="100%" 
+			dataProvider="{this._listadoEntregasCliente}" porcentajesColumnasPq="[7,15,25,15,10,10,10]">
+			<pqNet:columns>
+			<mx:DataGridColumn headerText="#" dataField="numFila"/>
+			<mx:DataGridColumn headerText="P. Interno">
+			<mx:itemRenderer>
+			<fx:Component>
+			<s:MXItemRenderer autoDrawBackground="false">
+			<fx:Script>
+			<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.EntregasCliente
+			]]>
+			</fx:Script>
+			<s:states>
+			<s:State name="normal"/>
+			<s:State name="hovered"/>
+			<s:State name="selected"/>
+			</s:states>
+			<mx:LinkButton label="{(data as EntregasCliente).cpedido }" color="0x257d92" toolTip="Ver factura" textDecoration.selected="underline" horizontalCenter="0"/>
+			</s:MXItemRenderer>
+			</fx:Component>
+			</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="Concepto" dataField="concepto"/>
+			<mx:DataGridColumn headerText="FEE" dataField="FEEString" sortCompareFunction="compareFunction_Fee"/>
+			<mx:DataGridColumn headerText="FR" dataField="FRString" sortCompareFunction="compareFunction_fr"/>
+			<mx:DataGridColumn headerText="Situación" dataField="situacion"/>
+			<mx:DataGridColumn headerText="En tiempo" dataField="enTiempo"/>
+			</pqNet:columns>
+			</pqNet:dataGridPqNet>
+			<otros:divisionHueca width="100%" />
+			<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+			<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+			<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+			<s:Spacer width="100%" />
+			<pqNet1:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+			</s:HGroup>
+			</s:VGroup>-->
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<mx:ColumnChart width="100%" height="100%" id="myChart"
+									showDataTips="true" 
+									showDataTipTargets="false"
+									dataTipRenderer="{EntregasToolTip}"
+									mouseSensitivity="5" 
+									dataTipMode="single"  
+									columnWidthRatio=".5"
+									seriesFilters="[]"
+									paddingRight="40" paddingLeft="20" paddingTop="20"
+									paddingBottom="40"
+									>
+						<mx:series>
+							<mx:ColumnSet type="stacked">
+								<mx:ColumnSeries id="serieAFT"
+												 yField="entregaAFT" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRedRenderer"
+												 />
+								<mx:ColumnSeries id="serieAET"
+												 yField="entregaAET" 
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarGreenRenderer"
+												 />
+							</mx:ColumnSet>
+							<mx:ColumnSet type="stacked">
+								<mx:ColumnSeries id="serieCFT"
+												 yField="entregaCFT"
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarRedRenderer"
+												 />
+								<mx:ColumnSeries id="serieCET" 
+												 yField="entregaCET"
+												 showDataEffect="{fxInterpolateIn}"
+												 itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.BarGreenRenderer"
+												 />
+							</mx:ColumnSet>
+						</mx:series>
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="vMes" categoryField="mes" />
+						</mx:horizontalAxis>
+						<mx:verticalAxis>
+							<mx:LinearAxis id="vCantidad" baseAtZero="true" title="Cantidad de partidas" labelFunction="formateoEje"/>
+						</mx:verticalAxis>
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{vCantidad}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels" />
+						</mx:verticalAxisRenderers>
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{vMes}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}"
+											 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+						</mx:horizontalAxisRenderers>
+					</mx:ColumnChart>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()"/>
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

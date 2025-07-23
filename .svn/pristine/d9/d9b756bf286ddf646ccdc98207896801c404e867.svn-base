@@ -1,0 +1,789 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:combo="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		  xmlns:seleccionHorario="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.seleccionHorario.*"
+		  gap="0" xmlns:textinput="skins.skin.textinput.*" 
+		  xmlns:busqueda="skins.textinput.busqueda.*" 
+		  xmlns:textarea="skins.skin.textarea.*"
+		  xmlns:evento="skins.botones.evento.*" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" 
+		  creationComplete="vgroup1_creationCompleteHandler(event)"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.generales.EventoCatClientes_Direcciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.generales.EventoCatProDirecciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.generales.ModeloCatProDirecciones;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Direccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Horario;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.itemRenderer.DireccionesIR_CatClientes;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			
+			private var _currentCliente:Cliente;
+			private var arrEliminar:ArrayCollection;
+			private var vieneDe:String = "";
+			private var indicesDeDireccionABorrar:Vector.<int>;
+			private var currentHorarioRecoleccion:Horario;
+			private var currentDireccion:Direccion;
+			private var arrAgregar:Object;
+			private var arrEdicion:ArrayCollection;
+			private var horarios:ArrayCollection
+			private var tieneRecoleccion:Boolean = false;
+			private var iniciaRecoleccion:Boolean = false;
+			private var respaldoHorarios:ArrayCollection;
+			private var direcciones:ArrayCollection;
+			private var respaldoDirecciones:ArrayCollection;
+			private var modificarDireccion:Boolean;
+			private var indexlistaCliente:int;
+			[Bindable]	private var numDirecion:String;
+			[Bindable] private var arrBotonera:ArrayCollection = new ArrayCollection([{icono: "recoleccion"}]);
+			
+			private const RECOLECCION_VALOR:int = 0;
+			private const RECOLECCION:String = "Recoleccion";
+			
+			
+			//Inicia Vista
+			public function iniciarVista():void
+			{
+				
+				if(_currentCliente && !isNaN(_currentCliente.idCliente))
+				{
+					
+					var evt:EventoCatClientes_Direcciones = new EventoCatClientes_Direcciones(EventoCatClientes_Direcciones.SOLICITAR_DIRECCIONES_DEL_CLIENTE);
+					evt.idCliente = _currentCliente.idCliente;
+					dispatchEvent(evt);
+					
+				}
+			}
+			
+			protected function vgroup1_creationCompleteHandler(event:FlexEvent):void
+			{
+				txtTotal.text = "0 Direcciones";
+				lstDirecciones.addEventListener("borrarItemSeleccionadoListaDirecciones_DireccionIR_CatProClientes",escucharEliminarElementoDeListaDirecciones,false,0,true);
+				lstDirecciones.addEventListener("editarItemSeleccionadoListaDirecciones_DireccionIR_CatProClientes",escucharEditarElementoDeListaDirecciones,false,0,true);
+				lstHorariosEdicion.addEventListener("borrarItemSeleccionadoListaHorarios",eliminarHorario,false,0,true);
+				cmpHorarioyLugar.addEventListener("AgregarItemSeleccionadoListaHorarios",agregarHorario,false,0,true);
+				grpDirecciones.visible = grpDirecciones.includeInLayout = true;
+				grpEdicion.visible = grpEdicion.includeInLayout = false;
+				addEventListener(EventoCatClientes_Direcciones.ABRIR_POP_UP_HORARIOS,AbrirPopHorario);
+				addEventListener(EventoCatClientes_Direcciones.ABRIR_POP_PARA_EDITAR_DIRECCION,ModificarDireccion);
+				
+				
+			}
+			
+			private function escucharEliminarElementoDeListaDirecciones($event:Event):void
+			{
+				alertaSingleton.show("¿Desea eliminar esta dirección y sus Horarios?",catalogoAlertas.TIT_ADV_atencion,"","SI","NO","","",null,false,alertListenerEliminar);
+			}
+			
+			private function alertListenerEliminar(eventObj:EventoAlertaPqNet):void {
+				if (eventObj.respuesta.botonSeleccionado == "SI"){
+					
+					var evtED:EventoCatClientes_Direcciones = new EventoCatClientes_Direcciones(EventoCatClientes_Direcciones.INSERTAR_NUEVA_DIRECCION_CLIENTE);
+					evtED.direccion = ObjectUtil.copy(lstDirecciones.selectedItem) as Direccion;
+					evtED.direccion.borrar = true;
+					
+					dispatchEvent(evtED);
+				}
+			}
+			
+			private function escucharEditarElementoDeListaDirecciones($event:Event):void
+			{
+				//Limpia los horarios
+				limpiarDatos();
+				cmpHorarioyLugar.limpiarSeleccionComponenteHorario();
+				cmpHorarioyLugar.grid.desSeleccionarTodoEnElGrid();
+				//Muestra la vista edicion de la Direccion y el Horario
+				grpDirecciones.visible = grpDirecciones.includeInLayout = false;
+				grpEdicion.visible = grpEdicion.includeInLayout = true;
+				currentDireccion = lstDirecciones.selectedItem;
+				if (currentDireccion){
+					buscarHorario();
+					lstHorariosEdicion.dataProvider = arrEdicion;
+					/*llenarDireccion();*/
+				}
+			}
+			
+			private function eliminarHorario($event:Event):void{
+				if (lstHorariosEdicion != null && lstHorariosEdicion.selectedItem != undefined){
+					switch(lstHorariosEdicion.selectedItem.tipo){
+						case RECOLECCION:
+						{
+							tieneRecoleccion = false;
+							if ((lstHorariosEdicion.selectedItem as Horario).idHorario > 0){
+								(lstHorariosEdicion.selectedItem as Horario).borrar = true;
+								arrEliminar.addItem(lstHorariosEdicion.selectedItem);
+							}
+							currentHorarioRecoleccion = new Horario();
+							//lstHorariosEdicion.dataProvider.removeItemAt(lstHorariosEdicion.selectedIndex);
+							arrEdicion.removeItemAt(lstHorariosEdicion.selectedIndex);
+							lstHorariosEdicion.dataProvider = arrEdicion;
+							if (arrAgregar.hasOwnProperty(RECOLECCION_VALOR)){
+								arrAgregar[RECOLECCION_VALOR] = null;
+							}
+							if (botonera.selectedIndex == RECOLECCION_VALOR){
+								cmpHorarioyLugar.limpiarSeleccionComponenteHorario();
+								cmpHorarioyLugar.grid.desSeleccionarTodoEnElGrid();
+								habilitarBotonesComponente(true);
+							}
+							break;
+						}
+							
+						default:
+						{
+							break;
+						}
+							
+					}
+				}
+			}
+			
+			private function agregarHorario($event:Event):void{
+				var arrarTemp:ArrayCollection = new ArrayCollection;
+				switch(botonera.selectedIndex)
+				{
+					case RECOLECCION_VALOR:
+					{
+						currentHorarioRecoleccion.plunes = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(0);
+						currentHorarioRecoleccion.pmartes = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(1);
+						currentHorarioRecoleccion.pmiercoles = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(2);
+						currentHorarioRecoleccion.pjueves = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(3);
+						currentHorarioRecoleccion.pviernes = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(4);
+						currentHorarioRecoleccion.borrar = false;
+						currentHorarioRecoleccion.tipo = RECOLECCION;
+						setearDiasHorarios(currentHorarioRecoleccion);
+						arrarTemp.addItem(currentHorarioRecoleccion);
+						ModeloCatProDirecciones.construirHorarios(arrarTemp);
+						arrEdicion.addItem(currentHorarioRecoleccion);
+						lstHorariosEdicion.dataProvider = arrEdicion;
+						arrAgregar[RECOLECCION_VALOR] = ObjectUtil.copy(currentHorarioRecoleccion);
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}		
+			}
+			
+			private function buscarHorario():void{
+				currentHorarioRecoleccion = new Horario;
+				
+				for each (var h:Horario in horarios) 
+				{
+					switch(h.tipo){
+						case RECOLECCION:
+						{
+							iniciaRecoleccion = true;
+							tieneRecoleccion = true;
+							currentHorarioRecoleccion = h;
+							arrEdicion.addItem(h);
+							break;
+						}
+							
+						default:
+						{
+							break;
+						}
+							
+					}
+				}
+				
+				if (iniciaRecoleccion){
+					habilitarBotonesComponente(false);
+				 }
+				else{
+					habilitarBotonesComponente(true);
+				}
+				enviarInfoHorario(currentHorarioRecoleccion);
+				botonera.selectedIndex = 0;
+			}
+			
+		
+			
+			protected function lstDirecciones_changingHandler(event:IndexChangeEvent):void
+			{
+				 numDirecion = "Dirección #"+ (lstDirecciones.selectedIndex + 1);
+				 if (lstDirecciones && lstDirecciones.selectedItem && lstDirecciones.selectedItem != undefined){
+				 var evt:EventoCatClientes_Direcciones = new EventoCatClientes_Direcciones(EventoCatClientes_Direcciones.SOLICITAR_HORARIOS_POR_DIRECCION);
+				 evt.direccion.idDireccion = (lstDirecciones.selectedItem as Direccion).idDireccion;
+			     dispatchEvent(evt);
+				} 
+				
+				lstHorarios.selectedIndex = 0;
+				
+			}
+			
+			protected function filtrado():void
+			{
+				var temp:ArrayCollection = new ArrayCollection();
+				temp = ObjectUtil.copy( respaldoDirecciones ) as ArrayCollection;
+				lstDirecciones.dataProvider = new ArrayCollection();
+				lstDirecciones.dataProvider = ( UtilsGrid.queryCampoXLikeVariosCampos( temp,['calle','estado','municipio'],this.txtBusqueda.text ) );
+			}
+			
+			protected function botonpqnetlargo1_clickHandler(event:MouseEvent):void
+			{
+				limpiarDatos();
+				grpDirecciones.visible = grpDirecciones.includeInLayout = false;
+				grpEdicion.visible = grpEdicion.includeInLayout = true;
+			}
+			
+			
+			
+			private function selectRenderer(item:Object):ClassFactory
+			{
+				var classFactory:ClassFactory = new ClassFactory(DireccionesIR_CatClientes);
+				if(lstDirecciones.dataProvider.length == 1)
+				{
+					classFactory.properties = {showBoteBasura:false};
+				}
+				else
+				{
+					classFactory.properties = {showBoteBasura:true};
+				}
+				
+				return classFactory;
+			}
+			
+			/*protected function obtenerDireccion():void
+			{
+				vieneDe = "buscar";
+				if (validarDireccion()){
+					obtenerComboDireccion(txtCP.text,cmbPais.selectedItem.valor);
+				}
+			}*/
+			
+		/*	private function validarDireccion():Boolean{
+				if (StringUtil.trim(txtCP.text) == "" ){
+					alertaSingleton.show("Es necesario indicar el codigo postal.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				if (cmbPais.selectedItem == undefined || cmbPais.selectedItem.llave == 0){
+					alertaSingleton.show("Es necesario indicar el país",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return false;
+				}
+				return true;
+			}*/
+			
+			private function obtenerComboDireccion($cp:String, $pais:String):void{
+				var evt:EventoCatProDirecciones = new EventoCatProDirecciones(EventoCatProDirecciones.OBTENER_DIRECCION_X_PAIS);
+				evt.direccion = new Direccion();
+				evt.direccion.codigoPostal = $cp;
+				evt.direccion.pais = $pais;
+				dispatchEvent(evt);
+			}
+			
+		/*	protected function cmbRuta_changingHandler(event:IndexChangeEvent):void
+			{
+				cmbZona.cargarZonasPorRutas(cmbRuta.selectedItem.valor);
+			}*/
+			
+			protected function guardarDireccionyHorario(evt:MouseEvent):void
+			{
+				var event:EventoCatProDirecciones = new EventoCatProDirecciones(EventoCatProDirecciones.ACTUALIZAR_DIRECCION_SELECCIONADA);
+				event.direccion = new Direccion();
+	            event.direccion.altitud = 0;
+				event.direccion.latitud = 0;
+				event.direccion.longitud = 0;
+				event.direccion.mapa = "";
+				event.direccion.idDireccion = currentDireccion.idDireccion;
+				event.direccion.horarios = new ArrayCollection;
+				event.direccion.horarios.addAll(ObjectUtil.copy(arrEliminar) as ArrayCollection);
+				if (arrAgregar.hasOwnProperty(RECOLECCION_VALOR) && arrAgregar[RECOLECCION_VALOR] != null){
+					event.direccion.horarios.addItem(ObjectUtil.copy(arrAgregar[RECOLECCION_VALOR]) as Horario);
+				}
+				settearIdDireccion(event.direccion.horarios,currentDireccion.idDireccion);
+				event.direccion.idProveedor = currentCliente.idCliente;
+				event.direccion.borrar = false;
+				vieneDe = "Actualizar";
+				dispatchEvent(event);
+				
+				obtenerInfoEnCurrentHorario(botonera.selectedIndex);
+			}
+			
+			private function obtenerInfoEnCurrentHorario(valor:int):void{
+				switch(valor)
+				{
+					case RECOLECCION_VALOR:
+					{
+						currentHorarioRecoleccion = new Horario();
+						currentHorarioRecoleccion.plunes = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(0);
+						currentHorarioRecoleccion.pmartes = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(1);
+						currentHorarioRecoleccion.pmiercoles = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(2);
+						currentHorarioRecoleccion.pjueves = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(3);
+						currentHorarioRecoleccion.pviernes = cmpHorarioyLugar.obtenerHorarioPorDiaDeLaSemana(4);
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			protected function cancelar(event:MouseEvent):void
+			{
+				limpiarDatos();
+				grpDirecciones.visible = grpDirecciones.includeInLayout = true;
+				grpEdicion.visible = grpEdicion.includeInLayout = false;
+				lstDirecciones.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			}
+			
+			protected function botonera_changingHandler(event:IndexChangeEvent):void
+			{
+				obtenerInfoEnCurrentHorario(event.oldIndex);
+				cmpHorarioyLugar.limpiarSeleccionComponenteHorario();
+				cmpHorarioyLugar.grid.desSeleccionarTodoEnElGrid();
+				switch(event.newIndex)
+				{
+					case RECOLECCION_VALOR:
+					{
+						if (tieneRecoleccion){
+							habilitarBotonesComponente(false);
+							cmpHorarioyLugar.btnAgregarHorario.enabled = false;
+						}
+						else{
+							habilitarBotonesComponente(true);
+						}
+						enviarInfoHorario(currentHorarioRecoleccion);
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			private function limpiarDatos():void{
+				currentHorarioRecoleccion = new Horario;
+				iniciaRecoleccion = false;
+				tieneRecoleccion = false;
+				cmpHorarioyLugar.limpiarSeleccionComponenteHorario();
+				cmpHorarioyLugar.grid.desSeleccionarTodoEnElGrid();
+				if (lstHorariosEdicion.dataProvider)
+					lstHorariosEdicion.dataProvider.removeAll();
+				lstHorariosEdicion.dataProvider = null;
+			/*	cmbPais.selectedIndex = 0;
+				cmbZona.selectedIndex = 0;
+				cmbRuta.selectedIndex = 0;
+				txtCP.text = "";
+				txtEstado.text = "";
+				txtCiudad.text = "";
+				txtCalle.text = "";
+				txtMunicipio.text = "";*/
+				habilitarBotonesComponente(true);
+				botonera.selectedIndex = 0;
+				arrEliminar = new ArrayCollection();
+				arrAgregar = new Object();
+				arrEdicion = new ArrayCollection();
+				currentDireccion = new Direccion();
+				lstHorarios.dataProvider = null;
+			}
+			
+			private function habilitarBotonesComponente($hab:Boolean):void{
+				cmpHorarioyLugar.btnAgregarHorario.enabled = !$hab;
+				cmpHorarioyLugar.btnSeleccionar.enabled = $hab;
+				cmpHorarioyLugar.btnDesSeleccionarTodo.enabled = $hab;
+			}
+		
+			
+			private function setearDiasHorarios($current:Horario):void{
+				if ($current.plunes.length > 0){
+					$current.lunes = true;
+				}
+				if ($current.pmartes.length > 0){
+					$current.martes = true;
+				}
+				if ($current.pmiercoles.length > 0){
+					$current.miercoles = true;
+				}
+				if ($current.pjueves.length > 0){
+					$current.jueves = true;
+				}
+				if ($current.pviernes.length > 0){
+					$current.viernes = true;
+				}
+			}
+			
+			private function enviarInfoHorario($current:Horario):void{
+				if ($current != null){
+					cmpHorarioyLugar.recibeDiasDeLaSemana($current.plunes,$current.pmartes,$current.pmiercoles,$current.pjueves,$current.pviernes);
+				}
+			}
+			
+			
+			/**
+			 * 
+			 */
+			public function set recibeRespuestaDireccionesDelProveedor($respuesta:Number):void{
+				
+				if ($respuesta >= 0 && vieneDe == "Eliminar"){
+					lstHorarios.dataProvider = null;
+					lstDirecciones.dataProvider.removeItemAt(lstDirecciones.selectedIndex);
+					enumerarListaDeDirecciones(lstDirecciones.dataProvider as ArrayCollection);
+					calculaTotal(lstDirecciones.dataProvider as ArrayCollection);
+					alertaSingleton.show("Se ha eliminado la dirección",catalogoAlertas.TIT_CONF_operacionExitosa);
+					btnAgregar.enabled = true;
+				}
+				else if ($respuesta > 0 && vieneDe == "Actualizar"){
+					//Ahora Actualiza el horario
+					trace($respuesta);
+					
+					//Refresca
+					cancelar(null);
+					iniciarVista();
+					
+				}
+				
+			}
+			
+			public function set recibeRespuestaHorarios($respuesta:Boolean):void{
+				
+				cancelar(null);
+				iniciarVista();
+			}
+		
+			
+			public function set recibeRespuestaDeRegistroDireccion($respuesta:Boolean):void{
+				if($respuesta)
+				{
+										iniciarVista();
+					
+				}
+				
+			}
+			
+			public function set revibeRespuestaDelregistroDeHorario($respuesta:Boolean):void{
+				if($respuesta)
+				{
+					indexlistaCliente = lstDirecciones.selectedIndex;
+					iniciarVista();
+				}
+				
+			}
+			private var tiposConHorario:ArrayCollection;
+			public function set recibeLosHorariosDireccionesDelCliente($horarios:ArrayCollection):void{
+				
+				tiposConHorario = new ArrayCollection();
+				
+				horarios = $horarios;
+				respaldoHorarios = ObjectUtil.copy(horarios) as ArrayCollection;
+				lstHorarios.dataProvider = $horarios;
+				lstHorarios.selectedIndex = 0;
+				
+				for (var i:int = 0; i < $horarios.length; i++) 
+				{
+					if($horarios[i].tipo == "Entrega" && $horarios[i].idHorario != null && $horarios[i].idHorario > 0 )
+						tiposConHorario.addItem($horarios[i]);
+					
+					if($horarios[i].tipo == "Revisión" && $horarios[i].idHorario != null && $horarios[i].idHorario > 0)
+						tiposConHorario.addItem($horarios[i]);
+					
+					if($horarios[i].tipo == "Cobro" && $horarios[i].idHorario != null && $horarios[i].idHorario > 0)
+						tiposConHorario.addItem($horarios[i]);
+					
+					
+					if($horarios[i].tipo == "Visita" && $horarios[i].idHorario != null && $horarios[i].idHorario > 0)
+						tiposConHorario.addItem($horarios[i]);
+				}
+				
+				
+			}
+			
+			public function set recibeLasDireccionesDelCliente($direcciones:ArrayCollection):void
+			{
+				if($direcciones.length > 0)
+				{
+					
+					calculaTotal($direcciones);
+					enumerarListaDeDirecciones($direcciones);
+					direcciones = $direcciones;
+					respaldoDirecciones = ObjectUtil.copy(direcciones) as ArrayCollection;
+					lstDirecciones.dataProvider = direcciones;
+					if( indexlistaCliente != 0 && indexlistaCliente > 0 && $direcciones.length > 1 ){
+						lstDirecciones.selectedIndex = indexlistaCliente;
+					}else
+					{
+						lstDirecciones.selectedIndex = 0;	
+					}
+					
+					lstDirecciones.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				}
+				else{
+					numDirecion = "";
+					lstDirecciones.dataProvider = new ArrayCollection();
+					lstHorarios.dataProvider = new ArrayCollection();
+					
+				}
+				
+				
+				
+			}
+			
+			
+			
+			
+			private function settearIdDireccion(array:ArrayCollection, idDireccion:Number):void{
+				for (var i:int = 0; i < array.length; i++) 
+				{
+					if (array[i] is Horario){
+						(array[i] as Horario).idDireccion = idDireccion;
+						(array[i] as Horario).diasEnTexto = null;
+						(array[i] as Horario).onlyDias = null;
+						(array[i] as Horario).onlyHoras = null;
+					}
+				}
+				
+			}
+			
+			private function calculaTotal($direcciones:ArrayCollection):void{
+				if($direcciones == null || $direcciones.length == 0)
+				{
+					txtTotal.text = "0 Direcciones";
+					return;
+				}
+				
+				if ($direcciones.length == 1){
+					txtTotal.text = "1 Dirección";
+				}
+				else{
+					txtTotal.text = $direcciones.length + " Direcciones";
+				}
+			}
+			
+			private function enumerarListaDeDirecciones($direcciones:ArrayCollection):void
+			{
+				for (var i:int = 0; i < $direcciones.length; i++) 
+				{
+					Direccion($direcciones[i]).numFila = i+1;
+				}
+			}
+			
+		
+			public function get currentCliente():Cliente
+			{
+				return _currentCliente;
+			}
+			
+			public function set currentCliente(value:Cliente):void
+			{
+				_currentCliente = value;
+			}
+			
+			protected function ModificarDireccion(event:EventoCatClientes_Direcciones):void{
+				modificarDireccion = true;
+				AbrirPopDirecciones();
+			}
+			
+			protected function mandarAbrirPopDir(event:MouseEvent):void{
+				modificarDireccion = false;
+				AbrirPopDirecciones();
+			}
+			
+		/*popUp de direcciones*/
+			private var popUpDirecciones:PopUpDireccionesClientes;
+			protected function AbrirPopDirecciones():void
+			{
+				if( popUpDirecciones == null ){
+					popUpDirecciones = PopUpDireccionesClientes(PopUpManager.createPopUp( this, PopUpDireccionesClientes, true ) );
+					popUpDirecciones.reciveCliente(_currentCliente);
+					if(modificarDireccion)
+					popUpDirecciones.direccionActual = lstDirecciones.dataProvider[lstDirecciones.selectedIndex];
+					popUpDirecciones.modificicarDireccion = modificarDireccion;
+					PopUpManager.centerPopUp( popUpDirecciones );
+					popUpDirecciones.addEventListener("cerrarPopUp",cerrarPopUpDirecciones);
+					
+				}else{
+					PopUpManager.addPopUp( popUpDirecciones , this, true );
+				}
+				
+			}
+			
+			/*popUp de Horarios*/
+			private function cerrarPopUpDirecciones(event:Event):void
+			{
+				if(modificarDireccion){
+					indexlistaCliente = lstDirecciones.selectedIndex;
+				}
+				
+				else{
+					indexlistaCliente = lstDirecciones.dataProvider.length;
+				}
+					
+				PopUpManager.removePopUp( popUpDirecciones );
+				popUpDirecciones = null;
+				
+			}
+			
+			private var popUpHorario:PopUPHorarioClientes;
+			protected function AbrirPopHorario(event:EventoCatClientes_Direcciones):void
+			{
+				if( popUpHorario == null ){
+					popUpHorario = PopUPHorarioClientes(PopUpManager.createPopUp( this, PopUPHorarioClientes, true ) );
+					popUpHorario.reciveCliente(_currentCliente);
+					popUpHorario.ModificarHorario = event.editarHorario;
+					popUpHorario.tiposHorarioNoD = tiposConHorario;
+					popUpHorario.direccionActual = lstDirecciones.dataProvider[lstDirecciones.selectedIndex];
+					if(event.editarHorario){
+						popUpHorario.horarioActual = lstHorarios.dataProvider[lstHorarios.selectedIndex]
+					}
+					PopUpManager.centerPopUp( popUpHorario );
+					popUpHorario.addEventListener("cerrarPopUp",cerrarPopUpHorario);
+					
+				}else{
+					PopUpManager.addPopUp( popUpHorario , this, true );
+				}
+				
+			}
+			private function cerrarPopUpHorario(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpHorario );
+				popUpHorario = null;
+				
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" verticalAlign="bottom" paddingBottom="10" paddingTop="18" paddingLeft="20" paddingRight="20">
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_direccionesGris}"/>
+		<label:TituloBankGothic_30 text="Direcciones"/>
+		<s:Spacer width="100%"/>
+		<s:HGroup height="100%" verticalAlign="bottom" horizontalAlign="right">
+			<label:Texto_13_VerdeAzul text="Última actualización: "/>
+			<label:Fecha_13_VerdeAzul id="lblFua" fecha="{null}"/>
+		</s:HGroup> 
+	</s:HGroup>
+	<s:HGroup width="100%" paddingLeft="20" paddingRight="20">
+		<otros:divisionGruesa width="100%" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%" height="100%" gap="0" id="grpDirecciones" >
+		<s:VGroup width="80%" height="100%" paddingLeft="15" paddingRight="20">
+			
+			<s:Spacer height="30" width="100%" />
+			<s:VGroup width="100%" horizontalAlign="right" gap="10">
+				<label:Titulo text="DIRECCIÓN" />
+				<otros:divisionGruesa />
+			</s:VGroup>
+			
+			<s:VGroup width="100%" height="100%" gap="20" paddingTop="10">
+				<s:HGroup width="100%" horizontalCenter="0" horizontalAlign="center" >
+					<s:TextInput id="txtBusqueda" width="70%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtrado()" />
+				</s:HGroup>
+				
+				<s:VGroup width="100%" height="100%" paddingTop="20" >
+					<s:List id="lstDirecciones" width="100%" height="100%" itemRendererFunction="selectRenderer" borderVisible="false" horizontalScrollPolicy="off" changing="lstDirecciones_changingHandler(event)"  />
+					<s:VGroup width="100%" horizontalAlign="center">
+						<label:TextoGris id="txtTotal"/>
+						<label:TextoGris text="TOTAL"/>
+					</s:VGroup>
+				</s:VGroup>
+				<s:VGroup width="100%" gap="10" paddingBottom="10" horizontalAlign="center" >
+					<otros:divisionHueca />
+					<pqNet:botonPqNetLargo id="btnAgregar" colorBase="#0b8692"  color="#0b8692" icono="mas_agregar_horario" label="Agregar" click="mandarAbrirPopDir(event)" />
+				</s:VGroup>
+			</s:VGroup>
+			
+		</s:VGroup>
+		
+		<s:Group width="100%" height="100%">
+			<s:Rect width="100%" height="100%">
+				<s:fill>
+					<s:SolidColor color="#e1e1e1" />
+				</s:fill>
+			</s:Rect>
+			<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="21">
+				<s:Spacer height="30" width="100%" />
+				<s:VGroup width="100%" horizontalAlign="right" gap="10">
+					<label:Titulo text="HORARIO" />
+					<otros:divisionGruesa />
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" gap="20" paddingTop="10">
+					<s:VGroup width="100%" horizontalCenter="0" gap="10" paddingTop="10">
+						<label:Titulo_18_VerdeAzul id="titleHorario" text="{numDirecion}"/>
+						<otros:Hdivision color="Negro" width="100%" height="2" />
+					</s:VGroup>
+					<s:VGroup width="100%" height="100%" >
+						<s:List id="lstHorarios" width="100%" height="100%" contentBackgroundColor="#e1e1e1" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.itemRenderer.CatClientes_TipoHorariosIR" borderVisible="false" horizontalScrollPolicy="off" />
+					</s:VGroup>
+				</s:VGroup>
+			</s:VGroup>
+		</s:Group>
+		
+	</s:HGroup>
+	
+	
+	<s:HGroup id="grpEdicion" width="100%" height="100%" >
+		<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="20">
+			
+			<s:Spacer height="30" width="100%" />
+			<s:VGroup width="100%" horizontalAlign="right" gap="10">
+				<label:Titulo text="GENERALES" />
+				<otros:divisionGruesa />
+			</s:VGroup>
+
+			<otros:divisionGruesa width="100%" height="3"/>
+			<s:HGroup width="100%" paddingTop="10" paddingBottom="20">
+				<evento:botonColoresConImagenEventoDefault color="#000000" conTexto="true" width="150" height="30" label="Guardar" click="guardarDireccionyHorario(event)" />
+				<s:HGroup width="100%" horizontalAlign="right">
+					<evento:botonColoresConImagenEventoDefault color="#ff4b4b" conTexto="true" width="150" height="30" label="Cancelar" click="cancelar(event)"/>
+				</s:HGroup>
+			</s:HGroup>
+			
+		</s:VGroup>
+		
+		<s:VGroup width="100%" height="100%" paddingLeft="20" paddingRight="21" gap="0">
+			<s:Spacer height="30" width="100%" />
+			<s:VGroup width="100%" horizontalAlign="right" paddingTop="6" gap="10">
+				<label:Titulo text="HORARIO" />
+				<otros:divisionGruesa />
+			</s:VGroup>
+			<s:VGroup width="100%" height="100%" horizontalAlign="center">
+				<s:List id="botonera" layoutDirection="ltr" width="100%" contentBackgroundColor="#ffffff" dataProvider="{arrBotonera}" borderVisible="false" horizontalScrollPolicy="off"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.itemRenderer.CatClientes_Botonera_IR" verticalScrollPolicy="off" changing="botonera_changingHandler(event)" >
+					<s:layout>
+						<s:HorizontalLayout gap="0" />
+					</s:layout>
+				</s:List>
+				
+				<seleccionHorario:componenteSeleccionHorarioDefaultPQNet width="100%" height="100%" id="cmpHorarioyLugar" paddingBottom="10"/>
+				
+			</s:VGroup>
+			
+			<s:Scroller width="100%" height="100%" maxHeight="225" >
+				<s:VGroup width="100%" height="100%" paddingTop="10" >
+					<s:List id="lstHorariosEdicion" height="100%" width="100%" contentBackgroundColor="#ffffff" itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.generales.itemRenderer.CatClientes_HorariosEdicion_IR" borderVisible="false" horizontalScrollPolicy="off" />
+				</s:VGroup>
+			</s:Scroller>
+		</s:VGroup>
+		
+	</s:HGroup>
+	
+	
+</s:VGroup>

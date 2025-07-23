@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _infoCPagoXCobrar:ArrayCollection;
+			
+			public function set obtenerListaCobros($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				/**
+				 * Se realiza una copia de la info y se recibe en un Array simple, para poder aplicar funciones específicas de los mismos
+				 **/
+				var arrayTemp:Array = new Array();
+				_infoCPagoXCobrar = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				arrayTemp = (ObjectUtil.copy($infoGrafica)as ArrayCollection).source;
+				
+				
+				/**
+				 * Eliminar los cobros en estado Cobrada y cancelada
+				 * */
+				keys = new Object();
+				var arraySinCobradayCancelada: Array = new Array();
+				arraySinCobradayCancelada = arrayTemp.filter(quitarCobradaYCancelada);
+				arraySinCobradayCancelada.sortOn("cpago");
+				
+				//Liberar memoria
+				arrayTemp = new Array();
+				
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Condición de Pago
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalNI:Array = new Array();
+				arrayTotalNI = arraySinCobradayCancelada.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Nivel de Ingreso
+				 * */
+				
+				FormarLasConicionesDePago(arrayTotalNI,arraySinCobradayCancelada,"CON_PAGO",_infoCPagoXCobrar);
+				
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoCPagoXCobrar,null,"totalCobros");
+				
+				//Para liberar Memoria
+				arrayTotalNI = new Array();
+				arraySinCobradayCancelada = new Array();
+			}
+			
+			private function FormarLasConicionesDePago(TotalNIs:Array,NIsInfo:Array,etiqueta:String,infoNIs:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCobros:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientes:Object;
+				
+				var currentPartidaCobros:Cobros; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalNIs.length; i++){
+					j=0;
+					keysClientes = new Object();
+					totalCobros =0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCobros = NIsInfo[j] as Cobros;
+					while( (TotalNIs[i] as Cobros).cpago == currentPartidaCobros.cpago){
+						totalPartidas += currentPartidaCobros.partidas;
+						totalPiezas += currentPartidaCobros.piezas;
+						totalMonto += currentPartidaCobros.montoDolares;
+						
+						totalCobros++;
+						
+						if(!keysClientes.hasOwnProperty(currentPartidaCobros.nombreCliente)){
+							keysClientes[currentPartidaCobros.nombreCliente] = currentPartidaCobros.nombreCliente;
+							totalClientes++;
+						}
+						
+						NIsInfo.shift();
+						if(NIsInfo.length >0)
+							currentPartidaCobros = NIsInfo[j] as Cobros;
+						else
+							currentPartidaCobros =new Cobros();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalNIs[i] as Cobros).cpago.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalCobros = totalCobros;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoNIs.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function quitarCobradaYCancelada(item:Cobros, id:uint, array:Array):Boolean
+			{
+				if(item.estado == "Cerrada" || item.estado == "Cancelada" || item.estado == "Por Cancelar"){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			
+			public function quitaDuplicados(item:Cobros, id:uint, _array:Array):Boolean{
+				if (keys.hasOwnProperty(item.cpago)) {
+					return false;
+				} else {
+					keys[item.cpago] = item.cpago;
+					return true;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="10%" verticalAlign="middle" horizontalAlign="center">
+		<s:Spacer width="100%" height="5%"/>
+		<componentes:tituloChartTablero width="100%" text="C.PAGO POR COBRAR" textAlign="center"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" horizontalCenter="0" verticalCenter="0" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="total"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="30%"/>
+	</s:VGroup>
+</s:Group>

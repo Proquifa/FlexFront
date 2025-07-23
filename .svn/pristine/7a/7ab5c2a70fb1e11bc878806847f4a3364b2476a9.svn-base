@@ -1,0 +1,843 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" 
+		  xmlns:compProforma="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.componentesComunProforma.*" paddingBottom="30" paddingTop="30" paddingLeft="40" paddingRight="40" 
+		  xmlns:flecharegresa="skins.botones.flecharegresa.*" xmlns:pqNet="skins.skin.datagrid.pqNet.*" xmlns:largo="skins.botones.largo.*" xmlns:largosinicono="skins.botones.largosinicono.*" xmlns:sinicono="skins.botones.largocolor.sinicono.*" xmlns:pqNet1="skins.botones.pqNet.*">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaProforma;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.alertPqNet.alertPqNet;
+			import mx.controls.Alert;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.events.DragEvent;
+			import mx.events.ListEvent;
+			import mx.events.ResizeEvent;
+			import mx.formatters.NumberFormatter;
+			import mx.utils.ObjectUtil;
+			import mx.utils.object_proxy;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]
+			private var _proformaDrop:String;
+			[Bindable]
+			private var _respaldoProformaDrag:ArrayCollection;
+			[Bindable]
+			private var _itemsDrag:ArrayCollection;
+			[Bindable]
+			private var _opcionSeleccionada:PartidaProforma;
+			[Bindable]
+			private var _listaProformas:ArrayCollection;
+			[Bindable]
+			private var _listaGrid:ArrayCollection;
+			private var seRegresatodo:Boolean = false;
+			[Bindable]
+			public var _datosBarraBoton:ArrayCollection = new ArrayCollection([{label:"Proforma", icono:"proforma", bandera:false},
+				{label:"Tiempos",icono:"reloj", bandera:false},
+			]);
+			private var indiceSeleccionado:int = 0;
+			public var _estaEnInspector:Boolean;
+			/**
+			 * 	funcion publica que inicia el componente
+			 */ 
+			public function iniciaComponente( $partida:PartidaProforma):void{
+				_opcionSeleccionada = new PartidaProforma();
+				_opcionSeleccionada = $partida;
+				var evento:EventoProforma = new EventoProforma( EventoProforma.CONSULTAR_PROFORMAS_POR_PROVEEDOR );
+				evento.idProveedor = $partida.proveedor;
+				evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;				
+				dispatchEvent( evento );
+				this.addEventListener( EventoProforma.REGRESA_CHECK_SELECCIONADO, obtenCheckSeleccionado );
+				this.addEventListener( EventoProforma.REGRESA_ID_PROFORMA, obtenProformaSeleccionadoDragDrop );
+				_estaEnInspector = false;
+			}
+			
+			/**
+			 * funcion publica que recibe del mapaProforma.mxml las lista de proformas por proveedor, la funcion que manda a llamar estos datos es 
+			 * iniciaComponente()
+			 */ 
+			public function set recibeProformasPorProveedor( $datos:ArrayCollection ):void{
+				if( $datos == null ){
+					return;
+				}
+				////////////////////////////////////////////////////////////////////////////////// aqui se genera la lista de proformas y tipo de carros ////////////////////////////////////////////////////
+				this._listaProformas = new ArrayCollection();
+				var _arregloProformasTemporal:ArrayCollection = new ArrayCollection();
+				var _arregloBackOrder:ArrayCollection = new ArrayCollection();
+				var _arregloStock:ArrayCollection = new ArrayCollection();
+				var _arregloCarroProgrmado:ArrayCollection = new ArrayCollection();
+				var _arregloCM:ArrayCollection = new ArrayCollection();
+				var _arregloCN:ArrayCollection = new ArrayCollection();
+				var _arregloCO:ArrayCollection = new ArrayCollection();
+				var _proformasET:int = 0;
+				var _proformasFT:int = 0;
+				var _existePartidaBackOrder:Boolean = false;
+				var _existePartidaStock:Boolean = false;
+				var _existePartidaProgramado:Boolean = false;
+				var _existePartidaMundiales:Boolean = false;
+				var _existePartidaNacionales:Boolean = false;
+				var _existePartidaOrigen:Boolean = false;
+				for( var i:int = 0; i < $datos.length; i++){
+					var relleno:int = 0;
+					if( ($datos[i] as PartidaProforma ).idProforma > 0 ){ 
+						var _arregloInterno:ArrayCollection = new ArrayCollection();
+						if( _arregloProformasTemporal.length == 0 ){
+							_arregloInterno = new ArrayCollection();
+							_arregloInterno.addItem( $datos[i] );
+							_arregloProformasTemporal.addItem( _arregloInterno );
+						}else{
+							var encontroCoincidencia:Boolean = false;
+							for( var t:int = 0; t < _arregloProformasTemporal.length; t++ ){
+								if(!encontroCoincidencia){
+									_arregloInterno = new ArrayCollection();
+									_arregloInterno = ObjectUtil.copy( _arregloProformasTemporal[t]) as ArrayCollection;
+									if( (_arregloInterno[0] as PartidaProforma).idProforma ==  ($datos[i] as PartidaProforma ).idProforma ){
+										_arregloInterno.addItem( $datos[i] );
+										_arregloProformasTemporal[t] =  ObjectUtil.copy( _arregloInterno ) as ArrayCollection;
+										encontroCoincidencia = true;
+									}	}	}
+							if( !encontroCoincidencia ){
+								_arregloInterno = new ArrayCollection();
+								_arregloInterno.addItem( $datos[i] );
+								_arregloProformasTemporal.addItem( _arregloInterno );
+								encontroCoincidencia = false;
+						}	}
+					}else{
+						( $datos[i] as PartidaProforma ).tipoCarro == "BACKORDER" ? _arregloBackOrder.addItem( $datos[i] ) : relleno++ ;
+						( $datos[i] as PartidaProforma ).tipoCarro == "STOCK" ? _arregloStock.addItem( $datos[i] ) : relleno++ ;
+						( $datos[i] as PartidaProforma ).tipoCarro == "PROGRAMADO" ? _arregloCarroProgrmado.addItem( $datos[i] ) : relleno++ ;	
+						( $datos[i] as PartidaProforma ).tipoCarro == "MUNDIALES" ? _arregloCM.addItem( $datos[i] ) : relleno++ ;
+						( $datos[i] as PartidaProforma ).tipoCarro == "NACIONALES" ? _arregloCN.addItem( $datos[i] ) : relleno++ ;
+						( $datos[i] as PartidaProforma ).tipoCarro == "ORIGEN" ? _arregloCO.addItem( $datos[i] ) : relleno++ ;
+					}
+					//se hace una validacion para generar carros vacios para el tipo de partidas existentes
+					if( ( $datos[i] as PartidaProforma ).tipoCarro == "BACKORDER" ){ _existePartidaBackOrder = true;  }
+					if( ( $datos[i] as PartidaProforma ).tipoCarro == "STOCK" ){ _existePartidaStock = true;  }
+					if( ( $datos[i] as PartidaProforma ).tipoCarro == "PROGRAMADO" ){ _existePartidaProgramado = true;  }
+					if( ( $datos[i] as PartidaProforma ).tipoCarro == "MUNDIALES" ){ _existePartidaMundiales = true;  }
+					if( ( $datos[i] as PartidaProforma ).tipoCarro == "NACIONALES" ){ _existePartidaNacionales = true;  }
+					if( ( $datos[i] as PartidaProforma ).tipoCarro == "ORIGEN" ){ _existePartidaOrigen = true;  }
+				}
+				var partidaProformaVacia:PartidaProforma = new PartidaProforma();
+				if( _arregloBackOrder.length > 0 ){
+					_listaProformas.addItem( _arregloBackOrder ) 
+				}else{
+					if( _existePartidaBackOrder ){
+						partidaProformaVacia = new PartidaProforma();
+						partidaProformaVacia.cantidadPedida = 0;
+						partidaProformaVacia.idProforma = 0;
+						partidaProformaVacia.tipoCarro = "BACKORDER";
+						_arregloBackOrder.addItem( partidaProformaVacia );
+						_listaProformas.addItem( _arregloBackOrder );		
+					}	}
+				if( _arregloStock.length > 0 ){
+					_listaProformas.addItem( _arregloStock ) 
+				}else{
+					if( _existePartidaStock ){
+						partidaProformaVacia = new PartidaProforma();
+						partidaProformaVacia.cantidadPedida = 0;
+						partidaProformaVacia.idProforma = 0;
+						partidaProformaVacia.tipoCarro = "STOCK";
+						_arregloStock.addItem( partidaProformaVacia );
+						_listaProformas.addItem( _arregloStock );		
+					}	}
+				if( _arregloCarroProgrmado.length > 0){
+					_listaProformas.addItem( _arregloCarroProgrmado ) 
+				}else{
+					if( _existePartidaProgramado ){
+						partidaProformaVacia = new PartidaProforma();
+						partidaProformaVacia.cantidadPedida = 0;
+						partidaProformaVacia.idProforma = 0;
+						partidaProformaVacia.tipoCarro = "PROGRAMADO";
+						_arregloCarroProgrmado.addItem( partidaProformaVacia );
+						_listaProformas.addItem( _arregloCarroProgrmado );		
+					}	}
+				if( _arregloCM.length > 0  ){
+					_listaProformas.addItem( _arregloCM ) 
+				}else{
+					if( _existePartidaMundiales ){
+						partidaProformaVacia = new PartidaProforma();
+						partidaProformaVacia.cantidadPedida = 0;
+						partidaProformaVacia.idProforma = 0;
+						partidaProformaVacia.tipoCarro = "MUNDIALES";
+						_arregloCM.addItem( partidaProformaVacia );
+						_listaProformas.addItem( _arregloCM );		
+					}	}
+				if( _arregloCN.length > 0 ){
+					_listaProformas.addItem( _arregloCN ) 
+				}else{
+					if( _existePartidaNacionales ){
+						partidaProformaVacia = new PartidaProforma();
+						partidaProformaVacia.cantidadPedida = 0;
+						partidaProformaVacia.idProforma = 0;
+						partidaProformaVacia.tipoCarro = "NACIONALES";
+						_arregloCN.addItem( partidaProformaVacia );
+						_listaProformas.addItem( _arregloCN );		
+					}	}
+				if( _arregloCO.length > 0 ){
+					_listaProformas.addItem( _arregloCO ) 
+				}else{
+					if( _existePartidaOrigen ){
+						partidaProformaVacia = new PartidaProforma();
+						partidaProformaVacia.cantidadPedida = 0;
+						partidaProformaVacia.idProforma = 0;
+						partidaProformaVacia.tipoCarro = "ORIGEN";
+						_arregloCO.addItem( partidaProformaVacia );
+						_listaProformas.addItem( _arregloCO );		
+					}	}
+				if(_arregloProformasTemporal.length > 0){
+					for( var u:int = 0;  u < _arregloProformasTemporal.length; u++){
+						_listaProformas.addItem( _arregloProformasTemporal[u] );
+						var proformaReal:PartidaProforma = new PartidaProforma;
+						proformaReal = _arregloProformasTemporal[u][0];
+						if( proformaReal.fechaCierre != null ){
+							UtilsFecha.determinarFechaEnTiempoDeUnDiaAOtro( proformaReal.fechaCierre ) == "enTiempo" ? _proformasET = _proformasET + 1 : _proformasFT = _proformasFT + 1;
+						}else{
+							_proformasET = _proformasET + 1 ;
+						} 
+					}
+				}
+				var arregloExtra:ArrayCollection = new ArrayCollection();
+				var proformaExtra:PartidaProforma = new PartidaProforma();
+				proformaExtra.ultimaProforma = true;
+				_arregloProformasTemporal.length > 0 ? proformaExtra.numProformasTotales = _arregloProformasTemporal.length :  proformaExtra.numProformasTotales = 0;
+				arregloExtra.addItem( proformaExtra );
+				_listaProformas.addItem( arregloExtra );
+				this.lblTotalProformas.text = _arregloProformasTemporal.length + ' Proformas · ' + _proformasFT 	+ ' ET · ' +  _proformasET + ' FT';
+				if( this.indiceSeleccionado > 0){
+					this.listProformas.selectedIndex =  this.indiceSeleccionado ;
+				}else{
+					this.listProformas.selectedIndex = 0;
+				}
+				(this.grdPartidaProforma.columns[0] as DataGridColumn).visible = false;
+				(this.grdPartidaProforma.columns[0] as DataGridColumn).width = 0;
+				visualizaProforma( this.listProformas.selectedItem );
+			}
+			/**
+			 * Funcion para regresar a la zona del Menu y Planificaion
+			 */ 
+			private function regresaAMenu():void{
+				_listaProformas = new ArrayCollection();
+				_listaGrid = new ArrayCollection();
+				var eventoR:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.OBTENER_TIPO_Y_TOTAL_PENDOENTES );
+				eventoR.usuario =  DatosGlobales.getInstance()._usuario.usuario; 
+				dispatchEvent( eventoR );
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+				evento.idOpcionSeleccionada = "espacioTablasYGrafGestorProdPHS";
+				dispatchEvent( evento );
+				this.stackPlanificacion.selectedIndex = 0;
+				this.btnBarra.selectedIndex = 0;
+			}
+			/**
+			 * Funcion privada  
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				if(event.currentTarget.selectedIndex == 0){
+					this.stackPlanificacion.selectedIndex = 0;
+				} else if(event.currentTarget.selectedIndex == 1){
+					this.stackPlanificacion.selectedIndex = 1;
+					this.compTiemposProforma.iniciaComponente(this._opcionSeleccionada );
+				}
+			}
+			/**
+			 * funcion para visualizar las partidas de las proformas
+			 */ 
+			private function visualizaProforma($dato:ArrayCollection):void{
+				if($dato==null){
+					return;
+				}
+				
+				this.indiceSeleccionado = this.listProformas.selectedIndex;
+				if(this.listProformas.selectedIndex == this._listaProformas.length-1) return;
+				var total:Number = 0;
+				var relleno:int = new int;
+				var totalFR:int = 0;
+				var totalFP:int = 0;
+				var totalFE:int = 0;
+				var totalST:int = 0;
+				var totalSTconID:int = 0;
+				this.imgbackorders.visible = false;
+				this.imgcandadorojoabierto.visible = false;
+				this.imgcandadorojocerrado.visible = false;
+				this.imgcandadoverdeabierto.visible = false;
+				this.imgcandadoverdecerrado.visible = false;
+				this.imgcarrostock.visible = false;
+				this.imgcontroladomundial.visible = false;
+				this.imgcontroladonacional.visible = false;
+				this.imgcontroladoorigen.visible = false;
+				this.imgprogramados.visible = false;
+				if( ($dato as ArrayCollection).length == 1 && ( $dato[0] as PartidaProforma).cantidadPedida == 0 && ( $dato[0] as PartidaProforma).idProforma  == 0){
+					this._listaGrid = new ArrayCollection();
+					lblNumPartidas.text = "0 Partidas";
+					lblCantidadProformaSeleccionada.text = "0 " + this._opcionSeleccionada.monedaProveedor +  " .";
+					vstBotones.selectedIndex = 0;
+					lblTipoProformaSeleccionada.text = ( $dato[0] as PartidaProforma ).tipoCarro;
+					( $dato[0] as PartidaProforma ).tipoCarro == "BACKORDER" ? this.imgbackorders.visible = true : relleno++ ;
+					( $dato[0] as PartidaProforma ).tipoCarro == "STOCK" ? this.imgcarrostock.visible = true : relleno++ ;
+					( $dato[0] as PartidaProforma ).tipoCarro == "PROGRAMADO" ? this.imgprogramados.visible = true : relleno++ ;	
+					( $dato[0] as PartidaProforma ).tipoCarro == "MUNDIALES" ? this.imgcontroladomundial.visible = true : relleno++ ;	
+					( $dato[0] as PartidaProforma ).tipoCarro == "NACIONALES" ? this.imgcontroladonacional.visible = true : relleno++ ;	
+					( $dato[0] as PartidaProforma ).tipoCarro == "ORIGEN" ? this.imgcontroladoorigen.visible = true : relleno++ ;	
+					habilitaControlProformaStock( false );
+				}else{ 
+					var contadorFRenControlados:int = 0;
+					var contadorFEenControlados:int = 0;
+					var contadorSPenControlados:int = 0;
+					for( var i:int = 0; i < $dato.length; i++ ){	
+						( $dato[i] as PartidaProforma ).numFila = i + 1;	
+						total = total + ( $dato[i] as PartidaProforma ).cantidadPedida * ( $dato[i] as PartidaProforma ).costoCDesc ;	
+						if( !isNaN( ( $dato[0] as PartidaProforma ).idProforma)  && ( $dato[0] as PartidaProforma ).idProforma > 0 ){	
+							( $dato[i] as PartidaProforma ).tipoFlete == "Regular" ? totalFR++ : relleno++ ;	
+							( $dato[i] as PartidaProforma ).tipoFlete == "Programado" ? totalFP++ : relleno++ ;	
+							( $dato[i] as PartidaProforma ).tipoFlete == "Flete Express" ? totalFE++: relleno++ ;	
+							( $dato[i] as PartidaProforma ).tipoCarro == "STOCK" ? totalSTconID++: relleno++ ;			
+						}else{
+							( $dato[i] as PartidaProforma ).tipoCarro == "STOCK" ? totalST++ : relleno++ ;
+							if(( $dato[i] as PartidaProforma ).tipoFlete != null){
+								( $dato[i] as PartidaProforma ).tipoFlete == "Regular" ? contadorFRenControlados++ : relleno++ ;	
+								( $dato[i] as PartidaProforma ).tipoFlete == "Programado" ? contadorFEenControlados++ : relleno++ ;	
+								( $dato[i] as PartidaProforma ).tipoFlete == "Flete Express" ? contadorSPenControlados++: relleno++ ;	
+							}
+						}
+					}
+					habilitaControlProformaStock( false );
+					habilitacolumnaFEBO(false);
+					if(  !isNaN( ( $dato[0] as PartidaProforma ).idProforma)  && ( $dato[0] as PartidaProforma ).idProforma > 0 ){ //al entrar a este if se indica que es una proforma						
+						lblTipoProformaSeleccionada.text= ( $dato[0] as PartidaProforma ).folioProforma;
+						this.lblNumPartidas.text = $dato.length + ' partidas : ' + totalFR + ' FR : ' +  totalFE + ' FE : ' + totalFP + ' FP';
+						totalSTconID > 0 ? this.lblNumPartidas.text = this.lblNumPartidas.text  + ' : ' + totalSTconID + 'ST' :  this.lblNumPartidas.text = this.lblNumPartidas.text;
+						vstBotones.selectedIndex = 3;
+						if( ( $dato[0] as PartidaProforma ).proformaAbierta ){
+							this.imgcandadoverdecerrado.visible = true;
+						}else{
+							this.imgcandadorojoabierto.visible = true;
+						}
+						habilitacolumnaUltimoOrigen(true);
+						if( _estaEnInspector ){ //si  se entra a este if, quiere decir que la vista actual se encuentra en los datos son enviados en un evento a viewStack General para q
+							var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+							evento.idOpcionSeleccionada = "actualizaDatosInspectorProforma";
+							evento.proforma = this._opcionSeleccionada;
+							evento.lista = this.listProformas.selectedItem as ArrayCollection;
+							dispatchEvent( evento );
+						}
+					}else{
+						habilitacolumnaUltimoOrigen(false);
+						if( ( $dato[0] as PartidaProforma ).tipoCarro == "BACKORDER" ){
+							lblTipoProformaSeleccionada.text = ( $dato[0] as PartidaProforma ).tipoCarro ;
+							lblNumPartidas.text = $dato.length + ' partidas . ' + $dato.length + 'FR · 0 FE · 0 FP';
+							vstBotones.selectedIndex = 0 ;
+							imgbackorders.visible = true ;
+							habilitacolumnaFEBO(true);
+						}else if( ( $dato[0] as PartidaProforma ).tipoCarro == "STOCK" ){
+							lblTipoProformaSeleccionada.text = ( $dato[0] as PartidaProforma ).tipoCarro;
+							lblNumPartidas.text = $dato.length + ' partidas · 0 FR · 0 FE · 0 FP';
+							vstBotones.selectedIndex = 1 ;
+							this.imgcarrostock.visible = true ;
+						}else if( ( $dato[0] as PartidaProforma ).tipoCarro == "PROGRAMADO" ){
+							lblTipoProformaSeleccionada.text = ( $dato[0] as PartidaProforma ).tipoCarro ;
+							lblNumPartidas.text = $dato.length + ' partidas · 0 FR · 0 FE · ' + $dato.length + 'FP';
+							vstBotones.selectedIndex = 0 ;
+							this.imgprogramados.visible = true ;	
+						}else if( ( $dato[0] as PartidaProforma ).tipoCarro == "MUNDIALES" ){
+							lblTipoProformaSeleccionada.text = "MUNDIALES" ;
+							lblNumPartidas.text = $dato.length + ' partidas · ' + contadorFRenControlados +  'FR · ' + contadorFEenControlados + ' FE · ' +  contadorSPenControlados + ' FP';
+							vstBotones.selectedIndex = 0 ;
+							this.imgcontroladomundial.visible = true ;	
+						}else if( ( $dato[0] as PartidaProforma ).tipoCarro == "NACIONALES" ){
+							lblTipoProformaSeleccionada.text = "NACIONALES" ;
+							lblNumPartidas.text = $dato.length + ' partidas · ' + contadorFRenControlados +  'FR · ' + contadorFEenControlados + ' FE · ' +  contadorSPenControlados + ' FP';
+							vstBotones.selectedIndex = 0 ;
+							this.imgcontroladonacional.visible = true ;	
+						}else if( ( $dato[0] as PartidaProforma ).tipoCarro == "ORIGEN" ){
+							lblTipoProformaSeleccionada.text = "ORIGEN" ;
+							lblNumPartidas.text = $dato.length + ' partidas · ' + contadorFRenControlados +  'FR · ' + contadorFEenControlados + ' FE · ' +  contadorSPenControlados + ' FP';
+							vstBotones.selectedIndex = 0 ;
+							this.imgcontroladoorigen.visible = true ;	
+						}
+					}
+					this.lblCantidadProformaSeleccionada.text = UtilsFormatosNumericos.precisionADosDecimalesConComas( total ) + ' ' + ( $dato[0] as PartidaProforma ).monedaProveedor + '.';
+					this._listaGrid = $dato;
+				}			
+			}
+			/**
+			 * Funcion Privada que llena todos los checks de un jalon
+			 */ 
+			private function controlChecks(accion:Boolean):void{
+				for( var i:int = 0; i < listProformas.selectedItem.length; i++ ){
+					(listProformas.selectedItem[i] as PartidaProforma).checkParaProforma = true;
+				}
+				listProformas.selectedItem.refresh();
+				calculaTotalProformaStock();
+			}
+			/**
+			 * Funcion que obtiene la partida con el check seleccionado para generar la proforma del componente hijo GridDragAndDropProforma.mxml
+			 */ 
+			private function obtenCheckSeleccionado( $evt:EventoProforma ):void{
+				for( var i:int = 0; i < this.listProformas.selectedItem.length; i++ ){
+					if( (this.listProformas.selectedItem[i] as PartidaProforma).idPPedido == $evt.partidaSeleccionada.idPPedido ){
+						this.listProformas.selectedItem[i] = $evt.partidaSeleccionada;
+					} 
+				}
+				calculaTotalProformaStock();
+			}
+			/**
+			 * funcion que calcula el total monetario de los stock seleccionados para la nueva proforma
+			 */ 
+			private function calculaTotalProformaStock():void{
+				var total:int = 0;
+				var contPartidas:int = 0;
+				for( var i:int = 0; i < listProformas.selectedItem.length; i++ ){
+					if ( (listProformas.selectedItem[i] as PartidaProforma).checkParaProforma ){
+						total = total + ( (listProformas.selectedItem[i] as PartidaProforma).cantidadPedida * (listProformas.selectedItem[i] as PartidaProforma).costoCDesc );
+						contPartidas++;
+					}
+				}
+				this.lblPrecioStockSeleccionado.text =  contPartidas + ' partidas  · ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( total ) + ' ' + ( listProformas.selectedItem[0] as PartidaProforma).monedaProveedor;
+				contPartidas == 0 ? this.lblPrecioStockSeleccionado.text  = "0 partidas" : this.lblPrecioStockSeleccionado.text = this.lblPrecioStockSeleccionado.text;
+			}
+			/**
+			 * funcion que se dirige al componente gridDragAndDrop para hacer visibles o invisbles las columnas
+			 */ 
+			private function habilitaControlProformaStock($habilita:Boolean):void{
+				tamanioColumnas();
+				this.grdPartidaProforma.controlColumna($habilita,0,this.grdPartidaProforma.width * 0.0623,0);
+				$habilita ? this.vstBotones.selectedIndex = 2 : this.vstBotones.selectedIndex = 1;
+			}
+			/**
+			 * funcion que habilita los controles para generar una nueva proforma con partidas de Stock
+			 */ 
+			private function habilitacolumnaFEBO($habilita:Boolean):void{
+				tamanioColumnas();
+				this.grdPartidaProforma.controlColumna($habilita,7,this.grdPartidaProforma.width * 0.0623,0);
+			}
+			/**
+			 * funcion que habilita los controles para generar una nueva proforma con partidas de Stock
+			 */ 
+			private function habilitacolumnaUltimoOrigen($habilita:Boolean):void{
+				tamanioColumnas();
+				this.grdPartidaProforma.controlColumna($habilita,12,this.grdPartidaProforma.width * 0.0623,0);
+				
+			}
+			private function tamanioColumnas():void{
+				(this.grdPartidaProforma.columns[0] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// check
+				(this.grdPartidaProforma.columns[1] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// #							
+				(this.grdPartidaProforma.columns[2] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// C
+				(this.grdPartidaProforma.columns[3] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.3);		// concepto
+				(this.grdPartidaProforma.columns[4] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// tipo
+				(this.grdPartidaProforma.columns[5] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// peticion especial
+				(this.grdPartidaProforma.columns[6] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// total a pagar
+				(this.grdPartidaProforma.columns[7] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// FEDB
+				(this.grdPartidaProforma.columns[8] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// FEE
+				(this.grdPartidaProforma.columns[9] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// PI
+				(this.grdPartidaProforma.columns[10] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// destino
+				(this.grdPartidaProforma.columns[11] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// En espera desde
+				(this.grdPartidaProforma.columns[12] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);	// Último origen
+				(this.grdPartidaProforma.columns[13] as DataGridColumn).width = (this.grdPartidaProforma.width * 0.0623);
+				(this.grdPartidaProforma.columns[14] as DataGridColumn).width = 0;// imagen
+				(this.grdPartidaProforma.columns[14] as DataGridColumn).visible = false;
+				(this.grdPartidaProforma.columns[15] as DataGridColumn).width = 0;// imagen
+				(this.grdPartidaProforma.columns[15] as DataGridColumn).visible = false;
+			}
+			/**
+			 * funcion que crea copias de seguridad de las partidas de la Proforma seleccionada
+			 */ 
+			protected function grdPartidaProforma_dragStartHandler(event:DragEvent):void{
+				_respaldoProformaDrag = new ArrayCollection();
+				_itemsDrag = new ArrayCollection();
+				_respaldoProformaDrag = ObjectUtil.copy( this.listProformas.selectedItem) as ArrayCollection;
+				for(var i:int = 0; i < this.grdPartidaProforma.selectedItems.length ; i++){
+					this._itemsDrag.addItem( this.grdPartidaProforma.selectedItems[i]);
+				}  
+			} 
+			/**
+			 * Funcion privada que obtiene el itemSeleccionado de la lista atraves del Drag and Drop
+			 */ 			
+			private function obtenProformaSeleccionadoDragDrop( $evt:EventoProforma ):void{
+				this._proformaDrop = "";
+				this._proformaDrop = $evt.seccionDestinoDeProforma;
+			}
+			/**
+			 * funcion que entra en accion cuando termina el drop del mouse de los elementos arrastadros desde el grid
+			 * los datos son elminados del grid de donde se arrastarn esto es en automatico esto no se puede evitar, estos datos son guardados en una variable l
+			 * lamada _itemsDrag al inciar con el 'dragStart' 
+			 */ 
+			protected function listProformas_dragDropHandler(event:DragEvent):void{
+				event.preventDefault();
+				var p:int = 0;
+				var m:int = 0;
+				var n:int = 0;
+				seRegresatodo = false;
+				if(_proformaDrop == null || _proformaDrop == "Vacio" || _proformaDrop == ""){
+					seRegresatodo = true;
+				}
+				if( this.grdPartidaProforma.dataProvider.length == this.grdPartidaProforma.selectedItems.length && ( _itemsDrag[0] as PartidaProforma ).idProforma > 0 ){
+					//aqui se valida si una proforma 
+					seRegresatodo= true;
+					alertaSingleton.show(catalogoAlertas.compradorPhs_proformaNoQuedaVacia, catalogoAlertas.TIT_ADV_informacionIncompleta); 
+				}
+				var insertaronDatos:Boolean = false;
+				for(var i:int = 0; i < _listaProformas.length; i++){
+					if( !insertaronDatos){
+						if( !seRegresatodo ){
+							if( (_listaProformas as ArrayCollection).length == 1 && (_listaProformas[0] as PartidaProforma).ultimaProforma  ){
+								seRegresatodo = true;
+							}else if( _proformaDrop != "STOCK" && _proformaDrop != "PROGRAMADO" && _proformaDrop != "BACKORDER" &&  !isNaN( ( _listaProformas[i][0] as PartidaProforma ).idProforma)  && ( _listaProformas[i][0] as PartidaProforma ).idProforma > 0 && ( _listaProformas[i][0] as PartidaProforma ).idProforma == parseInt(_proformaDrop) ){  
+								//validaciones monetarias para proformas
+								if( (_itemsDrag[0] as PartidaProforma).folioProforma ==  ( _listaProformas[i][0] as PartidaProforma ).folioProforma){
+									alertaSingleton.show(catalogoAlertas.ADV_elOrigenMismoDestino, catalogoAlertas.TIT_ADV_informacionIncompleta ); 
+									seRegresatodo = true;
+								}else{
+									var total:Number = 0;
+									for(m = 0; m < this._listaProformas[i].length; m++){
+										total = total +( ( _itemsDrag[n] as PartidaProforma ).costoCDesc * ( _itemsDrag[n] as PartidaProforma ).cantidadPedida );
+									}
+									for(n = 0; n < _itemsDrag.length; n++){
+										/* total = total + ( ( _itemsDrag[n] as PartidaProforma ).costoCDesc * ( _itemsDrag[n] as PartidaProforma ).cantidadPedida ); */
+										total = total +  ( _itemsDrag[n] as PartidaProforma ).costoCDesc;
+									}
+									if( total < (this._opcionSeleccionada.maxCompra + this._opcionSeleccionada.intervaloMayor ) ){
+										for(p = 0; p<_itemsDrag.length; p++){
+											(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+										}
+										insertaronDatos = true;
+									}else{
+										alertaSingleton.show(catalogoAlertas.compradorPhs_cantidadExcedeLimitesProforma, catalogoAlertas.TIT_ADV_atencion ); 
+										seRegresatodo = true;
+									} 
+								}
+							}else{
+								if( ( _listaProformas[i][0] as PartidaProforma ).tipoCarro == "STOCK" && _proformaDrop == "STOCK" ){
+									for(p = 0; p<_itemsDrag.length; p++){
+										if( (_itemsDrag[p] as PartidaProforma ).tipoCarro != "STOCK" ){
+											alertaSingleton.show( catalogoAlertas.compradorPhs_partidaNoPermitida, catalogoAlertas.TIT_ADV_informacionIncompleta ); 
+											seRegresatodo = true;
+										}
+									}
+									if(!seRegresatodo){
+										if( ( _listaProformas[i][0] as PartidaProforma ).idProforma == 0 &&  ( _listaProformas[i][0] as PartidaProforma ).cantidadPedida == 0  ){
+											this._listaProformas[i] = new ArrayCollection();  
+										}
+										for(p = 0; p<_itemsDrag.length; p++){
+											(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] ); 
+										}
+										insertaronDatos = true;
+									}
+								}
+								if( ( _listaProformas[i][0] as PartidaProforma ).tipoCarro == "BACKORDER" &&  _proformaDrop == "BACKORDER"){
+									for(p = 0; p<_itemsDrag.length; p++){
+										if( (_itemsDrag[p] as PartidaProforma ).tipoCarro != "BACKORDER"   ){
+											alertaSingleton.show(catalogoAlertas.compradorPhs_partidaNoPermitida, catalogoAlertas.TIT_ADV_informacionIncompleta); 
+											seRegresatodo = true;
+										}
+									}
+									if(!seRegresatodo){
+										if( ( _listaProformas[i][0] as PartidaProforma ).idProforma == 0 &&  ( _listaProformas[i][0] as PartidaProforma ).cantidadPedida == 0  ){
+											this._listaProformas[i] = new ArrayCollection();  
+										}
+										for(p = 0; p<_itemsDrag.length; p++){
+											(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+										}
+										insertaronDatos = true;
+									}
+								}
+								if( ( _listaProformas[i][0] as PartidaProforma ).tipoCarro == "PROGRAMADO" &&  _proformaDrop == "PROGRAMADO"){
+									for(p = 0; p<_itemsDrag.length; p++){
+										if( (_itemsDrag[p] as PartidaProforma ).tipoCarro != "PROGRAMADO" ){
+											seRegresatodo = true;
+											alertaSingleton.show(catalogoAlertas.compradorPhs_partidaNoPermitida, catalogoAlertas.TIT_ADV_informacionIncompleta ); 
+										}
+									}
+									if(!seRegresatodo){
+										if( ( _listaProformas[i][0] as PartidaProforma ).idProforma == 0 &&  ( _listaProformas[i][0] as PartidaProforma ).cantidadPedida == 0  ){
+											this._listaProformas[i] = new ArrayCollection();  
+										}
+										for(p = 0; p<_itemsDrag.length; p++){
+											(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+										}
+										insertaronDatos = true;
+									}
+								}
+								if( ( _listaProformas[i][0] as PartidaProforma ).tipoCarro == "MUNDIALES" &&  _proformaDrop == "MUNDIALES"){
+									for(p = 0; p<_itemsDrag.length; p++){
+										if( (_itemsDrag[p] as PartidaProforma ).tipoCarro != "MUNDIALES" ){
+											seRegresatodo = true;
+											alertaSingleton.show(catalogoAlertas.compradorPhs_partidaNoPermitida, catalogoAlertas.TIT_ADV_informacionIncompleta ); 
+										}
+									}
+									if(!seRegresatodo){
+										if( ( _listaProformas[i][0] as PartidaProforma ).idProforma == 0 &&  ( _listaProformas[i][0] as PartidaProforma ).cantidadPedida == 0  ){
+											this._listaProformas[i] = new ArrayCollection();  
+										}
+										for(p = 0; p<_itemsDrag.length; p++){
+											(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+										}
+										insertaronDatos = true;
+									}
+								}
+								if( ( _listaProformas[i][0] as PartidaProforma ).tipoCarro == "NACIONALES" &&  _proformaDrop == "NACIONALES" ){
+									for(p = 0; p<_itemsDrag.length; p++){
+										if( (_itemsDrag[p] as PartidaProforma ).tipoCarro != "NACIONALES" ){
+											seRegresatodo = true;
+											alertaSingleton.show(catalogoAlertas.compradorPhs_partidaNoPermitida, catalogoAlertas.TIT_ADV_informacionIncompleta ); 
+										}
+									}
+									if(!seRegresatodo){
+										if( ( _listaProformas[i][0] as PartidaProforma ).idProforma == 0 &&  ( _listaProformas[i][0] as PartidaProforma ).cantidadPedida == 0  ){
+											this._listaProformas[i] = new ArrayCollection();  
+										}
+										for(p = 0; p<_itemsDrag.length; p++){
+											(this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+										}
+										insertaronDatos = true;
+									}
+								}
+								if( ( _listaProformas[i][0] as PartidaProforma ).tipoCarro == "ORIGEN" &&  _proformaDrop == "ORIGEN" ){
+									for(p = 0; p<_itemsDrag.length; p++){
+										if( (_itemsDrag[p] as PartidaProforma ).tipoCarro != "ORIGEN" ){
+											seRegresatodo = true;
+											alertaSingleton.show(catalogoAlertas.compradorPhs_partidaNoPermitida, catalogoAlertas.TIT_ADV_informacionIncompleta); 
+										}
+									}
+									if(!seRegresatodo){
+										if( ( _listaProformas[i][0] as PartidaProforma ).idProforma == 0 &&  ( _listaProformas[i][0] as PartidaProforma ).cantidadPedida == 0 ){
+											this._listaProformas[i] = new ArrayCollection();  
+										}
+										for( p = 0 ; p < _itemsDrag.length ; p++ ){
+											( this._listaProformas[i] as ArrayCollection).addItem( _itemsDrag[p] );
+										}
+										insertaronDatos = true;
+									}
+								}
+							} 
+						}
+					}//fin del if  de datos insertados
+				} 
+				if( !seRegresatodo ){
+					//es por que se va a eliminar
+					if( this.grdPartidaProforma.dataProvider.length == this.grdPartidaProforma.selectedItems.length){
+						if( (_itemsDrag[0] as PartidaProforma).idProforma == 0 ){
+							var partidaProformaVacia:PartidaProforma = new PartidaProforma();
+							partidaProformaVacia.cantidadPedida = 0;
+							partidaProformaVacia.idProforma = 0;
+							partidaProformaVacia.tipoCarro = (_itemsDrag[0] as PartidaProforma).tipoCarro;
+						}
+						_listaProformas[ this.listProformas.selectedIndex ] = new ArrayCollection();
+						(_listaProformas[ this.listProformas.selectedIndex ] as ArrayCollection).addItem( partidaProformaVacia );
+						this.listProformas.selectedIndex = 0; 
+						this.grdPartidaProforma.dataProvider = new ArrayCollection();
+					}
+				}
+				visualizaProforma(this.listProformas.selectedItem);
+				_listaProformas.refresh(); 
+				if(seRegresatodo){
+					this._listaProformas[ this.listProformas.selectedIndex] = ObjectUtil.copy(this._respaldoProformaDrag) as ArrayCollection;
+					visualizaProforma(this.listProformas.selectedItem);
+				}else{
+					actualizaProforma();
+				}
+				_listaProformas.refresh(); 
+			}
+			/**
+			 * esta funcion se aplica cuando se termina el drag and drop con la variable _itemsDrag que es usada en esta funcion para que por detras 
+			 * se le hagan validaciones para su destino como los datos de la var _itemsDrag son soltados en la lista se les valida 
+			 * para que no entgren directamente ahi, si no al item seleccionado
+			 */ 
+			 protected function listProformas_dragCompleteHandler(event:DragEvent):void{
+				
+			}  
+			/**
+			 * funcion que dispara la actualizacion de las partidas de la proforma 
+			 */ 
+			private function actualizaProforma():void{
+				var evento:EventoProforma = new EventoProforma( EventoProforma.ACTUALIZA_LISTA_PROFORMAS );
+				if(  _proformaDrop == "STOCK" || _proformaDrop == "PROGRAMADO" || _proformaDrop == "BACKORDER" || _proformaDrop == "MUNDIALES" || _proformaDrop == "NACIONALES" || _proformaDrop == "ORIGEN" ){
+					evento.idProforma = -1;
+				}else{
+					evento.idProforma = parseInt( _proformaDrop );
+				}
+				evento.idProveedor = this._opcionSeleccionada.proveedor;
+				evento.partidas = ObjectUtil.clone( _itemsDrag ) as ArrayCollection;
+				dispatchEvent( evento );
+			}
+			/**
+			 * funcion que recibe del mapa MapaProforma la confirmacion de que se actualizo una proforma correctamente despues haber hecho un Drag & Drop correctamente y no fue rechazado por reglas de negocio 10,391.48
+			 */ 
+			public function set confirmaActualizacionProforma(dato:Boolean):void{
+				if( !dato ){
+					return;
+				}
+				var evento:EventoProforma = new EventoProforma( EventoProforma.CONSULTAR_PROFORMAS_POR_PROVEEDOR );
+				evento.idProveedor = _opcionSeleccionada.proveedor;
+				evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;				
+				dispatchEvent( evento );
+			}
+			/**
+			 * Funcion que genera una proforma con las partidas seleccionadas de stock, crea un evento con dichas partidas y las cacha el mapa
+			 */ 
+			private function creaProformaStock():void{
+				var listaPartidasProforma:ArrayCollection = new ArrayCollection();
+				if( (this.listProformas.selectedItem as ArrayCollection) != null && (this.listProformas.selectedItem as ArrayCollection).length > 0 ){
+					alertaSingleton.show( catalogoAlertas.compradorPhs_noSePuedeCrearProforma, catalogoAlertas.TIT_ADV_operacionImposible );
+					return;
+				}
+				for(var i:int = 0; i < (this.listProformas.selectedItem as ArrayCollection).length; i++){
+					if( (this.listProformas.selectedItem[i] as PartidaProforma).checkParaProforma ){
+						listaPartidasProforma.addItem( this.listProformas.selectedItem[i] );
+					}
+				}
+				var evento:EventoProforma = new EventoProforma( EventoProforma.GENERA_NUEVA_PROFORMA );
+				evento.idProveedor = this._opcionSeleccionada.proveedor;
+				evento.idProforma = 0;
+				evento.partidas = ObjectUtil.copy( listaPartidasProforma ) as ArrayCollection;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Funcion publica que recibe del mapa la confirmacion de un nueva partida
+			 */ 
+			public function set recibeConfimracion(confirmacion:Boolean ):void{
+				if( !confirmacion ){
+					return;
+				}
+				iniciaComponente( this._opcionSeleccionada );
+			}
+			/**
+			 * Funcion para pasar Al inspector
+			 */ 
+			private function avanzaInspector():void{
+				_estaEnInspector = true;
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+				evento.idOpcionSeleccionada = "seleccionaInspectorProforma";
+				evento.proforma = this._opcionSeleccionada;
+				evento.lista = this.listProformas.selectedItem as ArrayCollection;
+				dispatchEvent( evento );
+			} 
+			
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%">
+		<flecharegresa:botonFlechaRegresa click="regresaAMenu()"/>
+		<s:Spacer width="100%"/>
+		<s:ButtonBar skinClass="skins.botoneras.botoneraGris.skinbotoneraGris" dataProvider="{_datosBarraBoton}" selectedIndex="0" id="btnBarra" change="seleccionaBoton(event)"/>
+	</s:HGroup>
+	<s:Spacer height="2"/>
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="2"/>
+	<mx:ViewStack width="100%" height="100%" id="stackPlanificacion" creationPolicy="all">
+		<s:NavigatorContent width="100%" height="100%">
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_conreq36x46}"/>
+				<label:labelSubtitulo text="PROFORMAS"/>
+				<s:Spacer width="100%"/>
+				<label:labelSubtitulo fontSize="20" fontWeight="bold" color="#666666" text="[PROFORMAS POR COLOCAR]"/>
+			</s:HGroup>
+			<s:Spacer height="2"/>
+			<otros:divisionHueca width="100%"/>
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:VGroup  height="100%">
+					<s:HGroup width="100%" verticalAlign="middle">
+						<label:labelSubtitulo text="{ this._opcionSeleccionada.nombreProveedor }" fontSize="24" fontWeight="bold"/>
+						<s:Image source="{ catalogoIconosEtiquetas.getInstance().etiquetas_flechaCirculoProveedor }" verticalCenter="0"/>
+					</s:HGroup>
+					<label:labelSubtitulo text="{ _opcionSeleccionada.paisProveedor + ' . Min ' + UtilsFormatosNumericos.precisionADosDecimales(_opcionSeleccionada.minCompra) + '( +/- ' + _opcionSeleccionada.intervaloMenor +') : Max ' + UtilsFormatosNumericos.precisionADosDecimales(_opcionSeleccionada.maxCompra) + '( +/- ' + _opcionSeleccionada.intervaloMayor + ')' }" fontSize="14" fontWeight="bold" color="#666666" />
+				</s:VGroup>
+				<s:Spacer width="100%"/>
+				<label:labelSubtitulo fontSize="18" fontWeight="bold" id="lblTotalProformas"/>
+			</s:HGroup>
+			<s:Spacer height="2"/>
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="2"/>
+			<s:HGroup width="100%" height="100%">
+				<s:VGroup height="100%" width="17%">
+					<s:List height="100%" width="100%" id="listProformas" click="visualizaProforma(this.listProformas.selectedItem)"  change="visualizaProforma(this.listProformas.selectedItem)" 
+							dataProvider="{this._listaProformas}" borderVisible="false" itemRenderer="mx.com.proquifa.proquifanet.compradorPhs.vistas.vista.itemRenderes.ProformaMiniatura" 
+							dropEnabled="true" dragDrop="listProformas_dragDropHandler(event)">
+						<s:layout>
+							<s:VerticalLayout gap="0"  horizontalAlign="contentJustify" requestedRowCount="-1" />
+						</s:layout>
+					</s:List>
+					<s:Spacer height="15"/>
+				</s:VGroup>
+				<s:Spacer width="7"/>
+				<otros:VDivisionHueca height="100%"/>
+				<s:Spacer width="7"/>
+				<s:VGroup width="100%" height="100%">
+					<s:HGroup width="100%">
+						<mx:Canvas height="100%" >
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_backorders }" id="imgbackorders" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_carrostock }" id="imgcarrostock" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_programados }" id="imgprogramados" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_controladomundial }" id="imgcontroladomundial" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_controladonacional }" id="imgcontroladonacional" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_controladoorigen }" id="imgcontroladoorigen" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadorojoabierto }" id="imgcandadorojoabierto"  visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadorojocerrado }" id="imgcandadorojocerrado" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadoverdeabierto }" id="imgcandadoverdeabierto" visible="false"/>
+							<s:Image horizontalCenter="0" verticalCenter="0" source="{ catalogoIconosGrid.getInstance().render_candadoverdecerrado }" id="imgcandadoverdecerrado" visible="false"/>
+						</mx:Canvas>
+						<s:VGroup height="100%" >
+							<label:labelSubtitulo fontSize="18" id="lblTipoProformaSeleccionada" />
+							<label:labelSubtitulo fontSize="14" id="lblCantidadProformaSeleccionada"/>
+						</s:VGroup>
+						<s:Spacer width="100%" />
+						<label:labelSubtitulo fontSize="14" id="lblNumPartidas"/>
+					</s:HGroup>
+					<s:Spacer height="2"/>
+					<otros:divisionGruesa width="100%"/>
+					<s:Spacer height="2"/>
+					<compProforma:GridDragAndDropProforma  width="100%" height="100%"  wordWrap="true" allowDragSelection="true"  allowMultipleSelection="true" dragEnabled="true" dragMoveEnabled="true" 
+														   dataProvider="{this._listaGrid}" id="grdPartidaProforma" dragStart="grdPartidaProforma_dragStartHandler(event)" dragComplete="listProformas_dragCompleteHandler(event)" 
+														   variableRowHeight="true" creationComplete="tamanioColumnas()" />
+					<s:Spacer height="2"/>
+					<otros:divisionGruesa width="100%"/>
+					<s:Spacer height="2"/>
+					<mx:ViewStack width="100%" id="vstBotones" creationPolicy="all" >
+						<s:NavigatorContent width="100%" height="100%" id="espacioPrincipal">
+							<s:HGroup width="100%" />
+						</s:NavigatorContent>
+						<s:NavigatorContent width="100%" height="100%" id="botonesStockSeleccionar">
+							<s:HGroup width="100%">
+								<s:Spacer width="100%"/>
+								<pqNet1:botonPqNetLargo label="Seleccionar" icono="seleccionar" click="habilitaControlProformaStock(true)"/>
+							</s:HGroup>
+						</s:NavigatorContent>
+						<s:NavigatorContent width="100%" height="100%" id="botonesStock">
+							<s:HGroup width="100%">
+								<pqNet1:botonPqNetLargo label="Todo" click="controlChecks(true)" icono="todo"/>
+								<s:Spacer width="100%"/>
+								<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_partidaicono}" />
+								<label:labelSubtitulo id="lblPrecioStockSeleccionado" fontSize="16" fontWeight="bold" text="0 partidas"/>
+								<s:Spacer width="100%"/>
+								<pqNet1:botonPqNetLargo label="Proforma" icono="proforma" colorBase="6DAFFA" gradientePqnet="true" click="creaProformaStock()"/>
+								<pqNet1:botonPqNetLargo  label="Cancelar" icono="seleccionar" colorBase="990000" gradientePqnet="true" click="habilitaControlProformaStock(false)"/>
+							</s:HGroup>
+						</s:NavigatorContent>
+						<s:NavigatorContent width="100%" height="100%" id="botonesProforma">
+							<s:HGroup width="100%">
+								<s:Spacer width="100%"/>
+								<pqNet1:botonPqNetLargo label="Inspector" icono="inspector"  gradientePqnet="true" click="avanzaInspector()"/>
+							</s:HGroup>
+						</s:NavigatorContent>
+					</mx:ViewStack>
+				</s:VGroup>
+			</s:HGroup>
+		</s:NavigatorContent>
+		<s:NavigatorContent width="100%" height="100%">
+			<compProforma:TiemposProforma id="compTiemposProforma"/>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+</s:VGroup>

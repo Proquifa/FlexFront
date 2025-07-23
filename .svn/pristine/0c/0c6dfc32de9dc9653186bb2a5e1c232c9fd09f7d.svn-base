@@ -1,0 +1,1391 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores
+{
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.catalogos.proveedores.CostoFactor")]
+	[Bindable]
+	public class CostoFactor
+	{
+		private var _idCostoFactor:Number;
+
+		//IMPORTACIÓN
+		private var _factorIGI:Number;
+		private var _factorDTA:Number;
+		private var _factorValorEnAduana:Number;
+		private var _factorDescuento:Number;
+		private var _factorFletePC:Number;
+		private var _idAgenteAduanal:Number;
+		private var _idLugarAgenteAduanal:Number;
+		private var _idLugarConcepto:Number;
+		private var _piezas:int;
+		private var _montoLicencia:Number;
+		private var _porcentajeLicencia:Number;
+		
+		//GASTOS
+		private var _permiso:Number;
+		private var _costoConsularizacion:Number;
+		private var _fleteDocumentacion:Number;
+		private var _almacenDestino:Number;
+		
+		//FIJOS
+		private var _factorCostoFijo:Number;
+		
+		//UTILIDAD
+		private var _factor_AAplus:Number;
+		private var _factor_AA:Number;
+		private var _factor_AM:Number;
+		private var _factor_AB:Number;
+		private var _factor_MA:Number;
+		private var _factor_MM:Number;
+		private var _factor_MB:Number;
+		private var _factor_Bajo:Number;
+		private var _factor_FExpress:Number;
+		private var _factor_Stock:Number;
+		private var _factorDistribuidor:Number;
+		private var _factorPublico:Number;
+		private var _stockDisable:Boolean;
+		private var _fleteExpressDisable:Boolean;
+
+		
+		//COMISIÓN
+		private var _factor_Comision:Number;
+		
+		private var _montoAAplus:Number;
+		private var _montoAA:Number;
+		private var _montoAM:Number;
+		private var _montoAB:Number;
+		private var _montoMA:Number;
+		private var _montoMM:Number;
+		private var _montoMB:Number;
+		private var _montoFExpress:Number;
+		private var _montoStock:Number;
+		private var _montoDistribuidor:Number;
+		private var _montoComision:Number;
+		private var _montoPublico:Number;
+		private var _montoBajo:Number;
+		
+
+		private var _precioUAAplus:Number;
+		private var _precioUAA:Number;
+		private var _precioUAM:Number;
+		private var _precioUAB:Number;
+		private var _precioUMA:Number;
+		private var _precioUMM:Number;
+		private var _precioUMB:Number;
+		private var _precioUFExpress:Number;
+		private var _precioUStock:Number;
+		private var _precioUDistribuidor:Number;
+		private var _precioUComision:Number;
+		private var _precioUPublico:Number;
+		private var _precioUBajo:Number;
+		
+		
+		private var _cantidadAAplus:Number;
+		private var _cantidadAA:Number;
+		private var _cantidadAM:Number;
+		private var _cantidadAB:Number;
+		private var _cantidadMA:Number;
+		private var _cantidadMM:Number;
+		private var _cantidadMB:Number;
+		private var _cantidadFExpress:Number;
+		private var _cantidadStock:Number;
+		private var _cantidadDistribuidor:Number;
+		private var _cantidadComision:Number;
+		private var _cantidadPublico:Number;
+		private var _cantidadBajo:Number;
+		
+		
+		private var _diferencialAAplus:Number;
+		private var _diferencialAA:Number;
+		private var _diferencialAM:Number;
+		private var _diferencialAB:Number;
+		private var _diferencialMA:Number;
+		private var _diferencialMM:Number;
+		private var _diferencialMB:Number;
+		private var _diferencialFExpress:Number;
+		private var _diferencialStock:Number;
+		private var _diferencialDistribuidor:Number;
+		private var _diferencialComision:Number;
+		private var _diferencialPublico:Number;
+		private var _diferencialBajo:Number;
+		
+		private var _clienteAgente:Boolean;
+		private var _clienteLugar:Boolean;
+		private var _clienteConcepto:Boolean;
+		
+		
+		//VARIABLES PARA VISTA
+		private var _precioUAAplus_String:String;
+		private var _precioUAA_String:String;
+		private var _precioUAM_String:String;
+		private var _precioUAB_String:String;
+		private var _precioUMA_String:String;
+		private var _precioUMM_String:String;
+		private var _precioUMB_String:String;
+		private var _precioUFExpress_String:String;
+		private var _precioUStock_String:String;
+		private var _precioUDistribuidor_String:String;
+		private var _precioUComision_String:String;
+		private var _precioUPublico_String:String;
+		private var _precioUBajo_String:String;
+		private var _idLugarConceptoString:String;
+		
+		private var _totalPiezas:Number;
+		private var _distDisable:Boolean;
+		
+		// VARUABLES PARA LA PARTE DE CLIENTES
+		private var _montoCliente:Number;
+		private var _precioUCliente:Number;
+		private var _cantidadCliente:Number;
+		private var _diferencialCliente:Number;
+		private var _factorCliente:Number;
+		private var _idClienteConfig:Number;
+		private var _factorNivelProveedor:Number;
+		private var _restablecer:Boolean;
+		private var _cvCliente:Boolean;
+		private var _vaCliente:Boolean;
+		
+		private var _valor:Number;
+		private var _cv:Number;
+		private var _cantidad:Number;
+		private var _diferencial:Number;
+		
+		private var _caduca:Date;
+		private var _factorTempCliente:Number;
+		private var _factorTempCostoFijo:Number;
+		private var _precioUTemporalCliente:Number;
+		private var _diferencialTemporalCliente:Number;
+		
+		public function CostoFactor()
+		{
+			montoBajo = 0; 
+			precioUBajo = 0;
+			cantidadBajo = 0;
+			diferencialBajo = 0;
+			factor_Bajo = 0;
+			precioUBajo_String = "";
+		}
+
+		public function get factorDTA():Number
+		{
+			return _factorDTA;
+		}
+
+		public function set factorDTA(value:Number):void
+		{
+			_factorDTA = value;
+		}
+
+		public function get almacenDestino():Number
+		{
+			return _almacenDestino;
+		}
+
+		public function set almacenDestino(value:Number):void
+		{
+			_almacenDestino = value;
+		}
+
+		public function get factorIGI():Number
+		{
+			return _factorIGI;
+		}
+
+		public function set factorIGI(value:Number):void
+		{
+			_factorIGI = value;
+		}
+
+		public function get permiso():Number
+		{
+			return _permiso;
+		}
+
+		public function set permiso(value:Number):void
+		{
+			_permiso = value;
+		}
+
+		public function get montoPublico():Number
+		{
+			return _montoPublico;
+		}
+
+		public function set montoPublico(value:Number):void
+		{
+			_montoPublico = value;
+		}
+
+		public function get montoDistribuidor():Number
+		{
+			return _montoDistribuidor;
+		}
+
+		public function set montoDistribuidor(value:Number):void
+		{
+			_montoDistribuidor = value;
+		}
+
+		public function get factorPublico():Number
+		{
+			return _factorPublico;
+		}
+
+		public function set factorPublico(value:Number):void
+		{
+			_factorPublico = value;
+		}
+
+		public function get factorDistribuidor():Number
+		{
+			return _factorDistribuidor;
+		}
+
+		public function set factorDistribuidor(value:Number):void
+		{
+			_factorDistribuidor = value;
+		}
+
+		public function get idCostoFactor():Number
+		{
+			return _idCostoFactor;
+		}
+
+		public function set idCostoFactor(value:Number):void
+		{
+			_idCostoFactor = value;
+		}
+
+		public function get costoConsularizacion():Number
+		{
+			return _costoConsularizacion;
+		}
+
+		public function set costoConsularizacion(value:Number):void
+		{
+			_costoConsularizacion = value;
+		}
+
+		public function get fleteDocumentacion():Number
+		{
+			return _fleteDocumentacion;
+		}
+
+		public function set fleteDocumentacion(value:Number):void
+		{
+			_fleteDocumentacion = value;
+		}
+
+		public function get factorCostoFijo():Number
+		{
+			return _factorCostoFijo;
+		}
+
+		public function set factorCostoFijo(value:Number):void
+		{
+			_factorCostoFijo = value;
+		}
+
+		public function get factor_AA():Number
+		{
+			return _factor_AA;
+		}
+		
+		public function set factor_AA(value:Number):void
+		{
+			_factor_AA = value;
+		}
+		
+		public function get factor_AM():Number
+		{
+			return _factor_AM;
+		}
+		
+		public function set factor_AM(value:Number):void
+		{
+			_factor_AM = value;
+		}
+		
+		public function get factor_AB():Number
+		{
+			return _factor_AB;
+		}
+		
+		public function set factor_AB(value:Number):void
+		{
+			_factor_AB = value;
+		}
+		
+		public function get factor_MA():Number
+		{
+			return _factor_MA;
+		}
+		
+		public function set factor_MA(value:Number):void
+		{
+			_factor_MA = value;
+		}
+		
+		public function get factor_MM():Number
+		{
+			return _factor_MM;
+		}
+
+		public function set factor_MM(value:Number):void
+		{
+			_factor_MM = value;
+		}
+		
+		public function get factor_MB():Number
+		{
+			return _factor_MB;
+		}
+		
+		public function set factor_MB(value:Number):void
+		{
+			_factor_MB = value;
+		}
+
+		public function get factor_FExpress():Number
+		{
+			return _factor_FExpress;
+		}
+
+		public function set factor_FExpress(value:Number):void
+		{
+			_factor_FExpress = value;
+		}
+
+		public function get factor_Stock():Number
+		{
+			return _factor_Stock;
+		}
+
+		public function set factor_Stock(value:Number):void
+		{
+			_factor_Stock = value;
+		}
+
+		public function get montoAA():Number
+		{
+			return _montoAA;
+		}
+
+		public function set montoAA(value:Number):void
+		{
+			_montoAA = value;
+		}
+
+		public function get montoAM():Number
+		{
+			return _montoAM;
+		}
+
+		public function set montoAM(value:Number):void
+		{
+			_montoAM = value;
+		}
+
+		public function get montoAB():Number
+		{
+			return _montoAB;
+		}
+
+		public function set montoAB(value:Number):void
+		{
+			_montoAB = value;
+		}
+
+		public function get montoMA():Number
+		{
+			return _montoMA;
+		}
+
+		public function set montoMA(value:Number):void
+		{
+			_montoMA = value;
+		}
+
+		public function get montoMM():Number
+		{
+			return _montoMM;
+		}
+
+		public function set montoMM(value:Number):void
+		{
+			_montoMM = value;
+		}
+		
+		public function get montoMB():Number
+		{
+			return _montoMB;
+		}
+		
+		public function set montoMB(value:Number):void
+		{
+			_montoMB = value;
+		}
+
+		public function get montoFExpress():Number
+		{
+			return _montoFExpress;
+		}
+
+		public function set montoFExpress(value:Number):void
+		{
+			_montoFExpress = value;
+		}
+
+		public function get montoStock():Number
+		{
+			return _montoStock;
+		}
+
+		public function set montoStock(value:Number):void
+		{
+			_montoStock = value;
+		}
+
+		public function get factor_Comision():Number
+		{
+			return _factor_Comision;
+		}
+
+		public function set factor_Comision(value:Number):void
+		{
+			_factor_Comision = value;
+		}
+
+		public function get montoComision():Number
+		{
+			return _montoComision;
+		}
+
+		public function set montoComision(value:Number):void
+		{
+			_montoComision = value;
+		}
+
+		public function get diferencialAA():Number
+		{
+			return _diferencialAA;
+		}
+
+		public function set diferencialAA(value:Number):void
+		{
+			_diferencialAA = value;
+		}
+
+		public function get diferencialAM():Number
+		{
+			return _diferencialAM;
+		}
+
+		public function set diferencialAM(value:Number):void
+		{
+			_diferencialAM = value;
+		}
+
+		public function get diferencialAB():Number
+		{
+			return _diferencialAB;
+		}
+
+		public function set diferencialAB(value:Number):void
+		{
+			_diferencialAB = value;
+		}
+
+		public function get diferencialMA():Number
+		{
+			return _diferencialMA;
+		}
+
+		public function set diferencialMA(value:Number):void
+		{
+			_diferencialMA = value;
+		}
+
+		public function get diferencialMM():Number
+		{
+			return _diferencialMM;
+		}
+
+		public function set diferencialMM(value:Number):void
+		{
+			_diferencialMM = value;
+		}
+		
+		public function get diferencialMB():Number
+		{
+			return _diferencialMB;
+		}
+		
+		public function set diferencialMB(value:Number):void
+		{
+			_diferencialMB = value;
+		}
+
+		public function get diferencialFExpress():Number
+		{
+			return _diferencialFExpress;
+		}
+
+		public function set diferencialFExpress(value:Number):void
+		{
+			_diferencialFExpress = value;
+		}
+
+		public function get diferencialStock():Number
+		{
+			return _diferencialStock;
+		}
+
+		public function set diferencialStock(value:Number):void
+		{
+			_diferencialStock = value;
+		}
+
+		public function get diferencialDistribuidor():Number
+		{
+			return _diferencialDistribuidor;
+		}
+
+		public function set diferencialDistribuidor(value:Number):void
+		{
+			_diferencialDistribuidor = value;
+		}
+
+		public function get diferencialComision():Number
+		{
+			return _diferencialComision;
+		}
+
+		public function set diferencialComision(value:Number):void
+		{
+			_diferencialComision = value;
+		}
+
+		public function get diferencialPublico():Number
+		{
+			return _diferencialPublico;
+		}
+
+		public function set diferencialPublico(value:Number):void
+		{
+			_diferencialPublico = value;
+		}
+
+		public function get precioUAA():Number
+		{
+			return _precioUAA;
+		}
+
+		public function set precioUAA(value:Number):void
+		{
+			_precioUAA = value;
+		}
+
+		public function get precioUAM():Number
+		{
+			return _precioUAM;
+		}
+
+		public function set precioUAM(value:Number):void
+		{
+			_precioUAM = value;
+		}
+
+		public function get precioUAB():Number
+		{
+			return _precioUAB;
+		}
+
+		public function set precioUAB(value:Number):void
+		{
+			_precioUAB = value;
+		}
+
+		public function get precioUMA():Number
+		{
+			return _precioUMA;
+		}
+
+		public function set precioUMA(value:Number):void
+		{
+			_precioUMA = value;
+		}
+
+		public function get precioUMM():Number
+		{
+			return _precioUMM;
+		}
+
+		public function set precioUMM(value:Number):void
+		{
+			_precioUMM = value;
+		}
+
+		public function get precioUMB():Number
+		{
+			return _precioUMB;
+		}
+
+		public function set precioUMB(value:Number):void
+		{
+			_precioUMB = value;
+		}
+
+		public function get precioUFExpress():Number
+		{
+			return _precioUFExpress;
+		}
+
+		public function set precioUFExpress(value:Number):void
+		{
+			_precioUFExpress = value;
+		}
+
+		public function get precioUStock():Number
+		{
+			return _precioUStock;
+		}
+
+		public function set precioUStock(value:Number):void
+		{
+			_precioUStock = value;
+		}
+
+		public function get precioUDistribuidor():Number
+		{
+			return _precioUDistribuidor;
+		}
+
+		public function set precioUDistribuidor(value:Number):void
+		{
+			_precioUDistribuidor = value;
+		}
+
+		public function get precioUComision():Number
+		{
+			return _precioUComision;
+		}
+
+		public function set precioUComision(value:Number):void
+		{
+			_precioUComision = value;
+		}
+
+		public function get precioUPublico():Number
+		{
+			return _precioUPublico;
+		}
+
+		public function set precioUPublico(value:Number):void
+		{
+			_precioUPublico = value;
+		}
+
+		public function get cantidadAA():Number
+		{
+			return _cantidadAA;
+		}
+
+		public function set cantidadAA(value:Number):void
+		{
+			_cantidadAA = value;
+			
+		}
+
+		public function get cantidadAM():Number
+		{
+			return _cantidadAM;
+		}
+
+		public function set cantidadAM(value:Number):void
+		{
+			_cantidadAM = value;
+		}
+
+		public function get cantidadAB():Number
+		{
+			return _cantidadAB;
+		}
+
+		public function set cantidadAB(value:Number):void
+		{
+			_cantidadAB = value;
+		}
+
+		public function get cantidadMA():Number
+		{
+			return _cantidadMA;
+		}
+
+		public function set cantidadMA(value:Number):void
+		{
+			_cantidadMA = value;
+		}
+
+		public function get cantidadMM():Number
+		{
+			return _cantidadMM;
+		}
+
+		public function set cantidadMM(value:Number):void
+		{
+			_cantidadMM = value;
+		}
+
+		public function get cantidadMB():Number
+		{
+			return _cantidadMB;
+		}
+		
+		public function set cantidadMB(value:Number):void
+		{
+			_cantidadMB = value;
+		}
+		
+		public function get cantidadFExpress():Number
+		{
+			return _cantidadFExpress;
+		}
+
+		public function set cantidadFExpress(value:Number):void
+		{
+			_cantidadFExpress = value;
+		}
+
+		public function get cantidadStock():Number
+		{
+			return _cantidadStock;
+		}
+
+		public function set cantidadStock(value:Number):void
+		{
+			_cantidadStock = value;
+		}
+
+		public function get cantidadDistribuidor():Number
+		{
+			return _cantidadDistribuidor;
+		}
+
+		public function set cantidadDistribuidor(value:Number):void
+		{
+			_cantidadDistribuidor = value;
+		}
+
+		public function get cantidadComision():Number
+		{
+			return _cantidadComision;
+		}
+
+		public function set cantidadComision(value:Number):void
+		{
+			_cantidadComision = value;
+		}
+
+		public function get cantidadPublico():Number
+		{
+			return _cantidadPublico;
+		}
+
+		public function set cantidadPublico(value:Number):void
+		{
+			_cantidadPublico = value;
+		}
+
+		public function get idAgenteAduanal():Number
+		{
+			return _idAgenteAduanal;
+		}
+
+		public function set idAgenteAduanal(value:Number):void
+		{
+			_idAgenteAduanal = value;
+		}
+
+		public function get idLugarAgenteAduanal():Number
+		{
+			return _idLugarAgenteAduanal;
+		}
+
+		public function set idLugarAgenteAduanal(value:Number):void
+		{
+			_idLugarAgenteAduanal = value;
+		}
+
+		public function get precioUAA_String():String
+		{
+			return _precioUAA_String;
+		}
+
+		public function set precioUAA_String(value:String):void
+		{
+			_precioUAA_String = value;
+		}
+
+		public function get precioUAM_String():String
+		{
+			return _precioUAM_String;
+		}
+
+		public function set precioUAM_String(value:String):void
+		{
+			_precioUAM_String = value;
+		}
+
+		public function get precioUAB_String():String
+		{
+			return _precioUAB_String;
+		}
+
+		public function set precioUAB_String(value:String):void
+		{
+			_precioUAB_String = value;
+		}
+
+		public function get precioUMA_String():String
+		{
+			return _precioUMA_String;
+		}
+
+		public function set precioUMA_String(value:String):void
+		{
+			_precioUMA_String = value;
+		}
+
+		public function get precioUMM_String():String
+		{
+			return _precioUMM_String;
+		}
+
+		public function set precioUMM_String(value:String):void
+		{
+			_precioUMM_String = value;
+		}
+
+		public function get precioUMB_String():String
+		{
+			return _precioUMB_String;
+		}
+
+		public function set precioUMB_String(value:String):void
+		{
+			_precioUMB_String = value;
+		}
+
+		public function get precioUFExpress_String():String
+		{
+			return _precioUFExpress_String;
+		}
+
+		public function set precioUFExpress_String(value:String):void
+		{
+			_precioUFExpress_String = value;
+		}
+
+		public function get precioUStock_String():String
+		{
+			return _precioUStock_String;
+		}
+
+		public function set precioUStock_String(value:String):void
+		{
+			_precioUStock_String = value;
+		}
+
+		public function get precioUDistribuidor_String():String
+		{
+			return _precioUDistribuidor_String;
+		}
+
+		public function set precioUDistribuidor_String(value:String):void
+		{
+			_precioUDistribuidor_String = value;
+		}
+
+		public function get precioUComision_String():String
+		{
+			return _precioUComision_String;
+		}
+
+		public function set precioUComision_String(value:String):void
+		{
+			_precioUComision_String = value;
+		}
+
+		public function get precioUPublico_String():String
+		{
+			return _precioUPublico_String;
+		}
+
+		public function set precioUPublico_String(value:String):void
+		{
+			_precioUPublico_String = value;
+		}
+
+		public function get totalPiezas():Number
+		{
+			return _totalPiezas;
+		}
+
+		public function set totalPiezas(value:Number):void
+		{
+			_totalPiezas = value;
+		}
+
+		public function get montoCliente():Number
+		{
+			return _montoCliente;
+		}
+
+		public function set montoCliente(value:Number):void
+		{
+			_montoCliente = value;
+		}
+
+		public function get precioUCliente():Number
+		{
+			return _precioUCliente;
+		}
+
+		public function set precioUCliente(value:Number):void
+		{
+			_precioUCliente = value;
+		}
+
+		public function get cantidadCliente():Number
+		{
+			return _cantidadCliente;
+		}
+
+		public function set cantidadCliente(value:Number):void
+		{
+			_cantidadCliente = value;
+		}
+
+		public function get diferencialCliente():Number
+		{
+			return _diferencialCliente;
+		}
+
+		public function set diferencialCliente(value:Number):void
+		{
+			_diferencialCliente = value;
+		}
+
+		public function get factorCliente():Number
+		{
+			return _factorCliente;
+		}
+
+		public function set factorCliente(value:Number):void
+		{
+			_factorCliente = value;
+		}
+
+		public function get idClienteConfig():Number
+		{
+			return _idClienteConfig;
+		}
+
+		public function set idClienteConfig(value:Number):void
+		{
+			_idClienteConfig = value;
+		}
+
+		public function get factorNivelProveedor():Number
+		{
+			return _factorNivelProveedor;
+		}
+
+		public function set factorNivelProveedor(value:Number):void
+		{
+			_factorNivelProveedor = value;
+		}
+
+		public function get restablecer():Boolean
+		{
+			return _restablecer;
+		}
+
+		public function set restablecer(value:Boolean):void
+		{
+			_restablecer = value;
+		}
+
+		public function get montoBajo():Number
+		{
+			return _montoBajo;
+		}
+
+		public function set montoBajo(value:Number):void
+		{
+			_montoBajo = value;
+		}
+
+		public function get precioUBajo():Number
+		{
+			return _precioUBajo;
+		}
+
+		public function set precioUBajo(value:Number):void
+		{
+			_precioUBajo = value;
+		}
+
+		public function get cantidadBajo():Number
+		{
+			return _cantidadBajo;
+		}
+
+		public function set cantidadBajo(value:Number):void
+		{
+			_cantidadBajo = value;
+		}
+
+		public function get diferencialBajo():Number
+		{
+			return _diferencialBajo;
+		}
+
+		public function set diferencialBajo(value:Number):void
+		{
+			_diferencialBajo = value;
+		}
+
+		public function get factor_Bajo():Number
+		{
+			return _factor_Bajo;
+		}
+
+		public function set factor_Bajo(value:Number):void
+		{
+			_factor_Bajo = value;
+		}
+
+		public function get precioUBajo_String():String
+		{
+			return _precioUBajo_String;
+		}
+
+		public function set precioUBajo_String(value:String):void
+		{
+			_precioUBajo_String = value;
+		}
+
+		public function get factorValorEnAduana():Number
+		{
+			return _factorValorEnAduana;
+		}
+
+		public function set factorValorEnAduana(value:Number):void
+		{
+			_factorValorEnAduana = value;
+		}
+
+		public function get factorDescuento():Number
+		{
+			return _factorDescuento;
+		}
+
+		public function set factorDescuento(value:Number):void
+		{
+			_factorDescuento = value;
+		}
+
+		public function get factorFletePC():Number
+		{
+			return _factorFletePC;
+		}
+
+		public function set factorFletePC(value:Number):void
+		{
+			_factorFletePC = value;
+		}
+
+		public function get idLugarConcepto():Number
+		{
+			return _idLugarConcepto;
+		}
+
+		public function set idLugarConcepto(value:Number):void
+		{
+			_idLugarConcepto = value;
+			_idLugarConceptoString = value.toString();
+		}
+
+		public function get idLugarConceptoString():String
+		{
+			return _idLugarConceptoString;
+		}
+
+		public function set idLugarConceptoString(value:String):void
+		{
+			_idLugarConceptoString = value;
+		}
+
+		public function get stockDisable():Boolean
+		{
+			return _stockDisable;
+		}
+
+		public function set stockDisable(value:Boolean):void
+		{
+			_stockDisable = value;
+		}
+
+		public function get fleteExpressDisable():Boolean
+		{
+			return _fleteExpressDisable;
+		}
+
+		public function set fleteExpressDisable(value:Boolean):void
+		{
+			_fleteExpressDisable = value;
+		}
+
+		public function get piezas():int
+		{
+			return _piezas;
+		}
+
+		public function set piezas(value:int):void
+		{
+			_piezas = value;
+		}
+
+		public function get distDisable():Boolean
+		{
+			return _distDisable;
+		}
+
+		public function set distDisable(value:Boolean):void
+		{
+			_distDisable = value;
+		}
+
+		public function get montoLicencia():Number
+		{
+			return _montoLicencia;
+		}
+
+		public function set montoLicencia(value:Number):void
+		{
+			_montoLicencia = value;
+		}
+
+		public function get porcentajeLicencia():Number
+		{
+			return _porcentajeLicencia;
+		}
+
+		public function set porcentajeLicencia(value:Number):void
+		{
+			_porcentajeLicencia = value;
+		}
+
+		public function get clienteAgente():Boolean
+		{
+			return _clienteAgente;
+		}
+
+		public function set clienteAgente(value:Boolean):void
+		{
+			_clienteAgente = value;
+		}
+
+		public function get clienteLugar():Boolean
+		{
+			return _clienteLugar;
+		}
+
+		public function set clienteLugar(value:Boolean):void
+		{
+			_clienteLugar = value;
+		}
+
+		public function get clienteConcepto():Boolean
+		{
+			return _clienteConcepto;
+		}
+
+		public function set clienteConcepto(value:Boolean):void
+		{
+			_clienteConcepto = value;
+		}
+
+		public function get factor_AAplus():Number
+		{
+			return _factor_AAplus;
+		}
+
+		public function set factor_AAplus(value:Number):void
+		{
+			_factor_AAplus = value;
+		}
+
+		public function get montoAAplus():Number
+		{
+			return _montoAAplus;
+		}
+
+		public function set montoAAplus(value:Number):void
+		{
+			_montoAAplus = value;
+		}
+
+		public function get precioUAAplus():Number
+		{
+			return _precioUAAplus;
+		}
+
+		public function set precioUAAplus(value:Number):void
+		{
+			_precioUAAplus = value;
+		}
+
+		public function get cantidadAAplus():Number
+		{
+			return _cantidadAAplus;
+		}
+
+		public function set cantidadAAplus(value:Number):void
+		{
+			_cantidadAAplus = value;
+		}
+
+		public function get diferencialAAplus():Number
+		{
+			return _diferencialAAplus;
+		}
+
+		public function set diferencialAAplus(value:Number):void
+		{
+			_diferencialAAplus = value;
+		}
+
+		public function get precioUAAplus_String():String
+		{
+			return _precioUAAplus_String;
+		}
+
+		public function set precioUAAplus_String(value:String):void
+		{
+			_precioUAAplus_String = value;
+		}
+
+		public function get cvCliente():Boolean
+		{
+			return _cvCliente;
+		}
+
+		public function set cvCliente(value:Boolean):void
+		{
+			_cvCliente = value;
+		}
+
+		public function get vaCliente():Boolean
+		{
+			return _vaCliente;
+		}
+
+		public function set vaCliente(value:Boolean):void
+		{
+			_vaCliente = value;
+		}
+
+		public function get valor():Number
+		{
+			return _valor;
+		}
+
+		public function set valor(value:Number):void
+		{
+			_valor = value;
+		}
+
+		public function get cv():Number
+		{
+			return _cv;
+		}
+
+		public function set cv(value:Number):void
+		{
+			_cv = value;
+		}
+
+		public function get cantidad():Number
+		{
+			return _cantidad;
+		}
+
+		public function set cantidad(value:Number):void
+		{
+			_cantidad = value;
+		}
+
+		public function get diferencial():Number
+		{
+			return _diferencial;
+		}
+
+		public function set diferencial(value:Number):void
+		{
+			_diferencial = value;
+		}
+
+		public function get caduca():Date
+		{
+			return _caduca;
+		}
+
+		public function set caduca(value:Date):void
+		{
+			_caduca = value;
+		}
+
+		public function get factorTempCliente():Number
+		{
+			return _factorTempCliente;
+		}
+
+		public function set factorTempCliente(value:Number):void
+		{
+			_factorTempCliente = value;
+		}
+
+		public function get factorTempCostoFijo():Number
+		{
+			return _factorTempCostoFijo;
+		}
+
+		public function set factorTempCostoFijo(value:Number):void
+		{
+			_factorTempCostoFijo = value;
+		}
+
+		public function get precioUTemporalCliente():Number
+		{
+			return _precioUTemporalCliente;
+		}
+
+		public function set precioUTemporalCliente(value:Number):void
+		{
+			_precioUTemporalCliente = value;
+		}
+
+		public function get diferencialTemporalCliente():Number
+		{
+			return _diferencialTemporalCliente;
+		}
+
+		public function set diferencialTemporalCliente(value:Number):void
+		{
+			_diferencialTemporalCliente = value;
+		}
+
+
+	}
+}

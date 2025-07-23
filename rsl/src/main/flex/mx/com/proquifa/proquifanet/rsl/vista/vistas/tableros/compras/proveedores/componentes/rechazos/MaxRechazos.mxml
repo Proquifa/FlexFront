@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		 xmlns:formato ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" xmlns:acordeon="skins.skin.acordeon.*"
+		 xmlns:label="skins.skin.label.*"  xmlns:otros="skins.otros.*"
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:grafica="skins.botones.grafica.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" xmlns:graficas="skins.skin.graficas.*"
+		 paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15">
+	<fx:Script>
+		<![CDATA[
+			import skins.catalogos.catalogoInfoGraficas;
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.advancedDataGrid.EventoDataGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.proveedor.OCTableroProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.PropiedadesProveedor;
+			import mx.events.ListEvent;
+			
+			[Bindable]
+			private var _rechazosTabla:ArrayCollection;
+			
+			private var _sql:Query;
+			
+			private function maxRechazados():void{	
+				PropiedadesProveedor.nuevoDato.vista = "rechazos";
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			public function set resumenComparativaRechazo(comparativa:ArrayCollection):void{
+				if(comparativa == null) return;
+				
+				var arreTotal:ArrayCollection = UtilsGrid.queryCampoX( comparativa, "etiqueta", "TOTAL_PROVEEDORES_0" );
+				var arrPie:ArrayCollection = UtilsGrid.queryCampoX( comparativa, "etiqueta", "OC_RECHAZADAS_0" );
+				if(arreTotal.length > 0)
+				{
+					var valorProv:Number = (arreTotal[0] as ResumenConsulta).clientes_proveedores;
+					for(var h:int = 0; h < arrPie.length; h++)
+					{
+						(arrPie[h] as ResumenConsulta).provedorIndividual = valorProv;
+					}
+				}
+				myChart.dataProvider = myChart.aplicarFormatoTableroProveedores( arrPie,'RECHAZOS' );
+			}
+			
+			public function set vista(tipoVista:String):void{
+				if (tipoVista == "tabla"){
+					this.stackGeneral.selectedChild = vistaTabla;
+				}else{
+					this.stackGeneral.selectedChild = vistaGrafico;
+				}
+			}
+			
+			private function gridItemClickEvent(evento:EventoDataGrid):void{	 	        	
+				 
+				var click:ListEvent = evento.itemClick;
+				
+				if (click.columnIndex == 1 
+					&& (click.currentTarget.selectedItem as OCTableroProveedor).ordenDeCompra != null
+					&& (click.currentTarget.selectedItem as OCTableroProveedor).ordenDeCompra != ""
+				){
+					var urlreq:URLRequest;
+					var ruta:String;
+					var path:Object = Util.rutaNueva((click.currentTarget.selectedItem as OCTableroProveedor).ordenDeCompra);
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.COMPRAS_RUTA + path.ruta + (click.currentTarget.selectedItem as OCTableroProveedor).ordenDeCompra + "-P.pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}
+			}   
+			
+			private function generaArchivo():void{ 
+				var file2:File = new File();
+				
+				var dato0:Number = new Number;
+				var dato1:String = new String;
+				var dato2:String = new String;
+				var dato3:String = new String;
+				var dato4:String = new String;
+				
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				var longitud:int =  new int ;
+				longitud = this._rechazosTabla.length;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Orden compra");
+				fila1[2] = hoja.addItem("Descripción");
+				fila1[3] = hoja.addItem("Piezas");
+				fila1[4] = hoja.addItem("Tipo");		          
+				
+				for(var i:int = 0 ; i<longitud ; i++ ){
+					fila1 = new Array();	
+					
+					dato0 =  (this.tablaGrid.dataProvider[i] ).numFila ;
+					dato1 = '"'+ (this.tablaGrid.dataProvider[i] ).ordenDeCompra +'"';
+					dato2 = '"'+ (this.tablaGrid.dataProvider[i] ).descripcion +'"' ;
+					dato3 = '"'+ (this.tablaGrid.dataProvider[i] ).cantidad +'"' ;
+					dato4 = '"'+ (this.tablaGrid.dataProvider[i] ).tipoRechazo +'"';
+					
+					fila1[0] = dato0;
+					fila1[1] = dato1;
+					fila1[2] = dato2;
+					fila1[3] = dato3;
+					fila1[4] = dato4;
+					
+					hoja.addItem('\r' + fila1 );
+					fila1 = null;
+					
+				}
+				file2.save( hoja, "MaxOCRechazadso.csv");
+			}
+			
+			protected function tablaGrid_resizeHandler():void
+			{
+				(this.tablaGrid.columns[0] as AdvancedDataGridColumn).width = (this.tablaGrid.width * 0.10);//#
+				(this.tablaGrid.columns[1] as AdvancedDataGridColumn).width = (this.tablaGrid.width * 0.20);//OC
+				(this.tablaGrid.columns[2] as AdvancedDataGridColumn).width = (this.tablaGrid.width * 0.35);//descripción
+				(this.tablaGrid.columns[3] as AdvancedDataGridColumn).width = (this.tablaGrid.width * 0.10);//piezas
+				(this.tablaGrid.columns[4] as AdvancedDataGridColumn).width = (this.tablaGrid.width * 0.20);//tipo
+			}
+			
+			 public function set obtenerOCRechazados(rechazo:ArrayCollection):void{
+				if(rechazo == null){
+					return;
+				}
+				this._rechazosTabla = rechazo;
+				setValoresFooter(rechazo);
+			} 
+			
+			public function seleccionaTabla():void{
+				if(PropiedadesProveedor.nuevoDato.rechazos == true){
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.tipoEventos.push("CONSULTA_GRID_RECHAZO");
+					dispatchEvent(eventEspera);
+					PropiedadesProveedor.nuevoDato.rechazos = false;
+					PropiedadesProveedor.nuevoDato.vista = "rechazos";
+					var eventGrid:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.CONSULTA_GRID_RECHAZO);
+					eventGrid.parametros = PropiedadesProveedor.parametrosBus;
+					dispatchEvent(eventGrid);
+					this.stackGeneral.selectedChild = this.vistaTabla;
+				}
+				else
+				{
+					PropiedadesProveedor.nuevoDato.vista = "rechazos";
+					this.stackGeneral.selectedChild = this.vistaTabla;					
+				}
+			}
+			public function seleccionarGrafica():void{
+				this.stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["ordenDeCompra","descripcion","tipoRechazo"]);
+				
+				var _ordenes:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("ordenDeCompra").length;
+				var _descripcion:Number = _sql.getPunteros([null,"descripcion"],"descripcion").length;
+				var _piezas:Number = _sql.getSumarCampo("cantidad",[],"",true);
+				var _tipo:Number = _sql.getPunteros([null,null,"tipoRechazo"],"tipoRechazo").length;
+				
+				lbl1_nototal.text ="";
+				lbl2_ordenCompra.text= _ordenes == 1 ? "1 Compra":_ordenes.toString()+" Compras";
+				lbl3_noDescripcion.text = _descripcion == 1 ? "1 Producto":_descripcion.toString()+" Produtos";
+				lbl4_noPiezas.text = _piezas == 1 ? "1 Pieza":_piezas.toString()+" Piezas";
+				lbl5_noTipo.text= _tipo == 1 ? "1 Tipo":_tipo.toString()+" Tipos";
+			}
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero width="100%" text="RECHAZOS" />
+	<mx:ViewStack  id="stackGeneral" width="100%" height="100%">
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="0" gap="0">
+				<s:VGroup width="100%" height="100%" paddingBottom="0" >
+					<otros:divisionGruesa width="100%" />
+					<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="tablaGrid" itemClickADG="gridItemClickEvent(event)" width="100%" rowHeight="40" height="100%" dataProvider="{this._rechazosTabla}" tipoDeConsulta="vacio" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+																 anchoColumnas="{['5%','11%','71%','5%','=']}">
+						<AdvancedDataGrid:columns>
+							<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"  />
+							<mx:AdvancedDataGridColumn headerText="Orden de compra">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<mx:LinkButton label="{data.ordenDeCompra}" textDecoration.selected="underline" color="0x257d92" toolTip="Ver OC" 
+														   horizontalCenter="0" textAlign="center" width="100"/>
+										</s:MXAdvancedDataGridItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Descripción" dataField="descripcion" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<label:Texto text="{data.descripcion}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+							</mx:AdvancedDataGridColumn>
+							<mx:AdvancedDataGridColumn headerText="Piezas" dataField="cantidad" />
+							<mx:AdvancedDataGridColumn headerText="Tipo" dataField="tipoRechazo" width="210">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<label:Texto text="{data.tipoRechazo}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						</AdvancedDataGrid:columns>
+					</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+					
+				</s:VGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+					<label:Titulo id="lbl1_nototal" paddingTop="0" width="5%" textAlign="center" />
+					<label:Titulo_12_VerdeAzul_pTop10 id="lbl2_ordenCompra" paddingTop="0" width="11%" fontSize="14" textAlign="center"/>
+					<label:Titulo id="lbl3_noDescripcion" paddingTop="0" width="73%" textAlign="center" />
+					<label:Titulo id="lbl4_noPiezas" paddingTop="0" width="5%" textAlign="center" />
+					<label:Titulo id="lbl5_noTipo" paddingTop="0" width="8%" textAlign="center" />
+				</s:HGroup>
+				<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="maxRechazados()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()"/>
+				</s:HGroup>
+				
+			</s:VGroup>
+			
+			<!--<s:VGroup width="100%" height="100%" gap="0" horizontalAlign="center">
+				<otros:divisionGruesa width="100%" />
+					<pqNet1:dataGridPqNet id="tablaGrid" rowHeight="40" variableRowHeight="false"  width="100%" height="100%" itemClick="gridItemClickEvent(event)" 
+										  dataProvider="{this._rechazosTabla}" resize="tablaGrid_resizeHandler()" horizontalScrollPolicy="auto">
+						<pqNet1:columns>
+							<mx:DataGridColumn headerText="#" dataField="numFila" width="50" />
+							<mx:DataGridColumn headerText="Orden de compra">
+								<mx:itemRenderer>
+									<fx:Component>
+										<s:MXItemRenderer autoDrawBackground="false">
+											<s:states>
+												<s:State name="normal"/>
+												<s:State name="hovered"/>
+												<s:State name="selected"/>
+											</s:states>
+											<mx:LinkButton label="{data.ordenDeCompra}" textDecoration.selected="underline" color="0x257d92" toolTip="Ver OC" 
+														   horizontalCenter="0" textAlign="center" width="100"/>
+										</s:MXItemRenderer>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="Descripción" dataField="descripcion" />
+							<mx:DataGridColumn headerText="Piezas" dataField="cantidad" />
+							<mx:DataGridColumn headerText="Tipo" dataField="tipoRechazo" width="210"/>
+						</pqNet1:columns>
+					</pqNet1:dataGridPqNet>
+				<otros:divisionHueca width="100%" />
+			</s:VGroup>
+-->		</s:NavigatorContent>
+		
+		
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" dataProvider="{null}" showDataTips="false" innerRadius=".5"
+											  lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" cambioProvTotales="true">
+						 <graficas:series>
+							 <graficas:pieSeriesPqNet field="piezasTotal" />
+						 </graficas:series>
+					 </graficas:PieChartPqGris>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren  a costo de Compra</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="seleccionaTabla()" />
+						<pqNet:botonPqNetLargo label="Inicio" click="maxRechazados()" />
+					</s:HGroup>
+				</s:VGroup>
+				<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_PROVEEDORES_RECHAZOS}"/>
+			</s:HGroup>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+</s:VGroup>

@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 resize="calcular(event)"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%" 
+		 xmlns:registrarDespacho="mx.com.proquifa.vista.vistas.gestorCompras.componentes.registrarDespacho.*"
+		 creationComplete="ini(event)" xmlns:PopUp="mx.com.proquifa.vista.vistas.gestorCompras.componentes.registrarDespacho.PopUp.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.registrarDespacho.EventoRegistrarDespacho;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.registrarDespacho.PopUp.PopUpConfirmarRegistrarOrden;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			[Bindable]private var sizeFont:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]public var totalPiezas:int;
+			[Bindable]public var totalMonto:Number;
+			[Bindable]public var currentOrden:OrdenDespacho;
+			[Bindable]public var recargado:Boolean;
+			
+			
+			private var _dataProvider:ArrayCollection;
+			
+			[Bindable]
+			public function get dataProvider():ArrayCollection
+			{
+				return _dataProvider;
+			}
+			
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				_dataProvider = value;
+				listOrden.dataProvider = ObjectUtil.copy(value) as ArrayCollection
+				listOrden.selectedIndex = 0;
+				currentOrden = listOrden.selectedItem;
+				cambioOrdenDisparo();
+				if(vistaModificar.vistaCodigo != null)
+					vistaModificar.vistaCodigo.resetAll();
+				vistaModificar.vistaPedimento.resetAll();
+				vistaModificar.odString = listOrden.selectedItem.folio;
+				vistaModificar.vistaPedimento.archivoPedimento.currentOrdenDespacho = listOrden.selectedItem;
+			}
+			
+			protected function calcular(event:ResizeEvent):void
+			{
+				/*sizeWidth = (20/2005) * (unscaledWidth);
+				sizeHeight = (30/746) * (unscaledHeight);*/
+				sizeFont = (15/2005) * (unscaledWidth);
+				sizeFontProvee = (18/2005) * (unscaledWidth);
+				
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 8 ? 8:sizeFont;
+				sizeFontProvee = sizeFontProvee > 18 ? 18:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 15 ? 15:sizeFontProvee;
+			}
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				listOrden.dataProvider = UtilsGrid.queryCampoXLike(dataProvider,"folio",txtBuscador.text);
+			}
+			
+			protected function cambiarOrden(event:IndexChangeEvent):void
+			{
+				cambioOrdenDisparo();
+				verLinea();
+				EventoRegistrarDespacho.pedimentoCompleto = false;
+				vistaModificar.vistaPedimento.resetAll();
+				if(vistaModificar.vistaCodigo != null)
+					vistaModificar.vistaCodigo.resetAll();
+				vistaModificar.odString = listOrden.selectedItem.folio;
+				currentOrden = listOrden.selectedItem;
+				vistaModificar.vistaPedimento.archivoPedimento.currentOrdenDespacho = listOrden.selectedItem;
+				vistaModificar.vistaPedimento.archivoPedimento.currentOrdenDespacho.noPedimento = vistaModificar.pedimentoString;
+			}
+			private function cambioOrdenDisparo():void
+			{
+				if(listOrden.selectedItem != null){
+					var evento:EventoRegistrarDespacho = new EventoRegistrarDespacho(EventoRegistrarDespacho.OBTENER_PARTIDAS_PRODUCTO_ORDEN_DESPACHO_REGISTRADAS);
+					evento.idOrdenDespacho = (listOrden.selectedItem as OrdenDespacho).idOrdenDespacho;
+					dispatchEvent(evento);
+					vistaModificar.ordenDespacho = listOrden.selectedItem.folio;
+				}
+			}
+			private function verLinea():void
+			{
+				if(listOrden.selectedIndex ==	 0)
+					divArriba.visible =  false;
+				else
+					divArriba.visible =  true;
+				
+				EventoRegistrarDespacho.indiceSiguiente = listOrden.selectedIndex - 1;
+			}
+			
+			
+			protected function finalizarPedimento(event:Event):void
+			{
+				//QUITAR fechaVerificada
+				/*vistaModificar.vistaPedimento.compararFechas();*/
+				/*if(vistaModificar.vistaPedimento.fechaVerificada)*/
+				
+				
+				/*if(vistaModificar.vistaPedimento.compararFechas("salidaAduana") && 
+					vistaModificar.vistaPedimento.compararFechas("fechaArribo"))*/
+					confirmarGuardar();
+				/*else
+					alertaSingleton.show("La Fecha Salida de Aduana no Puede Ser Menor a la Fecha Estimada de Arrivo");*/
+			}
+			
+			protected function ini(event:FlexEvent):void
+			{
+				vistaModificar.addEventListener("finalizar",finalizarPedimento);
+			}
+			
+			public function getInfo():OrdenDespacho
+			{
+				var ordenTemporal:OrdenDespacho;
+				ordenTemporal = ObjectUtil.copy(currentOrden) as OrdenDespacho;
+				ordenTemporal.noPedimento = vistaModificar.pedimentoString;
+				ordenTemporal.referenciaPedimento = vistaModificar.vistaPedimento.txtRefencia.text;
+				ordenTemporal.guiaEmbarque = vistaModificar.vistaPedimento.txtNumGuia.text;
+				ordenTemporal.noBultos = parseInt(vistaModificar.vistaPedimento.txtNumBultos.text);
+				ordenTemporal.FEA = vistaModificar.vistaPedimento.fechaCompletaArribo();
+				ordenTemporal.pesoPedimento = Number(vistaModificar.vistaPedimento.txtPeso.text);
+				ordenTemporal.FSA = vistaModificar.vistaPedimento.fechaCompletaAduana();
+				ordenTemporal.usuarioComprador = vistaModificar.vistaPedimento.cmbComprador.selectedItem.llave;
+				ordenTemporal.documentoPedimentoArchivo = vistaModificar.vistaPedimento.archivoPedimento.byteArray;
+				ordenTemporal.documentoEvidenciaEmbarqueArchivo = vistaModificar.vistaPedimento.archivoEvidencia.byteArray;
+				ordenTemporal.tipoCambioPedimento = Number(vistaModificar.vistaPedimento.txtCambio.text);
+				
+				ordenTemporal.fpedimento = vistaModificar.vistaPedimento.fechaPedimento();
+				/*vistaModificar.vistaPedimento.fechaCompletaAduana();*/
+				return ordenTemporal;
+			}
+			public function set recibeRespuesta($datos:Boolean):void{
+				if($datos){
+					dispatchEvent( new Event("recargarPendientes",true));
+					recargado = true;
+					var eveRegDesp:EventoRegistrarDespacho = new EventoRegistrarDespacho(EventoRegistrarDespacho.OBTENER_ORDEN_DESPACHO_REGISTRADAS);
+					eveRegDesp.usuario = DatosGlobales.getInstance()._usuario.usuario;
+					dispatchEvent(eveRegDesp);
+				}
+			}
+			
+			public var confirmarVentana:PopUpConfirmarRegistrarOrden;
+			public function confirmarGuardar():void
+			{
+				if( confirmarVentana == null ){
+					confirmarVentana = PopUpConfirmarRegistrarOrden(PopUpManager.createPopUp( this, PopUpConfirmarRegistrarOrden, true ) );
+					PopUpManager.centerPopUp( confirmarVentana );
+					confirmarVentana.setPedimentoOrden(vistaModificar.pedimentoString,listOrden.selectedItem.folio);
+					confirmarVentana.addEventListener("confirmar",confirmarPopUp);
+					confirmarVentana.addEventListener("cancelar",cerrarPopUpConfirmar);
+				}
+				else{
+					PopUpManager.addPopUp( confirmarVentana , this, true );
+				}
+			}
+			private function cerrarPopUpConfirmar(event:Event):void
+			{
+				PopUpManager.removePopUp( confirmarVentana );
+				confirmarVentana = null;
+				//////////////////QUITAR/////////////////////////////
+				/*EventoRegistrarDespacho.bloquearOrdenes = false;*/
+			}
+			private function confirmarPopUp(event:Event):void
+			{
+				var eveRegDesp:EventoRegistrarDespacho = new EventoRegistrarDespacho(EventoRegistrarDespacho.CERRAR_PENDIENTE_ORDEN_DESPACHO_REGISTRADAS);
+				eveRegDesp.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				eveRegDesp.ordenDespacho = getInfo();
+				dispatchEvent(eveRegDesp);
+				PopUpManager.removePopUp( confirmarVentana );
+				EventoRegistrarDespacho.bloquearOrdenes = false;
+			}
+			
+			protected function checarBloqueo(event:IndexChangeEvent):void
+			{
+				if(EventoRegistrarDespacho.bloquearOrdenes){
+					event.preventDefault();
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup id="grpPrincipal" width="100%" height="100%"  gap="0">
+		<s:HGroup width="100%" height="100%"  gap="0" paddingTop="30" >
+			<s:VGroup id="grpOD" width="30%" height="100%" gap="0" paddingLeft="5" paddingRight="20">
+				<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="ORDENES DE DESPACHO" width="100%" textAlign="left" color="#404040"/>
+				<s:Spacer height="100%" maxHeight="24" width="100%"/>
+				<s:TextInput id="txtBuscador" width="100%" maxWidth="{grpOD.width}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)" 
+							 prompt="Orden de Despacho"/>
+				<s:Spacer height="100%" maxHeight="34" width="100%"/>
+				<otros:division id="divArriba" width="100%" grueso="1" color="#404040" visible="false"/>
+				<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+						id="listOrden" contentBackgroundAlpha="0" change="cambiarOrden(event)" changing="checarBloqueo(event)"
+						itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.componentes.registrarDespacho.IR.IR_ordenDespachoPorAgente"
+						/>
+				<otros:division width="100%" grueso="1" color="#404040"/>
+				<s:HGroup width="100%" height="4%" gap="0" verticalAlign="middle" maxHeight="45">
+					<s:Spacer height="100%" maxWidth="20" width="30%"/>
+					<s:Label styleName="tab_texto_14_Helvetica" width="100%" fontSize="{sizeFont}" text="{'#'+dataProvider.length}" textAlign="left" id="lblTotalOrdenes"/>
+					<s:Label styleName="tab_texto_14_Helvetica" width="100%" fontSize="{sizeFont}" text="{totalPiezas+(totalPiezas == 1 ? ' Pieza':' Piezas')}" textAlign="left" id="lblTotalPiezas"/>
+					<s:Label styleName="tab_texto_14_Helvetica" width="100%" fontSize="{sizeFont}" text="{'Monto: $ '+UtilsFormatosNumericos.precisionADosDecimalesConComas(totalMonto)}" textAlign="left" id="lblTotalProveedores" maxDisplayedLines="2"/>
+				</s:HGroup> 
+				
+			</s:VGroup>
+			<otros:divisionDegradadoVertical height="100%" />
+			<s:VGroup width="70%" height="100%" >
+				<registrarDespacho:VistaModificarInfoRegistrarDespacho id="vistaModificar" width="100%" height="100%" /> 
+			</s:VGroup>  
+			
+			<!--</s:Group>-->
+		</s:HGroup>
+		<s:HGroup width="100%" height="1" id="div" paddingLeft="-13"
+				  includeInLayout="{vistaModificar.currentState == 'cargarPedimento' ? false:true}"
+				  visible="{vistaModificar.currentState == 'cargarPedimento' ? false:true}">
+			<otros:division width="100%" height="1" />
+		</s:HGroup>  
+		<s:HGroup id="footer" width="100%" horizontalAlign="center" gap="30" verticalAlign="middle"
+				  height="10%" maxHeight="37" visible="{vistaModificar.currentState == 'cargarPedimento' ? false:true}"
+				  includeInLayout="{vistaModificar.currentState == 'cargarPedimento' ? false:true}">
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="VAC: Valor Comercial" textAlign="center"/>
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="FTE: Flete" textAlign="center"/>
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="VAD: Valor Aduanal" textAlign="center"/>
+			<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="IMP: Impuestos" textAlign="center"/>
+		</s:HGroup>  
+	</s:VGroup>
+	
+</s:Group>

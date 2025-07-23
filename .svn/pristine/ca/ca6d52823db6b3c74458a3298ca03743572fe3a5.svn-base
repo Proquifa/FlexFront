@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:otros="skins.otros.*"
+			   xmlns:label="skins.skin.label.*"
+			   skinClass="skins.titleWindow.skinTitleWindowBlanca"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="0" height="0" creationComplete="init()" xmlns:pqNet="skins.botones.pqNet.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<mx:StringValidator id="validaJustificacion" source="{justificacion}" property="text" minLength="2" requiredFieldError="{catalogoAlertas.REFERENCIA_ADV_descripcionJustificacion}" />
+		<mx:NumberValidator id="validarAreasOrigen" source="{areasOrigen}" property="selectedIndex" minValue="0" lowerThanMinError="{catalogoAlertas.GESTION_ADV_seleccionaOrigen}" />
+		<s:Resize id="fxResize"  target="{this}" duration="300" effectEnd="{this.grpTodo.visible = true }"/>
+		<s:Resize id="fxCierraPop" target="{this}" widthTo="0" heightTo="0" duration="150" effectEnd="cerrarPopUp()"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoGestionIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Reformulacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.events.ResizeEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.validators.Validator;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]
+			public var _folioIncidente:String;
+			[Bindable]
+			public var _reformulacion:Object;
+			[Bindable]
+			private var _areaOrigen:ArrayCollection = new ArrayCollection(); 
+			[Bindable]
+			private var _universoAreaOrigen:ArrayCollection;
+			[Bindable]
+			private var usuarioGerente:String;
+			[Bindable]
+			private var validarArr:Array;
+			private var validarTextArea:Array;
+			private var fechaHoy:Date = new Date();
+			
+			private function cerrarPopUp():void{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function centraEstePop(event:ResizeEvent):void{
+				PopUpManager.centerPopUp( this );
+			}
+			
+			private function ajustaCentraPop($:Event):void{
+				height = ($.currentTarget as Stage).stageHeight/1.7; //-
+				width = ($.currentTarget as Stage).stageWidth - ($.currentTarget as Stage).stageWidth/1.8; //+
+				this.addEventListener(ResizeEvent.RESIZE,centraEstePop);
+			}
+			
+			private function init():void{
+				/* height = stage.height/1.8;
+				width = stage.width - stage.width/1.8;  */
+				this.fxResize.heightTo = stage.height/1.7;
+				this.fxResize.widthTo = stage.width - stage.width/1.8;
+				this.fxResize.stop();
+				this.fxResize.play();
+				var evt:EventoGestionIncidente = new EventoGestionIncidente(EventoGestionIncidente.CARGA_LISTA_CONTACTOS_GESTION_INCIDENTE);
+				evt.nivel = "Gerente";
+				evt.valorAdicional = "";
+				dispatchEvent(evt);
+				
+				validarArr = new Array();
+				validarArr.push(validarAreasOrigen);
+				validarArr.push(validaJustificacion);
+				
+				this.addEventListener(ResizeEvent.RESIZE,centraEstePop);
+				stage.addEventListener( ResizeEvent.RESIZE, ajustaCentraPop );
+				PopUpManager.centerPopUp( this );
+			}
+			
+			private function alerta():void{
+				alertaSingleton.show(catalogoAlertas.GESTION_ADV_finalizarAnalisis, catalogoAlertas.TIT_ADV_atencion,"finalizarGestion","","","SI","NO");
+			}
+			
+			private function validarCambioOrigen(evt:MouseEvent):void{
+				validarTextArea = []; 
+				validarTextArea =  Validator.validateAll(validarArr) ;
+				var textAreaCompleto:Boolean = validarTextArea.length == 0;
+				if(textAreaCompleto){
+					var events:Event;
+					enviarCambioOrigen();
+				}else{
+					var error:ValidationResultEvent;
+					var mensajerror:ArrayCollection = new ArrayCollection();
+					
+					for(var n:int = 0 ; n<validarTextArea.length ; n++){
+						mensajerror.addItem(validarTextArea[n].message);	
+					}
+					alertaSingleton.show("",catalogoAlertas.TIT_ADV_atencion,"","","","","",mensajerror);
+				}
+			}
+			
+			public function set recibeEmpleadosHablitados(lista:ArrayCollection):void{
+				this._areaOrigen = new ArrayCollection();
+				_universoAreaOrigen = lista;
+				for(var d:int = 0; d<lista.length ; d++){
+					if(DatosGlobales.getInstance()._usuario.usuario != lista[d].valor){
+						_areaOrigen.addItem(lista[d].subproceso);	
+					}	
+				}
+				this.areasOrigen.dataProvider = this._areaOrigen;
+			}
+			
+			private function origenSeleccionado(event:IndexChangeEvent):void{
+				for(var m:int = 0 ; m<_universoAreaOrigen.length ; m++){
+					if(_universoAreaOrigen[m].subproceso == event.currentTarget.selectedItem){
+						this.nombreGerente.text = _universoAreaOrigen[m].nombre;
+						this.usuarioGerente = _universoAreaOrigen[m].valor;
+					}
+				}	
+			}
+			
+			private function enviarCambioOrigen():void{
+				var evto:EventoGestionIncidente = new EventoGestionIncidente(EventoGestionIncidente.GUARDA_CAMBIO_DE_ORIGEN);
+				evto.cambioOrigen.idPendiente = this._reformulacion.idPendiente;
+				evto.cambioOrigen.idIncidente = this._reformulacion.idIncidente;
+				evto.cambioOrigen.usuarioOrigen = DatosGlobales.getInstance()._usuario.usuario;// this._reformulacion.redacto;
+				evto.cambioOrigen.usuarioDestino = this.usuarioGerente;
+				evto.cambioOrigen.justificacion = this.justificacion.text;
+				evto.cambioOrigen.fecha = this.fechaHoy;
+				dispatchEvent(evto);
+			}
+			
+			/* public function set recibirCambioOrigen(cambioDORigen:Number):void{
+			if( isNaN( cambioDORigen ) ){
+			return;
+			Alert("Error");
+			}else{
+			PopUpManager.removePopUp(this);	
+			} 
+			} */
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" id="grpTodo" paddingLeft="20" paddingRight="20" paddingBottom="20" visible="false">
+		<s:HGroup width="100%">
+			<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_cambiodeorigen}"/>
+			
+			<s:Label text="CAMBIO DE ORIGEN" fontFamily="Helvetica" fontSize="20" fontWeight="bold"/>
+			
+		</s:HGroup>
+		<otros:divisionHueca width="100%"/>
+		
+		<s:HGroup width="100%">
+			
+			<s:TabBar dataProvider="{this.qdcReformulacion}" />
+			<s:Spacer width="100%"/>
+			<s:Label id="folioincidente" text="{this._folioIncidente}" fontSize="20" fontFamily="Helvetica" color="#0b4d98" fontWeight="bold"/>
+			
+		</s:HGroup>
+		
+		<otros:divisionHueca width="100%"/>
+		
+		<mx:ViewStack id="qdcReformulacion" width="100%" height="100%" creationPolicy="all">
+			<s:NavigatorContent label="QDC" width="100%" height="100%">
+				<s:VGroup width="100%" height="100%">
+					<s:Scroller width="100%" height="100%">
+						<s:Group width="100%" height="100%">
+							
+							<s:VGroup width="100%" height="100%">
+								
+								<s:Label  text="SITUACIÓN IDENTIFICADA" textAlign="right" fontWeight="bold" fontStyle="normal" fontFamily="Helvetica" fontSize="12" color="#0b4d98" paddingBottom="5" paddingTop="5"/>
+								<s:RichEditableText   width="100%" height="100%" id="situacion" fontStyle="normal" text="{this._reformulacion.situacionIdentificada}" editable="false"/>
+								<otros:division width="100%" />
+								<s:Label text="¿Qué?" textAlign="left" fontWeight="bold" fontStyle="normal" fontFamily="Helvetica" fontSize="12" color="#0b4d98" paddingBottom="5" paddingTop="5"/>
+								<s:RichEditableText width="100%" height="100%" id="que" fontStyle="normal" text="{this._reformulacion.descripcion}" editable="false"/>
+								<otros:division width="100%"/>
+								<s:Label  text="¿Dónde?" textAlign="left" fontWeight="bold" fontStyle="normal" fontFamily="Helvetica" fontSize="12" color="#0b4d98" paddingBottom="5" paddingTop="5"/>
+								<s:RichEditableText width="100%" height="100%" id="done" fontStyle="normal" text="{this._reformulacion.lugar}" editable="false"/>
+								<otros:division width="100%"/>
+								<s:Label text="¿Cuándo?" textAlign="left" fontWeight="bold" fontStyle="normal" fontFamily="Helvetica" fontSize="12" color="#0b4d98" paddingBottom="5" paddingTop="5"/>
+								<s:RichEditableText  width="100%" height="100%" id="cuando" fontStyle="normal"  text="{this._reformulacion.cuando}" editable="false"/>
+								<otros:division width="100%"/>
+								<s:Label  text="COMENTARIOS ADICIONALES" textAlign="left" fontWeight="bold" fontStyle="normal" fontFamily="Helvetica" fontSize="12" color="#0b4d98" paddingBottom="5" paddingTop="5"/>
+								<s:RichEditableText width="100%" height="100%" id="comentario" fontStyle="normal" text="{this._reformulacion.comentarios}" editable="false"/>
+								
+							</s:VGroup>
+							
+						</s:Group>
+					</s:Scroller>
+				</s:VGroup>
+			</s:NavigatorContent>
+			<s:NavigatorContent label="Justificación" width="100%" height="100%">
+				<s:VGroup width="100%" height="100%" >
+					<!--<s:Spacer width="100%" height="30"/>-->
+					<s:HGroup width="100%" height="100%">
+						<s:TextArea id="justificacion" width="100%" height="100%" borderVisible="false" fontFamily="Tahoma" fontSize="12"
+									skinClass="skins.skin.textarea.TextAreaSinBordeSkin"
+									prompt="REGISTRE AQUÍ SU JUSTIFICACIÓN"/>
+					</s:HGroup>
+					
+					<otros:divisionHueca width="100%"/>
+					
+					<s:HGroup width="100%" height="18%" paddingBottom="5">
+						<s:FormItem label="NUEVO ORIGEN:" width="100%" height="100%" fontFamily="Tahoma" fontSize="12" verticalCenter="0">
+							<s:ComboBox id="areasOrigen" width="175" change="origenSeleccionado(event)" fontFamily="Tahoma" verticalCenter="0"/>
+						</s:FormItem>
+						
+						<s:VGroup width="70%" height="100%">
+							<s:Label id="nombreGerente" width="100%" height="100%" textAlign="right" fontFamily="Helvetica" fontSize="12" verticalAlign="middle"/>
+							<s:Label id="areaGerente" text="Gerente de área" width="100%" height="100%" textAlign="right" fontFamily="Helvetica" fontSize="12" verticalAlign="middle"/>
+							
+						</s:VGroup>
+					</s:HGroup>
+				</s:VGroup>
+			</s:NavigatorContent>
+		</mx:ViewStack>
+		<otros:divisionHueca width="100%"/>
+		<s:HGroup width="100%">
+			<!--<s:Button styleName="botonNegroOld" label="Salir" click="cerrarPopUp()"/>-->
+			<pqNet:botonPqNetLargo icono="iconosalir" label="Salir" id="salir" click="fxCierraPop.play();this.grpTodo.visible = false" fontFamily="Tahoma" fontSize="15"/>
+			<s:Spacer width="100%"/>
+			<!--<s:Button styleName="botonNegroOld" label="Enviar" click="enviarCambioOrigen()"/>-->
+			
+			<pqNet:botonPqNetLargo icono="enviarblanco" label="Enviar" id="enviar" click="validarCambioOrigen(event)" fontFamily="Helvetica" fontSize="15"/>
+			
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:TitleWindow>

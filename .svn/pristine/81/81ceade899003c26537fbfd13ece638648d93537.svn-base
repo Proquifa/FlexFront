@@ -1,0 +1,432 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  xmlns:largosinicono="skins.botones.largosinicono.*" 
+		  xmlns:graficas="skins.skin.graficas.*" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:tabla="skins.botones.tabla.*" 
+		  xmlns:grafica="skins.botones.grafica.*" 
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:pqNet1="skins.botones.pqNet.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15"
+		  creationComplete="validarLlenarGrid()"
+		  >
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="300"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<s:SolidColorStroke id="trazoDelgado" color="0x{catalogoColores.LABEL_NEGRO}" weight="1"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.charts.HitData;
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.items.ColumnSeriesItem;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsRutaArchivos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.dataTipRendererCot;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoInfoGraficas;
+			
+			public function seleccionaTabla():void{			
+			/* 	stackGeneral.selectedChild = vistaTabla;
+				validarLlenarGrid(); */
+			}
+			public function seleccionarGrafica():void{
+				stackGeneral.selectedChild = vistaGrafico;
+			}
+			
+			private function minimiza():void{
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);
+			}
+			
+			[Bindable]	private var _listadoProductosCliente:ArrayCollection = new ArrayCollection();
+			
+			public function set recibeListaCotizaPedidoCliente($lista:ArrayCollection):void{
+				if($lista == null ) return;
+				_listadoProductosCliente = $lista;
+				for(var d:int = 0; d< _listadoProductosCliente.length ; d++){
+					if(_listadoProductosCliente[d].cotizacion == cotizacionTemp ){
+						_listadoProductosCliente[d].repetido = true;
+					}
+					var cotizacionTemp:String = _listadoProductosCliente[d].cotizacion;
+				}
+			/* 	btnExportar.enabled =  _listadoProductosCliente.length < 1 ? false : true; */
+			}
+			
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();
+			
+			public function set recibeLinealCotPedido( $lista:ArrayCollection ):void{
+				if( $lista == null ) 
+					return;
+				_linealArrGrafica = $lista;
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COT=PED_0") );
+			}
+			private var _listaMensual:ArrayCollection = new ArrayCollection([
+				"Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+			]);
+			
+			private function iniciarGrafica( $lista:ArrayCollection):ArrayCollection{
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var cuenta:int = 1;
+				while( cuenta < 13){
+					if(cuenta >= this._minimoMeses && cuenta <= this._maximoMeses){
+						objeto = new Object();
+						objeto.mes = _listaMensual[cuenta -1];
+						objeto.cotizado = 0;
+						objeto.pedido = 0;
+						for( var m:int = 0; m < $lista.length;m++ ){
+							var resumen:ResumenConsulta = $lista[m] as ResumenConsulta;
+							if(cuenta == resumen.mes){ 
+								if( resumen.conceptoResultado == "PEDIDA" ) objeto.pedido += resumen.total;
+								if( resumen.conceptoResultado == "COTIZADA" ) objeto.cotizado += resumen.total;
+							}
+						}
+						arrReturn.addItem(objeto);
+					}
+					cuenta++;
+				}
+				return arrReturn;
+			}
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void{
+				if( $event == null )
+					return;
+				if( _keyAnterior != $event.keyConsulta ){
+					_event = $event;
+					_minimoMeses = _event.rangoMinMes;
+					_maximoMeses = _event.rangoMaxMes;
+					validarLlenarGrid();
+				}
+				myChart.dataProvider = iniciarGrafica( UtilsGrid.queryCampoX( _linealArrGrafica, "etiqueta", "COT=PED_0") );
+			}
+			
+			private function formateoEje($valor:Number, $valorPrevio:Object, $eje:Object):String{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function gridItemClickEvent(event:ListEvent):void{
+				var urlreq:URLRequest;
+				var ruta:String;
+				if (event.columnIndex == 1 ){
+					if(event.itemRenderer.data.repetido != true){
+						ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.COTIZACIONES_RUTA + (event.currentTarget.selectedItem as CotizaPedidoCliente).cotizacion + ".pdf";
+						//ruta = "http://201.161.12.60:8080/SAP/Cotizaciones/"+ gridDatos.selectedItem.folioCotiza +".pdf";
+						urlreq = new URLRequest ( ruta );
+						navigateToURL( urlreq );
+					}
+				}	 
+				if (event.columnIndex == 4 ){
+					if(event.itemRenderer.data.pedido != "NA"){
+						ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.PEDIDOS_RUTA + (event.currentTarget.selectedItem as CotizaPedidoCliente).pedido + ".pdf";
+						//ruta = "http://201.161.12.60:8080/SAP/Pedidos/"+ gridDatos.selectedItem.cpedido +".pdf";
+						urlreq = new URLRequest ( ruta );	
+						navigateToURL( urlreq );	
+					}
+				}
+			}
+			
+			private function generaArchivo():void{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Cotización");
+				fila1[2] = hoja.addItem("Monto cotizado");
+				fila1[3] = hoja.addItem("Piezas cotizadas");
+				fila1[4] = hoja.addItem("Pedido");
+				fila1[5] = hoja.addItem("Monto pedido");
+				fila1[6] = hoja.addItem("Piezas pedidas");
+				for(var i:int = 0 ; i<_listadoProductosCliente.length ; i++ ){
+					fila1 = new Array();	
+					fila1[0] =  (_listadoProductosCliente[i] as CotizaPedidoCliente ).numFila;
+					fila1[1] = '"'+(_listadoProductosCliente[i] as CotizaPedidoCliente).cotizacion+'"';
+					fila1[2] = '"'+(_listadoProductosCliente[i] as CotizaPedidoCliente).montoCotizadoString+'"';
+					fila1[3] = '"'+(_listadoProductosCliente[i] as CotizaPedidoCliente).piezasCotizadas+'"';
+					fila1[4] = '"'+(_listadoProductosCliente[i] as CotizaPedidoCliente).pedido+'"';
+					fila1[5] = '"'+(_listadoProductosCliente[i] as CotizaPedidoCliente).montoPedidoString+'"';
+					fila1[6] = '"'+(_listadoProductosCliente[i] as CotizaPedidoCliente).piezasPedidas+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Cotiza_A_Pedido.csv");
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String{
+				return $etiqueta.toString().toUpperCase();
+			}
+			
+			private var _keyAnterior:String = "";
+			
+			protected function validarLlenarGrid():void
+			{
+			/* 	if( stackGeneral.selectedChild == vistaTabla ){
+					if( _event != null && _event.keyConsulta != _keyAnterior ){
+						var evet:EventoTableroClientes = new EventoTableroClientes( EventoTableroClientes.CONSULTA_GRID_COT_PED );
+						evet.anio = _event.anio;
+						evet.idCliente = _event.idCliente;
+						evet.periodo = _event.periodo;
+						evet.tipoPeriodo = _event.tipoPeriodo;
+						evet.mes = _event.mes;
+						evet.esacString = _event.esacString;
+						evet.idVentas = _event.idVentas;
+						evet.lineal = _event.lineal;
+						evet.rangoMinMes = _event.rangoMinMes;
+						evet.rangoMaxMes = _event.rangoMaxMes;
+						dispatchEvent( evet );
+						_keyAnterior = _event.keyConsulta;
+					}
+				} */
+				lblTitulo.text = 'COTIZACIÓN = PEDIDO';
+				if( stackGeneral.selectedChild == vistaGrafico )
+					lblTitulo.text += ' · MONTO COTIZADO / MONTO PEDIDO'; 
+			}
+			
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero id="lblTitulo" width="100%" />
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" change="validarLlenarGrid()">
+		<!--<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="0">
+				<otros:divisionGruesa width="100%" />
+				<pqNet:dataGridPqNet id="tablaGrid" itemClick="gridItemClickEvent(event)" horizontalScrollPolicy="auto" rowHeight="40"
+									 width="100%" height="100%" dataProvider="{this._listadoProductosCliente}" porcentajesColumnasPq="[ 7, 18, 19, 7, 18, 19, 7 ]">
+					<pqNet:columns>
+						<mx:DataGridColumn headerText="#" dataField="numFila"/>
+						<mx:DataGridColumn headerText="Cotización" dataField="cotizacion">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+												
+												import skins.catalogos.catalogoColores;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<mx:LinkButton label="{(data as CotizaPedidoCliente).cotizacion}" color="0x257d92" toolTip="Ver Cotización" textDecoration.selected="underline"  horizontalCenter="0"
+													   includeInLayout="{(data as CotizaPedidoCliente).repetido == true ? false:true}"
+													   visible="{(data as CotizaPedidoCliente).repetido == true ? false:true}"/>
+										
+										<s:Label horizontalCenter="0" text="{(data as CotizaPedidoCliente).cotizacion}" 
+												 includeInLayout="{(data as CotizaPedidoCliente).repetido == true ? true:false}" 
+												 visible="{(data as CotizaPedidoCliente).repetido == true ? true:false}"/>
+										
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						
+						<mx:DataGridColumn headerText="Monto cotizado" dataField="montoCotizadoString" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:Label width="50%" text="{(data as CotizaPedidoCliente).montoCotizadoString}" horizontalCenter="0"
+												 includeInLayout="{(data as CotizaPedidoCliente).repetido == true ? false:true}"
+												 visible="{(data as CotizaPedidoCliente).repetido == true ? false:true}"/>
+										
+										<s:Label text="$0.00" horizontalCenter="0" 
+												 includeInLayout="{(data as CotizaPedidoCliente).repetido == true ? true:false}" 
+												 visible="{(data as CotizaPedidoCliente).repetido == true ? true:false}"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						
+						<mx:DataGridColumn headerText="Piezas cotizadas" dataField="piezasCotizadas">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:Label text="{(data as CotizaPedidoCliente).piezasCotizadas}"  horizontalCenter="0"
+												 includeInLayout="{(data as CotizaPedidoCliente).repetido == true ? false:true}"
+												 visible="{(data as CotizaPedidoCliente).repetido == true ? false:true}"/>
+										
+										<s:Label horizontalCenter="0" text="0" 
+												 includeInLayout="{(data as CotizaPedidoCliente).repetido == true ? true:false}" 
+												 visible="{(data as CotizaPedidoCliente).repetido == true ? true:false}"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						
+						<mx:DataGridColumn headerText="Pedido" dataField="pedido">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<mx:LinkButton label="{(data as CotizaPedidoCliente).pedido}" color="0x257d92" toolTip="Ver Pedido" textDecoration.selected="underline"  horizontalCenter="0"
+													   includeInLayout="{(data as CotizaPedidoCliente).pedido == 'NA'? false:true}"
+													   visible="{(data as CotizaPedidoCliente).pedido == 'NA'? false:true}"/>
+										<s:Label horizontalCenter="0" text="NA" includeInLayout="{(data as CotizaPedidoCliente).pedido == 'NA'? true:false}" 
+												 visible="{(data as CotizaPedidoCliente).pedido == 'NA'? true:false}"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						
+						<mx:DataGridColumn headerText="Monto pedido" dataField="montoPedidoString">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:Label text="{(data as CotizaPedidoCliente).montoPedidoString}" textAlign="center"  horizontalCenter="0"/>
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="Piezas Pedidas" dataField="piezasPedidas">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.CotizaPedidoCliente;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:HGroup width="100%" paddingRight="20" horizontalAlign="center">
+											<s:Label text="{(data as CotizaPedidoCliente).piezasPedidas}"  horizontalCenter="0" />
+										</s:HGroup>	
+									</s:MXItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</pqNet:columns>
+				</pqNet:dataGridPqNet>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico" />
+					<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					<s:Spacer width="100%" />
+					<pqNet1:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()" />
+				</s:HGroup>
+			</s:VGroup>
+		</s:NavigatorContent>-->
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20" >
+					<otros:divisionGruesa width="100%" />
+					<mx:ColumnChart width="100%" height="100%" id="myChart"
+									showDataTips="true" 
+									mouseSensitivity="5" 
+									dataTipMode="single"
+									showDataTipTargets="false"
+									dataTipRenderer="{dataTipRendererCot}" 
+									paddingRight="40" paddingLeft="20" paddingTop="20"
+									paddingBottom="40"
+									fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal"
+									>
+						<mx:series>
+							<mx:ColumnSeries
+								id="serieCET" 
+								yField="cotizado"
+								displayName="Monto cotizado"
+								showDataEffect="{fxInterpolateIn}"
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barGrisRenderer"
+								/>
+							<mx:ColumnSeries 
+								id="serieAFT"
+								yField="pedido"
+								displayName="Monto pedido"
+								showDataEffect="{fxInterpolateIn}"
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.cotiPed.barAzulRenderer"
+								/>
+						</mx:series>
+						<mx:verticalAxis>
+							<mx:LinearAxis baseAtZero="true" title="Ventas en DLS" labelFunction="formateoEje" id="ventasCotPed"/>
+						</mx:verticalAxis>
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="cotPedMax" categoryField="mes" />
+						</mx:horizontalAxis>
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{cotPedMax}" axisStroke="{trazoGruezo}" tickStroke="{trazoDelgado}" 
+											 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction"/>
+						</mx:horizontalAxisRenderers>
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{ventasCotPed}" showLine="false" tickPlacement="none" color="0x999999" />
+						</mx:verticalAxisRenderers>
+					</mx:ColumnChart>
+					<otros:divisionHueca width="100%" />
+				<!--	<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="stackGeneral.selectedChild = vistaTabla"/>
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>-->
+				</s:VGroup>
+			</s:HGroup>  
+		</s:NavigatorContent>
+	</pq:MobViewStack>
+</s:VGroup>

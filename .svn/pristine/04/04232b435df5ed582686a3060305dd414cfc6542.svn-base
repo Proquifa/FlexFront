@@ -1,0 +1,201 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun
+{
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.consultas.comun.ParametrosBusquedaCobros")]                	
+	public class ParametrosBusquedaCobros
+	{
+		private var _fechaInicio:Date;
+		private var _fechaFin:Date; 
+		private var _idCliente:Number;
+		private var _medioPago:String;
+		private var _fpor:String;
+		private var _estado:String;
+		private var _cpago:String;
+		private var _drc:int;
+		private var _factura:String;
+		private var _idUsuarioLogueado:Number;
+		private var _cobrador:Number;
+		private var _cuenta:String;
+		private var _banco:String;
+		private var _uuid:String;
+		private var _fechaCobro:Date;
+		private var _busquedaCR:Boolean;
+		private var _individual:Boolean;
+
+		public function ParametrosBusquedaCobros()
+		{
+		}
+
+		public function get individual():Boolean
+		{
+			return _individual;
+		}
+
+		public function set individual(value:Boolean):void
+		{
+			_individual = value;
+		}
+
+		public function get fechaFin():Date
+		{
+			return _fechaFin;
+		}
+
+		public function set fechaFin(value:Date):void
+		{
+			_fechaFin = value;
+		}
+
+		public function get fechaInicio():Date
+		{
+			return _fechaInicio;
+		}
+
+		public function set fechaInicio(value:Date):void
+		{
+			_fechaInicio = value;
+		}
+
+		public function get busquedaCR():Boolean
+		{
+			return _busquedaCR;
+		}
+
+		public function set busquedaCR(value:Boolean):void
+		{
+			_busquedaCR = value;
+		}
+
+		public function get fechaCobro():Date
+		{
+			return _fechaCobro;
+		}
+
+		public function set fechaCobro(value:Date):void
+		{
+			_fechaCobro = value;
+		}
+
+		public function get banco():String
+		{
+			return _banco;
+		}
+
+		public function set banco(value:String):void
+		{
+			_banco = value;
+		}
+
+		public function get cuenta():String
+		{
+			return _cuenta;
+		}
+
+		public function set cuenta(value:String):void
+		{
+			_cuenta = value;
+		}
+
+		public function get cobrador():Number
+		{
+			return _cobrador;
+		}
+
+		public function set cobrador(value:Number):void
+		{
+			_cobrador = value;
+		}
+
+		public function get idUsuarioLogueado():Number
+		{
+			return _idUsuarioLogueado;
+		}
+
+		public function set idUsuarioLogueado(value:Number):void
+		{
+			_idUsuarioLogueado = value;
+		}
+
+		public function get factura():String
+		{
+			return _factura;
+		}
+
+		public function set factura(value:String):void
+		{
+			_factura = value;
+		}
+
+		public function get drc():int
+		{
+			return _drc;
+		}
+
+		public function set drc(value:int):void
+		{
+			_drc = value;
+		}
+
+		public function get cpago():String
+		{
+			return _cpago;
+		}
+
+		public function set cpago(value:String):void
+		{
+			_cpago = value;
+		}
+
+		public function get estado():String
+		{
+			return _estado;
+		}
+
+		public function set estado(value:String):void
+		{
+			_estado = value;
+		}
+
+		public function get fpor():String
+		{
+			return _fpor;
+		}
+
+		public function set fpor(value:String):void
+		{
+			_fpor = value;
+		}
+
+		public function get medioPago():String
+		{
+			return _medioPago;
+		}
+
+		public function set medioPago(value:String):void
+		{
+			_medioPago = value;
+		}
+
+		public function get idCliente():Number
+		{
+			return _idCliente;
+		}
+
+		public function set idCliente(value:Number):void
+		{
+			_idCliente = value;
+		}
+
+		public function get uuid():String
+		{
+			return _uuid;
+		}
+
+		public function set uuid(value:String):void
+		{
+			_uuid = value;
+		}
+
+		
+
+	}
+}

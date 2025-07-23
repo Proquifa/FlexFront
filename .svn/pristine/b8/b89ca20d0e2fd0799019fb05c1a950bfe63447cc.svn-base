@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		destructionPolicy="never"
+		actionBarVisible="false" 
+		creationComplete="init(event)" 
+		xmlns:vistas="vistas.*" 
+		xmlns:mx="library://ns.adobe.com/flex/mx" 
+		xmlns:botonera="vistas.vistaVisitas.botonera.*" 
+		xmlns:vistaVisitas="vistas.vistaVisitas.*"
+		>
+	<fx:Script>
+		<![CDATA[
+			import flash.filters.BitmapFilterQuality;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Sprint;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import eventos.EventoGeneralMobilVendedor;
+			import eventos.EventoVisitasVendedorMobil;
+			
+			import modelo.ModeloVisitasVendedorMobil;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			import vistas.menuPrincipalMobilVendedor;
+			import vistas.popup.popUpMobilPqNet;
+			import vistas.visitasEjecucion.VistaVisitasEjecucion;
+			
+			
+			[Bindable]private var fecha:String;
+			[Bindable]private var heightFlecha:Number = 21;/*30*/
+			[Bindable]private var widthFlecha:Number = 14;/*20*/
+			[Bindable]private var colorBoton:uint = 0x008894;/*20*/
+			
+			private var meses:Array = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener(EventoGeneralMobilVendedor.CAMBIAR_VISTA_MENU,cargarVista,true);
+				addEventListener(EventoVisitasVendedorMobil.CAMBIAR_VISTA_VISITA_INFO,cambioEstado,true);
+				addEventListener(EventoVisitasVendedorMobil.ENVIAR_INFORMACION_VISITA,cambiarVistaInformacion,true);
+				
+				addEventListener("cambioBotonera",cambioEstado);
+				
+				var fechaActual:Date = new Date();
+				fecha = fechaActual.getDate()+" "+meses[fechaActual.getMonth()]+" "+fechaActual.getFullYear();
+				currentState = "calendario";
+				/*resetVista();*/
+				ModeloVisitasVendedorMobil.limpiarRespuesta();
+				
+				/*var eventoVisitas:EventoVisitasVendedorMobil = new EventoVisitasVendedorMobil(EventoVisitasVendedorMobil.OBTENER_VISITAS_PROGRAMADAS);
+				eventoVisitas.usuarioId = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent(eventoVisitas);*/
+				dispatchEvent(new EventoVisitasVendedorMobil(EventoVisitasVendedorMobil.OBTENER_SPRINT_EN_CURSO));
+			}
+			
+			private function cargarVista(event:EventoGeneralMobilVendedor):void
+			{
+				if(event.vista == 'visitas'){
+					this.navigator.pushView(VistaVisitasPrincipal);
+				}else if(event.vista == 'cierre'){
+					this.navigator.pushView(VistaVisitasEjecucion);
+				}else if(event.vista == 'inicio'){
+					this.navigator.pushView(menuPrincipalMobilVendedor);
+				}
+				if(event.vista == 'LogOut'){
+					this.navigator.popToFirstView();
+				}
+			}
+			
+			private function cambioEstado(event:EventoVisitasVendedorMobil):void
+			{
+				botonera.currentState = event.vista;
+				grpInfo.currentState = event.vista;
+			}
+			private function resetVista():void
+			{
+				currentState = "calendario";
+				botonera.currentState = "informacion";
+				grpInfo.currentState = "informacion";
+			}
+			
+			private var listaAgendado:ArrayCollection;
+			public function set recibirVistitasProgramadas(data:ArrayCollection):void
+			{
+				if(data.length > 0){
+					/*var sprint:Sprint = data[0].sprint;
+					var listaFechas:ArrayCollection = seleccionarFechaSemana(sprint);*/
+					listaAgendado = new ArrayCollection;
+					
+					/*vistaCalendario.setListaFechas(listaFechas);*/
+					
+					for each (var temp:VisitaCliente in data) 
+					{
+						if(temp.horaVisitaFin && temp.horaVisitaInicio)
+							listaAgendado.addItem(ObjectUtil.copy(temp) as VisitaCliente);
+					}
+					
+					for each (var visita:VisitaCliente in listaAgendado) 
+					{
+						vistaCalendario.acomodarVisita(visita);
+					}
+					
+				}
+				/*vistaCalendario.seleccionarDiaActualBotoneras();*/
+			}
+			
+			public function set recibirSprintEnCurso(value:Sprint):void
+			{
+				if(value){
+					var sprint:Sprint = value;
+					var listaFechas:ArrayCollection = seleccionarFechaSemana(sprint);
+					vistaCalendario.setListaFechas(listaFechas);
+					
+					var eventoVisitas:EventoVisitasVendedorMobil = new EventoVisitasVendedorMobil(EventoVisitasVendedorMobil.OBTENER_VISITAS_PROGRAMADAS);
+					eventoVisitas.usuarioId = DatosGlobales.getInstance()._usuario.clave;
+					dispatchEvent(eventoVisitas);
+					
+					/*vistaCalendario.seleccionarDiaActualBotoneras();*/
+				}
+			}
+			public function set recibirRespuestaFecha(value:String):void
+			{
+				if(value == "true"){
+					var eventoVisitas:EventoVisitasVendedorMobil = new EventoVisitasVendedorMobil(EventoVisitasVendedorMobil.OBTENER_VISITAS_PROGRAMADAS);
+					eventoVisitas.usuarioId = DatosGlobales.getInstance()._usuario.clave;
+					dispatchEvent(eventoVisitas);
+					
+					var alert:popUpMobilPqNet = new popUpMobilPqNet();
+					alert.mensaje = "Se registro la checada";
+					alert.modoOk = true;
+					alert.open(this,true);
+				}
+			}
+			private function seleccionarFechaSemana(sprint:Sprint):ArrayCollection
+			{
+				var listaFechas:ArrayCollection = ModeloVisitasVendedorMobil.convertirRangoFechasLista(sprint.fechaInicio,sprint.fechaFin);
+				
+				return listaFechas;
+			}
+			
+			[Bindable]private var currentVisita:VisitaCliente;
+			private function cambiarVistaInformacion(event:EventoVisitasVendedorMobil):void
+			{
+				currentState = "informacion";
+				currentVisita = event.visitaCliente;
+				var minutoInicio:String = currentVisita.fechaVInicioMinuto < 9 ? currentVisita.fechaVInicioMinuto+"0":currentVisita.fechaVInicioMinuto.toString();
+				var minutoFin:String = currentVisita.fechaVInicioMinuto < 9 ? currentVisita.fechaVInicioMinuto+"0":currentVisita.fechaVInicioMinuto.toString();
+				
+				lblHora.text = currentVisita.fechaVInicioHora+':'+minutoInicio+' - '+currentVisita.fechaVFinHora+':'+minutoFin;
+				
+				var fechaActual:Date = new Date;
+				if(!currentVisita.fechaCheckIn && fechaActual.date == currentVisita.fechaVisita.date &&
+					fechaActual.month == currentVisita.fechaVisita.month && fechaActual.fullYear == currentVisita.fechaVisita.fullYear){
+					grpBotonCheck.addEventListener(MouseEvent.CLICK,generarCheckIn);
+					colorBoton = 0x008894;					
+				}
+				else{
+					colorBoton = 0xb9bac0;
+					grpBotonCheck.removeEventListener(MouseEvent.CLICK,generarCheckIn);
+				}
+				
+				grpInfo.setVisita(currentVisita);
+			}
+			
+			protected function volverCalendario(event:MouseEvent):void
+			{
+				currentState = "calendario";
+			}
+			
+			protected function generarCheckIn(event:MouseEvent):void
+			{
+				var eventoV:EventoVisitasVendedorMobil = new EventoVisitasVendedorMobil(EventoVisitasVendedorMobil.REGISTRAR_FECHA_CHECKIN);
+				eventoV.visitaCliente = currentVisita; //37
+				eventoV.usuarioId = currentVisita.idEmpleado; //195
+				dispatchEvent(eventoV);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="calendario"/>
+		<s:State name="informacion"/>
+	</s:states>
+	
+	<vistas:plantillaVendedorMobil width="100%" height="100%" >
+		<vistas:vistaPrincipal>
+			<s:VGroup width="100%" height="100%" gap="0">
+				
+				<s:Group width="100%" height="7%" depth="4">
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="#FFFFFF" />
+						</s:fill>
+						<s:filters>
+							<s:DropShadowFilter alpha="0.5" angle="90" blurX="4" blurY="4" color="#000000" 
+												distance="2" knockout="false" 
+												quality="{BitmapFilterQuality.HIGH}" strength="1"/>
+						</s:filters>
+					</s:Rect>
+					
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" paddingRight="20" paddingLeft="20">
+						<s:Label text="EJECUTAR VISITA" fontFamily="Helvetica" fontWeight="bold" color="#404040" fontSize="18"/>
+						<s:Spacer width="100%" />
+						<s:Label text="{fecha}" fontFamily="Helvetica" color="#404040" fontSize="18"/>
+					</s:HGroup>  
+				</s:Group>
+				
+				<s:Group width="100%" height="100%" includeIn="calendario">
+					<s:VGroup width="100%" height="100%" gap="0">
+						<!--<botonera:botoneraTiempovisita width="100%" height="30%" maxHeight="45" id="botoneraTiempo"/>-->
+						<vistaVisitas:VistaCalendarioVisitas width="100%" height="100%" id="vistaCalendario"/>
+					</s:VGroup>  
+				</s:Group>
+				
+				<s:VGroup width="100%" height="100%" includeIn="informacion" gap="0">
+					<s:Group width="100%" height="22%" depth="3">
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#FFFFFF" />
+							</s:fill>
+							<s:filters>
+								<s:DropShadowFilter alpha="0.5" angle="90" blurX="4" blurY="4" color="#000000" 
+													distance="2" knockout="false" 
+													quality="{BitmapFilterQuality.HIGH}" strength="1"/>
+							</s:filters>
+						</s:Rect>
+						<s:VGroup width="100%" height="100%" verticalAlign="bottom" gap="0" >
+							<s:HGroup width="100%" height="100%" verticalAlign="middle" paddingLeft="20" gap="10" click="volverCalendario(event)">
+								<mx:Image source="{catalogoIconosBotones.getInstance().flechaIR}" width="{widthFlecha}" height="{heightFlecha}" rotation="180" />
+								<s:Label text="{currentVisita.nombreCliente}" fontFamily="Helvetica" fontWeight="bold" color="#454545" fontSize="22"/>
+								<s:Label fontFamily="Helvetica" color="#454545" fontSize="22" id="lblHora"/>
+							</s:HGroup>  
+							<s:HGroup width="100%" height="50%" verticalAlign="bottom">
+								<botonera:botoneraOpcionesVisita width="100%" height="100%" id="botonera" />
+							</s:HGroup>
+						</s:VGroup>  
+					</s:Group>
+					
+					<vistaVisitas:informacionVisita width="100%" height="100%" id="grpInfo"/>
+					
+					<s:Group width="100%" height="20%" id="btnCheck">
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="{colorBoton}" />
+							</s:fill>
+						</s:Rect>
+						<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" id="grpBotonCheck">
+							<s:Label text="CHECK - IN" fontFamily="Helvetica" fontWeight="bold" color="#FFFFFF"/>
+						</s:HGroup>  
+					</s:Group>
+				</s:VGroup>
+				
+			</s:VGroup>  
+		</vistas:vistaPrincipal>
+	</vistas:plantillaVendedorMobil>
+</s:View>

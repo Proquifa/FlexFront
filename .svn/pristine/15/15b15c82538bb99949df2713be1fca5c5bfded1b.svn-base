@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:itemRenderer="vista.vistas.reporte.visita.itemRenderer.*" 
+		 xmlns:reportatVisita="vista.vistas.reportatVisita.*"
+		 xmlns:visita="vista.vistas.reporte.visita.*"
+		 width="100%" height="100%" 
+		 creationComplete="group1_creationCompleteHandler(event)" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.Producer;
+			
+			import vista.evento.reportarVisita.EventoReportarVisita;
+			import vista.vistas.reporte.visita.cotizar.componentes.popUpCotizacion;
+			
+			
+			private var vistaInicial:VistaInicialReportarVisita;
+			private var vistaOperacion:VistaOperacionReportarVisita;
+			private var e:Empleado = DatosGlobales.getInstance()._usuario;
+			
+			public function set recibirVisitaClienteAgrupadas(value:ArrayCollection):void
+			{
+				
+			}
+			
+			public function iniciaVista():void{
+				if (vistaInicial)
+					plantilla.header = vistaInicial.vgHeader;
+				plantilla.vsPrincipal.selectedIndex = 0;
+			}
+				
+			public function cambiarVista(event:EventoReportarVisita):void {
+				var index:int = event.index;
+				plantilla.vsPrincipal.selectedIndex = index;
+				if (index == 0) {
+					plantilla.header = vistaInicial.vgHeader;
+					
+					var eventRS:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.OBTENER_VISITA_CLIENTES_POR_SPRINT);
+					eventRS.current = e.idEmpleado; 
+					dispatchEvent(eventRS);
+				}
+				else {
+					vistaOperacion.currentCliente = event.current;
+					vistaOperacion.indexVisita = event.solicitudIndex + 1;
+					plantilla.header = vistaOperacion.vgHeader;
+				}
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				addEventListener(EventoReportarVisita.CAMBIAR_VISTA, cambiarVista, false, 0 ,true );
+				if (!vistaInicial)
+					vistaInicial = new VistaInicialReportarVisita();
+				plantilla.nvVistaInicial.addElement(vistaInicial);
+				plantilla.header = vistaInicial.vgHeader;
+				
+				if (!vistaOperacion)
+					vistaOperacion = new VistaOperacionReportarVisita();
+				plantilla.nvVistaOperacion.addElement(vistaOperacion);
+				
+				
+				addEventListener(EventoReportarVisita.ABRIR_POPUP_COTIZACION,abrirPopUpCotizacion);
+				
+			}
+			
+			
+			private var popUpCot:popUpCotizacion;
+			private var proA:Producto = new Producto();
+			private var vieneDe:String = "";
+			private var tipoMonedaPop:String = "";
+			public function abrirPopUpCotizacion(event:EventoReportarVisita):void
+			{
+				proA = new Producto;
+				vieneDe = "";
+				tipoMonedaPop = "";
+				
+				vieneDe = event.vieneDe;
+				var evtPRO:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.OBTENER_INFORMACION_PRODUCTO_PARA_GRAFICAR);
+				evtPRO.idCliente = event.idCliente;
+				if(vieneDe == "Editar")
+				{
+					evtPRO.idProducto = event.partidaCo.producto.idProducto;
+					evtPRO.idProveedor = event.partidaCo.producto.proveedor;
+					evtPRO.idCliente = VistaOperacionReportarVisita.visitaClienteActual.cliente.idCliente;
+					evtPRO.tipo = event.partidaCo.producto.tipo;
+					evtPRO.subtipo = event.partidaCo.producto.subtipo;
+					evtPRO.control = event.partidaCo.producto.control;
+					proA = event.partidaCo.producto;
+					tipoMonedaPop = event.partidaCo.monedaAbreviatura;
+					
+					var cosPro:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.OBTENER_PRECIO_MAXIMO_Y_PRECIO_MINIMO_DE_PRODUCTO);
+					cosPro.idCliente = VistaOperacionReportarVisita.visitaClienteActual.cliente.idCliente;
+					cosPro.nivelCliente = VistaOperacionReportarVisita.visitaClienteActual.cliente.nivelIngreso;
+					cosPro.idProductoString = String(event.partidaCo.producto.idProducto);
+					dispatchEvent(cosPro);
+				}
+					
+				else
+				{
+					proA = event.producto;
+					tipoMonedaPop = "USD";
+					evtPRO.idProducto = event.producto.idProducto;
+					evtPRO.idCliente = VistaOperacionReportarVisita.visitaClienteActual.cliente.idCliente;
+					evtPRO.idProveedor = event.producto.proveedor;	
+					evtPRO.tipo = event.producto.tipo;
+					evtPRO.subtipo = event.producto.subtipo;
+					evtPRO.control = event.producto.control;
+				}
+				
+				dispatchEvent(evtPRO);
+				
+			}
+			
+			private function aceptarPopCotizacion(event:Event):void
+			{
+				vistaOperacion.cotizar.actualizaPiezasYcostos(Number(popUpCot.cantidadPiezas.text),popUpCot.producto.idProducto,Number(popUpCot.cantidadPrecio.text),popUpCot.indicePrecio);
+				PopUpManager.removePopUp( popUpCot );
+				popUpCot = null;
+				respuestaCostos = false;
+				respuestaMinMax = false;
+				inicioPop = false;
+				
+			}
+			
+			private function agregarPopCotizacion(event:Event):void
+			{
+				vistaOperacion.cotizar.agregarProductoAlistaParaCotizar(Number(popUpCot.cantidadPiezas.text),Number(popUpCot.cantidadPrecio.text),popUpCot.indicePrecio);
+				PopUpManager.removePopUp( popUpCot );
+				popUpCot = null;
+				inicioPop = false;
+				respuestaCostos = false;
+				respuestaMinMax = false;
+				
+			}
+			
+			private function cerrarPopCotizacion(event:Event):void
+			{
+				respuestaCostos = false;
+				respuestaMinMax = false;
+				inicioPop = false;
+				PopUpManager.removePopUp( popUpCot );
+				popUpCot = null;
+			}
+			
+			private var listaCostosProductos:ArrayCollection = new ArrayCollection();
+			private var coMaxProducto:Number = 0;
+			private var coMinProducto:Number = 0;
+			private var intervaloGrafica:Number = 0;
+			private var respuestaCostos:Boolean;
+			public function set reciveInformacionCostos(listaCostos:ArrayCollection):void{
+		     if(listaCostos == null)
+				 return;
+			 
+				   listaCostosProductos = listaCostos;
+				 /*  coMaxProducto = proA.costo;
+				   coMinProducto = proA.costoMinimo;
+				   intervaloGrafica = (coMaxProducto-coMinProducto)/2;*/
+				   respuestaCostos = true;
+				   reciveRespuestasListaCostosyCostominyMax();
+			}
+			
+			private var respuestaMinMax:Boolean;
+			
+			public function set recibeCostosMinMaxPro(prod:Producto):void{
+				
+				if(prod == null || prod.idProducto == 0)
+					return;
+				
+				if(tipoMonedaPop != "USD")
+				{
+					if(tipoMonedaPop == "MXN")
+					{
+						proA.costo =  Math.round(prod.costo   * prod.pdolar); 
+						proA.costoMinimo = Math.round(prod.costoMinimo * prod.pdolar); 
+					}
+					else{
+						
+						proA.costo = Math.round(prod.costo / prod.edolar); 
+						proA.costoMinimo =  Math.round(prod.costoMinimo / prod.edolar); 	
+					}
+					
+				}
+				else{
+					proA.costo = prod.costo;
+					proA.costoMinimo = prod.costoMinimo;
+				}
+				
+				respuestaMinMax  = true;
+				reciveRespuestasListaCostosyCostominyMax();
+			}
+			
+			private var inicioPop:Boolean;
+			private function reciveRespuestasListaCostosyCostominyMax():void
+			{
+				if(respuestaCostos && respuestaMinMax && !inicioPop)
+				{
+					iniciarpopUPCotizacion();
+					inicioPop = true;
+					
+				}
+				else if(vieneDe != "Editar" && respuestaCostos )
+				{
+					iniciarpopUPCotizacion();
+				}
+				
+			}
+			
+			
+			
+			
+			public function iniciarpopUPCotizacion():void{
+				
+				var mon:String = "";
+				
+				if(tipoMonedaPop == "USD")
+					mon = "Dolares";
+				else if(tipoMonedaPop =="MXN")
+					mon = "Pesos";
+				else if(tipoMonedaPop == "EUR")
+					mon = "Euros";
+				if( popUpCot == null ){
+					popUpCot = popUpCotizacion(PopUpManager.createPopUp( this, popUpCotizacion, true ) );
+					PopUpManager.centerPopUp( popUpCot );
+					popUpCot.grafica.precioMax = proA.costo;
+					popUpCot.grafica.precioMin = proA.costoMinimo;
+					intervaloGrafica = (coMaxProducto-coMinProducto)/2;
+					popUpCot.grafica.intervalo = intervaloGrafica;
+					popUpCot.listaCostos = listaCostosProductos;
+					if(!VistaOperacionReportarVisita.visitaClienteActual.cliente.tieneContrato)
+					{
+						if(listaCostosProductos.length > 0)
+						{
+							popUpCot.gGrafica.visible = popUpCot.gGrafica.includeInLayout = true;
+							popUpCot.rayaSinCotizacion.visible = popUpCot.rayaSinCotizacion.includeInLayout = false;
+							popUpCot.rayaConCotizacion.visible = popUpCot.rayaConCotizacion.includeInLayout = true;
+							popUpCot.textoG.visible = popUpCot.textoG.includeInLayout = false;
+							popUpCot.grafica.iniciarGrafica(listaCostosProductos,"PRODUCTO",mon);
+							
+						}
+						else
+						{
+							popUpCot.gGrafica.visible = popUpCot.gGrafica.includeInLayout = false;
+							popUpCot.rayaSinCotizacion.visible = popUpCot.rayaSinCotizacion.includeInLayout = true;
+							popUpCot.rayaConCotizacion.visible = popUpCot.rayaConCotizacion.includeInLayout = false;
+							popUpCot.textoG.visible = popUpCot.textoG.includeInLayout = true;
+						}
+					}else{
+						popUpCot.gGrafica1.visible = popUpCot.gGrafica1.includeInLayout = false;
+						popUpCot.gPrecios.visible = popUpCot.gPrecios.includeInLayout = false;
+						popUpCot.rayaConCotizacion.visible = popUpCot.rayaConCotizacion.includeInLayout = false;
+						popUpCot.rayaSinCotizacion.visible = popUpCot.rayaSinCotizacion.includeInLayout = false;
+						popUpCot.textoAnalisis.visible = popUpCot.textoAnalisis.includeInLayout = false;
+						popUpCot.textoContrato.visible = popUpCot.textoContrato.includeInLayout = true;
+						popUpCot.espacio.visible = popUpCot.espacio.includeInLayout = false;
+					}
+				
+						
+					popUpCot.productoSeleccionado(proA,vieneDe,tipoMonedaPop);
+					popUpCot.addEventListener("cancelarPopUP",cerrarPopCotizacion);
+					popUpCot.addEventListener("agregarProducto",agregarPopCotizacion);
+					popUpCot.addEventListener("aceptarCambios",aceptarPopCotizacion);
+					
+				}else{
+					
+					PopUpManager.addPopUp( popUpCot , this, true );
+					
+				}
+				
+				
+				
+			}
+					
+			
+			
+		]]>
+	</fx:Script>
+	
+	<visita:PlantillaVisita id="plantilla" width="100%" />
+	
+	
+</s:Group>

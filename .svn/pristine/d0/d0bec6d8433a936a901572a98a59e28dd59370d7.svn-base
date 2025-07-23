@@ -1,0 +1,1432 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:s="library://ns.adobe.com/flex/spark"  
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:botoneraGrisconLabel="skins.botoneras.botoneraGrisconLabel.*" 
+		  xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+		  xmlns:botonNegroCuadrado="skins.botones.botonNegroCuadrado.*" 
+		  xmlns:vistaFacturar="vista.vistas.vistaFacturar.*" 
+		  xmlns:amparar="skins.botones.colores.amparar.*" 
+		  xmlns:finalizar="skins.botones.finalizar.*" 
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:textinput="skins.skin.textinput.*" 
+		  xmlns:ver="skins.botones.colores.ver.*"
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:salir="skins.botones.salir.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*" 
+		  width="100%" height="100%" 
+		  paddingRight="25" paddingBottom="13"
+		  paddingTop="20" paddingLeft="25" 
+		  creationComplete="inicia()"
+		  >
+	
+	<fx:Declarations>
+		<s:NumberValidator id="validatorTipoCambioPositivoMinimo"
+						   allowNegative="false"
+						   minValue="0.01"
+						   lessThanMinError="El tipo de cambio debe ser mayor a cero."
+						   domain="real" 
+						   decimalSeparator="." 
+						   decimalPointCountError="Hay más de un punto decimal."
+						   fractionalDigits="2"
+						   fractionalDigitsError="El número de decimales superó el máximo de dos permitido."
+						   required="true"
+						   requiredFieldError="Este campo no puede quedar vacio."
+						   parseError="No es un número valido."
+						   negativeError="No se permite que el número sea negativo."
+						   />
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.EventoCatClientes_General;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.financieros.EventoCatClientesFinancieros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Factura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ComprobanteFiscal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.SolicitudCFDI;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.mysuite.RequestTransactionResponse;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Referencia;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsRutaArchivos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			import mx.core.IVisualElement;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.components.ButtonBarButton;
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoBanderas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.catalogos.catalogoIconosGrid;
+			import skins.skin.textinput.textInputOpcional;
+			
+			import vista.eventos.EventoNotaCredito;
+			import vista.vistas.popup.notacredito.ConceptoPopUpNotaCredito;
+			
+			
+			private var _popUpConcepto:ConceptoPopUpNotaCredito;
+			
+			//esta variable es llenada desde Facturacion PantallaInicial
+			[Bindable] private var _clienteSeleccionado:Cliente = new Cliente();
+			[Bindable] private var _universoClientes:ArrayCollection;
+			[Bindable] private var _copiaSeguridadLista:ArrayCollection;
+			[Bindable] private var _copiaSeguridadGrid:ArrayCollection;
+			[Bindable] public var _empresaQueFactura:Empresa;
+			[Bindable] public var _datosBarraBoton:ArrayCollection = new ArrayCollection([{label:"Cliente", icono:"cliente"},{label:"Nota Crédito",icono:"precio"}]);
+			
+			private var _subTotal:Number;
+			private var _iva:Number;
+			private var _granTotal:Number;
+			private const tache:Class =  catalogoIconosGrid.getInstance().render_tache;
+			private const paloma:Class =  catalogoIconosGrid.getInstance().render_palomita;
+			
+			/* 
+			* Boton Amparar
+			*/
+			[Bindable] public var file:File = new File();
+			private var pdfByteArray:ByteArray = null;
+			private var _rutaDoc:String;
+			private var ref:Referencia = new Referencia();
+			
+			private var consumidorActualizaCliente:Consumer = new Consumer();
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			
+			private function inicia():void{
+				lstClientes.addEventListener(EventoNotaCredito.DESELECCIONA_RADIO_CLIENTES,escuchaItemRender,false,0,true);
+				lstClientes.addEventListener(EventoNotaCredito.DESELECCIONA_RADIO_CLIENTES_ESTADO,deseleccionarClientes,false,0,true);
+				consumidorActualizaCliente.destination = "actualizarFacturacion";
+				
+				consumidorActualizaCliente.addEventListener(MessageEvent.MESSAGE, messageUpdate);
+				
+				canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				canalesVerificacion = new ChannelSet();
+				canalesVerificacion.addChannel(canalVerificacion);
+				
+				consumidorActualizaCliente.channelSet = canalesVerificacion;
+				consumidorActualizaCliente.subscribe();
+				
+				obtenerListaClientes();
+				this.chkIVA.source = paloma;
+				
+				var btnBarBtn:ButtonBarButton = btnBarra.dataGroup.getElementAt(1) as ButtonBarButton;
+				btnBarBtn.enabled = false;
+				btnFacturar.visible = false;
+				
+				var evt1:EventoCatClientes_General = new EventoCatClientes_General(EventoNotaCredito.OBTENER_CFDI);
+				dispatchEvent( evt1 );				
+				var evt2:EventoCatClientes_General = new EventoCatClientes_General(EventoNotaCredito.OBTENER_METODO_DE_PAGO);
+				dispatchEvent( evt2 );
+			}
+			
+			[Bindable] private static var usoDeCFDI:ArrayCollection = new ArrayCollection;
+			public function set ObtenUsoDeCFDI( $datos:ArrayCollection ):void{
+				if( $datos == null ) { return; }
+				usoDeCFDI = ObjectUtil.copy($datos) as ArrayCollection;
+			}
+			
+			[Bindable] private static var metodoPago:ArrayCollection = new ArrayCollection;
+			public function set ObtenMetodoPago( $datos:ArrayCollection ):void{
+				if( $datos == null ) { return; }
+				metodoPago = ObjectUtil.copy($datos) as ArrayCollection;
+			}
+			
+			public function obtenerListaClientes():void{
+				var $evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CONSULTA_CLIENTES_FACTURA );
+				$evt.idLogueado = DatosGlobales.getInstance()._usuario.clave;
+				dispatchEvent( $evt );
+			}
+			
+			private function messageUpdate(message:MessageEvent):void
+			{
+				if(message.message.body.body == "actualizaFacturacion" ){
+					var evt:EventoNotaCredito = new EventoNotaCredito(EventoNotaCredito.OBTENER_CLIENTE_ID);
+					evt.cliente = message.message.body.cliente;
+					dispatchEvent( evt ); 
+					trace("Entro");
+				}
+			}
+			
+			public function set obtenerCliente($cliente:Cliente):void{
+				if (!$cliente) return;
+				
+				var elimina:Boolean = false;
+				var returnClientes:Boolean = false;
+				var referescaTotales:Boolean = false;
+				
+				var temp:ArrayCollection;
+				
+				if ($cliente.idCobrador != DatosGlobales.getInstance()._usuario.idEmpleado){
+					elimina = true;
+					temp = ObjectUtil.copy( _universoClientes ) as ArrayCollection
+				}
+				if (newIndex == $cliente.idCliente ){
+					$cliente.selected = _clienteSeleccionado.selected;
+					returnClientes = elimina;
+				}
+				
+				if(returnClientes){
+					if (btnBarra.selectedIndex == 1){
+						alertaSingleton.show("El cliente se ha reasignado",catalogoAlertas.TIT_ADV_atencion,"","","","","",null,false,alertListener);
+					}
+				}
+				
+				var index:Number = -1;
+				index = Util.searchInArrayCollection(_universoClientes,$cliente.idCliente,"idCliente");
+				if (index != -1 ){
+					if (elimina){
+						_universoClientes.removeItemAt(index);
+					}
+					else{
+						_universoClientes[index] = ObjectUtil.copy($cliente);
+					}
+				}
+				else{
+					if (!elimina){
+						_universoClientes.addItem(ObjectUtil.copy($cliente));
+						
+						_universoClientes.source.sortOn("nombre");
+						_universoClientes.refresh();
+					}
+				}
+				
+				if (!elimina){
+					temp = ObjectUtil.copy( _universoClientes ) as ArrayCollection;
+				}
+				temp = UtilsGrid.queryCampoXLikeDosCampos( temp,'nombre','rfc',this.txtBusqueda.text );
+				if ( Util.searchInArrayCollection(temp,$cliente.idCliente,"idCliente") != -1){
+					
+					index = Util.searchInArrayCollection((lstClientes.dataProvider as ArrayCollection),$cliente.idCliente,"idCliente");
+					if (index != -1 ){
+						if (elimina){
+							lstClientes.dataProvider.removeItemAt(index);
+							if (newIndex == $cliente.idCliente ){
+								lstClientes.selectedIndex = 0;
+								newIndex = lstClientes.selectedItem.idCliente;
+							}
+							referescaTotales = true;
+						}
+						else{
+							lstClientes.dataProvider[index] = $cliente;
+						}
+					}
+					else{
+						if (!elimina){
+							lstClientes.dataProvider.addItemAt(ObjectUtil.copy($cliente),lstClientes.dataProvider.length-1);
+							referescaTotales = true;
+							(lstClientes.dataProvider as ArrayCollection).source.sortOn("nombre");
+							(lstClientes.dataProvider as ArrayCollection).refresh();
+						}
+					}
+					
+					if (referescaTotales && lstClientes.dataProvider.length > 0){
+						lstClientes.dataProvider.removeItemAt(lstClientes.dataProvider.length-1);
+						var $datoTemp:Cliente = new Cliente();
+						$datoTemp.totalClientes = lstClientes.dataProvider.length;
+						lstClientes.dataProvider.addItem( $datoTemp );
+					}
+				}
+				
+				if (!elimina){
+					if (_clienteSeleccionado != null && _clienteSeleccionado.idCliente == $cliente.idCliente)
+					{
+						
+						_clienteSeleccionado = $cliente;
+					}
+				}
+				else{
+					if (lstClientes.selectedItem != null && lstClientes.selectedItem != undefined){
+						_clienteSeleccionado = lstClientes.selectedItem;
+					}
+					else{
+						lstClientes.selectedIndex = 0;
+						_clienteSeleccionado = lstClientes.selectedItem;
+					}
+				}
+				
+				if(_clienteSeleccionado != null){
+					activarBotonFactura();
+					activaBotonFacturar();
+				}
+				
+			}
+			
+			private function alertListener(eventObj:EventoAlertaPqNet):void {
+				if (eventObj.respuesta.botonSeleccionado == "OK"){
+					btnBarra.selectedIndex = 0;
+					btnBarra.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+				}
+			}
+			
+			/**
+			 * recibe del MapaFacturacion
+			 */ 
+			public function set ObtenClientes( $datos:ArrayCollection ):void{
+				if( $datos == null ) { return; }
+				_universoClientes = new ArrayCollection();
+				_universoClientes = ObjectUtil.copy( $datos ) as ArrayCollection;
+				dibujaClientes( $datos );
+				
+				this.lstClientes.selectedIndex = 0;
+				_clienteSeleccionado = this.lstClientes.selectedItem as Cliente;
+				
+				cargarCFDI(usoDeCFDI);
+				cargarMetPago(metodoPago);
+				
+				var objCFDI:CatalogoItem = new CatalogoItem;
+				var objMetPago:CatalogoItem = new CatalogoItem;
+				
+				if(usoDeCFDI && usoDeCFDI.length > 0 && usoDeCFDI.getItemAt(0).valor != "--SELECCIONA CFDI--"){
+					objCFDI.llave = 0;
+					objCFDI.valor = "--SELECCIONA CFDI--";
+					usoDeCFDI.addItemAt(objCFDI, 0);
+				}
+				
+				if(metodoPago && metodoPago.length > 0 && metodoPago.getItemAt(0).valor != "--SELECCIONA M. DE PAGO--"){
+					objMetPago.llave = 0;
+					objMetPago.valor = "--SELECCIONA M. DE PAGO--";
+					metodoPago.addItemAt(objMetPago, 0);
+				}
+				
+				if(_clienteSeleccionado.usoCFDI != null && _clienteSeleccionado.usoCFDI != "")
+					cmbCFDI.selectedIndex = cmbCFDI.seleccionarValor(_clienteSeleccionado.usoCFDI);
+				else
+					cmbCFDI.selectedIndex = 0;
+				
+				if(_clienteSeleccionado.metodoDePago != null && _clienteSeleccionado.metodoDePago != "")
+					cmbMetPago.selectedIndex = cmbMetPago.seleccionarValor(_clienteSeleccionado.metodoDePago);
+				else
+					cmbMetPago.selectedIndex = 0;
+			}
+			
+			
+			private function cargarCFDI(cfdi:ArrayCollection):void{
+				if (cfdi != null && cfdi.length > 0 ){
+					cmbCFDI.dataProvider = cfdi;
+				}
+			}
+			
+			private function cargarMetPago(metPago:ArrayCollection):void{
+				if (metPago != null && metPago.length > 0 ){
+					cmbMetPago.dataProvider = metPago;
+				}
+			}
+			
+			private function filtraLista():void{
+				var temp:ArrayCollection = new ArrayCollection();
+				temp = ObjectUtil.copy( _universoClientes ) as ArrayCollection
+				dibujaClientes( UtilsGrid.queryCampoXLikeDosCampos( temp,'nombre','rfc',this.txtBusqueda.text ) );
+				
+				var index:int = Util.searchInArrayCollection((lstClientes.dataProvider as ArrayCollection),newIndex,"idCliente");
+				if (index != -1 ){
+					this.lstClientes.selectedIndex = index;
+					_clienteSeleccionado = this.lstClientes.selectedItem as Cliente;
+				}
+			}
+			
+			private function dibujaClientes($datos:ArrayCollection):void{
+				var $listaTemp:ArrayCollection = new ArrayCollection();
+				$listaTemp = ObjectUtil.copy( $datos ) as ArrayCollection;
+				var $datoTemp:Cliente = new Cliente();
+				$datoTemp.totalClientes = $datos.length;
+				$listaTemp.addItem( $datoTemp );
+				this.lstClientes.dataProvider = new ArrayCollection();
+				this.lstClientes.dataProvider = $listaTemp;
+				if($datos.length > 0){
+					/* var index:int = Util.searchInArrayCollection((lstClientes.dataProvider as ArrayCollection),newIndex,"idCliente");
+					if (index != -1 ){
+					lstClientes.dataProvider[index].selected = false;
+					}
+					this.lstClientes.selectedIndex = 0;
+					_clienteSeleccionado = this.lstClientes.selectedItem as Cliente; */
+				}
+				calculaTotal();
+			}
+			
+			/**
+			 * recibe del MapaFacturacion
+			 */
+			
+			private var _listaConceptosUniverso:ArrayCollection;
+			public function set ObtenConceptos($evt:ArrayCollection):void{
+				if( $evt == null ){ return; }
+				this.lstConceptosFactura.dataProvider = new ArrayCollection();
+				for(var i:int = 0; i < $evt.length; i++ ){
+					( $evt[i] as ConceptoFactura).codigo = _empresaQueFactura.nomenclaturaEmpresa + ( $evt[i] as ConceptoFactura).idConcepto;
+				}
+				$evt.source.sortOn('codigo');
+				this.lstConceptosFactura.dataProvider = ObjectUtil.copy( $evt ) as ArrayCollection;
+				_listaConceptosUniverso = ObjectUtil.copy( $evt ) as ArrayCollection;
+				lstConceptosFactura.dragEnabled = true;
+				//this.gridConcepto.dataProvider = $evt;
+				
+				cambiaMoenda();
+			}
+			
+			//crearPopUp o abre
+			private var concepto:ConceptoFactura;
+			public function image1_clickHandler( $concepto:ConceptoFactura ):void{
+				if( this._popUpConcepto == null ){	
+					_popUpConcepto =  ConceptoPopUpNotaCredito( PopUpManager.createPopUp (this, ConceptoPopUpNotaCredito, true  ) )
+					this._popUpConcepto.addEventListener(EventoNotaCredito.CERRAR_POPUP_CONCEPTO, cerrarPopUp );
+					this._popUpConcepto.addEventListener(EventoNotaCredito.GUARDAR_POPUP_CONCEPTO, guardaPopUp );
+				}else{
+					PopUpManager.addPopUp( _popUpConcepto, this, true );
+				}
+				
+				$concepto.conceptoRender.empresaQueFactura = _empresaQueFactura;
+				$concepto.conceptoRender.idCliente = _clienteSeleccionado.idCliente;
+				_popUpConcepto.editaConcepto( $concepto );
+				PopUpManager.centerPopUp( _popUpConcepto );
+			}
+			
+			//cierra popup
+			private function cerrarPopUp( $evt:EventoNotaCredito ):void{
+				PopUpManager.removePopUp( _popUpConcepto );
+			}
+			
+			//guarda cambios a la partida enviados desde el popUp
+			private function guardaPopUp( $evt:EventoNotaCredito ):void{
+				concepto = ObjectUtil.copy($evt.conceptoFac) as ConceptoFactura;
+				gridConcepto.dataProvider.removeItemAt( ( gridConcepto.dataProvider as ArrayCollection ).length -1); //se elimina el renglon q cuenta las partidas 
+				for( var i:int = 0; i < (gridConcepto.dataProvider as ArrayCollection).length ; i++ ){
+					if( (gridConcepto.dataProvider[i] as ConceptoFactura).idConcepto == $evt.conceptoFac.idConcepto ){
+						gridConcepto.dataProvider[i] = $evt.conceptoFac;
+					}
+				}
+				//se agrega al final el objeto que cuenta las partidas
+				var totalDoctos:Object = new Object();
+				totalDoctos.finArray =  ( gridConcepto.dataProvider as ArrayCollection ).length;
+				gridConcepto.dataProvider.addItem( totalDoctos );
+				( gridConcepto.dataProvider as ArrayCollection).refresh();
+				PopUpManager.removePopUp( _popUpConcepto );
+				activaBotonFacturar();
+				calculaTotal();
+			}
+			
+			//drag and Drop
+			private function generaCopiaSeguridadDataGrid():void{
+				_copiaSeguridadLista = ObjectUtil.copy( lstConceptosFactura.dataProvider ) as ArrayCollection;
+				_copiaSeguridadGrid = ObjectUtil.copy( gridConcepto.dataProvider ) as ArrayCollection
+				//prueba
+			}
+			
+			/* protected function gridConcepto_dragDropHandler(event:DropLocation):void{ */
+			protected function gridConcepto_dragDropHandler(event:DragEvent):void{
+				var existe:Boolean;
+				
+				if( gridConcepto.dataProvider != null && gridConcepto.dataProvider.length > 0 ){
+					gridConcepto.dataProvider.removeItemAt( gridConcepto.dataProvider.length -1); //se elimina el renglon q cuenta las partidas
+					if (gridConcepto.dataProvider.length > 0 ){
+						Alert.show('No se puede agregar más de un concepto' );
+						return;
+					}
+					for(var i:int = 0; i < gridConcepto.dataProvider.length ; i++ ){
+						if( (gridConcepto.dataProvider[i] as ConceptoFactura).idConcepto == (lstConceptosFactura.selectedItem as ConceptoFactura).idConcepto && gridConcepto.dataProvider.length != i ){
+							existe = true;
+							Alert.show('El concepto ya existe en la lista' );
+							//se agrega al final el objeto que cuenta las partidas
+							var totalDoctos:Object = new Object();
+							totalDoctos.finArray =  gridConcepto.dataProvider.length;
+							gridConcepto.dataProvider.addItem( totalDoctos )
+							i = gridConcepto.dataProvider.length ;
+						}
+					}
+					event.delta = 0;
+				}
+				
+				gridConcepto.dataProvider == null ? gridConcepto.dataProvider = new ArrayCollection() : null;
+				if( !existe ){
+					/* (lstConceptosFactura.selectedItem as ConceptoFactura). */
+					(lstConceptosFactura.selectedItem as ConceptoFactura).cantidad = 1
+					if( this.rbDolares.selected ){  (lstConceptosFactura.selectedItem as ConceptoFactura).moneda = 'Dolar' }
+					if( this.rbEuro.selected ){ (lstConceptosFactura.selectedItem as ConceptoFactura).moneda = 'Euro' }
+					if( this.rbPeso.selected  ){ (lstConceptosFactura.selectedItem as ConceptoFactura).moneda = 'MN' }
+					(lstConceptosFactura.selectedItem as ConceptoFactura).unidadDeMedida = "No aplica";
+					(lstConceptosFactura.selectedItem as ConceptoFactura).notas = '';
+					(lstConceptosFactura.selectedItem as ConceptoFactura).valorUnitario = 0;
+					(lstConceptosFactura.selectedItem as ConceptoFactura).numFila =  gridConcepto.dataProvider.length +1;
+					gridConcepto.dataProvider.addItem( lstConceptosFactura.selectedItem as ConceptoFactura );
+					//se agrega al final el objeto que cuenta las partidas
+					var vartotalDoctos:Object = new Object();
+					vartotalDoctos.finArray =  gridConcepto.dataProvider.length;
+					gridConcepto.dataProvider.addItem( vartotalDoctos )
+					//this.gridConcepto.dataProvider = ObjectUtil.copy( arrayTemp );
+					calculaTotal();
+					lstConceptosFactura.dataProvider.removeItemAt(lstConceptosFactura.selectedIndex);
+					lstConceptosFactura.dragEnabled = false;
+				}
+				//lstConceptosFactura.dataProvider = ObjectUtil.copy( _copiaSeguridadLista ) as ArrayCollection;
+			}
+			
+			
+			/**
+			 * funcion que cambia a la opcion seleccionada  del componente hijo stackPrecio.mxml
+			 */ 
+			private function seleccionaBoton(event:IndexChangeEvent):void{
+				
+				if (event.currentTarget.selectedItem == null ){
+					event.preventDefault();
+				}
+				
+				if( event.currentTarget.selectedIndex == 0 ){
+					grupoClientes.visible = true;
+					grupoFactura.visible = false;
+					btnFacturar.visible = false;
+				}else if( event.currentTarget.selectedIndex == 1 ){
+					grupoClientes.visible = false;
+					grupoFactura.visible = true;
+					btnFacturar.visible = true;
+				}
+				
+			}
+			
+			
+			/**
+			 * funcion quecambia la moneda a los conceptos por facturar
+			 */ 
+			private function cambiaMoenda():void{
+				var moneda:String = "";
+				this.txtTC.enabled = false;
+				
+				if( this.rbDolares.selected ){  
+					moneda = 'dolar';
+				}else if( this.rbEuro.selected ){ 
+					moneda = 'euro';
+				}else if(this.rbPeso.selected){
+					moneda = 'dolar';
+				}
+				else{
+					moneda = '';
+				}
+				if( moneda != '' ){
+					var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CONSULTA_TIPO_DE_CAMBIO);
+					evt.moneda = moneda;
+					dispatchEvent( evt );
+				}
+				
+				if( this.rbPeso.selected  ){ 
+					this.imgLapizGris.visible = true;
+					this.imgLapiz.visible = false;
+					this.txtTC.enabled = false;
+					this.txtTC.text = "";
+				}else{
+					this.imgLapiz.visible = true;
+					this.imgLapizGris.visible = false;
+				}
+				if( gridConcepto.dataProvider != null && (gridConcepto.dataProvider as ArrayCollection).length > 0){
+					gridConcepto.dataProvider.removeItemAt( ( gridConcepto.dataProvider as ArrayCollection ).length -1); //se elimina el renglon q cuenta las partidas 
+					for( var i:int = 0; i < (gridConcepto.dataProvider as ArrayCollection).length; i++ ){
+						if( this.rbDolares.selected ){  
+							( gridConcepto.dataProvider[i] as ConceptoFactura).moneda = 'Dolar' ;
+						}
+						if( this.rbEuro.selected ){ 
+							( gridConcepto.dataProvider[i] as ConceptoFactura).moneda = 'Euro';
+						}
+						if( this.rbPeso.selected  ){ 
+							( gridConcepto.dataProvider[i] as ConceptoFactura).moneda = 'MN' ;
+							
+						}
+					}
+					//se agrega al final el objeto que cuenta las partidas
+					var totalDoctos:Object = new Object();
+					( gridConcepto.dataProvider as ArrayCollection ).length == 0 ? totalDoctos.finArray = 0 : totalDoctos.finArray =  ( gridConcepto.dataProvider as ArrayCollection ).length;
+					gridConcepto.dataProvider.addItem( totalDoctos );
+				}
+				
+				setTimeout(calculaTotal,300);
+				//calculaTotal();
+			}
+			
+			
+			/**
+			 * se recibe el tipo de cambio de la BD
+			 */ 
+			private var pdolar:String;
+			public function set recibeTipoCambio( $dato:Number ):void{
+				if( isNaN( $dato ) ){
+					return;
+				}
+				if (rbPeso.selected){
+					pdolar = UtilsFormatosNumericos.precisionADosDecimales( $dato );
+				}else{
+					if (rbDolares.selected){
+						pdolar = UtilsFormatosNumericos.precisionADosDecimales( $dato );
+					}
+					this.txtTC.text = UtilsFormatosNumericos.precisionADosDecimales( $dato );
+				}
+				calculaTotal();
+			}
+			
+			
+			/**
+			 * funcion que calcula totales
+			 */ 
+			//private var arregloTEmp:ArrayCollection
+			private  function calculaTotal():void{
+				var tempsubTotal:Number = 0;
+				var tempIva:Number = 0;
+				var simbolo:String = '';
+				this._subTotal = 0;
+				this._iva = 0;
+				this._granTotal = 0;
+				var tc:Number = 1;
+				
+				if (txtTC.text != "" && parseFloat(txtTC.text) > 0){
+					tc = parseFloat(txtTC.text);
+				}
+				
+				if( this.rbDolares.selected ){ 
+					simbolo ='Dolar';
+				}
+				if( this.rbEuro.selected ){ 
+					simbolo = 'Euro';
+				}
+				if( this.rbPeso.selected  ){ 
+					simbolo = 'MN';
+					tc = parseFloat(pdolar);
+				}
+				simbolo =  UtilsFormatoMoneda.determinaMoneda( simbolo );
+				
+				if( gridConcepto.dataProvider !=null && gridConcepto.dataProvider.length > 0 ){
+					gridConcepto.dataProvider.removeItemAt( gridConcepto.dataProvider.length -1);//se elimina el renglon q cuenta las partidas 
+					for( var i:int = 0; i < gridConcepto.dataProvider.length; i++ ){
+						if( (gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario > 0 ){
+							if (this.rbDolares.selected){
+								(gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario = concepto.valorUnitario;
+								(gridConcepto.dataProvider[i] as ConceptoFactura).importe = concepto.valorUnitario;
+							}
+							if( this.rbEuro.selected ){ 
+								(gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario = (concepto.valorUnitario * parseFloat(pdolar)) / tc;
+								(gridConcepto.dataProvider[i] as ConceptoFactura).importe = (concepto.valorUnitario * parseFloat(pdolar)) / tc;
+								//(gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario = concepto.valorUnitario;
+							}
+							if( this.rbPeso.selected  ){ 
+								(gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario = concepto.valorUnitario * tc;
+								(gridConcepto.dataProvider[i] as ConceptoFactura).importe = concepto.valorUnitario * tc;
+								//(gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario = concepto.valorUnitario;
+							}
+							tempsubTotal = tempsubTotal + ( ( gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario * ( gridConcepto.dataProvider[i] as ConceptoFactura).cantidad ); 
+						}
+					}
+					
+					//se agrega al final el objeto que cuenta las partidas
+					var totalDoctos:Object = new Object();
+					totalDoctos.finArray =  gridConcepto.dataProvider.length;
+					/* gridConcepto.dataProvider.addItem( totalDoctos ) */ 
+					gridConcepto.dataProvider.addItem( totalDoctos ) 
+				}
+				
+				
+				lblSubtotal.text = simbolo +' '+UtilsFormatosNumericos.precisionADosDecimalesConComas( tempsubTotal );
+				if( _clienteSeleccionado.paisFiscal == "Mexico" || _clienteSeleccionado.paisFiscal == "México" || _clienteSeleccionado.paisFiscal == "MEXICO" ){
+					if( tempsubTotal > 0 ){
+						var _iva:Number = UtilsFormatoMoneda.iva() 
+						tempIva = _iva * tempsubTotal;
+					}
+				}
+				
+				this._subTotal = tempsubTotal;
+				if( this.cargarIVA ){
+					this._iva = 0;
+					tempIva = 0;
+				}else{
+					this._iva = tempIva;
+				}
+				lblIVA.text = simbolo + ' ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( tempIva );
+				lblTotal.text = simbolo + ' ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( (tempsubTotal + tempIva) );
+				this._granTotal = (tempsubTotal + tempIva);
+				
+				//gridConcepto.dataProvider = ObjectUtil.copy( arregloTEmp ) as ArrayCollection;
+				//setTimeout( prueba, 0);
+			}
+			
+			
+			public function eliminaConcepto( $:ConceptoFactura ):void{
+				gridConcepto.dataProvider.removeItemAt( ( gridConcepto.dataProvider as ArrayCollection ).length -1); //se elimina el renglon q cuenta las partidas 
+				for( var i:int = 0; i < (gridConcepto.dataProvider as ArrayCollection).length; i++ ){
+					(gridConcepto.dataProvider[i] as ConceptoFactura).numFila = i + 1;
+					if( (gridConcepto.dataProvider[i] as ConceptoFactura).idConcepto == $.idConcepto ){
+						lstConceptosFactura.dataProvider.addItem(gridConcepto.dataProvider[i]);
+						(gridConcepto.dataProvider as ArrayCollection).removeItemAt( i );
+						i = i-1;
+						(lstConceptosFactura.dataProvider as ArrayCollection).source.sortOn("codigo");
+						(lstConceptosFactura.dataProvider as ArrayCollection).refresh();
+					}
+				}
+				//se agrega al final el objeto que cuenta las partidas
+				var totalDoctos:Object = new Object();
+				( gridConcepto.dataProvider as ArrayCollection ).length == 0 ? totalDoctos.finArray = 0 : totalDoctos.finArray =  ( gridConcepto.dataProvider as ArrayCollection ).length;
+				gridConcepto.dataProvider.addItem( totalDoctos );
+				activaBotonFacturar();
+				calculaTotal();
+				lstConceptosFactura.dragEnabled = true;
+			}
+			
+			
+			protected function botonfinalizar1_clickHandler():void{
+				//limpia
+				if (newIndex != -1 ){
+					var index:int = Util.searchInArrayCollection((lstClientes.dataProvider as ArrayCollection),newIndex,"idCliente");
+					if (index != -1)
+						lstClientes.dataProvider[index].selected = false;
+					index = Util.searchInArrayCollection(_universoClientes,newIndex,"idCliente");
+					_universoClientes[index].selected = false;
+				}
+				newIndex = -1;
+				oldIndex = -1;
+				
+				var btnBarBtn:ButtonBarButton = btnBarra.dataGroup.getElementAt(1) as ButtonBarButton;
+				btnBarBtn.enabled = false;
+				btnBarra.selectedIndex = 0;
+				
+				grupoClientes.visible = true;
+				grupoFactura.visible = false;
+				this.imgLapizGris.visible = true;
+				this.imgLapiz.visible = false;
+				this.txtBusqueda.text = '';
+				this.txtBusquedaConcepto.text = '';
+				filtraLista();
+				this.txtTC.text = '';
+				this.txtTC.enabled = false;
+				this.btnVerAmparo.visible = btnVerAmparo.includeInLayout = false;
+				this.lblAmpa.text = "";
+				this.rbDolares.selected = true; this.rbEuro.selected = false; this.rbPeso.selected= false;
+				chkEmpresa.selected = false; this.btnFacturar.enabled = false;
+				_clienteSeleccionado.selected = false;
+				btnFacturar.visible = false;
+				this.gridConcepto.dataProvider = new ArrayCollection();
+				var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.CAMBIA_INDEX_FACTURISTA );
+				evt.indexSeleccionado = 0;
+				dispatchEvent( evt );
+			}
+			
+			
+			private function activaBotonFacturar():void{
+				var actibaPorCheck:Boolean = false;
+				var activaPorGrid:Boolean = true;
+				var activaPorDocumento:Boolean = false;
+				
+				if (_clienteSeleccionado != null && _clienteSeleccionado.selected){
+					actibaPorCheck = true;
+				}
+								
+				if( gridConcepto.dataProvider != null && (gridConcepto.dataProvider as ArrayCollection).length > 0 ){
+					gridConcepto.dataProvider.removeItemAt( ( gridConcepto.dataProvider as ArrayCollection ).length -1); //se elimina el renglon q cuenta las partidas
+					if ((gridConcepto.dataProvider as ArrayCollection).length > 0){
+						for( var i:int = 0; i < (gridConcepto.dataProvider as ArrayCollection).length; i++ ){
+							if( (gridConcepto.dataProvider[i] as ConceptoFactura).cantidad == 0 || (gridConcepto.dataProvider[i] as ConceptoFactura).valorUnitario == 0 ){
+								activaPorGrid = false;
+								i = (gridConcepto.dataProvider as ArrayCollection).length;
+							}
+						}
+					}
+					else{
+						activaPorGrid = false;
+					}
+					//se agrega al final el objeto que cuenta las partidas
+					var totalDoctos:Object = new Object();
+					totalDoctos.finArray =  ( gridConcepto.dataProvider as ArrayCollection ).length;
+					gridConcepto.dataProvider.addItem( totalDoctos )
+				}else{
+					activaPorGrid = false;
+				}
+				
+				if(lblAmpa.text != null && lblAmpa.text != ""){
+					activaPorDocumento = true;
+				}
+				
+				if( actibaPorCheck && activaPorGrid && activaPorDocumento){
+					this.btnFacturar.enabled = true;
+				}else{
+					this.btnFacturar.enabled = false;
+				}
+			}
+			
+			
+			//funcion tentativa para generar factura
+			private function generaFactura():void{
+				if(cmbCFDI.selectedIndex != 0 && cmbMetPago.selectedIndex != 0){
+					//manda evento
+					
+					if (validarTipoCambioPositivoMinimo(txtTC)){
+						var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.GENERA_FACTURA_NOTA_CREDITO );
+						
+						evt.cfdi = new ComprobanteFiscal();
+						evt.cfdi.conceptosList = new ArrayCollection();
+						gridConcepto.dataProvider.removeItemAt( ( gridConcepto.dataProvider as ArrayCollection ).length -1); //se elimina el renglon q cuenta las partidas 
+						evt.cfdi.conceptosList = ObjectUtil.copy( gridConcepto.dataProvider ) as ArrayCollection;
+						
+						//se agrega al final el objeto que cuenta las partidas
+						var totalDoctos:Object = new Object();
+						totalDoctos.finArray =  ( gridConcepto.dataProvider as ArrayCollection ).length;
+						gridConcepto.dataProvider.addItem( totalDoctos )
+						evt.cfdi.emisor = new Empresa();
+						evt.cfdi.emisor = ObjectUtil.copy( _empresaQueFactura ) as Empresa;
+						
+						/* evt.cfdi.emisor.alias = "Administrador";
+						evt.cfdi.emisor.rfcEmpresa  = "AAA010101AAA"; */
+						var aliasTemp:String = new String;
+						aliasTemp = UtilsRutaArchivos.obtenFpor( evt.cfdi.emisor.nomenclaturaEmpresa )
+						evt.cfdi.emisor.alias =  aliasTemp.substring(0, (aliasTemp.length -1 ) );//se quita la diagonal de la carpeta
+						evt.cfdi.receptor = new Cliente();
+						evt.cfdi.receptor = ObjectUtil.copy( _clienteSeleccionado ) as Cliente;
+						evt.cfdi.totales = new Factura();
+						if( this.rbDolares.selected ){
+							evt.cfdi.totales.moneda = "USD";
+						}else if( this.rbEuro.selected ){
+							evt.cfdi.totales.moneda = "EUR";
+						}else{
+							evt.cfdi.totales.moneda = "MXN";
+						}
+						if( txtTC.text != "" ){
+							evt.cfdi.totales.tipoCambio = parseFloat( txtTC.text );
+						}else{
+							evt.cfdi.totales.tipoCambio  = 1;
+						}
+						evt.cfdi.totales.importe = parseFloat( UtilsFormatosNumericos.precisionADosDecimales(  this._subTotal ) );
+						evt.cfdi.totales.iva = parseFloat( UtilsFormatosNumericos.precisionADosDecimales( this._iva ) );
+						evt.cfdi.totales.montoRealPagado = parseFloat( UtilsFormatosNumericos.precisionADosDecimales( this._granTotal ) );
+						evt.cfdi.totales.montoConLetra = ""; 
+						evt.cfdi.totales.pedido = "";
+						evt.cfdi.tipoDeComprobante = "NOTA_DE_CREDITO";
+						evt.cfdi.pruebaCFDI = true;
+						evt.cfdi.usoCFDI = cmbCFDI.selectedItem.llave;
+						evt.cfdi.metPago = cmbMetPago.selectedItem.llave;
+						
+						//Bytes del documento Amparar
+						/* var ref:Referencia = new Referencia();
+						ref.bytes = this.pdfByteArray;
+						evt.referencia = ref; */
+						//evt.bytes = this.pdfByteArray;
+						
+						dispatchEvent( evt );
+						//confirmaGeneraFactura = new RequestTransactionResponse;
+					}else{
+						alertaSingleton.show( 'Debe seleccionar un uso de CFDI y un método de pago.', catalogoAlertas.TIT_ADV_informacionIncompleta );
+						return;
+					}
+				}
+			}
+			
+			
+			public function set confirmaGeneraFactura( $dato:RequestTransactionResponse ):void{
+				if( $dato  == null){
+					return;
+				}
+				
+				var conceptoTemp:ConceptoFactura = new ConceptoFactura();
+				var evt:EventoNotaCredito = new EventoNotaCredito( EventoNotaCredito.AGREGAR_NOTA_CREDITO );
+				
+				if (gridConcepto.dataProvider[0] is ConceptoFactura){
+					conceptoTemp = gridConcepto.dataProvider[0] as ConceptoFactura;
+				}
+				
+				evt.empresaQueFactura = _empresaQueFactura;
+				evt.idCliente = _clienteSeleccionado.idCliente;
+				
+				if(!isNaN(conceptoTemp.conceptoRender.factura) && conceptoTemp.conceptoRender.factura != 0){
+					evt.folioFactura = conceptoTemp.conceptoRender.factura.toString();
+				}
+				else{
+					evt.folioFactura = "";
+					evt.finicio = conceptoTemp.conceptoRender.finicio;
+					evt.ffin = conceptoTemp.conceptoRender.ffin;
+				}
+				evt.conceptoFac = new ConceptoFactura;
+				evt.conceptoFac.importe = _granTotal;
+				evt.iva = _iva;
+				
+				if( txtTC.text != "" ){
+					evt.tipoCambio = parseFloat( txtTC.text );
+				}else{
+					evt.tipoCambio = 1;
+				}
+				
+				evt.bytes = this.pdfByteArray;
+				/* var ref:Referencia = new Referencia();
+				ref.bytes = this.pdfByteArray; */
+				evt.referencia = ref;
+				evt.folio = $dato.requestTransactionResult.response.identifier.serial.toString();
+				evt.scfdi = new SolicitudCFDI;
+				evt.scfdi.serie = $dato.requestTransactionResult.response.identifier.batch.toString();
+				//evt.folio = '505';
+				evt.moneda = conceptoTemp.moneda;
+				dispatchEvent(evt);
+				
+				var $url:URLRequest = new URLRequest();
+				var fPor:String = new String;
+				fPor = UtilsRutaArchivos.obtenFpor( _empresaQueFactura.nomenclaturaEmpresa );
+				$url.url = RutasPdF.GENERAL_RUTA + RutasPdF.NOTA_CREDITO + fPor + $dato.requestTransactionResult.response.identifier.serial + '.pdf';   
+				/* $url.url = 'file:///Users/fmartinez/Desktop/' + $dato.requestTransactionResult.response.identifier.serial + '.pdf'; */
+				navigateToURL( $url );
+				botonfinalizar1_clickHandler();
+			}
+			
+			
+			// funcion para manipular el tipo de cambio
+			private function modificaTipoDeCambio():void{
+				if( !this.rbPeso.selected ){
+					this.txtTC.enabled = true
+				}
+			}
+			
+			public function set confirmaNotaCredito( $dato:Boolean ):void{
+			}
+			
+			
+			private var cargarIVA:Boolean = true;
+			private function grabaIVA():void{
+				if(cargarIVA){
+					cargarIVA = false;
+					//muestra tache
+					this.chkIVA.source = tache
+				}else{
+					cargarIVA = true;
+					//muestra Paloma
+					this.chkIVA.source = paloma
+				}
+				calculaTotal();
+			}
+			
+			
+			private var _listaFiltradaConcepto:ArrayCollection;
+			private function filtraConcepto( event:TextOperationEvent ):void{
+				_listaFiltradaConcepto = new ArrayCollection();
+				_listaFiltradaConcepto = ObjectUtil.copy( UtilsGrid.queryCampoXLike( (_listaConceptosUniverso) as ArrayCollection, 'descripcion', txtBusquedaConcepto.text ) ) as ArrayCollection;
+				if( _listaFiltradaConcepto != null ){	
+					lstConceptosFactura.dataProvider = ObjectUtil.copy( _listaFiltradaConcepto ) as ArrayCollection;
+				}
+			}
+			
+			
+			protected function lstClientes_clickHandler(event:MouseEvent):void
+			{
+				if (lstClientes.selectedItem != undefined && !lstClientes.selectedItem.selected ){
+					deseleccionarClientes(null);
+					_clienteSeleccionado = this.lstClientes.selectedItem as Cliente;
+					
+					if(_clienteSeleccionado.usoCFDI != null && _clienteSeleccionado.usoCFDI != "")
+						cmbCFDI.selectedIndex = cmbCFDI.seleccionarValor(_clienteSeleccionado.usoCFDI);
+					else
+						cmbCFDI.selectedIndex = 0;
+					
+					if(_clienteSeleccionado.metodoDePago != null && _clienteSeleccionado.metodoDePago != "")
+						cmbMetPago.selectedIndex = cmbMetPago.seleccionarValor(_clienteSeleccionado.metodoDePago);
+					else
+						cmbMetPago.selectedIndex = 0;
+				}			
+			}
+			
+			
+			protected function browseFileSystem(event:MouseEvent):void
+			{
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				
+				var docFilter:FileFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter]); 
+			}
+			
+			
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			
+			
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				ref = new Referencia();
+				this.pdfByteArray = file.data;
+				this._rutaDoc = file.nativePath;
+				this.lblAmpa.text = file.nativePath;
+				
+				ref.bytes = file.data;
+				ref.extensionArchivo = file.extension;
+				
+				mostrarDocumento(this._rutaDoc);
+				this.btnVerAmparo.visible = btnVerAmparo.includeInLayout = true;
+				activaBotonFacturar();
+			}
+			
+			
+			private function mostrarDocumento(ruta:String):void{
+				var request:URLRequest = new URLRequest("file://"+  encodeURI(ruta));
+				navigateToURL(request);
+			}
+			
+			private function validarTipoCambioPositivoMinimo($txtInput:IVisualElement):Boolean
+			{
+				var error:ValidationResultEvent;
+				
+				if (!rbPeso.selected){
+					if($txtInput != null && $txtInput is TextInput)
+					{
+						var currentTxtInput:TextInput = $txtInput as TextInput;
+						validatorTipoCambioPositivoMinimo.listener = currentTxtInput;
+						error = validatorTipoCambioPositivoMinimo.validate(currentTxtInput.text);
+					}
+					else if($txtInput != null && $txtInput is textInputOpcional)
+					{
+						var currentTxtInputOpcional:textInputOpcional = $txtInput as textInputOpcional;
+						if(currentTxtInputOpcional.habilitaBoton)
+						{
+							validatorTipoCambioPositivoMinimo.listener = currentTxtInputOpcional.texto;
+							error = validatorTipoCambioPositivoMinimo.validate(currentTxtInputOpcional.texto.text);
+						}
+					}
+					
+					calculaTotal();
+				}
+				if(error == null || error.results == null)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+				
+			}
+			
+			protected function txtTC_enterHandler(event:FlexEvent):void
+			{
+				validarTipoCambioPositivoMinimo(txtTC);
+			}
+			
+			private var newIndex:int = -1;
+			private var oldIndex:int = -1;
+			private var isPrimera:Boolean = true;
+			public function escuchaItemRender(evt:EventoNotaCredito):void{
+				oldIndex = newIndex;
+				newIndex = lstClientes.selectedItem.idCliente;
+				
+				var index:int = -1;
+				if (oldIndex != -1){
+					index = Util.searchInArrayCollection(_universoClientes,oldIndex,"idCliente");
+					_universoClientes[index].selected = false;
+					index = Util.searchInArrayCollection((lstClientes.dataProvider as ArrayCollection),oldIndex,"idCliente");
+					if (index != -1 ){
+						lstClientes.dataProvider[index].selected = false;
+					}
+				}
+				if (newIndex != -1 ){
+					index = Util.searchInArrayCollection(_universoClientes,newIndex,"idCliente");
+					_universoClientes[index].selected = true;
+					lstClientes.selectedItem.selected = true;
+					activarBotonFactura();
+					activaBotonFacturar();
+				}
+				
+			}
+			
+			private function activarBotonFactura():void{
+				
+				var btnBarBtn:ButtonBarButton = btnBarra.dataGroup.getElementAt(1) as ButtonBarButton;
+				if( _clienteSeleccionado != null && _clienteSeleccionado.selected ){	
+					btnBarBtn.enabled = true;
+				}
+				else{
+					btnBarBtn.enabled = false;
+				}
+				
+			}
+			
+			public function deseleccionarClientes(evt:EventoNotaCredito):void{
+				oldIndex = newIndex;
+				
+				var index:int = -1;
+				if (oldIndex != -1){
+					index = Util.searchInArrayCollection(_universoClientes,oldIndex,"idCliente");
+					if (index != -1){
+						_universoClientes[index].selected = false;
+					}
+					index = Util.searchInArrayCollection((lstClientes.dataProvider as ArrayCollection),oldIndex,"idCliente");
+					if (index != -1 ){
+						lstClientes.dataProvider[index].selected = false;
+					}
+					activarBotonFactura();
+					activaBotonFacturar();
+				}
+				
+			}
+			
+		]]>
+		
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:RadioButtonGroup id="radioBanderas"/>
+	</fx:Declarations>
+	<s:HGroup width="100%"  verticalAlign="middle" >
+		<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_inspector}"/>
+		<label:labelTitulo text="INSPECTOR" width="100%"/>
+		<label:labelTitulo text="[ELABORAR NOTA DE CRÉDITO]" textAlign="right" color="0x{catalogoColores.LABEL_GRIS}"/>
+	</s:HGroup>
+	<s:Spacer height="15" />
+	<otros:divisionHueca width="100%"/>
+	<s:Spacer height="15" />
+	<s:HGroup width="100%" >
+		<label:labelSubtitulo id="lblNombreEmpresa" width="100%" text="{ _empresaQueFactura.razonSocial + '  ·  ' + _empresaQueFactura.rfcEmpresa }"/>
+		<s:Label fontSize="15" fontWeight="bold" id="lblfechaHoy" textAlign="right" text="{ 'FECHA DE NOTA DE CRÉDITO  ·  ' + UtilsFecha.formatoFechaDDMMMYYYY( new Date )}" color="0x{catalogoColores.LABEL_ROJO}"/>
+	</s:HGroup>
+	<s:Spacer height="15" />
+	<otros:divisionGruesa width="100%"/>
+	<s:Spacer height="15" />
+	<s:Group width="100%" height="100%" >
+		
+		
+		<s:HGroup width="100%" height="100%" id="grupoClientes" visible="true" >
+			<s:VGroup width="20%" height="100%"  paddingRight="15">
+				<s:TextInput id="txtBusqueda" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtraLista()"/>
+				<s:Spacer height="15"/>
+				<s:List width="100%" height="100%" itemRenderer="vista.vistas.vistaFacturar.itemrenderer.ListaClientesNotaCredito_IR" id="lstClientes"  borderVisible="false"
+						mouseDown="lstClientes_clickHandler(event)" horizontalScrollPolicy ="off" useVirtualLayout="true" />
+			</s:VGroup>
+			<otros:VDivisionHueca height="100%"/>
+			<s:VGroup width="100%" height="100%" gap="15" paddingLeft="15">
+				<s:HGroup width="100%" >
+					<s:Label fontWeight="bold" fontSize="18" text="{ _clienteSeleccionado.nombre }" id="lblCliente" width="100%"/>
+					<s:HGroup paddingTop="-10" paddingLeft="-20">
+						<chekbox:checkBoxRadio id="chkEmpresa"  change="activaBotonFacturar()" selected="false" visible="false" includeInLayout="false" />
+					</s:HGroup>
+				</s:HGroup>
+				<otros:division width="100%"/>
+				<s:Scroller width="100%" height="100%" >
+					<s:HGroup width="100%" height="100%" >
+						<s:Scroller width="60%" height="100%"  horizontalScrollPolicy="off">
+							<s:VGroup height="100%" width="60%" >
+								<s:Label text="GENERALES" fontSize="16" fontWeight="bold" color="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+								<s:Spacer height="10" />
+								<s:Label text="Razón Social:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="12"  text="{_clienteSeleccionado.razonSocial}" color="0x{catalogoColores.LABEL_CASI_NEGRO}" />
+								<s:Spacer height="10" />
+								<s:Label text="RFC:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="12"  text="{_clienteSeleccionado.rfc }"  color="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+								<s:Spacer height="10" />
+								<s:Label text="Dirección fiscal:" fontSize="12" fontWeight="bold"  />
+								<s:Label text="{ _clienteSeleccionado.calleFiscal + ' ' + _clienteSeleccionado.delegacionFiscal + ' CP: ' +  _clienteSeleccionado.codigoPostalFiscal + ' ' + _clienteSeleccionado.paisFiscal + ' ' + _clienteSeleccionado.estadoFiscal}"
+										 toolTip="{ _clienteSeleccionado.calleFiscal + ' ' + _clienteSeleccionado.delegacionFiscal + ' CP: ' +  _clienteSeleccionado.codigoPostalFiscal + ' ' + _clienteSeleccionado.paisFiscal + ' ' + _clienteSeleccionado.estadoFiscal}" 
+										 color="0x{catalogoColores.LABEL_CASI_NEGRO}" fontSize="12" width="100%" maxDisplayedLines="2" />
+								<s:Spacer height="10" />
+								<s:Label text="Factura:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="12"  text="{_clienteSeleccionado.empresaFactura}" color="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+								<s:Spacer height="10" />
+								<s:Label text="Destino de factura electrónica:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="12"  text="{_clienteSeleccionado.correoElectronico}"  color="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+							</s:VGroup>
+						</s:Scroller>
+						<otros:VDivisionHueca height="100%"/>
+						<s:Scroller width="40%" height="100%" >
+							<s:VGroup height="100%" width="100%" paddingLeft="15">
+								<s:Label text="PAGO" fontSize="16" fontWeight="bold" color="0x{catalogoColores.LABEL_VERDE_AZUL}"  />
+								<s:Spacer height="10" />
+								<s:Label text="Condiciones:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="12" text="{_clienteSeleccionado.condicionesPago}" color="0x{catalogoColores.LABEL_CASI_NEGRO}" />
+								<s:Spacer height="10" />
+								<s:Label text="Medio:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="12" text="{_clienteSeleccionado.medioPago}"  color="0x{catalogoColores.LABEL_CASI_NEGRO}" />
+								<s:Spacer height="10" />
+								<s:Label text="Cuenta origen conocida:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="13" text="{_clienteSeleccionado.numeroDeCuenta}" color="0xw{catalogoColores.LABEL_CASI_NEGRO}"/>
+								<s:Spacer height="10" />
+								<s:Label text="Uso de CFDI:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="13" text="{_clienteSeleccionado.usoCFDI == null ? '' : _clienteSeleccionado.usoCFDI}" color="0xw{catalogoColores.LABEL_CASI_NEGRO}"/>
+								<s:Spacer height="10" />
+								<s:Label text="Método de pago:" fontSize="12" fontWeight="bold"  />
+								<s:Label fontSize="13" text="{_clienteSeleccionado.metodoDePago == null ? '' : _clienteSeleccionado.metodoDePago}" color="0xw{catalogoColores.LABEL_CASI_NEGRO}"/>
+							</s:VGroup>
+						</s:Scroller>
+					</s:HGroup>
+				</s:Scroller>	
+				<otros:division width="100%"/>
+				<s:Label text="Comentarios adicionales para la facturación:" fontSize="18" fontWeight="bold" color="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+				<s:RichText width="100%" height="20%" fontStyle="normal"  text="{ _clienteSeleccionado.comentaFacturacion }" id="txtNota"/>
+			</s:VGroup>
+		</s:HGroup>
+		
+		
+		<s:HGroup width="100%" height="100%" id="grupoFactura" visible="false"  >
+			<s:VGroup width="25%" height="100%" gap="0" paddingLeft="15" paddingRight="15">
+				<s:Spacer height="15" />
+				<s:Label text="CONCEPTOS" fontSize="14" width="100%" fontWeight="bold" textAlign="center" />
+				<s:Spacer height="5" />
+				<s:TextInput id="txtBusquedaConcepto" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" fontStyle="normal" change="filtraConcepto(event)" prompt="CONCEPTO" />
+				<s:Spacer height="10" />
+				<otros:division width="100%" />
+				<s:List width="100%" height="100%" borderVisible="false" itemRenderer="vista.vistas.vistaFacturar.VistaPrincipalITMRConceptos"  id="lstConceptosFactura" 
+						dragStart="generaCopiaSeguridadDataGrid()" 
+						dragEnabled="true"
+						dragMoveEnabled="false" horizontalScrollPolicy="off"
+						/>
+			</s:VGroup>
+			
+			<otros:VDivisionHueca height="100%"/>
+			<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15">
+				<!--<vistaFacturar:VistaPrincipalInspectorGrid width="100%" height="100%" id="gridConcepto" dragDrop="gridConcepto_dragDropHandler(event)"/>-->
+				<pqNet:advancedGridPqNet  id="gridConcepto" width="100%" height="100%"  textAlign="center"  dragDrop="gridConcepto_dragDropHandler(event)"
+										  porcentajesColumnasPq="{[4,33,18,14,19,4,3 ]}"  rowHeight="70" 
+										  dropEnabled="true" >
+					<!--agregar 33%-->
+					<pqNet:columns>
+						<mx:AdvancedDataGridColumn headerText="#" width="35" dataField="numFila" />
+						<mx:AdvancedDataGridColumn headerText="CONCEPTO" dataField="descripcion"  >
+							<mx:itemRenderer >
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+												
+												import skins.catalogos.catalogoColores;
+												
+											]]>
+										</fx:Script>
+										<s:VGroup width="100%" height="100%" horizontalAlign="center"  >
+											<s:Label maxDisplayedLines="2" width="100%" text="{(data as ConceptoFactura).descripcion }" fontSize="12"/>
+											<!--<s:Label maxDisplayedLines="2" width="100%" text=" { (data as ConceptoFactura).notas }"  fontSize="11"
+											toolTip="{ (data as ConceptoFactura).notas}" color="0x{catalogoColores.LABEL_VERDE_AZUL}"
+											visible="{data.notas != ''}" includeInLayout="{data.notas != ''}" />-->
+										</s:VGroup>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Unidad" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+											]]>
+										</fx:Script>
+										<s:Group width="100%" height="100%"  >
+											<s:Label width="100%" height="100%" text="{(data as ConceptoFactura).cantidad}" horizontalCenter="0" verticalCenter="0" fontSize="14" />
+										</s:Group>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Precio unitario">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+												import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+												import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+											]]>
+										</fx:Script>
+										<s:VGroup  width="100%" horizontalAlign="center">
+											
+											<s:Label width="100%"  fontSize="14" 
+													 text="{ UtilsFormatoMoneda.determinaMoneda((data as ConceptoFactura).moneda)+' '+UtilsFormatosNumericos.precisionADosDecimales( (data as ConceptoFactura).valorUnitario )}"/>
+											<s:Label width="100%" text="{ (data as ConceptoFactura).moneda }" fontSize="14" />
+											
+										</s:VGroup>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>						
+						<mx:AdvancedDataGridColumn headerText="IMPORTE" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+												import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+												import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+												
+												import skins.catalogos.catalogoColores;
+											]]>
+										</fx:Script>
+										<s:VGroup  horizontalAlign="center" width="100%">
+											<s:Label width="100%"   fontSize="14" color="0x{catalogoColores.LABEL_VERDE_AZUL}" verticalAlign="bottom"
+													 text="{ UtilsFormatoMoneda.determinaMoneda((data as ConceptoFactura).moneda)+' '+UtilsFormatosNumericos.precisionADosDecimales( ((data as ConceptoFactura).valorUnitario *(data as ConceptoFactura).cantidad) )}"/>
+											<s:Label width="100%"  text="{ (data as ConceptoFactura).moneda }"  fontSize="14" color="0x{catalogoColores.LABEL_VERDE_AZUL}" verticalAlign="top"/>
+										</s:VGroup>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText=" ">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+												
+												import skins.catalogos.catalogoIconosGrid;
+												public function regresaCotizacion():void{
+													outerDocument.image1_clickHandler( data as ConceptoFactura )
+												}
+											]]>
+										</fx:Script>
+										<s:Image source="{catalogoIconosGrid.getInstance().render_lapiz }" click="regresaCotizacion()" id="imgInfo" horizontalCenter="0"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText=" ">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100%">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.ConceptoFactura;
+												
+												import skins.catalogos.catalogoIconosGrid;
+												public function eliminaCotizacion():void{
+													outerDocument.eliminaConcepto( data as ConceptoFactura )
+												}
+											]]>
+										</fx:Script>
+										<s:Image source="{catalogoIconosGrid.getInstance().render_botontache }" click="eliminaCotizacion()" id="imgInfo" horizontalCenter="0"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+					</pqNet:columns>
+					<pqNet:rendererProviders >
+						<mx:AdvancedDataGridRendererProvider 
+							dataField="finArray"
+							columnIndex="0"
+							columnSpan="0"
+							renderer="vista.vistas.vistaFacturar.FacturistaITRMTotalConceptosAgregadosFactura"/>
+					</pqNet:rendererProviders>
+				</pqNet:advancedGridPqNet>
+			</s:VGroup>
+			<otros:VDivisionHueca height="100%"/>
+			<s:Scroller width="25%" height="100%"  horizontalScrollPolicy="off">
+				<s:VGroup width="100%" height="100%" gap="17" paddingLeft="15"  >
+					<s:Label height="0"/>
+					<s:Label text="{_clienteSeleccionado.nombre}" fontSize="14" fontWeight="bold" width="100%" textAlign="center"/>
+					
+					<s:VGroup width="100%" height="131">
+						<s:Spacer height="10" />
+						<s:Label text="Uso de CFDI:" fontSize="12" fontWeight="bold"  />
+						<!--change="activaCambios = true;"-->
+						<cmbCat:ComboCatalogos id="cmbCFDI" fontSize="14" width="360" height="28" creationComplete="{cmbCFDI.cargarRevisionFactura('--NO APLICA--')}" />
+						<s:Spacer height="10" />
+						<s:Label text="Método de pago:" fontSize="12" fontWeight="bold"  />
+						<!--change="activaCambios = true;"-->
+						<cmbCat:ComboCatalogos id="cmbMetPago" fontSize="14" width="360" height="28" creationComplete="{cmbMetPago.cargarRevisionFactura('--NO APLICA--')}" />
+						<s:Spacer height="6" />
+					</s:VGroup> 
+					
+					<otros:division width="100%"/>
+					<s:Label text="TOTALES" color="0x{catalogoColores.LABEL_VERDE_AZUL }"  width="100%" textAlign="center" fontSize="19"  fontWeight="bold"/>
+					<otros:division width="100%" />
+					<s:Label text="SUBTOTAL" color="0x{catalogoColores.LABEL_CASI_NEGRO }" fontWeight="bold" fontSize="12"/>
+					<s:Label color="0x{ catalogoColores.LABEL_VERDE_AZUL}" id="lblSubtotal" width="100%"  fontSize="19"/>	
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%">
+						<s:VGroup width="100%" height="100%" >
+							<s:Label text="IVA" color="0x{catalogoColores.LABEL_CASI_NEGRO }" fontWeight="bold" fontSize="12"/>
+							<s:Label color="0x{ catalogoColores.LABEL_VERDE_AZUL }" id="lblIVA" width="100%" fontSize="19" />
+						</s:VGroup>
+						<s:VGroup horizontalAlign="right" paddingRight="5" verticalAlign="middle" height="100%">
+							<s:Image click="grabaIVA()" id="chkIVA" />
+						</s:VGroup>					
+					</s:HGroup>	
+					<otros:divisionHueca width="100%" />
+					<s:Label text="TOTAL" color="0x{catalogoColores.LABEL_CASI_NEGRO }" fontWeight="bold" fontSize="12"/>
+					<s:Label color="0x{ catalogoColores.LABEL_ROJO }" id="lblTotal" width="100%"  fontSize="19" fontWeight="bold"/>
+					<otros:divisionHueca width="100%" />
+					<s:Label text="MONEDA" color="0x{catalogoColores.LABEL_CASI_NEGRO }" fontWeight="bold" fontSize="12"/>
+					<s:HGroup width="100%" horizontalAlign="center"> 
+						<s:Spacer width="20"/>
+						<s:VGroup verticalAlign="middle" horizontalAlign="center" >
+							<s:Image source="{catalogoBanderas.getInstance().banderaPesoMini}"  click="rbPeso.selected = true;rbDolares.selected = false;rbEuro.selected = false;  cambiaMoenda()"/>
+							<s:RadioButton id="rbPeso" click="cambiaMoenda()" groupName="radioBanderas" />
+						</s:VGroup>
+						<s:Spacer width="100%"/>
+						<s:VGroup verticalAlign="middle" horizontalAlign="center" >
+							<s:Image source="{catalogoBanderas.getInstance().banderaDolaresMini}" click="rbPeso.selected = false;rbDolares.selected = true;rbEuro.selected = false;  cambiaMoenda()"/>
+							<s:Spacer height="2"/>
+							<s:RadioButton id="rbDolares" selected="true" click="cambiaMoenda()" groupName="radioBanderas" />
+						</s:VGroup>
+						<s:Spacer width="100%"/>
+						<s:VGroup verticalAlign="middle" horizontalAlign="center" >
+							<s:Image source="{catalogoBanderas.getInstance().banderaEuroMini}" click="rbPeso.selected = false;rbDolares.selected = false;rbEuro.selected = true; cambiaMoenda()"/>
+							<s:Spacer height="0"/>
+							<s:RadioButton id="rbEuro" click="cambiaMoenda()" groupName="radioBanderas"/>
+						</s:VGroup>
+					</s:HGroup>
+					<otros:division width="100%"/>
+					<s:HGroup width="100%">
+						<s:Label text="TC: " color="0x{catalogoColores.LABEL_CASI_NEGRO }" textAlign="center" fontWeight="bold" height="100%" verticalAlign="middle" />
+						<s:TextInput width="100%" id="txtTC" enabled="false" restrict="0-9." fontStyle="normal" focusOut="validarTipoCambioPositivoMinimo(txtTC)" enter="txtTC_enterHandler(event)"/>
+						<s:Group>
+							<s:Image source="{ catalogoIconosGrid.getInstance().render_lapizGris }" id="imgLapizGris"/>
+							<s:Image source="{ catalogoIconosGrid.getInstance().render_lapiz }" click="modificaTipoDeCambio()" visible="false" id="imgLapiz"/>
+						</s:Group>
+					</s:HGroup>
+					<s:HGroup height="100%" horizontalCenter="0" width="100%" verticalAlign="middle" verticalCenter="0">
+						<amparar:botonAmparar id="btnAmparo" click="browseFileSystem(event)" width="100%"/>
+						<ver:botonVer id="btnVerAmparo" click="mostrarDocumento(this._rutaDoc)" visible="false" includeInLayout="false" width="100"/>
+					</s:HGroup>
+					<s:Label id="lblAmpa" visible="false" width="0" height="0"/>
+				</s:VGroup>
+			</s:Scroller>
+		</s:HGroup>
+	</s:Group>
+	<s:Spacer height="7" />
+	<otros:divisionGruesa width="100%" />
+	<s:Spacer height="7" />
+	<s:HGroup width="100%" >
+		<salir:botonSalir click="botonfinalizar1_clickHandler()" />
+		<s:Spacer width="50%"/>
+		<s:ButtonBar  id="btnBarra" selectedIndex="0" dataProvider="{_datosBarraBoton}" skinClass="skins.botoneras.botoneraGrisconLabel.skinbotoneraGrisconLabel" 
+					  requireSelection="true" changing="seleccionaBoton(event)"/>   <!--change="seleccionaBoton(event)"-->
+		<s:Spacer width="50%"/>
+		<botonNegroCuadrado:botonNegroCuadrado label="NOTA CRÉDITO" id="btnFacturar" enabled="false" click="generaFactura()"/>
+		<!--icono="adicionales"-->
+	</s:HGroup>
+</s:VGroup>

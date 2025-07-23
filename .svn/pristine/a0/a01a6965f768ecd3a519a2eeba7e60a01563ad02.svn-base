@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:formato ="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.grid.*" 
+		  xmlns:label="skins.skin.label.*"  xmlns:otros="skins.otros.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:pqNet1="skins.skin.datagrid.pqNet.*" xmlns:grafica="skins.botones.grafica.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+		  width="100%" height="100%" 
+		  paddingRight="20" paddingLeft="20" paddingTop="25" paddingBottom="15">
+
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.productos.EventoTableroProductos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable]
+			private var _clientesParaTabla:ArrayCollection;
+			private var _sql:Query;
+			
+			private function maxTopClientes():void
+			{	
+				var evt:EventoTableroProductos = new EventoTableroProductos(EventoTableroProductos.VOLVER_A_TABLERO_PRODUCTOS);
+				dispatchEvent(evt);				
+			}
+			
+			public function set resumenComparativaClientesProd(comparativa:ArrayCollection):void
+			{
+				if(comparativa == null)
+				{
+					return;
+				}
+				
+				var arreTotal:ArrayCollection = UtilsGrid.queryCampoX( comparativa, "etiqueta", "TOTAL_PROVEEDORES_0" );
+				var arrPie:ArrayCollection = UtilsGrid.queryCampoX( comparativa, "etiqueta", "CLIENTES_0" );
+				
+				if(arreTotal.length > 0)
+				{
+					var valorProv:Number = (arreTotal[0] as ResumenConsulta).clientes_proveedores;
+					for(var h:int = 0; h < arrPie.length; h++)
+					{
+						(arrPie[h] as ResumenConsulta).provedorIndividual = valorProv;
+					}
+				}
+				
+				myChart.dataProvider = myChart.aplicarFormatoTableroProductos( arrPie,'CLIENTES' );
+			}
+			
+			/**
+			 * Metodo que muestra grafica maximizada  
+			 */
+			public function seleccionarGrafica():void
+			{
+				this.stackGeneral.selectedChild = this.vistaGrafico;
+			}
+			
+			public function seleccionaTabla():void{			
+				this.stackGeneral.selectedChild = this.vistaTabla;
+			} 
+			
+			/**
+			 * Metodo que recibe del mapa el top ten de clientes  
+			 */
+			public function set obtenerClientesGrid(clientes:ArrayCollection):void{
+				if (clientes==null){
+					return ;
+				}
+				this._clientesParaTabla = new ArrayCollection(); 
+				this._clientesParaTabla = clientes;
+				setValoresFooter(clientes);
+			}
+						
+			private function generaArchivo():void
+			{
+				if(!_clientesParaTabla){
+					alertaSingleton.show("No hay información para generar el archivo.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				var file2:File = new File();
+				
+				var dato0:Number = new Number;
+				var dato1:String = new String;
+				var dato2:String = new String;
+				var dato3:String = new String;
+				
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				var longitud:int =  new int ;
+				longitud = this._clientesParaTabla.length;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Nombre Cliente");
+				fila1[2] = hoja.addItem("Piezas");
+				fila1[3] = hoja.addItem("Monto Compra USD");
+				
+				for(var i:int = 0 ; i<longitud ; i++ ){
+					fila1 = new Array();	
+					
+					dato0 = (this.tablaGrid.dataProvider[i] ).numFila;
+					dato1 = '"' + (this.tablaGrid.dataProvider[i] ).concepto + '"';
+					dato2 = '"' + (this.tablaGrid.dataProvider[i] ).cantidadPiezas +'"';
+					dato3 = '"' + (this.tablaGrid.dataProvider[i] ).formatoMonto + '"';
+					
+					fila1[0] = dato0;
+					fila1[1] = dato1;
+					fila1[2] = dato2;
+					fila1[3] = dato3;
+					
+					hoja.addItem('\r' + fila1 );
+					fila1 = null;
+					
+				}
+				file2.save( hoja, "Clientes_TabProductos.csv");
+			}
+			
+			private function setValoresFooter($arreglo:ArrayCollection):void
+			{
+				_sql = new Query($arreglo,["concepto"]);
+				
+				var _clientes:Number = _sql.getValoresCampoOmitiendoRepetidosDeTodoElUniverso("concepto").length;
+				var _piezas:Number = _sql.getSumarCampo("cantidadPiezas",[],"",true);
+				var _monto:Number = _sql.getSumarCampo("monto",[],"",true);
+				
+				lbl1_nototal.text ="";
+				lbl2_cliente.text= _clientes == 1 ? "1 Cliente":_clientes.toString()+" Clientes";
+				lbl3_noPiezas.text = _piezas == 1 ? "1 Pieza":_piezas.toString()+" Piezas";
+				lbl4_nomonto.text = "$"+UtilsFormatosNumericos.precisionADosDecimalesConComas(_monto);
+				
+			}
+		]]>
+	</fx:Script>
+	<componentes:TituloChartMaxTablero width="100%" text="CLIENTES" />
+	<mx:ViewStack  id="stackGeneral" width="100%" height="100%" creationPolicy="all"> 
+		<s:NavigatorContent id="vistaTabla" width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="0" horizontalAlign="center">
+				<otros:divisionGruesa width="100%" />
+				
+				<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="tablaGrid" width="100%" rowHeight="40" height="100%" dataProvider="{this._clientesParaTabla}" tipoDeConsulta="vacio" disableDragableColumns="{[0]}" disableResizableColumns="{[0]}"
+															 anchoColumnas="{['5%','60%','10%','=']}" mostrarFooter="false">
+					
+					<AdvancedDataGrid:columns>
+						<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+						<mx:AdvancedDataGridColumn headerText="Nombre Cliente" dataField="concepto">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false">
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<label:Texto text="{data.concepto}" width="100%" fontSize="12" maxDisplayedLines="2"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Piezas" dataField="cantidadPiezas"/>
+						<mx:AdvancedDataGridColumn headerText="Monto compra USD" dataField="formatoMonto"/>
+					</AdvancedDataGrid:columns>					
+				</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				
+			<otros:division width="100%" grueso="2" color="0xeaeaea"/>
+			<s:HGroup id="grpFooter" width="100%" height="75" verticalAlign="middle" gap="0">
+				<label:Titulo id="lbl1_nototal" paddingTop="0" width="5%" textAlign="center" />
+				<label:Titulo id="lbl2_cliente" paddingTop="0" width="60%" textAlign="center" />
+				<label:Titulo id="lbl3_noPiezas" paddingTop="0" width="10%" textAlign="center" />
+				<label:Titulo id="lbl4_nomonto" paddingTop="0" width="25%" textAlign="center" />
+			</s:HGroup>
+				<otros:divisionHueca width="100%" />
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+					<grafica:botonPopUp icono="chart" click="stackGeneral.selectedChild = vistaGrafico"/>
+					<pqNet:botonPqNetLargo label="Inicio" click="maxTopClientes()" />
+					<s:Spacer width="100%" />
+					<pqNet:botonPqNetLargo id="btnExportar" icono="exportar" label="Exportar" click="generaArchivo()"/>
+				</s:HGroup>
+				
+			</s:VGroup>
+		</s:NavigatorContent>
+		
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+				<s:VGroup width="100%" height="100%" gap="0" paddingRight="20">
+					<otros:divisionGruesa width="100%" />
+					<graficas:PieChartPqGris id="myChart" width="100%" height="100%" dataProvider="{null}" paddingTop="30" paddingBottom="10" showDataTips="false" innerRadius=".5"
+											 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true" cambioProvTotales="true" >
+						<graficas:series>
+							<graficas:pieSeriesPqNet field="total" />
+						</graficas:series>
+					</graficas:PieChartPqGris>	
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren  a costo de Compra</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%" />
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="stackGeneral.selectedChild = vistaTabla" />
+						<pqNet:botonPqNetLargo label="Inicio" click="maxTopClientes()" />
+					</s:HGroup>
+				</s:VGroup>
+				<!--<componentes:PanelInfoMax textoHTML="{catalogoInfoGraficas.TABLERO_PROVEEDORES_TOP10_CLIENTES}"/>-->
+			</s:HGroup>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+</s:VGroup>

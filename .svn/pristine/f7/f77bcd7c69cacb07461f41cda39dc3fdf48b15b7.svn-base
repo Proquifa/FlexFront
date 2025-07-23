@@ -1,0 +1,661 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:oferta="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.comerciales.oferta.vistaOferta.*" 
+		  xmlns:shaders="skins.skin.shaders.*"
+		  width="100%" height="100%"
+		  creationComplete="iniciaComp(event)"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.comerciales.oferta.EventoCatClientes_Oferta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.comerciales.oferta.itemRender.CatClienteOferta_IR_titulosAnimados;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			
+			private var _universoProductos:ArrayCollection;
+			private var _universoCostos:ArrayCollection;
+			private var _universoClasificaciones:ArrayCollection;
+			
+			private var _arregloTitulos:ArrayCollection;
+			public static var _proveedor:Proveedor;
+			public var rutaClienteActual:String;
+			
+			
+			private var isProveedorNacional:Boolean = false;
+			private var _configuracionSeleccionada:ConfiguracionPrecio;
+			private var _nivel:String= 'Generales';
+			private var _indiceSeleccionado:int;
+			private var currentMoneda:String;
+			private var numeroDeConfifuracionSeleccionada:uint;
+			private var cli:Cliente;
+			private var _idConfig:Number = 0;
+			public  var _titulo:CatClienteOferta_IR_titulosAnimados = new CatClienteOferta_IR_titulosAnimados();
+			
+			protected function iniciaComp(event:FlexEvent):void
+			{
+				addEventListener( EventoCatClientes_Oferta.RECORRE_TITULO_SELECCIONADO, mueveTitulos,false,0,true );
+				addEventListener( ResizeEvent.RESIZE, recibeResize,false,0,true );			
+				addEventListener( EventoCatClientes_Oferta.CAMBIA_NIVEL_EN_VISTA_OFERTA, cargaInformacion,false,0,true );  
+				addEventListener( EventoCatClientes_Oferta.EXPORTAR_PRODUCTOS_CON_PRECIO, llamadadeProductosParaExportar,false,0,true );  
+				
+			}
+			
+			private function recibeResize($evt:Event):void{
+				setTimeout( acomoda, 470 ); //130
+			}
+			
+			private var _primerResize:Boolean = true;
+			
+			private function acomoda():void
+			{
+				if( arregroTitulosPorFamilia != null && arregroTitulosPorFamilia.length > 0)
+				{
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				}
+				
+				grpImagenes.x = ( cnvPanel.width/2 ) -120;
+				moveLeft.stop();
+				moveLeft.duration = 0;
+				moveLeft.xBy = -178 * _indiceSeleccionado;
+				moveLeft.play();
+				_primerResize = false;
+			}
+			
+			public function recibeProveedorSeleccionado($pro:Proveedor):void
+			{
+				if($pro == null || isNaN($pro.idProveedor)){
+					_proveedor = $pro;
+					_proveedor.idProveedor=0;
+					lblProveedor.text='';
+					inicia();
+					return;
+				}
+				
+				_proveedor = $pro;
+				_nivel = 'General';
+				_titulo.modificarCurrentNivel("General");
+				
+				if($pro.pais.toLocaleLowerCase() == "mexico" || $pro.pais.toLocaleLowerCase() == "méxico")
+					isProveedorNacional = true;
+				else
+					isProveedorNacional = false;
+				
+				currentMoneda = _proveedor.monedaVentaAbreviatura;
+				lblProveedor.text = $pro.nombre;
+				inicia();
+			}
+			
+			
+			private function inicia():void
+			{
+				
+				var eve:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.OBTENER_TODAS_FAMILIAS_PROVEEDOR_CLIENTE);
+				eve.idProveedor = _proveedor.idProveedor;
+				dispatchEvent(eve);
+				_idConfig = 0;
+			}
+			
+			
+			public function set recibeConfiguracionesProducto( $listConfProductos:ArrayCollection ):void
+			{
+				if( $listConfProductos == null || $listConfProductos.length == 0 )
+				{
+					mandarALimpiarTodo();
+					return;
+				}
+				_universoProductos = $listConfProductos;
+				enviaInformacionAgrupada( _nivel );
+			}
+			
+			
+			public function set recibeConfiguracionesPrecioCosto($listaConfCosto:ArrayCollection):void
+			{
+				if( $listaConfCosto == null || $listaConfCosto.length == 0)
+				{
+					mandarALimpiarTodo();
+					return;
+				}
+				
+				_universoCostos = $listaConfCosto;
+				enviaInformacionAgrupada( _nivel );
+			}
+			
+			public function set recibeConfiguracionesClasificacion($listaConfClasif:ArrayCollection):void
+			{
+				if( $listaConfClasif == null)
+				{
+					mandarALimpiarTodo();
+					return;
+				}
+				_universoClasificaciones = $listaConfClasif;
+				enviaInformacionAgrupada( _nivel );
+			}
+			
+			
+			
+			private function cambia( $sentido:String, totalmovimientos:int = 1 ):void
+			{
+				
+				$sentido == 'izquierda' ?   _indiceSeleccionado = _indiceSeleccionado - 1 : _indiceSeleccionado = _indiceSeleccionado + 1;
+				_indiceSeleccionado == 0 ? btnIzquierdo.enabled = false : btnIzquierdo.enabled = true;
+				_indiceSeleccionado == arregroTitulosPorFamilia.length - 1 ? btnDerecho.enabled = false : btnDerecho.enabled = true;
+				
+				for( var m:int = 0; m < arregroTitulosPorFamilia.length; m++ )
+				{
+					( arregroTitulosPorFamilia[m] as ConfiguracionPrecio ).animacion = false;	
+				}
+				
+				for( var r:int = 0; r < arregroTitulosPorFamilia.length; r++ )
+				{
+					( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).titutloSeleccionado = false;
+					if( ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).numFila == _indiceSeleccionado )
+					{
+						( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).titutloSeleccionado = true;	
+						( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).animacion = true;
+						
+						if( $sentido == 'derecha' )
+						{ //se mueve a la izquierda se anima el de la derecha
+							( arregroTitulosPorFamilia[r-1] as ConfiguracionPrecio ).animacion = true;
+						}
+						else
+						{
+							( arregroTitulosPorFamilia[r+1] as ConfiguracionPrecio ).animacion = true;
+						}
+						numeroDeConfifuracionSeleccionada = ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).numFila;
+						currentItemSelected = ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).idConfiguracionPrecio;
+					}
+				}
+				if( $sentido == 'izquierda' )
+				{
+					moveRight.stop();
+					moveRight.duration = 1000;
+					moveRight.xBy = 178;
+					moveRight.play();
+					
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+					
+					grpImagenes.x = ( cnvPanel.width/2 ) -120;
+					moveRight.stop();
+					moveRight.duration = 0;
+					moveRight.xBy = -178 * _indiceSeleccionado;
+					moveRight.play();
+					_primerResize = false;
+					
+				}else{
+					
+					moveLeft.stop();
+					moveLeft.duration = 1000;
+					moveLeft.xBy = -178;
+					moveLeft.play();
+					
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+					
+					grpImagenes.x = ( cnvPanel.width/2 ) -120;
+					moveLeft.stop();
+					moveLeft.duration = 0;
+					moveLeft.xBy = -178 * _indiceSeleccionado;
+					moveLeft.play();
+					_primerResize = false;
+				}  
+			}
+			
+			
+			
+			private var currentItemSelected:int;
+			
+			public function enviaInformacionAgrupada( $nivel:String ):void
+			{
+				if($nivel == 'Producto')
+				{
+					grpZonaTrabajo.iniciaGenerales( _universoProductos, _nivel, _proveedor);
+				}
+				else if($nivel == "Clasificacion")
+				{
+					grpZonaTrabajo.iniciaGenerales(_universoClasificaciones,_nivel,_proveedor);
+				}
+				else 
+				{
+					grpZonaTrabajo.iniciaGenerales( _universoCostos, _nivel, _proveedor);
+				}
+			}
+			
+			
+			
+			private function cargaInformacion($evt:EventoCatClientes_Oferta):void
+			{ 
+				
+				_nivel =$evt.nivel;			
+				
+				if(_nivel == 'Clasificacion')
+				{
+					lblSeccion.text = 'CLASIFICACIÓN';
+				}
+				else if(_nivel == 'Producto')
+				{
+					lblSeccion.text = 'PRODUCTO';
+				}
+				else// NIVELES GENERALES  Y PRECIO DE LISTA 
+				{
+					if(_nivel == 'Precio lista')
+						lblSeccion.text = 'PRECIO LISTA';
+					else //NIVEL GENERALES
+						lblSeccion.text = 'GENERALES';
+				}
+				
+				dispatchEvent(new EventoCatClientes_Oferta(EventoCatClientes_Oferta.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES_CLIENTE));
+				
+			} 
+			
+			private function mueveTitulos( event:EventoCatClientes_Oferta ):void
+			{
+				if(currentItemSelected != event.idConfiguracion)
+				{
+					currentItemSelected = event.idConfiguracion;
+					
+					var totalMovimientos:int = 0;
+					totalMovimientos = event.idConfiguracion; //esete id es realmente la ubicacion en la lista de titulos
+					totalMovimientos = totalMovimientos - numeroDeConfifuracionSeleccionada;
+					var $dato:String = '';
+					
+					if( totalMovimientos < 0)
+					{
+						$dato = 'izquierda';
+						totalMovimientos = totalMovimientos * (-1);
+					}
+					else if(  totalMovimientos > 0  )
+					{
+						$dato = 'derecha';
+					}
+					else
+					{
+						totalMovimientos = 0;
+					}
+					
+					for( var i:int = totalMovimientos; i > 0; i-- ){
+						cambia( $dato,totalMovimientos );
+					}
+					
+					
+					//if(event.laFamiliaTieneProductos)
+					{
+						var enviarConfiguracion:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.ENVIAR_CONFIGURACION_SELECCIONADA_CLIENTES);
+						enviarConfiguracion.configuracionPrecio = event.configuracionPrecio;
+						dispatchEvent(enviarConfiguracion);
+						_configuracionSeleccionada = event.configuracionPrecio;
+					}
+				//	else
+					{
+					//	_universoProductos = new ArrayCollection;
+						//_universoCostos = new ArrayCollection;
+						//_universoClasificaciones = new ArrayCollection;
+						//event.nivel = "Generales";
+						var cambiarNiveles:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.CAMBIA_NIVEL_EN_VISTA_OFERTA);
+						cambiarNiveles.nivel = event.nivel == null ? _nivel:event.nivel;
+						dispatchEvent(cambiarNiveles);
+						
+					//	cargaInformacion(event);
+					}
+				}
+			}  
+			
+						
+			public function regresarNivel():void
+			{
+				_titulo.modificarCurrentNivel("General");
+			}
+			
+			
+			private function mandarALimpiarTodo():void
+			{
+				enviaInformacionAgrupada(_nivel);
+			}
+			
+			
+			private var arregroTitulosPorFamilia:ArrayCollection;
+			public function set recibeLasFamiliasDelProveedorSeleccionado($familias:ArrayCollection):void
+			{
+				_universoProductos = new ArrayCollection;
+				_universoCostos = new ArrayCollection;
+				_universoClasificaciones = new ArrayCollection; 
+				
+				if($familias == null || $familias.length ==0 )
+				{
+					_nivel = "Generales";
+					mandarALimpiarTodo();
+					arregroTitulosPorFamilia = new ArrayCollection;
+					grpImagenes.removeAllElements();
+
+					if (_titulo)
+						_titulo.modificarCurrentNivel("General");
+					
+					var fechas:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.ENVIAR_FECHA_OFERTA_SELECCIONADO);
+					dispatchEvent(fechas); 
+					
+					return;
+				}
+				
+				trace("llegaron las familias");
+				
+				arregroTitulosPorFamilia = $familias;
+				familySort();
+				
+				numeroDeConfifuracionSeleccionada = 0;
+				(arregroTitulosPorFamilia[0] as ConfiguracionPrecio).titutloSeleccionado = true;
+				
+				_configuracionSeleccionada = new ConfiguracionPrecio;
+				_configuracionSeleccionada = ObjectUtil.copy((arregroTitulosPorFamilia[0] as ConfiguracionPrecio)) as ConfiguracionPrecio;
+				
+				var enviarConfiguracion:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.ENVIAR_CONFIGURACION_SELECCIONADA_CLIENTES);
+				enviarConfiguracion.configuracionPrecio = (arregroTitulosPorFamilia[0] as ConfiguracionPrecio);
+				
+				btnIzquierdo.enabled = false;
+				
+				if( arregroTitulosPorFamilia.length == 1 )
+				{
+					btnDerecho.enabled = false;	
+				}
+				else if( arregroTitulosPorFamilia.length > 1 )
+				{
+					btnDerecho.enabled = true;
+				}
+				
+				_indiceSeleccionado = 0;
+				_nivel = 'Generales';
+				lblSeccion.text = 'GENERALES';
+				acomoda();
+				
+				dispatchEvent( enviarConfiguracion );
+				
+				dispatchEvent(new EventoCatClientes_Oferta(EventoCatClientes_Oferta.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES_CLIENTE));
+				
+			}
+			
+			
+			public function set confirmaCostoFactor( $dato:Boolean ):void{
+				if( !$dato )
+					return;
+				
+				dispatchEvent(new EventoCatClientes_Oferta(EventoCatClientes_Oferta.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES_CLIENTE));
+			}
+			
+			
+			
+			private function cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias():void
+			{
+				grpImagenes.removeAllElements();
+				var numItemsQueCaben:int = 0;
+				var iniciaConteo:Boolean = false;
+				numItemsQueCaben = ( cnvPanel.width / 2  )  / 177;
+				
+				for(var g:int =0; g < arregroTitulosPorFamilia.length; g++ )
+				{
+					
+					var currentItem:ConfiguracionPrecio = arregroTitulosPorFamilia[g] as ConfiguracionPrecio;
+					
+					currentItem.numFila = g ;
+					
+					var _titulo:CatClienteOferta_IR_titulosAnimados = new CatClienteOferta_IR_titulosAnimados();
+					
+					//_titulo.modificarCurrentNivel("General");
+					
+					if(g==0)
+					{
+						currentItem.ubicacionItem = 'Primero';
+						_titulo.data = currentItem;
+					}
+					else
+					{
+						
+						if((g+1) == arregroTitulosPorFamilia.length)
+						{
+							currentItem.ubicacionItem = 'Ultimo';
+						}
+						else
+						{
+							currentItem.ubicacionItem = 'Medio';
+						}
+						_titulo.data = currentItem;
+						
+					}
+					
+					if( !iniciaConteo )
+					{
+						grpImagenes.addElement(_titulo);
+					}
+					else
+					{
+						if( numItemsQueCaben > 0)
+						{
+							grpImagenes.addElement(_titulo);
+							numItemsQueCaben = numItemsQueCaben - 1;
+						}
+					}
+					
+					if(( arregroTitulosPorFamilia[g] as ConfiguracionPrecio ).titutloSeleccionado )
+					{
+						iniciaConteo = true;
+					}
+				}
+			}
+			
+			public function set recibeClienteSeleccionado($cli:Cliente):void
+			{
+				if( $cli == null )
+					return;
+				
+				if(!isNaN( $cli.idCliente) )
+				{
+					cli = ObjectUtil.copy($cli) as Cliente;
+				}
+			}
+			
+			private function familySort():void{
+				
+				var tempSort:ArrayCollection = new ArrayCollection();
+				
+				var filtrado:Query = new Query(arregroTitulosPorFamilia,["industria","tipo","subtipo","control"]);
+				var arrayIndustrial:ArrayCollection = new ArrayCollection(['Farma','Alimentos','Aguas','Clínico','Gobierno']);
+				
+				var arrayTipoFarma:ArrayCollection = new ArrayCollection(['Estandares','Reactivos','Publicaciones','Labware','Medicamentos','Asesorías','Capacitaciones']);
+				var arrayTipoAlimentos:ArrayCollection = new ArrayCollection(['Estandares','Reactivos','Labware','Diagnóstico','Publicaciones','Medicamentos','Asesorías','Capacitaciones']);
+				var arrayTipoAgua:ArrayCollection = new ArrayCollection(['Estandares','Reactivos','Labware','Pruebas de aptitud','Publicaciones','Medicamentos','Asesorías','Capacitaciones']);
+				
+				var arraySubtipo:ArrayCollection = new ArrayCollection(['Químico','Biológico']);
+				var arrayControl:ArrayCollection = new ArrayCollection(['Normal','Nacionales','Mundiales','Origen']);
+				
+				var punteros:Array = new Array;
+				var arrayTipo:ArrayCollection = new ArrayCollection;
+				
+				for (var i:int = 0; i < arrayIndustrial.length; i++ ){
+					if (arrayIndustrial[i] == 'Farma' || arrayIndustrial[i] == 'Clínico' || arrayIndustrial[i] == 'Gobierno' ){
+						arrayTipo = arrayTipoFarma;
+					}
+					else if(arrayIndustrial[i] == 'Alimentos'){
+						arrayTipo = arrayTipoAlimentos;
+					}
+					else{
+						arrayTipo = arrayTipoAgua;
+					}
+					for (var j:int = 0; j < arrayTipo.length; j++){
+						if (arrayTipo[j] == 'Estandares' || arrayTipo[j] == 'Reactivos'){
+							for (var k:int = 0; k < arraySubtipo.length; k++){
+								for (var l:int = 0; l < arrayControl.length; l++){
+									punteros = filtrado.getPunteros([arrayIndustrial[i],arrayTipo[j],arraySubtipo[k],arrayControl[l]],'industria');
+									tempSort.addAll(filtrado.armarLista(punteros));
+								}
+							}
+						}
+						else{
+							punteros = filtrado.getPunteros([arrayIndustrial[i],arrayTipo[j],null,null],'industria');
+							tempSort.addAll(filtrado.armarLista(punteros));
+						}
+					}
+				}
+				arregroTitulosPorFamilia = ObjectUtil.copy(tempSort) as ArrayCollection;
+			}
+			
+			public function  set escucharPeticionDeActualizarConfiguracionesCliente(event:EventoCatClientes_Oferta):void
+			{
+				if(event == null)
+				{
+					return;
+				}
+				_universoProductos = null;
+				_universoCostos = null;
+				_universoClasificaciones = null;
+				
+				if(_nivel == "Producto")
+				{
+					var eve:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.OBTENER_INFORMACION_OFERTA);
+					eve.idProveedor = _proveedor.idProveedor;
+					eve.idCliente = cli.idCliente;
+					eve.nivelIngreso = cli.nivelIngreso;
+					eve.idConfiguracion  = _configuracionSeleccionada.idConfiguracionPrecio;
+					dispatchEvent(eve); 
+				} 
+				else if(_nivel == "Clasificacion")
+				{
+					var obtenerTodasLasClasif:EventoCatClientes_Oferta = new EventoCatClientes_Oferta (EventoCatClientes_Oferta.OBTENER_CONFIGURACIONES_CLASIFICACION_CLIENTE);
+					obtenerTodasLasClasif.idConfiguracion = _configuracionSeleccionada.idConfiguracionPrecio;
+					obtenerTodasLasClasif.idCliente = cli.idCliente;
+					dispatchEvent(obtenerTodasLasClasif);
+				}
+				else // NIVELES GENERAL Y PRECIO LISTA 
+				{
+					var productosXCosto:EventoCatClientes_Oferta = new EventoCatClientes_Oferta (EventoCatClientes_Oferta.OBTENER_CONFIGURACIONES_PRECIO_COSTO_CLIENTE);
+					productosXCosto.idConfiguracion = _configuracionSeleccionada.idConfiguracionPrecio;
+					productosXCosto.idCliente = cli.idCliente;
+					productosXCosto.nivelIngreso = cli.nivelIngreso;
+					dispatchEvent(productosXCosto);
+				}
+			}
+			
+			private function llamadadeProductosParaExportar(evento:EventoCatClientes_Oferta):void
+			{
+				var eve:EventoCatClientes_Oferta = new EventoCatClientes_Oferta(EventoCatClientes_Oferta.OBTENER_INFORMACION_OFERTA_PRODUCTOS_EXPORTAR);
+				eve.idProveedor = _proveedor.idProveedor;
+				eve.idCliente = cli.idCliente;
+				eve.nivelIngreso = cli.nivelIngreso;
+				eve.idConfiguracion  = _configuracionSeleccionada.idConfiguracionPrecio;
+				dispatchEvent(eve); 	
+			}
+			
+			public function set recibeProductosparaExportar($productos:ArrayCollection):void
+			{
+				if(!$productos)
+					return;
+				
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Proveedor");
+				fila[2] = hoja.addItem("Tipo");
+				fila[3] = hoja.addItem("Subtipo");
+				fila[4] = hoja.addItem("Control");
+				fila[5] = hoja.addItem("Catalogo");
+				fila[6] = hoja.addItem("Producto");
+				fila[7] = hoja.addItem("Precio Lista");
+				fila[8] = hoja.addItem("Precio Proquifa");
+				fila[9] = hoja.addItem("Tiempo de Entrga");
+				
+				for(var i:int = 0; i < $productos.length; i++)
+				{
+					var currentProducto:ConfiguracionPrecioProducto = $productos[i] as ConfiguracionPrecioProducto;
+					fila = new Array();
+					fila[0] = '"' + (i + 1) + '"';
+					fila[1] = '"' + _proveedor.nombre + '"';
+					fila[2] = '"' + _configuracionSeleccionada.tipo + '"';
+					fila[3] = '"' + _configuracionSeleccionada.subtipo + '"';
+					fila[4] = '"' + _configuracionSeleccionada.control + '"';
+					fila[5] = '"' + currentProducto.producto.codigo.toString()+ '"';
+					fila[6] = '"' + currentProducto.producto.concepto + '"';
+					fila[7] = '"' + currentProducto.costoProducto + '"';
+					fila[8] = '"' + currentProducto.costoFactorProducto.precioUCliente + '"';
+					for(var r:int = 0; r< currentProducto.tiempoEntregaRuta.length;r++){
+						if(currentProducto.tiempoEntregaRuta[r].ruta == rutaClienteActual ){
+							fila[9] = '"' + currentProducto.tiempoEntregaRuta[r].requierePNo + '"';
+							break;
+						}
+						        
+						     
+					}
+					
+					
+					hoja.addItem('\r' + fila );
+				}
+				file.save(hoja,"PrecioProductos-"+_proveedor.nombre+"-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date) + ".csv");
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<s:Sine id="sineEasing" easeInFraction="0.3"/>
+		<s:Power id="powerEasing"  exponent="4"/>
+		<s:Move id="moveRight"  target="{grpImagenes}" easer="{powerEasing}"/>
+		<s:Move id="moveLeft"  target="{grpImagenes}" easer="{powerEasing}"/>
+	</fx:Declarations>
+	
+	
+	<s:HGroup width="100%" paddingTop="20" paddingLeft="20" paddingRight="20" verticalAlign="bottom" >
+		<label:TituloBankGothic_24 id="lblProveedor" />
+		<s:Spacer width="100%" />
+		<label:TituloBankGothic_24 id="lblSeccion" />
+	</s:HGroup>
+	<s:Spacer height="30"/>
+	<s:VGroup width="100%" height="135" verticalAlign="middle">
+		<s:Group width="100%" height="100%">
+			<s:Rect id="fondo" width="100%" height="100%" >
+				<s:filters>
+					<s:DropShadowFilter alpha="1" angle="90" blurX="0" blurY="7"
+										color="#424242" distance="1" hideObject="false" inner="false"
+										knockout="false" quality="3" strength="0.9"/>
+					<s:DropShadowFilter alpha="1" angle="270" blurX="0" blurY="7"
+										color="#424242" distance="1" hideObject="false" inner="false"
+										knockout="false" quality="3" strength="0.9"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="black" />
+				</s:fill> 
+			</s:Rect>
+			<s:HGroup width="100%" height="135" gap="0" verticalAlign="middle" id="grpNegro"  >
+				<s:Group width="170" height="135" mouseDown="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierdaDown}" id="btnIzquierdo" click="cambia('izquierda')"
+						 mouseOver="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierdaDown }" mouseOut="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierda}" >
+					<s:Image source="{ catalogoIconosBotoneras.getInstance().fondoBotonNegroGrande}" height="135" width="169"/>
+					<s:Image id="imgBotonI" source="{ catalogoIconosBotoneras.getInstance().flechasIzquierda }" horizontalCenter="15" verticalCenter="0" />
+				</s:Group>
+				<s:VGroup paddingTop="-4" width="83%" depth="-5000" id="grpPanel">
+					<s:Panel  width="100%" depth="-5000" id="pnlImagenes" borderVisible="false" borderAlpha="0" dropShadowVisible="false"  contentBackgroundAlpha="0" backgroundAlpha="0" 
+							  controlBarVisible="false" skinClass="skins.skin.panelSpark.PanelSinTitleBar"   >
+						<mx:Canvas width="100%" id="cnvPanel" borderAlpha="0" dropShadowVisible="false" contentBackgroundAlpha="0" backgroundAlpha="0" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+							<s:HGroup width="100%" verticalAlign="middle" id="grpImagenes" gap="-2" />
+						</mx:Canvas>
+						
+					</s:Panel>
+				</s:VGroup>
+				<s:Group width="170" height="135" mouseDown="{imgBotonD.source = catalogoIconosBotoneras.getInstance().flechasDerechaDown}"  id="btnDerecho" click="cambia('derecha')"
+						 mouseOver="{imgBotonD.source= catalogoIconosBotoneras.getInstance().flechasDerechaDown }" mouseOut="{imgBotonD.source= catalogoIconosBotoneras.getInstance().flechasDerecha}" >
+					<s:Image source="{ catalogoIconosBotoneras.getInstance().fondoBotonNegroGrande}" height="135" width="170"/>
+					<s:Image id="imgBotonD" source="{ catalogoIconosBotoneras.getInstance().flechasDerecha }" horizontalCenter="-15" verticalCenter="0"/>
+				</s:Group>
+			</s:HGroup>
+		</s:Group>
+	</s:VGroup>
+	<s:Scroller width="100%" height="100%" depth="-500">
+		<oferta:CatClientes_OfertaZonaTrab width="100%" id="grpZonaTrabajo"/>
+	</s:Scroller>
+</s:VGroup>

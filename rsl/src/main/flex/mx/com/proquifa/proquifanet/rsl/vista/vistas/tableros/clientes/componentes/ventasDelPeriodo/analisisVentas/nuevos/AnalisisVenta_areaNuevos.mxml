@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:altos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.altos.*"
+		  xmlns:nuevos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.nuevos.*"
+		  xmlns:todos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.todos.*"
+		  xmlns:hd="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.*"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" xmlns:evento="skins.botones.evento.*" 
+		  >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			public const CLIENTE_VISTA:String = "cliente";
+			public const ESAC_VISTA:String = "esac";
+			public const EV_VISTA:String = "ev";
+			
+			public var _currentVista:String = CLIENTE_VISTA;
+			public var _nivelSeleccionado:String = "TODOS";
+			
+			[Bindable]
+			private var vistaCliente:Boolean = true;
+			
+			private var _event:EventoTableroClientes;
+			private var _filtros:EventoTableroClientes;
+			private var _sql:Query;
+			
+			//GRID
+			private var bajosProvider:ArrayCollection;
+			
+			public function get filtros():EventoTableroClientes
+			{
+				return _filtros;
+			}
+			
+			public function set filtros(value:EventoTableroClientes):void
+			{
+				if (!value)
+					return;
+				
+				_filtros = value;
+				nuevosVista_ESAC.filtros = _filtros;
+				totalesClientes.filtros = _filtros;
+				grpEV.filtros = _filtros;
+			}
+			
+			public function set recibeListaResumenVentasTodosClientesNuevos($clientes:ArrayCollection):void
+			{
+				if(!$clientes)
+					return;
+				
+				_sql = new Query($clientes,["nivelIVista","usuarioVista","conceptoResultado","etiqueta"]);
+				hacerCalculosVistaCliente(); 
+			}
+			
+			private function hacerCalculosVistaCliente():void
+			{
+				
+				if(_sql.universo && _sql.universo.length > 0)
+				{
+					var punterosBajos:Array = _sql.getPunteros(["NUEVOS"]);
+					bajosProvider = setEvento(ObjectUtil.copy(_sql.armarLista(punterosBajos)) as ArrayCollection,punterosBajos);
+					
+					listNuevos.dataProvider = bajosProvider;
+					totalesClientes.calcularTotales(bajosProvider);
+				}
+				else
+				{
+					listNuevos.dataProvider = new ArrayCollection();
+					totalesClientes.calcularTotales(new ArrayCollection());
+				}
+			}
+			
+			public function setEvento($arreglo:ArrayCollection,$punteros:Array):ArrayCollection
+			{
+				if(_filtros)
+				{
+					var granTotal:Number = _sql.getSumarCampo("total",$punteros);
+					var granTotalAnterior:Number = _sql.getSumarCampo("montoAnterior",$punteros);	
+					Util.sortArray($arreglo,"total",true);
+					
+					for (var u:int=0; u < $arreglo.length; u++)
+					{
+						var temp:ResumenConsulta = $arreglo[u];
+						if(u == ($arreglo.length-1))
+							temp.nivelI = "ultimo";
+						temp.eventoTabClientes = _filtros;
+						temp.numFila = (u+1);
+						temp.porcentaje = ((temp.total * 100)/granTotal);
+						temp.porcentaje2 = ((temp.montoAnterior * 100)/granTotalAnterior);
+					}
+				}
+				return $arreglo;
+			}
+			
+			
+			protected function cambioVista(event:Event):void
+			{
+				_currentVista = checkBusqueda.selected;
+				selecionarVista();
+				
+				if (_currentVista == ESAC_VISTA)
+					lblTitulo.text="NUEVOS";
+				else if (_currentVista == CLIENTE_VISTA)
+					lblTitulo.text = _nivelSeleccionado == "TODOS" ? "NUEVOS":_nivelSeleccionado;
+				else if (_currentVista == EV_VISTA)
+					lblTitulo.text="NUEVOS";
+				
+				var evt:EventoTableroClientes = new EventoTableroClientes(EventoTableroClientes.CAMBIOS_GRAFICA_NUEVOS);
+				evt.currentVista = _currentVista;
+				dispatchEvent(evt);
+			}
+			
+			private function selecionarVista():void
+			{
+				if (_currentVista == ESAC_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = false;
+					nuevosVista_ESAC.visible = nuevosVista_ESAC.includeInLayout = true;
+					grpEV.visible = grpEV.includeInLayout = false;
+				}
+				else if(_currentVista == CLIENTE_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = true;
+					nuevosVista_ESAC.visible = nuevosVista_ESAC.includeInLayout = false;					
+					grpEV.visible = grpEV.includeInLayout = false;
+				} 
+				else if(_currentVista == EV_VISTA)
+				{
+					grpClientes.visible = grpClientes.includeInLayout = false;
+					nuevosVista_ESAC.visible = nuevosVista_ESAC.includeInLayout = false;
+					grpEV.visible = grpEV.includeInLayout = true;
+				} 
+			}
+			
+			protected function btnExportar_clickHandler(event:MouseEvent):void
+			{
+				
+				if (_currentVista == CLIENTE_VISTA)
+					exportarCliente();
+				else if (_currentVista == ESAC_VISTA)
+					exportarEsac();
+				else if (_currentVista == EV_VISTA)
+					exportarEv();
+				
+			}
+			
+			
+			private function exportarEsac():void {
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("ESAC");
+				fila[2] = hoja.addItem("$ FPAc");
+				fila[3] = hoja.addItem("% FPAc");
+				fila[4] = hoja.addItem("FP Diferencia");
+				fila[5] = hoja.addItem("$ FPAnt");
+				fila[6] = hoja.addItem("% FPAnt");
+				fila[7] = hoja.addItem("$ OF");
+				fila[8] = hoja.addItem("% OF");
+				fila[9] = hoja.addItem("$ OD");
+				fila[10] = hoja.addItem("% OD");
+				fila[11] = hoja.addItem("PF");
+				fila[12] = hoja.addItem("PV");
+				fila[13] = hoja.addItem("");
+				fila[14] = hoja.addItem("");
+				fila[15] = hoja.addItem("");
+				fila[16] = hoja.addItem("Clientes");
+				fila[17] = hoja.addItem("Carteras");
+				
+				var data:ArrayCollection = nuevosVista_ESAC.listEsac.dataProvider as ArrayCollection;
+				
+				for(var i:int = 0; i < data.length; i++){
+					var fecha:Date = new Date();
+					var promActual:Number;
+					
+					if(data[i].eventoTablero.parametros.periodo == "Anual" )
+					{ 
+						if (data[i].eventoTablero.parametros.anio == fecha.getFullYear())
+						{
+							promActual =(data[i].ventaNuevos/ UtilsFormatosNumericos.getMesesTrabajados());
+						}
+						else
+						{
+							promActual =(data[i].ventaNuevos/data[i].eventoTablero.parametros.rangoMaxMes);
+						}
+					}				
+					
+					var difOF:Number = 0;
+					var difOD:Number = 0;
+					var valDist1:Number = 0;
+					var valDist2:Number = 0;
+					var valDist3:Number = 0;
+					var _valPV:Number = promActual * data[i].eventoTablero.parametros.rangoMaxMes;
+					
+					if (data[i].totalNuevos_ant != 0 ) {
+						difOF = ((data[i].objFun_TotalNuevos/data[i].totalNuevos_ant)-1)*100;
+						difOD = ((data[i].objFun_TotalNuevos/data[i].totalNuevos_ant)-1)*100;
+						valDist1 = ((_valPV/data[i].totalNuevos_ant)-1)*100;
+					}
+					if (data[i].objFun_TotalNuevos != 0)
+						valDist2 = ((_valPV/data[i].objFun_TotalNuevos)-1)*100;
+					
+					if (data[i].objDes_TotalNuevos != 0)
+						valDist3 = ((_valPV/data[i].objDes_TotalNuevos)-1)*100;
+					
+					fila = new Array();
+					fila[0] = i + 1;
+					fila[1] = '"' + data[i].conceptoResultado + "..." + data[i].industria.toUpperCase() + " · " + data[i].ruta.toUpperCase() + '"';
+					fila[2] = '"' + data[i].ev + '"';
+					fila[3] = '"' + data[i].usuario + '"';
+					fila[4] = '"' + data[i].cobrador + '"';
+					fila[5] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].total) + '"';
+					fila[6] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].porcentaje)+" %" + '"';
+					if (isNaN(data[i].montoAnterior) || data[i].montoAnterior == 0)
+						fila[7] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].total) +"%" + '"';
+					else
+						fila[7] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(((data[i].total/data[i].montoAnterior)-1)*100) +"%" + '"';
+					fila[8] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].montoAnterior) + '"';
+					fila[9] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].porcentaje2)+" %" + '"';
+					fila[10] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].monto2) + '"';
+					fila[11] = '"' + UtilsFormatosNumericos.precisionADosDecimales(difOF)+" %" + '"';
+					fila[12] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].monto) + '"';
+					fila[13] = '"' +  UtilsFormatosNumericos.precisionADosDecimales(difOD)+" %" + '"';
+					fila[14] = '"' + "$ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas(promActual) + '"';
+					fila[15] = '"' + "$ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas(_valPV) + '"';
+					fila[16] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist1)+"%" + '"';
+					fila[17] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist2)+"%" + '"';
+					fila[18] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist3)+"%" + '"';
+					hoja.addItem('\r' + fila);
+				}
+				
+				
+				file.save(hoja, "VentasPeriodo_Nuevos_Esac_" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+			}
+			
+			private function exportarCliente():void {
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Cartera Clientes");
+				fila[2] = hoja.addItem("EV");
+				fila[3] = hoja.addItem("ESAC");
+				fila[4] = hoja.addItem("Cobrador");
+				fila[5] = hoja.addItem("$ FPAc");
+				fila[6] = hoja.addItem("% FPAc");
+				fila[7] = hoja.addItem("FP Diferencia");
+				fila[8] = hoja.addItem("$ FPAnt");
+				fila[9] = hoja.addItem("% FPAnt");
+				fila[10] = hoja.addItem("$ OF");
+				fila[11] = hoja.addItem("% OF");
+				fila[12] = hoja.addItem("$ OD");
+				fila[13] = hoja.addItem("% OD");
+				fila[14] = hoja.addItem("PF");
+				fila[15] = hoja.addItem("PV");
+				fila[16] = hoja.addItem("");
+				fila[17] = hoja.addItem("");
+				fila[18] = hoja.addItem("");
+				
+				var data:ArrayCollection = listNuevos.dataProvider as ArrayCollection;
+				
+				for(var i:int = 0; i < data.length; i++){
+					var promActual:Number;
+					var fecha:Date = new Date();
+					if(data[i].eventoTabClientes.parametros.periodo == "Anual" )
+					{ 
+						if (data[i].eventoTabClientes.parametros.anio == fecha.getFullYear())
+						{
+							promActual =(data[i].total/ UtilsFormatosNumericos.getMesesTrabajados());
+						}
+						else
+						{
+							promActual =(data[i].total/data[i].eventoTabClientes.parametros.rangoMaxMes);
+						}
+					}		
+					
+					var difOF:Number = 0;
+					var difOD:Number = 0;
+					var valDist1:Number = 0;
+					var valDist2:Number = 0;
+					var valDist3:Number = 0;
+					var _valPV:Number = promActual * data[i].eventoTabClientes.parametros.rangoMaxMes;
+					
+					if (data[i].montoAnterior != 0 ) {
+						difOF = ((data[i].monto2/data[i].montoAnterior)-1)*100;
+						difOD = ((data[i].monto/data[i].montoAnterior)-1)*100;
+						valDist1 = ((_valPV/data[i].montoAnterior)-1)*100;
+					}
+					if (data[i].monto2 != 0)
+						valDist2 = ((_valPV/data[i].monto2)-1)*100;
+					
+					if (data[i].monto != 0)
+						valDist3 = ((_valPV/data[i].monto)-1)*100;
+					
+					fila = new Array();
+					fila[0] = i + 1;
+					fila[1] = '"' + data[i].conceptoResultado + "..." + data[i].industria.toUpperCase() + " · " + data[i].ruta.toUpperCase() + '"';
+					fila[2] = '"' + data[i].ev + '"';
+					fila[3] = '"' + data[i].usuario + '"';
+					fila[4] = '"' + data[i].cobrador + '"';
+					fila[5] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].total) + '"';
+					fila[6] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].porcentaje)+" %" + '"';
+					if (isNaN(data[i].montoAnterior) || data[i].montoAnterior == 0)
+						fila[7] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].total) +"%" + '"';
+					else
+						fila[7] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(((data[i].total/data[i].montoAnterior)-1)*100) +"%" + '"';
+					fila[8] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].montoAnterior) + '"';
+					fila[9] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].porcentaje2)+" %" + '"';
+					fila[10] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].monto2) + '"';
+					fila[11] = '"' + UtilsFormatosNumericos.precisionADosDecimales(difOF)+" %" + '"';
+					fila[12] = '"' + "$ "+UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].monto) + '"';
+					fila[13] = '"' +  UtilsFormatosNumericos.precisionADosDecimales(difOD)+" %" + '"';
+					fila[14] = '"' + "$ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas(promActual) + '"';
+					fila[15] = '"' + "$ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas(_valPV) + '"';
+					fila[16] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist1)+"%" + '"';
+					fila[17] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist2)+"%" + '"';
+					fila[18] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist3)+"%" + '"';
+					hoja.addItem('\r' + fila);
+				}
+				
+				
+				file.save(hoja, "VentasPeriodo_Nuevos_Clientes_" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+			}
+			
+			private function exportarEv():void {
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("ESAC");
+				fila[2] = hoja.addItem("$ FPAc");
+				fila[3] = hoja.addItem("% FPAc");
+				fila[4] = hoja.addItem("FP Diferencia");
+				fila[5] = hoja.addItem("$ FPAnt");
+				fila[6] = hoja.addItem("% FPAnt");
+				fila[7] = hoja.addItem("$ OF");
+				fila[8] = hoja.addItem("% OF");
+				fila[9] = hoja.addItem("$ OD");
+				fila[10] = hoja.addItem("% OD");
+				fila[11] = hoja.addItem("PF");
+				fila[12] = hoja.addItem("PV");
+				fila[13] = hoja.addItem("");
+				fila[14] = hoja.addItem("");
+				fila[15] = hoja.addItem("");
+				fila[16] = hoja.addItem("Clientes");
+				fila[17] = hoja.addItem("Carteras");
+				
+				var data:ArrayCollection = grpEV.listEsac.dataProvider as ArrayCollection;
+				
+				for(var i:int = 0; i < data.length; i++){
+					var fecha:Date = new Date();
+					var promActual:Number;
+					
+					if(data[i].eventoTablero.parametros.periodo == "Anual" )
+					{ 
+						if (data[i].eventoTablero.parametros.anio == fecha.getFullYear())
+						{
+							promActual =(data[i].ventaNuevos/ UtilsFormatosNumericos.getMesesTrabajados());
+						}
+						else
+						{
+							promActual =(data[i].ventaNuevos/data[i].eventoTablero.parametros.rangoMaxMes);
+						}
+					}				
+					
+					var difOF:Number = 0;
+					var difOD:Number = 0;
+					var valDist1:Number = 0;
+					var valDist2:Number = 0;
+					var valDist3:Number = 0;
+					var _valPV:Number = promActual * data[i].eventoTablero.parametros.rangoMaxMes;
+					
+					if (data[i].totalNuevos_ant != 0 ) {
+						difOF = ((data[i].objFun_TotalNuevos/data[i].totalNuevos_ant)-1)*100;
+						difOD = ((data[i].objFun_TotalNuevos/data[i].totalNuevos_ant)-1)*100;
+						valDist1 = ((_valPV/data[i].totalNuevos_ant)-1)*100;
+					}
+					if (data[i].objFun_TotalNuevos != 0)
+						valDist2 = ((_valPV/data[i].objFun_TotalNuevos)-1)*100;
+					
+					if (data[i].objDes_TotalNuevos != 0)
+						valDist3 = ((_valPV/data[i].objDes_TotalNuevos)-1)*100;
+					
+					fila = new Array();
+					fila[0] = i + 1;
+					fila[1] = '"' + data[i].esac + '"';
+					fila[2] = '"' + "$ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(data[i].ventaNuevos) + '"';
+					fila[3] = '"' + porciento(data[i].distribucionNuevos) + '"';
+					fila[4] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas((data[i].ventaNuevos/(data[i].totalNuevos_ant)-1)*100) +"%" + '"';
+					fila[5] = '"' + moneda(data[i].totalNuevos_ant) + '"';
+					fila[6] = '"' + porciento(data[i].distribucionNuevos_ant) + '"';
+					fila[7] = '"' + moneda(data[i].objFun_TotalNuevos) + '"';
+					fila[8] = '"' + porciento(difOF) + '"';
+					fila[9] = '"' + moneda(data[i].objDes_TotalNuevos) + '"';
+					fila[10] = '"' + porciento(difOD) + '"';
+					fila[11] = '"' + moneda(promActual) + '"';
+					fila[12] = '"' + moneda(_valPV) + '"';
+					fila[13] = '"' +  UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist1)+"%" + '"';
+					fila[14] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist2)+"%" + '"';
+					fila[15] = '"' + UtilsFormatosNumericos.precisionADosDecimalesConComas(valDist3)+"%" + '"';
+					fila[16] = '"' + (data[i].clientesNuevos).toString()+" clientes" + '"';
+					fila[17] = '"' + (data[i].carterasNuevos).toString() + '"';
+					hoja.addItem('\r' + fila);
+				}
+				
+				
+				file.save(hoja, "VentasPeriodo_Nuevos_Ev_" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+			}
+			
+			private function porciento($numero:Number):String
+			{
+				return UtilsFormatosNumericos.precisionADosDecimales($numero)+" %";
+			}
+			
+			private function moneda($numero:Number):String
+			{
+				return "$ "+ UtilsFormatosNumericos.precisionADosDecimalesConComas($numero);;
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup id="grpContenedorPrincipal" width="100%" height="57"  paddingLeft="20" paddingRight="20" verticalAlign="middle" >
+		<label:Titulo_22_pTop10 id="lblTitulo" text="NUEVOS" paddingTop="15"/>
+		<s:HGroup width="30" height="30" paddingTop="5" >
+			<evento:botonColoresConImagenEventoDefault id="btnExportar" icono="exportarEvento" color="0x{catalogoColores.BTN_VERDE_AZUL}"  width="30" height="30" click="btnExportar_clickHandler(event)" toolTip="Exportar"/>
+		</s:HGroup>
+		<s:Spacer width="100%" />
+		<s:VGroup height="50" width="220" paddingTop="7" >
+			<hd:switchVentasPeriodo id="checkBusqueda" width="100%" height="100%" click="cambioVista(event)"/>
+		</s:VGroup>
+	</s:HGroup>
+	
+	<!-- /////////////// ESTA ES LA PARTE DE CLIENTES  ///////////////  -->
+	<s:VGroup id="grpClientes" width="100%" height="100%">
+		<s:VGroup width="100%" height="100%" gap="0">
+			
+			<hd:AV_Header_Clientes width="100%" />
+			<s:List id="listNuevos" borderVisible="false" width="100%" height="100%"
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.altos.IR_AnalisisVentas_Altos_Clientes" />
+		</s:VGroup>
+		<altos:Totales_Altos_Clientes id="totalesClientes" width="100%" />
+	</s:VGroup>
+	
+	<!-- /////////////// ESTA ES LA PARTE DE ESAC  ///////////////  -->
+	<nuevos:AnalisisVenta_areaNuevos_ESAC id="nuevosVista_ESAC" width="100%" height="100%" visible="false" includeInLayout="false" />
+	
+	<!-- /////////////// ESTA ES LA PARTE DE EV   ///////////////  -->
+	<nuevos:AnalisisVenta_areaNuevos_EV id="grpEV" width="100%" height="100%" visible="false" includeInLayout="false" />
+	
+</s:VGroup>

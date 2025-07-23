@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" creationComplete="init();" xmlns:label="skins.skin.label.*">
+	<mx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoVerificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Accion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.controls.Alert;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			
+			public var totalPendientes:int;
+			[Bindable]
+			public var Acciones:ArrayCollection =  new ArrayCollection();
+			
+			[Bindable]
+			public var DatosGrafica:ArrayCollection = new ArrayCollection();
+			
+			public var usuario:String = "";
+			
+			private var consumidorVerificacion:Consumer = new Consumer();
+			private var canalVerificacion:AMFChannel;
+			private var canalesVerificacion:ChannelSet;
+			
+			private function init():void{
+				this.consumidorVerificacion.destination = "actualizacionService";
+				this.consumidorVerificacion.addEventListener("fault",falloconsumidor);
+				this.consumidorVerificacion.addEventListener(MessageEvent.MESSAGE,actualizar);
+				this.canalVerificacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesVerificacion = new ChannelSet();
+				this.canalesVerificacion.addChannel(canalVerificacion);
+				this.consumidorVerificacion.channelSet = this.canalesVerificacion;
+				this.consumidorVerificacion.subscribe();
+				this.usuario = parentApplication.datosUsuarioLogueado.usuario;
+				traeracciones();
+			}
+			
+			private function falloconsumidor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Consumidor de verificación","Error");
+			}
+			
+			
+			private function actualizar(mensaje:MessageEvent):void{
+				if(mensaje.message.headers["Destino"] == "Verificacion" && mensaje.message.headers["Usuario"] == this.usuario){
+					this.traeracciones();
+				}
+			}
+			
+			private function traeracciones():void{
+				var evento:EventoVerificacion = new EventoVerificacion(EventoVerificacion.TRAER_VERIFICACION);
+				evento._accion = new Accion();
+				//evento._accion.incidente = 60;
+				evento._usuario = this.usuario;
+				this.dispatchEvent(evento);
+				/*var evento:EventoAccion = new EventoAccion(EventoAccion.OBTENER_ACCION);
+				evento._accion = new Accion();
+				//evento._accion.incidente = 60;
+				evento._accion.idAccion = 4;
+				this.dispatchEvent(evento);*/
+			}
+			
+			public function set recibir_Acciones(_Acciones:ArrayCollection):void{
+				this.totalPendientes = 0;
+				this.Acciones = new ArrayCollection();
+				this.DatosGrafica = new ArrayCollection();
+				//var fechaactual:Date = new Date();
+				if(_Acciones.length != 0){
+					this.Acciones = _Acciones;
+					var atiempo:Object = {};
+					var fueradetiempo:Object = {};
+					atiempo["valor"] = 0;
+					fueradetiempo["valor"] = 0;
+					for(var m:int = 0; m<this.Acciones.length;m++){
+						this.Acciones[m].diasAtraso > 0 ? fueradetiempo.valor = fueradetiempo.valor + 1 : atiempo.valor = atiempo.valor + 1 ;
+						//this.Acciones[m].fecha >= fechaactual ? atiempo.valor = atiempo.valor + 1 : fueradetiempo.valor = fueradetiempo.valor + 1;
+					}
+					atiempo["label"] = "Total de pendientes En tiempo ( " + atiempo.valor + " )";
+					fueradetiempo["label"] = "Total de pendientes Fuera de tiempo ( " + fueradetiempo.valor + " )";
+					this.DatosGrafica.addItem(atiempo);
+					this.DatosGrafica.addItem(fueradetiempo);
+					this.totalPendientes = atiempo.valor + fueradetiempo.valor;
+					//se encoge la tabla y crece la grafica. 
+					this.dtgPoderacion.percentHeight = 50;
+					this.spcr.percentHeight = 1;	
+					this.vbxGrafica.percentHeight = 50
+				}else{
+					this.dtgPoderacion.percentHeight = 100;
+					this.spcr.percentHeight = 0;	
+					this.vbxGrafica.height = 0;
+				}
+			}
+			
+			/* public function formatofecha(item:Object, column:DataGridColumn):String{
+				var fecha:String = "";
+				if( item[column.dataField] == null){
+					return "NA";
+				}
+				fecha = this.validadorfecha.format(item[column.dataField]);
+				return fecha;
+			} */
+			
+			/* public function porcentaje(item:Object,colum:DataGridColumn):String{
+				return item[colum.dataField].toString() + "%";
+			} */
+			
+			
+			
+			/*public function consecutivos(item:Object,column:DataGridColumn):String{
+			var consecutivo:String = "";
+			if((item.idAccion != 0) && (item.idAccion != anterior)){
+			this.anterior = item.idAccion;
+			this.consecutivogrid = this.consecutivogrid + 1;
+			consecutivo= this.consecutivogrid.toString();
+			}
+			else{
+			consecutivo = this.consecutivogrid.toString();
+			}
+			return consecutivo;
+			}*/
+			
+			
+			/**
+			 * Metodo usado para darle formato a los DATATIPS del la grafica del Pie (en tiempo y fuera de tiempo)
+			 */ 
+			public function dtFunc(hd:HitData):String {
+				var porcentaje:Number = new Number;
+				porcentaje = (hd.item.valor * 100 ) /this.totalPendientes;
+				if( hd.item.label.substring(0,35) == "Total de pendientes Fuera de tiempo"){
+					return 	"<B>Fuera de Tiempo:</B> "+ porcentaje + "<B>%</B>" + "<BR>" +"<B>No. de pendientes:</B> "+ hd.item.valor + "<BR>";
+				}else{
+					return 	"<B>En Tiempo:</B> "+ porcentaje + "<B>%</B>" + "<BR>" +"<B>No. de pendientes:</B> "+ hd.item.valor + "<BR>";
+				}
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:SolidColor id="sc1" color="0x32CD32"/>
+	<mx:SolidColor id="scPorCobrar" color="0xFF0000"/>
+	<mx:SeriesInterpolate id="interpolarpiechart" duration="1000" />
+	<mx:DateFormatter id="validadorfecha" formatString="DD/MMM/YYYY"/> 
+	<mx:VBox width="100%" height="100%" verticalGap="0">
+		<mx:DataGrid  dataProvider="{this.Acciones}" height="100%" id="dtgPoderacion" rowCount="10" width="100%" textAlign="center">
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" dataField="numFila"/>
+				<mx:DataGridColumn headerText="INC" dataField="incidenteFolio"/>
+				<mx:DataGridColumn headerText="Folio" dataField="folio"/>
+				<mx:DataGridColumn headerText="En espera desde" dataField="enEsperaDesdeFormato"/>
+				<mx:DataGridColumn headerText="FER" dataField="fechaEstimadaRealizacionFormato" />
+				<mx:DataGridColumn headerText="FR" dataField="fechaRealizacionFormato" />
+				<mx:DataGridColumn headerText="Días de atraso" dataField="diasAtraso" />
+				<mx:DataGridColumn headerText="Programó" dataField="nombreProgramo"/>
+				<mx:DataGridColumn headerText="Tipo" dataField="tipo"/>
+				<mx:DataGridColumn headerText="Eficacia esperada" dataField="eficaciaFormato" />
+				<mx:DataGridColumn headerText="" dataField="idAccion">
+					<mx:itemRenderer>
+						<mx:Component>
+							<mx:LinkButton  textDecoration="underline" color="#0C4AFC" label="Verificar" click="ejecutar()">
+								<mx:Script>
+									<![CDATA[
+										import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoVerificacion;
+										import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Accion;
+										private function ejecutar():void{
+											var evento:EventoVerificacion = new EventoVerificacion(EventoVerificacion.OBTENER_VERIFICACION);
+											evento._accion = data as Accion;
+											evento._usuario = this["outerDocument"].usuario;
+											//evento._usuario = 
+											dispatchEvent(evento);
+										}
+									]]>
+								</mx:Script>
+							</mx:LinkButton>
+						</mx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:Spacer height="0" id="spcr"/>
+		<mx:VBox width="100%" height="0" borderStyle="solid" id="vbxGrafica">
+			<!--<mx:Label text="Tasa de espera" fontSize="20" width="100%" paddingTop="10" paddingLeft="10"/>-->
+			<label:labelSubtitulo text="Tasa de espera" paddingTop="10" paddingLeft="10"/>
+			<mx:PieChart showDataTips="true" dataProvider="{this.DatosGrafica}" height="100%" width="100%" id="piechart1" dataTipFunction="dtFunc">
+				<mx:series>
+					<mx:PieSeries  showDataEffect="{interpolarpiechart}" displayName="Incidentes" field="valor" nameField="label" labelPosition="callout"  labelField= "label"  fills="{[sc1, scPorCobrar]}" />
+				</mx:series>
+			</mx:PieChart>
+		</mx:VBox>
+	</mx:VBox>
+	<!--<mx:Legend dataProvider="{piechart1}"/>-->
+</mx:VBox>

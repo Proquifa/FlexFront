@@ -1,0 +1,727 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:contenedores="skins.skin.contenedores.*"
+		  xmlns:otros="skins.otros.*"
+		  paddingLeft="-6" depth="-1"
+		  creationComplete="Inicio(event)" xmlns:pqNet="skins.botones.pqNet.*" xmlns:textinput="skins.skin.textinput.*" xmlns:coverflowpqnet="mx.com.proquifa.proquifanet.rsl.vista.vistas.comun.coverflowpqnet.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.agenteAduanal.EventoCatAgenteAduanalGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoAuxiliarEnLaActualizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoCatProOferta;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.tecnicos.EventoCatProClasificacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAConfigPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.agenteAduanal.itemRenderer.operativos.CatAgenteIR_TituloAnimados;
+			import mx.events.EffectEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			public var _familias:ArrayCollection;
+			public var _fechasFua:Array;
+			public var _idAgente:Number;
+			
+			private var _indiceSeleccionado:int;
+			private var arregroTitulosPorFamilia:ArrayCollection;
+			private var numeroDeConfifuracionSeleccionada:uint;
+			private var currentItemSelected:int;
+			private var _primerResize:Boolean = true;
+			public var insercionMinimo:Boolean = false;
+			public var numeroSeleccionado:Number;
+			private var _agenteAduanal:AgenteAduanal;
+			private var contDes:Boolean;
+			[Bindable] private var itemSeleccionado:ConfiguracionPrecio;
+			[Bindable] private var agenteAsociado:ArrayCollection;
+			
+			
+			protected function Inicio(event:FlexEvent):void
+			{
+				addEventListener( EventoCatAgenteAduanalGeneral.HACER_INSERCION, insertar,false,0,true);
+				addEventListener( ResizeEvent.RESIZE, recibeResize,false,0,true );	
+				addEventListener( EventoCatAgenteAduanalGeneral.RECORRE_TITULO_SELECCIONADO, mueveTitulos,false,0,true );
+				
+				addEventListener( EventoCatProClasificacion.CAMBIA_NIVEL_EN_VISTA_CLASIFICACION, cambiarNivelesDeVista,false,0,true );
+				cmpCoverflow.vista = "clasificacion";
+			}
+			
+			private var currentWidth:Number;
+			private function recibeResize($evt:ResizeEvent):void
+			{
+				if(currentWidth != $evt.oldWidth)
+				{
+					setTimeout( acomoda, 130 );
+					currentWidth = $evt.oldWidth;
+				}
+			}
+			
+			private function acomoda():void
+			{
+				/*if( arregroTitulosPorFamilia != null && arregroTitulosPorFamilia.length > 0)
+				{
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				}
+				
+				grpImagenes.x = ( cnvPanel.width/2 ) -120;
+				moveLeft.stop();
+				moveLeft.duration = 0;
+				moveLeft.xBy = -178 * _indiceSeleccionado;
+				moveLeft.play();
+				_primerResize = false;*/
+			}
+			
+			public function insertar($eve:EventoCatAgenteAduanalGeneral):void
+			{
+				var eve:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.GUARDAR_MIN_MAX);
+				eve.aacp = $eve.aacp;
+				eve.aacp.minimoOC = $eve.aacp.minimoOC;
+				eve.aacp.maximoOC = $eve.aacp.maximoOC;
+				eve.aacp.idAgenteAduanal = $eve.idAgente;
+				eve.aacp.asociar = true;
+				
+				if (eve.aacp.idAgenteAConfigPrecio == 0)
+				{
+				eve.ventana = "CatAgenteAduanal_Marcas nuevo( idAgente:"+$eve.idAgente+", idProveedor:"+itemSeleccionado.idProveedor+
+					", idAAConfiguracionPrecio:"+eve.aacp.idAgenteAConfigPrecio+", idConfiguracionPrecio:"+eve.aacp.idConfigPrecio+" )";
+				}
+				else
+				{
+				eve.ventana = "CatAgenteAduanal_Marcas ( idAgente:"+$eve.idAgente+", idProveedor:"+itemSeleccionado.idProveedor+
+					", idAAConfiguracionPrecio:"+eve.aacp.idAgenteAConfigPrecio+", idConfiguracionPrecio:"+eve.aacp.idConfigPrecio+" )";
+				}
+				dispatchEvent( eve );
+				
+				
+			}
+			
+			public function set recibeFamilias( $familias:ArrayCollection):void{
+				if (!$familias.length > 0)
+				{
+					arregroTitulosPorFamilia = new ArrayCollection();
+					/*grpImagenes.removeAllElements();*/
+					menuBotones.visible = false;
+					grpInfoMin.visible = grpInfoMin.includeInLayout = false;
+					listaAgentesAsociados.visible = listaAgentesAsociados.includeInLayout = false;
+					
+					return;
+				}
+				
+				
+				if (insercionMinimo){
+					_indiceSeleccionado = numeroSeleccionado;
+				}
+				else{
+					_indiceSeleccionado = 0;
+				}
+				
+				
+				var ultimo:Object = new Object();
+				var tempFam:ArrayCollection = new ArrayCollection();
+				ultimo.etiqueta = 'ultimo';
+				ultimo.tipo = 'ultimo';
+				menuBotones.visible = true;
+				listaAgentesAsociados.visible = listaAgentesAsociados.includeInLayout = true;
+				hideTipoCambio.play();
+				arregroTitulosPorFamilia = $familias;
+				//cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				
+				if (insercionMinimo){
+					numeroDeConfifuracionSeleccionada = numeroSeleccionado;
+					(arregroTitulosPorFamilia[numeroSeleccionado] as ConfiguracionPrecio).titutloSeleccionado = true;
+				}
+				else
+				{
+					numeroDeConfifuracionSeleccionada = 0;
+					(arregroTitulosPorFamilia[0] as ConfiguracionPrecio).titutloSeleccionado = true;
+				}
+				
+				
+				if ($familias == null || $familias.length == 0) {
+					var arra:ArrayCollection = new ArrayCollection();
+					ultimo.total = 0;
+					arra.addItem(ultimo);
+					//lstFamiliaProductos.dataProvider = arra;
+					//	this.lbltotal.text = '0 Familias';
+					return;
+				}
+				_fechasFua = new Array();
+				for (var i:Number=0;i<$familias.length; i++)
+				{
+					($familias[i] as ConfiguracionPrecio).numeroFam = i+1;
+					($familias[i] as ConfiguracionPrecio).numFila = i;
+					if(($familias[i] as ConfiguracionPrecio).aacp.fua != null)
+						_fechasFua.push(($familias[i] as ConfiguracionPrecio).aacp.fua);
+				}
+				ultimo.total = $familias.length;
+				_fechasFua.sort(ordenarFechas);
+				tempFam = ObjectUtil.copy($familias) as ArrayCollection;
+				tempFam.addItem(ultimo);
+				_familias = tempFam;
+				/* 	lstFamiliaProductos.dataProvider = new ArrayCollection();
+				lstFamiliaProductos.dataProvider = _familias; */
+				
+				
+				/*btnIzquierdo.enabled = false;
+				
+				if( arregroTitulosPorFamilia.length == 1 )
+				{
+					btnDerecho.enabled = false;	
+				}
+				else if( arregroTitulosPorFamilia.length > 1 )
+				{
+					btnDerecho.enabled = true;
+				}*/
+				acomoda();
+				//setTimeout( acomodaTodasLasFamilias, 50 );
+				
+				
+				
+				var evento:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.ENVIA_FUA_MARCAS_VISTA);
+				evento.aacp = new AgenteAConfigPrecio();
+				evento.aacp.fua = _fechasFua.length > 0 ? _fechasFua[0] : null;
+				dispatchEvent(evento);
+				
+				cmpCoverflow.recibeFamilias(arregroTitulosPorFamilia);
+				cmpCoverflow.vista = "clasificacion";
+			}
+			
+			private function ordenarFechas(a:Date, b:Date):int
+			{
+				if(a.time > b.time)
+					return -1;
+				else if(a.time == b.time)
+					return 0;
+				else
+					return 1;
+			}
+			
+			
+			private function cambia( $sentido:String, totalmovimientos:int = 1 ):void
+			{
+				hideTipoCambio.play();
+				
+				$sentido == 'izquierda' ?   _indiceSeleccionado = _indiceSeleccionado - 1 : _indiceSeleccionado = _indiceSeleccionado + 1;
+				/*_indiceSeleccionado == 0 ? btnIzquierdo.enabled = false : btnIzquierdo.enabled = true;
+				_indiceSeleccionado == arregroTitulosPorFamilia.length - 1 ? btnDerecho.enabled = false : btnDerecho.enabled = true;*/
+				
+				for( var m:int = 0; m < arregroTitulosPorFamilia.length; m++ )
+				{
+					( arregroTitulosPorFamilia[m] as ConfiguracionPrecio ).animacion = false;	
+				}
+				
+				for( var r:int = 0; r < arregroTitulosPorFamilia.length; r++ )
+				{
+					( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).titutloSeleccionado = false;
+					if( ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).numFila == _indiceSeleccionado )
+					{
+						( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).titutloSeleccionado = true;	
+						( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).animacion = true;
+						
+						if( $sentido == 'derecha' )
+						{ //se mueve a la izquierda se anima el de la derecha
+							( arregroTitulosPorFamilia[r-1] as ConfiguracionPrecio ).animacion = true;
+						}
+						else
+						{
+							( arregroTitulosPorFamilia[r+1] as ConfiguracionPrecio ).animacion = true;
+						}
+						numeroDeConfifuracionSeleccionada = ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).numFila;
+						currentItemSelected = ( arregroTitulosPorFamilia[r] as ConfiguracionPrecio ).idConfiguracionPrecio;
+					}
+				}
+				
+				
+				if( $sentido == 'izquierda' )
+				{
+					/*moveRight.stop();
+					moveRight.duration = 500;
+					moveRight.xBy = 178 * totalmovimientos;
+					moveRight.play();*/
+					
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+					
+					/*grpImagenes.x = ( cnvPanel.width/2 ) -120;*/
+					/*moveRight.stop();
+					moveRight.duration = 0;
+					moveRight.xBy = -178 * _indiceSeleccionado;
+					moveRight.play();
+					_primerResize = false;*/
+					
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				}else{
+					
+					/*moveLeft.stop();
+					moveLeft.duration = 500;
+					moveLeft.xBy = -178;
+					moveLeft.play();*/
+					
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+					
+					/*grpImagenes.x = ( cnvPanel.width/2 ) -120;*/
+					/*moveLeft.stop();
+					moveLeft.duration = 0;
+					moveLeft.xBy = -178 * _indiceSeleccionado;
+					moveLeft.play();*/
+					_primerResize = false;
+					
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				} 
+				
+				itemSeleccionado = (arregroTitulosPorFamilia[_indiceSeleccionado] as ConfiguracionPrecio);
+				
+				var aget:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.OBTENER_REPORTE_AGENTES_ASOCIADOS);
+				aget.idProveedor = itemSeleccionado.idProveedor;
+				aget.idConfiguracion = itemSeleccionado.idConfiguracionPrecio;
+				aget.idAgente = _agenteAduanal.idAgenteAduanal;
+				dispatchEvent( aget );
+				
+				btnAsoc.visible = btnAsoc.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+				imgEngrane.visible = imgEngrane.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+				btnDesa.visible = btnDesa.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? false:true;
+				grpInfoMin.visible = grpInfoMin.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+				
+			}
+			
+			
+			private function cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias():void
+			{
+				/*grpImagenes.removeAllElements();*/
+				var numItemsQueCaben:int = 0;
+				var iniciaConteo:Boolean = false;
+				/*numItemsQueCaben = ( cnvPanel.width / 2  )  / 177;*/
+				
+				for(var g:int =0; g < arregroTitulosPorFamilia.length; g++ )
+				{
+					
+					var currentItem:ConfiguracionPrecio = arregroTitulosPorFamilia[g] as ConfiguracionPrecio;
+					
+					currentItem.numFila = g ;
+					
+					var _titulo:CatAgenteIR_TituloAnimados = new CatAgenteIR_TituloAnimados();
+					
+					
+					if(g==0)
+					{
+						currentItem.ubicacionItem = 'Primero';
+						_titulo.data = currentItem;
+					}
+					else
+					{
+						
+						if((g+1) == arregroTitulosPorFamilia.length)
+						{
+							currentItem.ubicacionItem = 'Ultimo';
+						}
+						else
+						{
+							currentItem.ubicacionItem = 'Medio';
+						}
+						_titulo.data = currentItem;
+						
+					}
+					
+					if( !iniciaConteo )
+					{
+						/*grpImagenes.addElement(_titulo);*/
+					}
+					else
+					{
+						if( numItemsQueCaben > 0)
+						{
+							/*grpImagenes.addElement(_titulo);*/
+							numItemsQueCaben = numItemsQueCaben - 1;
+						}
+					}
+					
+					if(( arregroTitulosPorFamilia[g] as ConfiguracionPrecio ).titutloSeleccionado )
+					{
+						iniciaConteo = true;
+					}
+				}
+				
+				if (arregroTitulosPorFamilia.length > 0){
+					itemSeleccionado = (arregroTitulosPorFamilia[_indiceSeleccionado] as ConfiguracionPrecio);
+					
+					var aget:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.OBTENER_REPORTE_AGENTES_ASOCIADOS);
+					aget.idProveedor = itemSeleccionado.idProveedor;
+					aget.idConfiguracion = itemSeleccionado.idConfiguracionPrecio;
+					aget.idAgente = _agenteAduanal.idAgenteAduanal;
+					dispatchEvent( aget );
+					
+					btnAsoc.visible = btnAsoc.includeInLayout = itemSeleccionado.aacp.minimoOC > 0 ? true:false;
+					imgEngrane.visible = imgEngrane.includeInLayout = itemSeleccionado.aacp.minimoOC > 0 ? true:false;
+					btnDesa.visible = btnDesa.includeInLayout = itemSeleccionado.aacp.minimoOC > 0 ? false:true;
+					grpInfoMin.visible = grpInfoMin.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+				}
+			}
+			
+			
+			private function mueveTitulos( event:EventoCatAgenteAduanalGeneral ):void
+			{
+				var totalMovimientos:int = 0;
+				totalMovimientos = event.idConfiguracion; //esete id es realmente la ubicacion en la lista de titulos
+				totalMovimientos = totalMovimientos - numeroDeConfifuracionSeleccionada;
+				var $dato:String = '';
+				
+				if( totalMovimientos < 0)
+				{
+					$dato = 'izquierda';
+					totalMovimientos = totalMovimientos * (-1);
+				}
+				else if(  totalMovimientos > 0  )
+				{
+					$dato = 'derecha';
+				}
+				else
+				{
+					totalMovimientos = 0;
+				}
+				
+				for( var i:int = totalMovimientos; i > 0; i-- ){
+					cambia( $dato,totalMovimientos );
+				}
+			} 
+			
+			private function acomodaTodasLasFamilias():void
+			{
+				if( arregroTitulosPorFamilia != null && arregroTitulosPorFamilia.length > 0)
+				{
+					cargaTitulosEnElGrupoPorMedioDeTodasLasFamilias();
+				}
+				
+				/*grpImagenes.x = ( cnvPanel.width/2 ) -120;*/
+				/*moveLeft.stop();
+				moveLeft.duration = 0;
+				moveLeft.xBy = -178 * _indiceSeleccionado;
+				moveLeft.play();*/
+				_primerResize = false;
+			}
+			
+			protected function showGrupo(event:MouseEvent):void
+			{
+				this.grpEditar.includeInLayout = true;
+				this.grpEditar.visible = true;
+				this.menuBotones.visible = false; 
+				grpInfoMin.visible = grpInfoMin.includeInLayout = false;
+				showTipoCambio.play();
+				
+			}
+			
+			protected function showTipoCambio_effectEndHandler(event:EffectEvent):void
+			{
+				grpEditar.height = 120;
+				grpEditar.percentWidth = 100;
+			}
+			
+			protected function hideTipoCambio_effectEndHandler(event:EffectEvent):void
+			{
+				this.grpEditar.visible = false;
+				this.grpEditar.includeInLayout = false;
+				this.menuBotones.visible = true; 
+			}
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				hideTipoCambio.play();
+				grpInfoMin.visible = grpInfoMin.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+			}
+			
+			private function validarCampos():void
+			{
+				if (Number(this.minimoOc.text)>Number(this.maximoOc.text)){
+					alertaSingleton.show("El Mínimo OC tiene que ser menor al Máximo OC", "Errores de Validación");
+				}else{
+					guardarInfo();
+				}
+			}
+			
+			protected function interacionConLosTextImputs_focusOutHandler(event:FocusEvent):void
+			{
+				if(event.currentTarget != null){
+					event.stopImmediatePropagation();
+					event.preventDefault();
+					
+					switch(event.currentTarget.id)
+					{
+						case "minimoOc":{maximoOc.setFocus();break;}
+						case "maximoOc":{minimoOc.setFocus();break;}
+					}
+				}
+			}
+			
+			protected function guardarInfo():void
+			{
+				// TODO Auto-generated method stub
+				var eve:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.HACER_INSERCION);
+				eve.aacp = itemSeleccionado.aacp;
+				eve.aacp.minimoOC = Number(this.minimoOc.text);
+				eve.aacp.maximoOC = Number(this.maximoOc.text);
+				eve.idAgente = _idAgente;
+				dispatchEvent( eve ); 
+				
+				hideTipoCambio.play();
+				insercionMinimo = true;
+				numeroSeleccionado = _indiceSeleccionado;
+			}
+			
+			public function set recibeAgenteSeleccionado($pro:AgenteAduanal):void{
+				if( $pro == null )
+					return;
+				
+				_agenteAduanal = new AgenteAduanal();
+				_agenteAduanal = ObjectUtil.copy($pro) as AgenteAduanal;
+				_idAgente = _agenteAduanal.idAgenteAduanal;
+				
+			}
+			
+			
+			public function set recibeAgentesAsociados( $agentesAsociados:ArrayCollection):void{
+				if ($agentesAsociados == null) 
+				{
+					return;
+				}
+				
+				agenteAsociado = ObjectUtil.copy($agentesAsociados) as ArrayCollection;
+				var final:Object = new Object();
+				final.nombreComercial = 'ultimo';
+				final.tamano = agenteAsociado.length;
+				agenteAsociado.addItem(final);
+				
+			}
+			
+			
+			protected function btnAsoc_clickHandler(event:MouseEvent):void
+			{
+				contDes = true;
+				alertaSingleton.show( '¿Desea eliminar la asociación?' ,catalogoAlertas.TIT_ADV_atencion,'catAgenteAEliminarAsociacion','SI','NO','','');
+			}
+			
+			
+			public function set recibeDelAlert( $dato:ResultAlert):void{
+				if( $dato == null || $dato.vieneD == null )
+					return;
+					
+				if( $dato.vieneD == "catAgenteAEliminarAsociacion" && $dato.botonSeleccionado == "SI" && contDes)
+				{
+					contDes = false;
+					var desc:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.DESASOCIOAR_MARCA_AGENTE_ADUANAL);
+					desc.aacp = itemSeleccionado.aacp;
+					desc.aacp.minimoOC = Number(this.minimoOc.text);
+					desc.aacp.maximoOC = Number(this.maximoOc.text);
+					desc.idAgente = _idAgente;
+					desc.aacp.asociar = false;
+				
+					desc.ventana = "CatAgenteAduanal_Marcas ( idAgente:"+itemSeleccionado.aacp.idAgenteAduanal+", idProveedor:"+itemSeleccionado.idProveedor+
+						", idAAConfiguracionPrecio:"+desc.aacp.idAgenteAConfigPrecio+", idConfiguracionPrecio:"+desc.aacp.idConfigPrecio+" )";
+				
+					dispatchEvent( desc ); 
+					
+					insercionMinimo = true;
+					numeroSeleccionado = _indiceSeleccionado;
+				}
+			}
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				
+				super.updateDisplayList($width,$height);
+				cmpCoverflow.showIconos = false;
+				cmpCoverflow.vista = "clasificacion";
+			}
+			
+			private function cambiarNivelesDeVista($evt:EventoCatProClasificacion):void
+			{ 
+				if($evt==null)
+					return ;
+				
+				_indiceSeleccionado = $evt.posicionDeLaConfEnElCinturon;
+				
+				itemSeleccionado = (arregroTitulosPorFamilia[_indiceSeleccionado] as ConfiguracionPrecio);
+				
+				var aget:EventoCatAgenteAduanalGeneral = new EventoCatAgenteAduanalGeneral(EventoCatAgenteAduanalGeneral.OBTENER_REPORTE_AGENTES_ASOCIADOS);
+				aget.idProveedor = itemSeleccionado.idProveedor;
+				aget.idConfiguracion = itemSeleccionado.idConfiguracionPrecio;
+				aget.idAgente = _agenteAduanal.idAgenteAduanal;
+				dispatchEvent( aget );
+				
+				hideTipoCambio.play();
+				btnAsoc.visible = btnAsoc.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+				imgEngrane.visible = imgEngrane.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+				btnDesa.visible = btnDesa.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? false:true;
+				grpInfoMin.visible = grpInfoMin.includeInLayout = itemSeleccionado.aacp.maximoOC > 0 ? true:false;
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		
+		<s:Parallel id="showTipoCambio" effectEnd="showTipoCambio_effectEndHandler(event)" target="{grpEditar}" > 
+			<s:Resize heightFrom="0" heightTo="120" duration="200"/>
+			<s:Fade alphaFrom="0" alphaTo="1" duration="150"/>
+		</s:Parallel>
+		
+		<s:Parallel id="hideTipoCambio" effectEnd="hideTipoCambio_effectEndHandler(event)" target="{grpEditar}" >
+			<s:Resize heightFrom="120" heightTo="0" duration="220"/>
+			<s:Fade alphaFrom="1" alphaTo="0" duration="100"/>
+		</s:Parallel>
+		
+		<s:Sine id="sineEasing" easeInFraction="0.3"/>
+		<s:Power id="powerEasing"  exponent="4"/>
+		<!--<s:Move id="moveRight"  target="{grpImagenes}" easer="{powerEasing}"/>
+		<s:Move id="moveLeft"  target="{grpImagenes}" easer="{powerEasing}"/>-->
+	</fx:Declarations>
+	
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="hovered"/>
+		<s:State name="selected"/>
+	</s:states>
+	
+	<s:VGroup width="100%" paddingTop="20" paddingLeft="20" paddingRight="20" verticalAlign="bottom" >
+		<label:TituloBankGothic_24 id="nombreProveedor" width="100%" textAlign="left"/>
+	</s:VGroup>
+	
+	<s:Spacer height="30"/>
+	<s:VGroup width="100%" height="135" verticalAlign="middle" paddingRight="-20">
+		<!--<s:Group width="100%" height="100%" visible="false" includeInLayout="false">
+			<s:Rect id="fondo" width="100%" height="100%" >
+				<s:filters>
+					<s:DropShadowFilter alpha="1" angle="90" blurX="0" blurY="7"
+										color="#424242" distance="1" hideObject="false" inner="false"
+										knockout="false" quality="3" strength="0.9"/>
+					<s:DropShadowFilter alpha="1" angle="270" blurX="0" blurY="7"
+										color="#424242" distance="1" hideObject="false" inner="false"
+										knockout="false" quality="3" strength="0.9"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="black" />
+				</s:fill> 
+			</s:Rect>
+			<s:HGroup width="100%" height="135" gap="0" verticalAlign="middle" id="grpNegro"  >
+				<s:Group width="170" height="135" mouseDown="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierdaDown}" id="btnIzquierdo" click="cambia('izquierda')"
+						 mouseOver="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierdaDown }" mouseOut="{imgBotonI.source= catalogoIconosBotoneras.getInstance().flechasIzquierda}" >
+					<s:Image source="{ catalogoIconosBotoneras.getInstance().fondoBotonNegroGrande}" height="135" width="169"/>
+					<s:Image id="imgBotonI" source="{ catalogoIconosBotoneras.getInstance().flechasIzquierda }" horizontalCenter="15" verticalCenter="0" />
+				</s:Group>
+				<s:VGroup paddingTop="-4" width="83%" depth="-5000" id="grpPanel">
+					<s:Panel  width="100%" depth="-5000" id="pnlImagenes" borderVisible="false" borderAlpha="0" dropShadowVisible="false"  contentBackgroundAlpha="0" backgroundAlpha="0" 
+							  controlBarVisible="false" skinClass="skins.skin.panelSpark.PanelSinTitleBar"   >
+						<mx:Canvas width="120%" id="cnvPanel" borderAlpha="0" dropShadowVisible="false" contentBackgroundAlpha="0" backgroundAlpha="0" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+							<s:HGroup width="100%" verticalAlign="middle" id="grpImagenes" gap="-2" />
+						</mx:Canvas>
+						
+					</s:Panel>
+				</s:VGroup>
+				<s:Group width="170" height="135" mouseDown="{imgBotonD.source = catalogoIconosBotoneras.getInstance().flechasDerechaDown}"  id="btnDerecho" click="cambia('derecha')"
+						 mouseOver="{imgBotonD.source= catalogoIconosBotoneras.getInstance().flechasDerechaDown }" mouseOut="{imgBotonD.source= catalogoIconosBotoneras.getInstance().flechasDerecha}" >
+					<s:Image source="{ catalogoIconosBotoneras.getInstance().fondoBotonNegroGrande}" height="135" width="170"/>
+					<s:Image id="imgBotonD" source="{ catalogoIconosBotoneras.getInstance().flechasDerecha }" horizontalCenter="-15" verticalCenter="0"/>
+				</s:Group>
+			</s:HGroup>
+		</s:Group>-->
+	<coverflowpqnet:CoverFlowDefaultPQNet id="cmpCoverflow" showIconos="false" vista="clasificacion" />
+	</s:VGroup>
+	
+	<s:Spacer height="10" />
+	
+	<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" gap="10" paddingRight="0">
+		
+		
+		<s:HGroup width="100%" id="menuBotones">
+			<s:Spacer width="100%" /> 
+			<s:VGroup >
+				<pqNet:botonPqNetLargo id="btnDesa"  width="244" label="Desasociado" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" click="showGrupo(event)" />
+				<s:HGroup gap="10" >
+					<pqNet:botonPqNetLargo id="btnAsoc" width="200" label="Asociado" colorBase="0x{catalogoColores.BTN_VERDE }" click="btnAsoc_clickHandler(event)"/>
+					<s:Image height="100%" source="{catalogoIconosGrid.getInstance().render_engraneGrande}" 
+							 mouseOver="{imgEngrane.source = catalogoIconosGrid.getInstance().render_engraneGrisGrande }" 
+							 mouseOut="{imgEngrane.source = catalogoIconosGrid.getInstance().render_engraneGrande }"
+							 id="imgEngrane" click="showGrupo(event)" />
+				</s:HGroup>
+			</s:VGroup>
+			<s:Spacer width="100%" /> 
+		</s:HGroup>
+		
+		
+		<s:VGroup id="grpEditar" height="0" width="100%" horizontalAlign="center" visible="false" includeInLayout="false" alpha="0"
+				  visible.normal="false" includeInLayout.normal="false" visible.hovered="false" includeInLayout.hovered="false"
+				  visible.selected="false" includeInLayout.selected="false">
+			
+			
+			<s:HGroup width="100%">
+				<s:Spacer width="100%"/>
+				<s:VGroup >
+					<label:Titulo text="Mínimo OC" />
+					<s:HGroup width="100%">
+						<textinput:txtInputBlancoDefaultPQNet id="minimoOc" restrict="0-9" text="{itemSeleccionado.aacp.minimoOC}" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)"/>
+						<label:Titulo text="{UtilsFormatoMoneda.monedaGenerica(itemSeleccionado.aacp.moneda,'')}" paddingTop="7" />
+					</s:HGroup>
+				</s:VGroup>
+				<s:Spacer width="20" />
+				<s:VGroup  >	
+					<label:Titulo text="Máximo OC" />
+					<s:HGroup >
+						<textinput:txtInputBlancoDefaultPQNet id="maximoOc" restrict="0-9" text="{itemSeleccionado.aacp.maximoOC}" keyFocusChange="interacionConLosTextImputs_focusOutHandler(event)"/>
+						<label:Titulo text="{UtilsFormatoMoneda.monedaGenerica(itemSeleccionado.aacp.moneda,'')}" paddingTop="7" />
+					</s:HGroup>
+				</s:VGroup>
+				<s:Spacer width="100%"/>
+			</s:HGroup>
+			
+			
+			<s:HGroup width="100%" height="100%">
+				<s:Spacer width="100%"/>
+				<s:VGroup height="100%"  verticalAlign="bottom" horizontalAlign="left">
+					<pqNet:botonPqNetLargo label="Guardar" click="validarCampos()" colorBase="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+				</s:VGroup>
+				<s:Spacer width="70%" />
+				<s:VGroup height="100%"  verticalAlign="bottom" horizontalAlign="right">
+					<pqNet:botonPqNetLargo label="Cancelar" click="button1_clickHandler(event)" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }" />
+				</s:VGroup>
+				<s:Spacer width="100%"/>
+			</s:HGroup>
+		</s:VGroup>
+		
+		<s:VGroup id="grpInfoMin" width="100%" horizontalAlign="center" paddingTop="10">
+			<s:HGroup width="100%"  horizontalAlign="center" >
+				<label:Titulo text="Min OC: " paddingTop="0"/>
+				<label:Texto text="{itemSeleccionado.aacp.minimoOC} {UtilsFormatoMoneda.monedaGenerica(itemSeleccionado.aacp.moneda,'')}" paddingTop="0"/>
+			</s:HGroup>
+			<s:HGroup width="100%"  horizontalAlign="center" >
+				<label:Titulo text="Max OC: " paddingTop="0"/>
+				<label:Texto text="{itemSeleccionado.aacp.maximoOC} {UtilsFormatoMoneda.monedaGenerica(itemSeleccionado.aacp.moneda,'')}" paddingTop="0"/>
+			</s:HGroup>
+		</s:VGroup>
+		
+		<s:Spacer height="20" />
+		
+		<s:VGroup width="100%" id="listaAgentesAsociados" gap="20">
+			<!--<otros:divisionGruesa width="100%" />-->
+			<s:VGroup width="100%" horizontalAlign="center">
+				<label:Titulo text="Reporte de Asociados" paddingTop="0" />
+			</s:VGroup>
+			<otros:divisionHueca width="100%" />
+			<s:List id="lstAgentesAsoc" borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  
+					contentBackgroundAlpha="0" 
+					itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.agenteAduanal.itemRenderer.marcas.CatAgenteIR_Marca_AgenteAsociado"
+					dataProvider="{agenteAsociado}">
+			</s:List>
+		</s:VGroup>
+		
+	</contenedores:VGroupConPaddingStandardPqNet>
+	
+</s:VGroup>

@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark"
+		xmlns:botonLogin="skin.botonLogin.*"
+		xmlns:botonAtras="skin.botonAtras.*"
+		title="Dirección" 
+		viewActivate="init(event)"
+		backgroundColor="#252b2c" 
+		fontFamily="Helvetica Neue"
+		>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.sensors.Geolocation;
+			
+			import spark.events.ViewNavigatorEvent;
+			
+			import eventos.EventoMensajero;
+			
+			import modelo.objetos.itemPendientes;
+			
+			import vistas.popup.popUpMobilPqNet;
+			
+			protected var geo:Geolocation;
+			[Bindable]
+			public var latitud:Number = 0;//19.285660406064647;
+			
+			[Bindable]
+			public var longitud:Number = 0;//-99.15956900;
+			
+			[Bindable]
+			public var altitud:Number = 0;
+			
+			[Bindable]
+			private var gps:Boolean = false;
+			
+			[Bindable]
+			private var direccionValidada:Boolean = false;
+			
+			[Bindable]
+			public var pendienteSeleccionado:itemPendientes = new itemPendientes();
+			
+			public var validacion:Boolean = false;
+			
+			
+			///////////////////////////Funciones gps/////////////////////////////////////////////			
+			
+			protected function init(event:ViewNavigatorEvent):void
+			{
+				if(geo == null)
+					geo = new Geolocation;
+				
+				
+				if(Geolocation.isSupported)
+				{
+					geo.addEventListener(GeolocationEvent.UPDATE, actualizar);
+					addEventListener(ViewNavigatorEvent.REMOVING,eliminar);
+					gps = true;
+				}
+				else
+				{
+					trace("gps no soportado");
+					gps = false;
+					lbValidar.enabled = false;
+				}
+				
+				var lat1:Number = 19.4596605515289;
+				var long1:Number=-99.1946829111308;
+				
+				var lat2:Number = 19.459780748020354;
+				var long2:Number = -99.1946610343635;
+				
+				var degtorad:Number = 0.01745329;
+				var dlong:Number = (-long1 + long2);
+				
+				var distancia:Number = 0;
+				
+				distancia = (Math.sin(lat1 * degtorad) * Math.sin(lat2 * degtorad)) + (Math.cos(lat1 * degtorad) * Math.cos(lat2 * degtorad) * Math.cos(dlong * degtorad));
+				
+				distancia = Math.acos(distancia) * (6371000);
+				trace(distancia + " m");
+				
+			}
+			
+			protected function actualizar(event:GeolocationEvent):void
+			{
+				latitud = event.latitude;
+				longitud = event.longitude;
+				altitud = event.altitude;
+			}
+			
+			///////////////////////////////////////////////////////////////////////////////////////						
+			///////////////////////////////////////////////////////////////////////////////////////			
+			
+			public function set recibirPendientesporRuta(_pendiente:itemPendientes):void
+			{
+				pendienteSeleccionado = new itemPendientes();
+				if(_pendiente.pendientes.length > 0 )
+				{
+					pendienteSeleccionado = _pendiente;
+					pendienteSeleccionado.latitud == 0 ? direccionValidada = false : direccionValidada = true;
+				}
+			}
+			
+			protected function popUpMensaje(event:MouseEvent):void
+			{
+				var m:popUpMobilPqNet = new popUpMobilPqNet();
+				m.mensaje = "¿Desea confirmar la validación \n de la ubicación?";
+				m.open(this,true);	
+				m.btnSi.addEventListener(MouseEvent.CLICK,validarDireccion);
+			}
+			
+			protected function validarDireccion(event:MouseEvent):void
+			{
+				if(gps == true)
+				{
+					validacion = true;
+					var evento:EventoMensajero = new EventoMensajero(EventoMensajero.ACTUALIZAR_COORDENADAS_MENSAJERO);
+					
+					for(var m:int = 0; m<pendienteSeleccionado.pendientes.length; m++)
+					{
+						pendienteSeleccionado.pendientes[m].latitud = latitud;
+						pendienteSeleccionado.pendientes[m].longitud = longitud;
+						pendienteSeleccionado.pendientes[m].altitud = altitud;
+					}
+					evento._pendientesSeleccionadosArreglo = pendienteSeleccionado.pendientes;
+					dispatchEvent(evento);
+				}
+			}
+			
+			public function set recibirValidarDireccion(resultado:Boolean):void
+			{
+				if(resultado == true && validacion == true)
+				{
+					vistaAnterior();
+				}
+				else{
+					validacion = false;
+				}
+			}
+			
+			
+			
+			protected function iraMapa(event:MouseEvent,validar:Boolean):void
+			{
+				navigator.pushView(mapaDireccionView);
+				
+				var evento:EventoMensajero = new EventoMensajero(EventoMensajero.IR_A_MAPA_MENSAJERO);
+				evento._pendientesSeleccionados = pendienteSeleccionado;
+				evento._pendientesSeleccionados.coordenadas.latitud = latitud;
+				evento._pendientesSeleccionados.coordenadas.longitud = longitud;
+				evento._pendientesSeleccionados.coordenadas.latitudDestino = pendienteSeleccionado.latitud;
+				evento._pendientesSeleccionados.coordenadas.longitudDestino = pendienteSeleccionado.longitud;
+				evento._pendientesSeleccionados.coordenadas.validar = validar;
+				dispatchEvent(evento);	
+			}
+			
+			protected function validarVisita(event:MouseEvent):void
+			{
+				var lat1:Number = pendienteSeleccionado.latitud;
+				var lat2:Number = latitud;
+				
+				var long1:Number = pendienteSeleccionado.longitud;
+				var long2:Number = longitud;
+				
+				var degtorad:Number = 0.01745329;
+				var dlong:Number = (-long1 + long2);
+				
+				var distancia:Number = 0;
+				
+				distancia = (Math.sin(lat1 * degtorad) * Math.sin(lat2 * degtorad))
+					+ (Math.cos(lat1 * degtorad) * Math.cos(lat2 * degtorad) * Math.cos(dlong * degtorad));
+				
+				distancia = Math.acos(distancia) * (6371000);
+				
+				var evento:EventoMensajero = new EventoMensajero(EventoMensajero.VALIDAR_VISITA_MENSAJERO);
+				if(gps)
+				{ 
+					if(distancia < 1000)
+					{
+						validacion = true;
+						dispatchEvent(evento);
+						vistaAnterior();
+					}
+					else
+					{
+						validacion = false;
+						var m:popUpMobilPqNet = new popUpMobilPqNet();
+						m.mensaje = "Usted se encuentra a " + distancia.toFixed(2) + "m de el lugar de visita, acerquese a menos de 1000m";
+						m.modoOk = true;
+						m.open(this,true);	
+					}
+				}
+				else
+				{
+					
+					validacion = true;
+					dispatchEvent(evento);
+					vistaAnterior();
+				} 
+			}
+			
+			///////////////////////////////////////////////////////////////////////////////////////						
+			///////////////////////////////////////////////////////////////////////////////////////				
+			
+			
+			protected function eliminar(event:ViewNavigatorEvent):void
+			{
+				geo.removeEventListener(GeolocationEvent.UPDATE,actualizar);
+			}
+			
+			protected function vistaAnterior():void
+			{
+				if(isActive == true)
+				{
+					navigator.popView();
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:navigationContent>
+		<botonAtras:botonAtras click="vistaAnterior()"/>
+	</s:navigationContent>
+	<s:actionContent>
+		<s:Button label="Verificar" visible="{this.direccionValidada}" click="validarVisita(event)"/>
+	</s:actionContent>
+	<s:layout>
+		<s:VerticalLayout horizontalAlign="center" gap="15" paddingBottom="30" paddingTop="30">
+			
+		</s:VerticalLayout>
+	</s:layout>
+	
+	<s:Label color="0x2d859b" id="encabezado" text="Posición Actual" horizontalCenter="0" fontSize="36.22"/>
+	<s:Label color="0x2d859b" text="{'LAT: ' + this.latitud.toString()}" fontSize="36.22"/>
+	<s:Label color="0x2d859b" text="{'LON: ' + this.longitud.toString()}" fontSize="36.22"/>
+	<s:Label color="0x2d859b" text="{'ALT: ' + this.altitud.toString()}" fontSize="36.22"/>
+	
+	<s:Rect width="450" height="5">
+		<s:fill>
+			<s:SolidColor color="0x4a4a4a"/>
+		</s:fill>
+	</s:Rect>
+	<s:Label width="450" textAlign="center" verticalAlign="middle" text="{this.pendienteSeleccionado.direccion}" color="0xffffff" fontSize="27.17"  height="100%"/>
+	
+	<s:Label includeInLayout="{direccionValidada}" visible="{direccionValidada}" id="lbValidar" text="Validada" click="iraMapa(event,true)" color="0x67981a" fontSize="36.22"/>
+	<botonLogin:botonLogin includeInLayout="{!direccionValidada}" visible="{!direccionValidada}" id="btnValidar" label="Validar ubicación" click="popUpMensaje(event)"/>
+</s:View>

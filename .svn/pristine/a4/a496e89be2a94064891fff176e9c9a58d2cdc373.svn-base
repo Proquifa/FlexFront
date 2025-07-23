@@ -1,0 +1,510 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:componentes="mx.com.proquifa.proquifanet.gestorCostos.vistas.vista.componentes.*"
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:input="skins.skin.textinput.*" 
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%" 
+		 resize="calcular(event)" 
+		 xmlns:registarGastos="mx.com.proquifa.proquifanet.gestorCostos.vistas.vista.componentes.registarGastos.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.flash_proxy;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.com.proquifa.proquifanet.gestorCostos.vistas.eventos.EventoRegistrarGastos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PedimentoGastos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaPedido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			private var _fontSize:Number = 18;
+			private var ruta:String;
+			private var archivo:ByteArray;
+			[Bindable]private var nombreArchivo:String = "";
+			[Bindable]private var archivoCargado:Boolean;
+			private var _ordenDespacho:String;
+			
+
+			[Bindable]
+			public function get ordenDespacho():String
+			{
+				return _ordenDespacho;
+			}
+
+			public function set ordenDespacho(value:String):void
+			{
+				_ordenDespacho = value;
+			}
+
+			[Bindable]
+			public function get fontSize():Number
+			{
+				return _fontSize;
+			}
+			
+			public function set fontSize(value:Number):void
+			{
+				_fontSize = value;
+			}
+			
+			/****************** CARGAR DOCUMENTO ******************/
+			public var file:File = new File();
+			[Bindable]
+			public var widModificado:int = 590;
+			[Bindable]
+			public var heiModificado:int = 632;
+			[Bindable] private var numeroActual:Number;
+			private var numeroMax:Number;
+			[Bindable] private var arregloImagenes:ArrayCollection;
+			[Bindable]public var widthImagen:Number;
+			[Bindable]public var heightImagen:Number;
+			[Bindable]public var hightImagen:Number;
+			[Bindable]public var espacio1:Number;
+			[Bindable]public var espacio2:Number;
+			[Bindable]public var currentPedido:PartidaPedido;
+			public var variacionW:int = 142.5;
+			public var variacionH:int = 158.75;
+			
+			public function cargarArchivos(event:MouseEvent):void
+			{
+				var docFilter:FileFilter;
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				/*file.addEventListener(Event.COMPLETE,guardarBytes);*/
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				docFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter])
+			}
+			private function selectHandler(event:Event):void 
+			{
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void 
+			{
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void 
+			{
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandler(event:Event):void 
+			{
+				trace("completeHandler: " + event);
+				
+				try{
+					ruta = file.nativePath;
+					archivo = file.data;
+					nombreArchivo = file.name;
+					archivoCargado = true;
+					var evento:EventoRegistrarGastos = new EventoRegistrarGastos(EventoRegistrarGastos.OBTENER_IMAGENES_PEDIMENTOS);
+					evento.pedimento = new PedimentoGastos();
+					evento.pedimento.rutaPDF = ruta;
+					evento.pedimento.documentoPDF = archivo;
+					evento.idOrdenDespacho = ordenDespacho;
+					dispatchEvent(evento);
+					dispatchEvent(new Event("verificarPedimento"));
+				}catch(error:*){
+					
+				}
+			}
+			protected function aumentarHoja():void
+			{
+				if(numeroActual < numeroMax - 1)
+				{
+					numeroActual++;
+					var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + "/SAP" + arregloImagenes[numeroActual]);
+					/*var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + "" + arregloImagenes[numeroActual]);*/
+					var img:Loader = new Loader();
+					
+					img.load(url);				
+					img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);	
+				}
+			}
+			protected function restarHoja():void
+			{
+				if(numeroActual > 0)
+				{
+					numeroActual--;
+					var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + "/SAP" + arregloImagenes[numeroActual]);
+					/*var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + "" + arregloImagenes[numeroActual]);*/
+					var img:Loader = new Loader();
+					
+					img.load(url);				
+					img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);	
+				}
+			}
+			public function loaded(e:Event):void
+			{
+				var bitmap:Bitmap = e.target.content;
+				imagenVisualizaId.source = bitmap;
+				e.target.removeEventListener(Event.COMPLETE,loaded);
+				grupCargar.visible= grupCargar.includeInLayout = false;
+				grupImagen.visible= grupImagen.includeInLayout = true;
+				archivoCargado = true;
+			}
+			public function recibirImagenes($rutaImagen:ArrayCollection):void
+			{
+				arregloImagenes = $rutaImagen;
+				if (arregloImagenes == null || arregloImagenes.length == 0) {
+					grupCargar.visible= grupCargar.includeInLayout = true;
+					grupImagen.visible= grupImagen.includeInLayout = false;
+				}
+				numeroActual = 0; 
+				arregloImagenes = new ArrayCollection();
+				
+				if($rutaImagen.length > 0)
+				{
+					if($rutaImagen.length > 1)
+					{
+						imgHojaMas.visible = imgHojaMas.includeInLayout = true;
+						imgHojaMenos.visible = imgHojaMenos.includeInLayout = true;
+					}
+					else
+					{
+						imgHojaMas.visible = imgHojaMas.includeInLayout = false;
+						imgHojaMenos.visible = imgHojaMenos.includeInLayout = false;
+					}
+					
+					numeroMax = $rutaImagen.length;
+					arregloImagenes = ObjectUtil.copy($rutaImagen) as ArrayCollection;
+				}
+				else
+				{
+					imgHojaMas.visible = imgHojaMas.includeInLayout = false;
+					imgHojaMenos.visible = imgHojaMenos.includeInLayout = false;
+					return;
+				}
+				var temp:String = "http://" + Destinos.ipUsandose + "/SAP" +  $rutaImagen[0];
+				/*var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + "/" +$rutaImagen[0]);*/
+				var url:URLRequest = new URLRequest("http://" + Destinos.ipUsandose + "/SAP" +$rutaImagen[0]);
+				var img:Loader = new Loader();
+				
+				img.load(url);				
+				img.contentLoaderInfo.addEventListener(Event.COMPLETE,loaded);
+			}
+			protected function scrollId_mouseWheelHandler(event:MouseEvent):void
+			{
+				event.delta = event.delta > 0 ? .5 : -1;
+			}
+			public function decrementaZoom():void
+			{
+				if(widModificado > 300 && heiModificado > 300){
+					heiModificado = heiModificado - variacionH;
+					widModificado = widModificado - variacionW;
+				}
+			}
+			public function incrementaZoom():void
+			{
+				if(widModificado <= 1160 && heiModificado <= 1280 ){
+					widModificado = widModificado + variacionW;
+					heiModificado = heiModificado + variacionH;
+				}
+			}
+			
+			protected function calcular(event:ResizeEvent):void
+			{
+				widthImagen = (204/1582) * (unscaledWidth);
+				heightImagen = (264/912) * (unscaledHeight);
+				
+				widthImagen = widthImagen > 204 ? 204:widthImagen;
+				widthImagen = widthImagen < 102 ? 102:widthImagen;
+				heightImagen = heightImagen > 264 ? 264:heightImagen;
+				heightImagen = heightImagen < 135 ? 135:heightImagen;
+				
+				espacio1 = (20/912) * (unscaledHeight);
+				espacio1 = espacio1 > 20 ? 20:espacio1;
+				espacio1 = espacio1 < 8 ? 8:espacio1;
+				espacio2 = (30/912) * (unscaledHeight);
+				espacio2 = espacio2 > 30 ? 30:espacio2;
+				espacio2 = espacio2 < 15 ? 15:espacio2;
+				
+				hightImagen = (255/912) * (unscaledHeight);
+				hightImagen = hightImagen > 255 ? 255:hightImagen;
+				hightImagen = hightImagen < 134 ? 134:hightImagen;
+				
+				fontSize = (18/1582) * (unscaledWidth); 
+				fontSize = fontSize > 18 ? 18:fontSize;
+				fontSize = fontSize < 13 ? 13:fontSize;
+			}
+			public function reset():void
+			{
+				grpTIC.resetMonto();
+				grpVAL.resetMonto();
+				grpFTE.resetMonto();
+				grpSEG.resetMonto();
+				grpOTI.resetMonto();
+				grpVAD.resetMonto();
+				grpIVA.resetMonto();
+				grpDTA.resetMonto();
+				grpIGI.resetMonto();
+				grpPRV.resetMonto();
+				grpCNT.resetMonto();
+				grpIMP.resetMonto();
+				grpPRP.resetMonto();
+				arregloPDFtemporal = new ArrayCollection(); //QUITAR
+				
+				archivoCargado = false;
+				imagenVisualizaId.source = null;
+				recibirImagenes(new ArrayCollection());
+			}
+			public function extraerDatosPedimento():PedimentoGastos
+			{
+				//AÑADIR RETURN CUANDO ESTE LISTO
+				var pedimento:PedimentoGastos = new PedimentoGastos();
+				
+				try{
+					pedimento.TIC = Number(grpTIC.txtMonto.text);
+					pedimento.VAL = Number(grpVAL.txtMonto.text);
+					pedimento.FTE = Number(grpFTE.txtMonto.text);
+					pedimento.SEG = Number(grpSEG.txtMonto.text);
+					pedimento.OTI = Number(grpOTI.txtMonto.text);
+					pedimento.VAD = Number(grpVAD.txtMonto.text);
+					pedimento.IVA = Number(grpIVA.txtMonto.text);
+					pedimento.DTA = Number(grpDTA.txtMonto.text);
+					pedimento.IGI = Number(grpIGI.txtMonto.text);
+					pedimento.PRV = Number(grpPRV.txtMonto.text);
+					pedimento.CNT = Number(grpCNT.txtMonto.text);
+					pedimento.IMP = Number(grpIMP.txtMonto.text);
+					pedimento.PRP = Number(grpPRP.txtMonto.text);
+					pedimento.documentos = arregloPDFtemporal; //QUITAR
+					pedimento.folio = "";
+					
+				}catch(error:*){
+					
+				}
+				
+				return pedimento;
+			}
+			
+			protected function verificarPedimento(event:EventoRegistrarGastos):void
+			{
+				dispatchEvent(new Event("verificarPedimento"));
+			}
+			
+			public function estaCompleto():Boolean
+			{
+				var temp:Boolean;
+					
+				if(grpTIC.txtMonto.text == "")
+					temp = false
+				else if(grpVAL.txtMonto.text == "")
+					temp = false
+				else if(grpFTE.txtMonto.text == "")
+					temp = false
+				else if(grpSEG.txtMonto.text == "")
+					temp = false
+				else if(grpOTI.txtMonto.text == "")
+					temp = false
+				else if(grpVAD.txtMonto.text == "")
+					temp = false
+				else if(grpIVA.txtMonto.text == "")
+					temp = false
+				else if(grpDTA.txtMonto.text == "")
+					temp = false
+				else if(grpIGI.txtMonto.text == "")
+					temp = false
+				else if(grpPRV.txtMonto.text == "")
+					temp = false
+				else if(grpCNT.txtMonto.text == "")
+					temp = false;
+				else if(grpIMP.txtMonto.text == "")
+					temp = false;
+				else if(grpPRP.txtMonto.text == "")
+					temp = false;
+				else if(!archivoCargado)
+					temp = false;
+				else
+					temp = true;
+				
+				return temp;
+			}
+			
+			[Bindable] private var arregloPDFtemporal:ArrayCollection = new ArrayCollection();
+			public function guardarBytes(event:Event):void
+			{
+				
+				trace("completeHandler: " + event);
+				
+				try{
+					ruta = file.nativePath;
+					archivo = file.data;
+					nombreArchivo = file.name;
+					arregloPDFtemporal.addItem(file.data);
+					archivoCargado = true;
+				}catch(error:*){
+					
+				}
+				dispatchEvent(new Event("verificarPedimento"));
+			}
+			
+			public function set recibirRutasImagenes($rutaImagen:ArrayCollection):void
+			{
+				recibirImagenes($rutaImagen);
+			}
+			
+			public function generarMontos(montos:ArrayCollection):void
+			{
+				var gastos:PedimentoGastos = new PedimentoGastos();
+				for(var i:int = 0; i < montos.length;i++){
+					gastos.VAD += montos[i].VAD;
+					gastos.TIC = montos[i].TIC;
+					/*gastos.TIC += montos[i].TIC;*/
+					gastos.PRV += montos[i].PRV;
+					gastos.CNT += montos[i].CNT;
+					gastos.VAL += montos[i].VAL;
+					gastos.FTE += montos[i].flete;
+					
+					gastos.DTA += montos[i].DTA;
+					gastos.IGI += montos[i].IGI;
+					gastos.IVA += montos[i].iva;
+				}
+				
+				grpTIC.monto = gastos.TIC+""
+				grpVAL.monto = gastos.VAL+""
+				grpVAD.monto = gastos.VAD+""			
+				grpCNT.monto = gastos.CNT+"";
+				grpPRV.monto = gastos.PRV+"";
+				grpFTE.monto = gastos.FTE+"";
+				
+				grpDTA.monto = gastos.DTA+"";
+				grpIGI.monto = gastos.IGI+"";
+				grpIVA.monto = gastos.IVA+"";
+				grpIMP.monto = gastos.IVA + gastos.DTA + gastos.IGI+"";
+				
+				if(currentPedido != null){
+					grpPRP.monto = (
+					gastos.TIC + gastos.VAL + gastos.VAD + gastos.CNT + gastos.PRV + gastos.DTA + 
+					gastos.IGI + gastos.IVA +
+					(gastos.IVA + gastos.DTA + gastos.IGI))+"";
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="0">
+		<!--<s:VGroup width="100%" height="100%" >
+		<s:Rect width="100%" height="100%">
+		<s:stroke>
+		<s:SolidColorStroke color="#000000" weight="1"/>
+		</s:stroke>
+		</s:Rect>
+		</s:VGroup>-->  
+		<s:HGroup width="100%" height="100%" horizontalAlign="center" gap="20">
+			<s:Group width="100%" height="100%" >
+				<s:Rect width="100%" height="100%" depth="1">
+					<s:stroke>
+						<s:SolidColorStroke color="#008894" weight="1"/>
+					</s:stroke>
+				</s:Rect>
+				<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<s:HGroup width="100%" height="100%" >
+						<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+							<s:HGroup width="50%" height="100%" horizontalAlign="left" verticalAlign="middle"> 
+								<s:Label id="lblTitulo" text="" fontWeight="bold" fontFamily="Novecento" fontSize="{fontSize}"/>
+							</s:HGroup>  
+						</s:HGroup>  
+						<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+							<s:Label text="VEI" fontWeight="bold" fontFamily="Novecento" fontSize="{fontSize}"/>
+							<s:Label text="($)" fontFamily="Novecento" fontSize="{fontSize}"/>
+						</s:VGroup>  
+						<s:VGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+							<s:Label text="VRI" fontWeight="bold" fontFamily="Novecento" fontSize="{fontSize}"/>
+							<s:Label text="($)" fontFamily="Novecento" fontSize="{fontSize}"/>
+						</s:VGroup>  
+					</s:HGroup>
+					<s:Rect width="90%" height="2" depth="1">
+						<s:fill >
+							 <s:SolidColor color="#eceef0"/>
+						</s:fill>
+					</s:Rect>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpTIC" width="100%" height="100%" monto="0.00" titulo="TIC" fontSize="{fontSize}" color="#f15b1a" weight="bold" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpVAL" width="100%" height="100%" monto="0.00" titulo="VAL" fontSize="{fontSize}" color="#9bbc11" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpFTE" width="100%" height="100%" monto="0.00" titulo="FTE" fontSize="{fontSize}" color="#9bbc11" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpSEG" width="100%" height="100%" monto="0.00" titulo="SEG" fontSize="{fontSize}" color="#9bbc11" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpOTI" width="100%" height="100%" monto="0.00" titulo="OTI" fontSize="{fontSize}" color="#9bbc11" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpVAD" width="100%" height="100%" monto="0.00" titulo="VAD" fontSize="{fontSize}" color="#9bbc11" weight="bold" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpIVA" width="100%" height="100%" monto="0.00" titulo="IVA" fontSize="{fontSize}" color="#a00795" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpDTA" width="100%" height="100%" monto="0.00" titulo="DTA" fontSize="{fontSize}" color="#a00795" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpIGI" width="100%" height="100%" monto="0.00" titulo="IGI" fontSize="{fontSize}" color="#a00795" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpPRV" width="100%" height="100%" monto="0.00" titulo="PRV" fontSize="{fontSize}" color="#a00795" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpCNT" width="100%" height="100%" monto="0.00" titulo="CNT" fontSize="{fontSize}" color="#a00795" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpIMP" width="100%" height="100%" monto="0.00" titulo="IMP" fontSize="{fontSize}" color="#a00795" weight="bold" verificarPedimentoCompletos="verificarPedimento(event)"/>
+					<registarGastos:FormatoLinea_RegistrarGastos id="grpPRP" width="100%" height="100%" monto="0.00" titulo="PRP" fontSize="{fontSize}" color="#008894" weight="bold" verificarPedimentoCompletos="verificarPedimento(event)"/>
+				</s:VGroup>
+			</s:Group>
+			<s:HGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+				<s:Group width="100%" height="100%" >
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="#f3f3f4" />
+						</s:fill>
+					</s:Rect>
+					<s:VGroup gap="0" id="grupCargar" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" visible="true" includeInLayout="true">
+						<s:VGroup width="100%" height="{hightImagen}" verticalAlign="middle" horizontalAlign="center">
+							<mx:Image id="imgCarga" horizontalCenter="0" verticalCenter="0" width="{widthImagen}" height="{heightImagen}" source="{catalogoIconosBotones.getInstance().cargar_pedimento}"
+									  click="cargarArchivos(event)" buttonMode="true"/>
+						</s:VGroup>  
+						<s:Spacer height="{espacio1}" />
+						<s:Label styleName="tab_texto_14_Helvetica" id="lblTipo" color="#888888" fontSize="25" width="100%" maxDisplayedLines="2" textAlign="center" text=".pdf"/>
+						<s:Spacer height="{espacio2}" />
+						<s:Label styleName="tab_texto_14_Helvetica" id="lblMensaje" color="#888888" fontSize="25" width="100%" maxDisplayedLines="2" textAlign="center" text="Cargar Pedimento Desglosado"/>
+					</s:VGroup>
+					<s:VGroup id="grupImagen" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" visible="false" includeInLayout="false">
+						
+						<s:Scroller width="100%" height="100%" maxWidth="590" maxHeight="743" id="scrollId" mouseWheel="scrollId_mouseWheelHandler(event)">
+							<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" >						
+								<mx:Image id="imagenVisualizaId" width="{widModificado}" height="{heiModificado}" horizontalAlign="center" verticalAlign="middle"/>
+							</s:VGroup>  					
+						</s:Scroller>
+						
+						<s:Group width="100%" height="5%">
+							<s:VGroup width="100%" height="100%" paddingBottom="10">
+								<s:HGroup gap="0" width="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Group click="restarHoja()">
+										<mx:Image id="imgHojaMenos" source="{catalogoIconosBotones.getInstance().pagina_anterior}"  smoothBitmapContent="true" visible="false"/>
+									</s:Group>
+									<s:Spacer width="10" />
+									<s:Label styleName="Texto_12" text="{' '+(numeroActual + 1).toString() + ' / ' + arregloImagenes.length.toString()+' '}" paddingTop="0"/>
+									<s:Spacer width="10" />
+									<s:Group click="aumentarHoja()">
+										<mx:Image id="imgHojaMas" source="{catalogoIconosBotones.getInstance().pagina_siguiente}"  smoothBitmapContent="true" visible="false"/>
+									</s:Group>
+								</s:HGroup>
+								
+								<s:HGroup gap="5" width="100%" horizontalAlign="center">
+									<s:Group click="decrementaZoom()">
+										<mx:Image id="imgZoomMenos" source="{catalogoIconosBotones.getInstance().zoom_menos}"  smoothBitmapContent="true" />
+									</s:Group>
+									<s:Group click="incrementaZoom()">
+										<mx:Image id="imgZoomMas" source="{catalogoIconosBotones.getInstance().zoom_mas}"  smoothBitmapContent="true"/>
+									</s:Group>
+								</s:HGroup>
+							</s:VGroup>  
+							
+							<pqNet:botonPqNetLargo  id="btnRecargar"  width="35" right="20" icono="recargarImg" 
+													colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" click="cargarArchivos(event)"/>
+						</s:Group>
+					</s:VGroup>
+					
+				</s:Group>
+				
+			</s:HGroup>
+		</s:HGroup>  
+	</s:VGroup>  
+	
+</s:Group>

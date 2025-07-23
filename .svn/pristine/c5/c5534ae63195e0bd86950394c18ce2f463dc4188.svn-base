@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:otros="skins.otros.*"
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		 xmlns:largo="skins.botones.largo.*"
+		 xmlns:pqNet1="skins.botones.pqNet.*"
+		 width="100%" height="100%"
+		 paddingBottom="10" paddingLeft="10" paddingRight="10"
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.desPhsUsa.vistas.eventos.EventoGenericoDespachoPhsUsa;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatoMoneda;
+			import mx.events.ListEvent;
+			import mx.events.ResizeEvent;
+			
+			import spark.events.ListEvent;
+			private var colorRojoTextoGrid:uint = 0xd10c0c; // Red
+			private var colorVerdeTextoGrid:uint = 0x70a047; // Verde
+			[Bindable]	private var _colorET:uint = 0xCC5566;
+			
+			[Bindable]	public var _listaPartidaASurtirPHSUniverso:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listaPartidaASurtirPHSTrabajo:ArrayCollection;
+			[Bindable]	private var _listaFacturas:ArrayCollection = new ArrayCollection(); 
+			
+			[Bindable]	private var _facturaTitulo:String="unset";
+			[Bindable]	private var _facturaMonto:String="unset";
+			[Bindable]	private var _facturaET:String="unset";
+			
+			public function iniciarSurtido($cliente:String):void{
+				limpiaDatosTitulo();
+				this._facturaTitulo = $cliente;
+				this._listaFacturas = new ArrayCollection();
+				var arrTodoCliente:ArrayCollection = new ArrayCollection();
+				arrTodoCliente = UtilsGrid.queryCampoX(this._listaPartidaASurtirPHSUniverso, "nombreCliente", $cliente);
+				this._listaFacturas = UtilsGrid.queryQuitarRepetidos(arrTodoCliente, "factura");
+				for(var f:int=0; f<this._listaFacturas.length; f++){
+					var arrTempo:ArrayCollection = UtilsGrid.queryADosCampos(this._listaPartidaASurtirPHSUniverso,
+						"nombreCliente", this._listaFacturas[f].nombreCliente,
+						"factura", this._listaFacturas[f].factura
+					);
+					(this._listaFacturas[f] as PartidaASurtirPHS).numPartidas = arrTempo.length;
+					this._facturaET = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "diasDesdeFIP", 0 ) >  0 ? "FT" : "ET" ;
+					_colorET = this._facturaET == "ET" ? colorVerdeTextoGrid: colorRojoTextoGrid;
+					(this._listaFacturas[f] as PartidaASurtirPHS).stringET = this._facturaET;
+					(this._listaFacturas[f] as PartidaASurtirPHS).numManET = UtilsGrid.conteoCampoX(arrTempo, "enTiempo","En tiempo");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numManUR = UtilsGrid.conteoCampoX(arrTempo, "enTiempo","Urgente");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numManFT = UtilsGrid.conteoCampoX(arrTempo, "enTiempo","Fuera de tiempo");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numCG = UtilsGrid.conteoCampoX(arrTempo, "manejo","Congelación");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numRG = UtilsGrid.conteoCampoX(arrTempo, "manejo","Refrigeración");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numAB = UtilsGrid.conteoCampoX(arrTempo, "manejo","Ambiente");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numNA = UtilsGrid.conteoCampoX(arrTempo, "manejo","NA");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numFR = UtilsGrid.conteoCampoX(arrTempo, "tipoFlete", "Regular");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numFE = UtilsGrid.conteoCampoX(arrTempo, "tipoFlete", "Flete Express");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numFP = UtilsGrid.conteoCampoX(arrTempo, "tipoFlete", "Programado");
+					(this._listaFacturas[f] as PartidaASurtirPHS).numST = UtilsGrid.conteoCampoX(arrTempo, "nombreCliente","STOCK");
+					(this._listaFacturas[f] as PartidaASurtirPHS).importePFactura = UtilsGrid.sumatoria(arrTempo, "importePFactura");
+				}
+				var finalLista:PartidaASurtirPHS = new PartidaASurtirPHS();
+				finalLista.ultimo = this._listaFacturas.length.toString();
+				this._listaFacturas.addItem(finalLista);
+				 tablaGrid_resizeHandler();
+				 if( this._listaFacturas.length > 0){
+					 this.listFacts.selectedIndex = 0;
+				 }else{
+					 this._listaPartidaASurtirPHSTrabajo = new ArrayCollection();
+				 }
+				 listFacts_clickHandler();
+			}
+			private function limpiaDatosTitulo():void{
+				this._listaPartidaASurtirPHSTrabajo = new ArrayCollection();
+				//this._displayPHS = new PartidaASurtirPHS();
+				this.lblET.visible = false;
+			}
+			/**
+			 * Funcion para pasar Al inspector
+			 */ 
+			private function avanzaInspector():void{
+				var evento:EventoGenericoDespachoPhsUsa = new EventoGenericoDespachoPhsUsa( EventoGenericoDespachoPhsUsa.SELECCIONA_OPCION );
+				evento.idOpcionSeleccionada = "seleccionaInspector";
+				dispatchEvent( evento );
+			}
+			
+			protected function tablaGrid_resizeHandler():void
+			{
+				(this.tablaGrid.columns[0] as DataGridColumn).width = (this.tablaGrid.width * 0.04);//#
+				(this.tablaGrid.columns[1] as DataGridColumn).width = (this.tablaGrid.width * 0.04);//C
+				(this.tablaGrid.columns[2] as DataGridColumn).width = (this.tablaGrid.width * 0.30);//concepto
+				(this.tablaGrid.columns[3] as DataGridColumn).width = (this.tablaGrid.width * 0.15);//tipo
+				(this.tablaGrid.columns[4] as DataGridColumn).width = (this.tablaGrid.width * 0.15);//FEE
+				(this.tablaGrid.columns[5] as DataGridColumn).width = (this.tablaGrid.width * 0.15);//numero de documentos asociados
+				(this.tablaGrid.columns[6] as DataGridColumn).width = (this.tablaGrid.width * 0.10);//ubicacion
+			}
+			/**
+			 * recibo la lista del mapa MapaInspectorPhs
+			 */
+			public function set recibeListaPartidaDespacho($lista:ArrayCollection):void{
+				if($lista == null || $lista.length < 1) return;
+				this._listaPartidaASurtirPHSUniverso = $lista;
+			}
+			[Bindable]	private var _indiceAnteriorlistFacts:int = 0;
+			protected function listFacts_clickHandler():void
+			{
+				if(this.listFacts.selectedIndex == this._listaFacturas.length-1){
+					this.listFacts.selectedIndex  = _indiceAnteriorlistFacts;
+					return;
+				}
+					_indiceAnteriorlistFacts = this.listFacts.selectedIndex;
+					var facturaPhs:String = (this._listaFacturas[this.listFacts.selectedIndex] as PartidaASurtirPHS).factura;
+					this._facturaMonto = UtilsFormatoMoneda.determinaMoneda((this._listaFacturas[this.listFacts.selectedIndex] as PartidaASurtirPHS).monedaFactura) + ' '+
+													UtilsFormatosNumericos.precisionADosDecimalesConComas( (this._listaFacturas[this.listFacts.selectedIndex] as PartidaASurtirPHS).importePFactura).toString() + ' '
+													+ (this._listaFacturas[this.listFacts.selectedIndex] as PartidaASurtirPHS).monedaFactura;
+					this._facturaTitulo = 'F'+facturaPhs;
+					this.lblET.visible = true;
+					//this._ET = (this._listaFacturas[this.listFacts.selectedIndex] as PartidaASurtirPHS).ET;
+					var colorRojoTextoGrid:uint = 0xd10c0c; // Red
+					var colorVerdeTextoGrid:uint = 0x70a047; // Verde
+					//this.lblET.setStyle("color", (this._facturaET == "ET" ? colorVerdeTextoGrid: colorRojoTextoGrid) );
+					this._listaPartidaASurtirPHSTrabajo = UtilsGrid.queryCampoX(this._listaPartidaASurtirPHSUniverso, "factura", facturaPhs );
+					this._numPartidas = _listaPartidaASurtirPHSTrabajo.length;
+					this._numET = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"enTiempo","En tiempo");
+					this._numManUR = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"enTiempo","Urgente");
+					this._numManFT = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"enTiempo","Fuera de tiempo");
+					this._numST  = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"nombreCliente","STOCK");
+					this._numCG = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"manejo","Congelamiento");
+					this._numRG = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"manejo","Refrigeración");
+					this._numAB = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"manejo","Ambiente");
+					this._numNA = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"manejo","NA");
+					this._numFR = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"tipoFlete","Regular");
+					this._numFE = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"tipoFlete","Flete Express");
+					this._numFP = UtilsGrid.conteoCampoX(this._listaPartidaASurtirPHSTrabajo,"tipoFlete","Programado");
+					if(this._listaPartidaASurtirPHSTrabajo.length > 0) this.tablaGrid.selectedIndex = 0;
+					_ultimoIndiceTablaGrid=0;
+					tablaGrid_itemClickHandler();
+			}
+			[Bindable]	private var _numPartidas:int=-1;
+			[Bindable]	private var _numET:int=-1;
+			[Bindable]	private var _numManUR:int=-1;
+			[Bindable]	private var _numManFT:int=-1;
+			[Bindable]	private var _numST:int=-1;
+			[Bindable]	private var _numCG:int=-1;
+			[Bindable]	private var _numRG:int=-1;
+			[Bindable]	private var _numAB:int=-1;
+			[Bindable]	private var _numNA:int=-1;
+			[Bindable]	private var _numFR:int=-1;
+			[Bindable]	private var _numFE:int=-1;
+			[Bindable]	private var _numFP:int=-1;
+			
+			private var _ultimoIndiceTablaGrid:int=0;
+			protected function tablaGrid_itemClickHandler():void
+			{
+				 if( (this._listaPartidaASurtirPHSTrabajo[this.tablaGrid.selectedIndex ] as PartidaASurtirPHS).numFila > 0){
+					(this._listaPartidaASurtirPHSTrabajo[this.tablaGrid.selectedIndex ] as PartidaASurtirPHS).numFila = (this.tablaGrid.selectedIndex +1 )* -1;
+				} 
+				 if(_ultimoIndiceTablaGrid != this.tablaGrid.selectedIndex ){
+					(this._listaPartidaASurtirPHSTrabajo[_ultimoIndiceTablaGrid] as PartidaASurtirPHS).numFila = (_ultimoIndiceTablaGrid +1 );
+					_ultimoIndiceTablaGrid = this.tablaGrid.selectedIndex;
+				} 
+				this._listaPartidaASurtirPHSTrabajo.refresh();
+			}
+		]]>
+	</fx:Script>
+		<s:VGroup width="25%" height="100%">
+			<s:List id="listFacts" width="100%" height="100%" borderVisible="false"
+					mouseDown="listFacts_clickHandler()" dataProvider="{this._listaFacturas}"
+					itemRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.SurtidoRenderer"
+					selectedIndex="0" selectionColor="#5294df" rollOverColor="#70b2fd" />
+		</s:VGroup>
+		<otros:VDivisionHueca height="100%"/>
+		<s:VGroup width="100%" height="100%" paddingLeft="15">
+			
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:VGroup id="grpArribadas" width="100%" height="100%" >
+					<s:Label paddingBottom="5" color="#773F8C" fontSize="14" fontWeight="bold"
+							 text="{this._numPartidas} partida{(this._numPartidas == 1 ? '':'s')} : {this._numET} ET · {this._numManUR} UR · {this._numManFT} FT" />
+					<s:Label color="#336699" fontSize="13" text="{this._numPartidas} partida{(this._numPartidas == 1 ? '':'s')} : {this._numCG} CG · {this._numRG} RG · {this._numAB} AB · {this._numNA} NA "/>
+					<s:Label color="#999999" fontSize="13" text="{this._numPartidas} partida{(this._numPartidas == 1 ? '':'s')} : {this._numFR} FR · {this._numFE} FE · {this._numFP} FP"/>
+				</s:VGroup>
+				<s:VGroup horizontalAlign="right" verticalAlign="middle">
+					<label:labelSubtitulo fontSize="14" fontWeight="bold" text="{this._facturaTitulo}"/>
+					<label:labelSubtitulo id="lbltituloRechazado" color="#999999" fontSize="14" fontWeight="bold" text="{this._facturaMonto}"/>
+					<label:labelSubtitulo id="lblET" fontSize="14" fontWeight="bold" text="{this._facturaET}" color="{this._colorET}"/>
+				</s:VGroup>
+			</s:HGroup>
+			
+			<!--<s:Spacer height="2"/>-->
+			<otros:divisionGruesa width="100%"/>
+			<!--<s:Spacer height="2"/>-->
+			<pqNet:dataGridPqNet id="tablaGrid" width="100%" height="100%"
+								 dataProvider="{this._listaPartidaASurtirPHSTrabajo}" itemClick="tablaGrid_itemClickHandler()"
+								 horizontalScrollPolicy="auto" resize="tablaGrid_resizeHandler()"
+								 variableRowHeight="true" >
+				<pqNet:columns>
+					<mx:DataGridColumn dataField="numFila" headerText="#">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:Label text="{( (this.data as PartidaASurtirPHS).numFila > 0 ? (this.data as PartidaASurtirPHS).numFila: (this.data as PartidaASurtirPHS).numFila * -1)}" color.selected="#ffffff" horizontalCenter="0" />
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="C" dataField="cantidad"/>
+					<mx:DataGridColumn headerText="Concepto" dataField="descripcionProducto" itemRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.VerMasRenderer"/>
+					<mx:DataGridColumn headerText="Tipo">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup width="100%">
+										<s:Label width="100%" fontSize="10" fontWeight="normal" textAlign="center"
+												 text="{(this.data as PartidaASurtirPHS).tipo}" color.selected="#FFFFFF"/>
+										<s:Label width="100%" fontSize="10" color="#666666" textAlign="center" color.selected="#FFFFFF"
+												 text="{( (this.data as PartidaASurtirPHS).manejo == 'NA' ||  (this.data as PartidaASurtirPHS).manejo ==  null ? 'No aplica': (this.data as PartidaASurtirPHS).manejo)}" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="FEE">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+											
+											import skins.catalogos.catalogoIconosGrid;
+											
+											import spark.components.Label;
+											[Bindable]	private var colorX:uint = 0x002200;
+											[Bindable]	private var normalIco:Class;
+											override public function set data(value:Object):void{
+												super.data= value;
+												if(data.enTiempo == "Fuera de tiempo"){
+													colorX = 0x773F8C;// morado
+													normalIco = catalogoIconosGrid.getInstance().render_banderamorada;
+												}
+												if(data.enTiempo == "Urgente"){
+													colorX = 0xC1251D;// rojo
+													normalIco = catalogoIconosGrid.getInstance().render_banderaroja;
+												}
+												if(data.enTiempo == "En tiempo"){
+													colorX = 0x6BA143;// verde
+													normalIco = catalogoIconosGrid.getInstance().render_banderaverde;
+												}
+												if(data.tipoFlete == "Regular"){
+													lblFlete.text = "FR";
+												}else if(data.tipoFlete == "Programado"){
+													lblFlete.text = "FP";
+												}else if(data.tipoFlete == "Flete Express"){
+													lblFlete.text = "FE";
+												}
+												iniciarr();
+											}
+											private function iniciarr():void{
+												if(data.nombreCliente == "STOCK"){
+													grpFecha.height = 0;
+													grpFecha.visible = false;
+													grpNA.percentHeight = 100;
+													grpNA.visible = true;
+												}else{
+													grpFecha.percentHeight = 100;
+													grpFecha.visible = true;
+													grpNA.height = 0;
+													grpNA.visible = false;
+												}
+											}
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup id="grpFecha" width="100%" horizontalAlign="center">
+										<s:Label id="lblFEE" color="{colorX}" text="{ (data as PartidaASurtirPHS).FEEMasCercanaString}"  fontWeight="bold" color.selected="#FFFFFF"/>
+										<s:Label id="lblFlete" text="-" color.selected="#FFFFFF" />
+										<s:Image source="{normalIco}" horizontalCenter="0"/>
+									</s:VGroup>
+									<s:VGroup id="grpNA" width="100%" horizontalAlign="center">
+										<s:Label color="#666666" color.selected="#FFFFFF" text="NA" />
+										<s:Label color="#666666" color.selected="#FFFFFF" text="NA" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn dataField="documentoAsociado" headerText="Número de documentos asociados" headerRenderer="mx.com.proquifa.proquifanet.desPhsUsa.vistas.vista.itemRenderer.HeaderRendererCatorce">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:Label text="{ (data as PartidaASurtirPHS).documentoAsociado.length}" color.selected="#FFFFFF" horizontalCenter="0" />
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="Ubicación">
+						<mx:itemRenderer>
+							<fx:Component>
+								<s:MXItemRenderer autoDrawBackground="false">
+									<fx:Script>
+										<![CDATA[
+											import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaASurtirPHS;
+											
+											override public function set data(value:Object):void{
+												super.data= value;
+												if( (data as PartidaASurtirPHS).ubicacion != "Congelador" &&
+													(data as PartidaASurtirPHS).ubicacion != "Refrigerador"  && 
+													(data as PartidaASurtirPHS).ubicacion != "Cuarentena" &&
+													(data as PartidaASurtirPHS).ubicacion != "ND" ){
+													lblEstante.percentHeight = 100;
+													lblEstante.visible = true;
+												}else{
+													lblEstante.height = 0;
+													lblEstante.visible = false;
+												}
+											}
+										]]>
+									</fx:Script>
+									<s:states>
+										<s:State name="normal"/>
+										<s:State name="hovered"/>
+										<s:State name="selected"/>
+									</s:states>
+									<s:VGroup width="100%" height="100%" horizontalAlign="center" >
+											<s:Label id="lblUbicacion" fontSize="10" text="{ (data as PartidaASurtirPHS).ubicacion == 'ND' ? 'Pendiente': (data as PartidaASurtirPHS).ubicacion}" color.selected="#FFFFFF" horizontalCenter="0" />
+											<s:Label id="lblEstante" fontSize="10" text="Estante" color="#666666" color.selected="#FFFFFF" horizontalCenter="0" />
+									</s:VGroup>
+								</s:MXItemRenderer>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+				</pqNet:columns>
+			</pqNet:dataGridPqNet>
+			<!--<s:Spacer height="2"/>-->
+			<otros:divisionGruesa width="100%"/>
+			<!--<s:Spacer height="2"/>-->
+			<s:HGroup width="100%" height="25" verticalAlign="middle" horizontalAlign="right" paddingTop="13">
+				<pqNet1:botonPqNetLargo label="Inspector" icono="inspector"/>
+			</s:HGroup>
+		</s:VGroup>
+</s:HGroup>

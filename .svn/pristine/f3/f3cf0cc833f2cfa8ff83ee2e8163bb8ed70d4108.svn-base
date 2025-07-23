@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contenedores:VGroupConPaddingStandardPqNet  xmlns:fx="http://ns.adobe.com/mxml/2009"  
+											 xmlns:controls="mx.com.adobe.flex.extras.controls.*"
+											 xmlns:contenedores="skins.skin.contenedores.*"
+											 xmlns:s="library://ns.adobe.com/flex/spark"
+											 xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+											 xmlns:mx="library://ns.adobe.com/flex/mx" 
+											 xmlns:textinput="skins.skin.textinput.*"
+											 xmlns:btnEnviar="skins.botones.envia.*"
+											 xmlns:textarea="skins.skin.textarea.*" 
+											 xmlns:graficas="skins.skin.graficas.*"
+											 xmlns:btnSalir="skins.botones.salir.*"
+											 xmlns:btnLargo="skins.botones.largo.*"
+											 xmlns:pqNet1="skins.botones.pqNet.*" 
+											 xmlns:label="skins.skin.label.*" 
+											 xmlns:hbox="skins.skin.hbox.*" 
+											 xmlns:otros="skins.otros.*" 
+											 width="100%" height="100%" 
+											 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.com.adobe.flex.extras.controls.eventotextinputemail.EventoTextInputEmail;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+			import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPopUpContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsRutaArchivos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.comun.contactos.ObtenerContacto;
+			import mx.controls.Label;
+			import mx.controls.LinkButton;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			private var ListDoc:Array = new Array;
+			private var fPor:String;
+			private var tipoDoc:String;
+			[Bindable]
+			private var _correoInfoGeneral:Correo;
+			private var correoPorEnviar:Correo;
+			private var ComentariosEntrega:String;
+			private var observoComentarios:Boolean = new Boolean;
+			private var contacto:ObtenerContacto= null;
+			
+			private var productorDocSalientes:Producer = new Producer();
+			private var canalRegistro:AMFChannel;
+			private var canalesRegistro:ChannelSet;
+			
+			public function iniciaCorreoInspector(elcorreo:Object):void{
+				//						DEFINIR PRODUCTOR PARA EL CANAL
+				this.productorDocSalientes.destination = "actualizacionService";
+				this.productorDocSalientes.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalRegistro = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesRegistro = new ChannelSet();
+				this.canalesRegistro.addChannel(canalRegistro);
+				this.productorDocSalientes.channelSet = this.canalesRegistro;
+				
+				var correoNuevo:Object = new Object();
+				fPor = "";
+				tipoDoc = "";
+				this.ListDoc = new Array();
+				
+				_correoInfoGeneral = new Correo();
+				_correoInfoGeneral = elcorreo as Correo;
+				fPor = _correoInfoGeneral.facturadaPor;
+				if(_correoInfoGeneral.tipo == "Cotizaciones por enviar"){ // agregar los 6 tipos botones
+					tipoDoc = "Cotizaciones";
+				}else if(_correoInfoGeneral.tipo == "Pedidos por enviar"){
+					tipoDoc = "Pedidos";
+				}else if(_correoInfoGeneral.tipo == "Facturas por enviar"){
+					tipoDoc = "Facturas";
+				}else if(_correoInfoGeneral.tipo == "Notificaciones por enviar"){
+					tipoDoc = "Notificaciones";
+				}else if(_correoInfoGeneral.tipo.indexOf('Confir') != -1){
+					tipoDoc = "Cotizaciones";
+				}else if(_correoInfoGeneral.tipo.indexOf('Segui') != -1){
+					tipoDoc = "Cotizaciones";
+				}
+				
+				observoComentarios = false;
+				if(_correoInfoGeneral.archivoAdjunto != "" ){
+					ListDoc = _correoInfoGeneral.archivoAdjunto.split(",");
+					for( var i:int = 1;i<ListDoc.length;i++){
+						var enlaceDocumento:LinkButton = new LinkButton();
+						enlaceDocumento.label = this.ListDoc[i] + ".pdf";
+						enlaceDocumento.id = "Archivo" + (i+1);
+						enlaceDocumento.addEventListener("click",VerDocumento);
+						enlaceDocumento.toolTip = "Ver Documento";
+						enlaceDocumento.setStyle("color","#0C4AFC");
+						this.areaAdjuntos.addElement(enlaceDocumento);
+					}
+				}else{
+					var etiqueta:Label = new Label;
+					etiqueta.text = "N/A";
+					this.areaAdjuntos.addElement( etiqueta );
+				}
+				txtPara.setFocus();
+				/* txtPara.selectionBeginIndex = 0;
+				txtPara.selectionEndIndex = 0; */
+				txtPara.selectRange(0,0);
+			}
+			private function falloproductor(event:MessageFaultEvent):void{
+				//Alert.show("Se ha producido un error en el Productor","Error");
+				/*  var evt:EventoAlertaPqNet = new EventoAlertaPqNet(EventoAlertaPqNet.MOSTRAR_ALERTA);
+				evt.mensaje = "Se ha producido un error en el Productor";
+				evt.encabezado = "Error";
+				dispatchEvent(evt);  */
+				alertaSingleton.show( catalogoAlertas.ERR_channelProductor, catalogoAlertas.TIT_ERR);
+			}
+			private function VerDocumento(evet:Event):void{	
+				var folioSeleccionado:String;
+				folioSeleccionado = evet.target.label;   
+				folioSeleccionado = folioSeleccionado.substring(0,folioSeleccionado.length - 4);
+				var tipoDocto:String = new String;
+				var ruta:String = new String;
+				var directorio:String;
+				tipoDocto = UtilsRutaArchivos.obtenerCarpeta( folioSeleccionado, tipoDoc);
+				directorio = UtilsRutaArchivos.obtenerRuta(tipoDocto, this.fPor );
+				if (tipoDocto=="OC"){
+					folioSeleccionado = folioSeleccionado + "-P";
+				}else if (tipoDocto == "Cartas"){
+					if(folioSeleccionado == "Carta fin de año Proquifa"){
+						folioSeleccionado = "Carta fin de anio Proquifa";
+					}
+				}		             	
+				ruta = directorio + folioSeleccionado + ".pdf";
+				var request:URLRequest = new URLRequest(ruta);
+				navigateToURL(request);
+			}
+			/**
+			 * Funcion para llamar al padre DefaulVistaAIESC.mxml y seleccionar hijo espacioPlanificacion
+			 * */
+			private function regresaGrid():void{
+				var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.SELECCIONA_OPCION);
+				evento.idOpcionSeleccionada = "espacioPlanificacionSinReiniciarComponente";
+				evento.pendienteMensaje.numeroFolio = _correoInfoGeneral.folioNumerico.toString();
+				evento.pendienteMensaje.vieneDe = "usuarioViejoBorra";
+				evento.pendienteMensaje.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(evento);
+			}
+			
+			private function validaCorreoCC():void{
+				if ( txtPara.text != "" ){
+					this.txtPara.addEventListener( EventoTextInputEmail.VALIDADO_EMAILS, correoParaVerdadero );
+					var vieneD:String = "Para"
+					this.txtPara.validarEmails( vieneD );
+				}else{
+					//Alert.show("Debe indicar al menos una dirección de correo en el campo Para","Información incompleta");
+					/*  var bivent:EventoAlertaPqNet = new EventoAlertaPqNet(EventoAlertaPqNet.MOSTRAR_ALERTA);
+					bivent.mensaje = "Debe indicar al menos una dirección de correo en el campo Para";
+					bivent.encabezado = "Información incompleta";
+					dispatchEvent(bivent);  */
+					alertaSingleton.show(catalogoAlertas.ADV_debeIndicarUnaDirecciónDeEmail, catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}		
+			}
+			private function correoParaVerdadero(evento:EventoTextInputEmail):void{			
+				if ( evento.type == "EventoValidadoEmails"){
+					//validaCorreoPara = true;
+					if(this.txtCCopia.text != ""){
+						this.txtCCopia.addEventListener(EventoTextInputEmail.VALIDADO_EMAILS, correoCcopiaVerdadero);
+						this.txtCCopia.addEventListener(EventoTextInputEmail.ERROR_EMAILS, correoCcopiaVerdadero);
+						var vieneD:String = "CC";
+						this.txtCCopia.validarEmails( vieneD );
+					}else{
+						sendMail();
+					}
+				}
+			}
+			private function correoCcopiaVerdadero(evento:EventoTextInputEmail):void{	
+				if ( evento.type == "EventoValidadoEmails" ){
+					sendMail();
+				}
+			}
+			private function sendMail():void{
+				this.enviarCorreo();
+				cerrar();
+				/* var evento:EventoPendientesPorEnviar = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.SELECCIONA_OPCION);
+				evento.idOpcionSeleccionada = "borraPendienteEnUsoDelArreglo";
+				evento.pendienteMensaje.numeroFolio = _correoInfoGeneral.folioNumerico.toString();
+				evento.pendienteMensaje.vieneDe = "usuarioViejoBorra";
+				evento.pendienteMensaje.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				dispatchEvent(evento); */
+			}
+			/**
+			 * Metodo para enviarr el objeto correo al Mapa
+			 */
+			private function enviarCorreo():void{		
+				var evento:EventoPendientesPorEnviar = null;
+				//if( this.tipoDoc ==  "Cotizaciones" ){ // agregar para los demas tipos
+				evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.CORREO_POR_ENVIAR_COTIZACIONES );
+				//}
+				this.correoPorEnviar = new Correo();
+				this.correoPorEnviar = _correoInfoGeneral;
+				this.correoPorEnviar.idEmpleadoString = _correoInfoGeneral.origen;
+				this.correoPorEnviar.origen = "ventas"; // this.origen;
+				this.correoPorEnviar.tipo = this.tipoDoc;
+				this.correoPorEnviar.FolioDocumento = _correoInfoGeneral.archivoAdjunto; //folios;
+				this.correoPorEnviar.correo = this.txtPara.text;
+				this.correoPorEnviar.ccorreo = this.txtCCopia.text;
+				this.correoPorEnviar.cocorreo = this.txtCCo.text;
+				this.correoPorEnviar.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+				//this.ComentariosEntrega = _correoInfoGeneral.comentariosAdicionales; // agregada	  
+				evento.correo = this.correoPorEnviar;
+				dispatchEvent( evento );
+				evento = null;
+				
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.body = "actualizaGridPlanificacionDocumentosSalientes";
+				this.productorDocSalientes.send( mensaje );
+			} 
+			private function cerrar():void{
+				this.txtPara.text = "";
+				this.txtCCopia.text = "";
+				//this.txtAsunto.text = "";
+				this.txtCCo.text = "";
+				//this.txtCuerpoCorreo.text = ""; 	
+				//this.ContenedorLinks.removeAllElements();	 
+			}
+			private function verAmparo():void{
+				var arregloAdjuntos:Array = _correoInfoGeneral.archivoAdjunto.split(",");
+				//var ruta:String = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA + arregloAdjuntos[0] + ".pdf";
+				//mostrarDocumento(ruta);
+				
+				var folioSeleccionado:String;
+				folioSeleccionado = arregloAdjuntos[0] + ".pdf";   
+				folioSeleccionado = folioSeleccionado.substring(0,folioSeleccionado.length - 4);
+				var tipoDocto:String = new String;
+				var ruta:String = new String;
+				var directorio:String;
+				tipoDocto = UtilsRutaArchivos.obtenerCarpeta( folioSeleccionado, tipoDoc);
+				directorio = UtilsRutaArchivos.obtenerRuta(tipoDocto, this.fPor );
+				if (tipoDocto=="OC"){
+					folioSeleccionado = folioSeleccionado + "-P";
+				}else if (tipoDocto == "Cartas"){
+					if(folioSeleccionado == "Carta fin de año Proquifa"){
+						folioSeleccionado = "Carta fin de anio Proquifa";
+					}
+				}		             	
+				ruta = directorio + folioSeleccionado + ".pdf";
+				
+				var request:URLRequest = new URLRequest(ruta);
+				navigateToURL(request);
+			}
+			private function mostrarDocumento(ruta:String):void{
+				var request:URLRequest = new URLRequest(ruta);
+				navigateToURL(request);
+			}
+			//-------------------------------------------------Consultar Contactos--------------------------------------------
+			private function consultaContactos():void{ 
+				/* var evt:EventoParaContactoService = new EventoParaContactoService(EventoParaContactoService.HAS_VISIBLE_POPUP_CONTACTOS);
+				evt.consulta = "cliente";
+				evt.vieneD = "DocumentosSalientesInspectorMail";
+				evt.busquedaPorEmpresa = this._correoInfoGeneral.nombreDestino;
+				dispatchEvent(evt); */
+				var evt:EventoPopUpContactos = new EventoPopUpContactos(EventoPopUpContactos.MUESTRA_POP_UP);
+				evt.vieneDE_PopUp = 'DocumentosSalientesInspectorMail';
+				dispatchEvent( evt );
+			}
+			
+			private function regresaSubtituloTipo(etiqueta:String):String{
+				var regresaString:String='';
+				if(etiqueta.indexOf('Coti') != -1 || etiqueta.indexOf('Conf') != -1 || etiqueta.indexOf('Segu') != -1 ) regresaString = 'Cotización';
+				if(etiqueta.indexOf('Pedi') != -1) regresaString = 'Pedido';
+				if(etiqueta.indexOf('Fact') != -1) regresaString = 'Factura';
+				if(etiqueta.indexOf('Noti') != -1) regresaString = 'Notificación';
+				return regresaString;
+			}
+		]]>
+	</fx:Script>
+	
+	
+	<s:Scroller width="100%" height="100%">
+		<s:VGroup width="100%" height="100%">
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_inspector}"/>
+				<!--<label:labelTitulo width="100%" fontSize="26" text="Inspector {}"/>-->
+				<label:TituloBankGothic_30 width="100%"  text="Inspector {}"/>
+				<s:Spacer width="100%"/>
+				<label:TituloBankGothic_24_Gris  text="[Documentos a enviar]" textAlign="right"/>
+				<!--<s:Label width="438" fontFamily="Bank Gothic" color="0x777777" height="24" fontSize="24" fontStyle="normal" fontWeight="normal"
+				text="[Documentos a enviar]" textAlign="right"/>-->
+			</s:HGroup>
+			<otros:divisionHueca width="100%"/>
+			<s:HGroup width="100%">
+				<s:VGroup width="100%">
+					<label:TituloBankGothic_22 id="lblcliente" text="{ this._correoInfoGeneral.nombreDestino }" textAlign="left"/>
+					<!--<s:Label id="lblcliente" text="{ this._correoInfoGeneral.nombreDestino }" fontFamily="Bank Gothic" fontSize="23" fontWeight="bold" textAlign="left"/>-->
+					<label:TituloBankGothic_16_GrisCasiNegro  id="lblpais" text="{this._correoInfoGeneral.paisDestino}" fontSize="14" textAlign="left"/>
+					<!--<s:Label id="lblpais" text="{this._correoInfoGeneral.paisDestino}" fontFamily="Bank Gothic" fontSize="14" color="0x777777" textAlign="left"/>-->
+				</s:VGroup>
+				<s:VGroup paddingTop="10" paddingBottom="10">
+					<pqNet1:botonPqNetLargo icono="contactos" width="160" click="consultaContactos()" label="Contactos"/>
+				</s:VGroup>
+			</s:HGroup>
+			<otros:divisionHueca width="100%"/>
+			<s:HGroup width="100%" paddingTop="10" paddingBottom="10">
+				<label:TextoBankGothic_24 id="lblcotizacion" text="{ regresaSubtituloTipo(_correoInfoGeneral.tipo) } · { _correoInfoGeneral.FolioDocumento }"/>
+				<!--<s:Label id="lblcotizacion" fontSize="24" fontStyle="normal" fontWeight="normal" fontFamily="Bank Gothic"
+				text="{ regresaSubtituloTipo(_correoInfoGeneral.tipo) } . { _correoInfoGeneral.FolioDocumento }"/>-->
+				<s:Spacer width="100%"/>
+				<pqNet1:botonPqNetLargo icono="amparo" click="verAmparo()" width="160" label="Amparo"/>
+			</s:HGroup>
+			<otros:divisionGruesa width="100%"/>
+			
+			
+			<s:VGroup width="100%" height="100%">
+				<label:Titulo_19_pTop10 color="#C61515" text="¡IMPORTANTE ANTES DE ENVIAR!" paddingTop="30"/>
+				<!--<s:Label color="#C61515" fontFamily="tahoma" fontSize="18" fontWeight="bold" text="¡IMPORTANTE ANTES DE ENVIAR!" paddingTop="30"/>-->
+				<textarea:txtAreaBlancoDefaultPQNet id="lblcuerpo" text="{this._correoInfoGeneral.comentariosAdicionales}" width="100%"  height="100%" editable="false" color="0x353535"/>
+				<!--<mx:Text id="lblcuerpo" text="{this._correoInfoGeneral.comentariosAdicionales}" width="100%" color="0x353535" height="100%" fontFamily="Tahoma" fontSize="16"/>-->
+				<!--<s:Label width="100%" fontSize="15" color="0x353535" text="ATTE. {this._correoInfoGeneral.nombreOrigen }"/>-->
+				<label:Texto_16_GrisCasiNegro width="100%" text="ATTE. {this._correoInfoGeneral.nombreOrigen }" paddingTop="10"/>
+			</s:VGroup>
+			
+			
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="10"/>
+			<s:HGroup width="100%" verticalAlign="middle">
+				<s:Spacer width="100%"/>
+				<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_mailson49x35}"/>
+				<!--<s:Label text="Email" fontFamily="Bank Gothic" fontSize="23"/>-->
+				<label:TextoBankGothic_24 text="Email" />
+			</s:HGroup>
+			
+			<s:VGroup width="100%" paddingTop="10" paddingBottom="10">
+				<s:HGroup width="100%">
+					<label:Texto text="PARA:" width="45" height="100%" paddingTop="0" textAlign="right" verticalAlign="middle"/>
+					<!--<textinput:txtInputBlancoDefaultPQNet id="txtPara" width="100%" text="{this._correoInfoGeneral.correo}" />-->
+					<controls:TextInputMailPQNet activarAlerta="true" id="txtPara" width="100%" text="{this._correoInfoGeneral.correo}" />
+				</s:HGroup>
+				<s:HGroup width="100%">
+					<label:Texto text="CC:" width="45" height="100%" paddingTop="0" textAlign="right" verticalAlign="middle"/>
+					<!--<textinput:txtInputBlancoDefaultPQNet id="txtCCopia" width="100%" text="{this._correoInfoGeneral.ccorreo}" />-->
+					<controls:TextInputMailPQNet activarAlerta="true" id="txtCCopia" width="100%" text="{this._correoInfoGeneral.ccorreo}" />
+				</s:HGroup>
+				<s:HGroup width="100%">
+					<label:Texto text="CCO:" width="45" height="100%" paddingTop="0" textAlign="right" verticalAlign="middle"/>
+					<!--<textinput:txtInputBlancoDefaultPQNet id="txtCCo" width="100%" text="{this._correoInfoGeneral.cocorreo}" />-->
+					<controls:TextInputMailPQNet activarAlerta="true" id="txtCCo" width="100%" text="{this._correoInfoGeneral.cocorreo}"  />
+				</s:HGroup>
+				<s:HGroup width="100%">
+					<s:HGroup width="45" horizontalAlign="center">
+						<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_clipson22x53}" />
+					</s:HGroup>
+					<s:BorderContainer width="100%">
+						<s:HGroup id="areaAdjuntos" width="100%"/>
+						<s:HGroup width="100%" height="100%" id="ContenedorLinks"/>
+					</s:BorderContainer>
+				</s:HGroup>
+			</s:VGroup>
+			
+			
+			<!--<mx:HBox label="Administrador de Documentos" width="100%">
+			<mx:Form textAlign="right" width="100%" >			
+			<mx:FormItem label="PARA:" width="100%">
+			
+			<controls:TextInputEmail activarAlerta="true" x="40" y="51" id="txtPara1" width="100%" text="{this._correoInfoGeneral.correo}" />
+			</mx:FormItem>
+			<mx:FormItem label="CC:" width="100%">
+			<controls:TextInputEmail activarAlerta="true" x="40" y="51" id="txtCCopia1" width="100%" text="{this._correoInfoGeneral.ccorreo}"/>
+			</mx:FormItem>
+			<mx:FormItem label="CCO:" width="100%">
+			<controls:TextInputEmail activarAlerta="true" x="40" y="51" id="txtCCo1" width="100%" text="{this._correoInfoGeneral.cocorreo}" />	
+			</mx:FormItem>
+			<s:HGroup width="100%">
+			<s:Spacer width="9"/>
+			<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_clipson22x53}"/>
+			<s:Spacer width="5"/>
+			<s:BorderContainer width="100%">
+			<s:HGroup id="areaAdjuntos" width="100%"/>
+			<mx:HBox width="100%" height="100%" id="ContenedorLinks"/>
+			</s:BorderContainer>
+			</s:HGroup>
+			</mx:Form>
+			</mx:HBox>-->
+			<otros:divisionGruesa width="100%"/>
+			<s:HGroup width="100%" paddingTop="10">
+				<btnSalir:botonSalir click="regresaGrid()"/>
+				<s:Spacer width="100%"/>
+				<btnEnviar:botonEnviar click="validaCorreoCC()"/>
+			</s:HGroup>
+		</s:VGroup>
+	</s:Scroller>
+</contenedores:VGroupConPaddingStandardPqNet>

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.pieChartDinamico.PieDinamico;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.PartidaInspeccion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.pieChartDinamico.pqNetPiesChartDinamico;
+			import mx.utils.ObjectUtil;
+			[Bindable] private var _listaPartidaInspeccionUniverso:ArrayCollection;
+			[Bindable] private var _listaPartidaInspeccionTrabajo:ArrayCollection;
+			/**
+			 * recibo la lista del mapa MapaInspectorPhs
+			 */
+			public function set recibeListaPartidaCompra($lista:ArrayCollection):void{
+				if($lista == null || $lista.length < 1) return;
+				this._listaPartidaInspeccionUniverso = new ArrayCollection();
+				this._listaPartidaInspeccionUniverso = $lista;
+			}
+			public function iniciarEstadistica($nombreProvee:String):void{
+				this._listaPartidaInspeccionTrabajo = UtilsGrid.queryCampoX(this._listaPartidaInspeccionUniverso, "nombreProveedor", $nombreProvee );
+				crearGraficas(this._listaPartidaInspeccionTrabajo);
+			}
+			////////		CREAR GRAFICAS
+			[Bindable]	private var _componenteArregloPies:pqNetPiesChartDinamico = null;
+			private var _listaGraficas:ArrayCollection;
+			private function crearGraficas($lista:ArrayCollection):void{
+				this._listaGraficas = new ArrayCollection();
+				// SITUACION PARTIDAS
+				var arrSituacion:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista,"enTiempo");
+				this._listaGraficas.addItem(setearGrafica("Situación\npartidas", arrSituacion, 0, 0, "horizontal", 0, 200, "right", "top") );
+				// MANEJO PARTIDAS
+				var arrManejo:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista,"manejo");
+				this._listaGraficas.addItem( setearGrafica("Manejo\npartidas", arrManejo, 0, 0, "horizontal", 0, 0, "right", "top") );
+				// DISTRIBUCION FLETES
+				var arrFletes:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista,"tipoFlete");
+				this._listaGraficas.addItem( setearGrafica("Distribución\nfletes", arrFletes, 0, 0, "horizontal", 0, 0, "right","top") );
+				// ET vs FT
+				/** creo una lista con las ordenes de compra a contar del proveedor seleccionado */
+				var arrTempo:ArrayCollection = UtilsGrid.queryQuitarRepetidos($lista, "compra");
+				for(var v:int= 0; v < arrTempo.length; v++){
+					/** tomo las q coinciden en el universo para hacer el conteo*/
+					var arrTres:ArrayCollection = UtilsGrid.queryCampoX(this._listaPartidaInspeccionUniverso, "compra", (arrTempo[v] as PartidaInspeccion).compra );
+					/** si las ordenes de compra FT son mayores de 0 entonces la orden de compra ya esta fuera de tiempo */
+					(arrTempo[v] as PartidaInspeccion).numFT = UtilsGrid.conteoCampoXMayorQueMenorQue(arrTres, "numFechaInicioInspeccionDias", 0);
+					if( (arrTempo[v] as PartidaInspeccion).numFT > 0 ){
+						(arrTempo[v] as PartidaInspeccion).numET = 0;
+					}else{
+						/** si el conteo da 0 entonces la orden de compra esta en tiempo */
+						(arrTempo[v] as PartidaInspeccion).numET = 1;
+					}
+				}
+				var arrET:ArrayCollection = new ArrayCollection([
+					{tipo: "Órdenes de compra ET", total: UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numET", 0) },
+					{tipo: "Órdenes de compra FT", total: UtilsGrid.conteoCampoXMayorQueMenorQue(arrTempo, "numFT", 0) }
+				]);
+				this._listaGraficas.addItem( setearGrafica("ET vs FT", arrET, 1, 1, "horizontal", 200, 0, "right","bottom") );
+				// TIPOS PARTIDAS
+				var arrTipo:ArrayCollection = Util.getInstance().consultaPieChartConteoXCampo($lista,"tipo");
+				this._listaGraficas.addItem( setearGrafica("Tipos\npartidas", arrTipo, 0, 1, "horizontal", 0, 0, "right", "bottom") );
+				// RECHAZOS DOC vs INS
+				var arrRechazos:ArrayCollection = new ArrayCollection([
+					{tipo: "Rechazos por Documentación", total: UtilsGrid.conteoCampoX($lista, "rechazoXDoc", "true") },
+					{tipo: "Rechazos por Inspección", total: UtilsGrid.conteoCampoX($lista, "rechazoXInsp", "true") },
+					{tipo: "Rechazos por Inspección y Documentación", total: UtilsGrid.conteoADosCampos($lista, "rechazoXDoc", "true", "rechazoXInsp", "true") }
+				]);
+				this._listaGraficas.addItem( setearGrafica("Rechazos\nDOC vs INS", arrRechazos, 0, 1, "horizontal", 0, 0, "right", "bottom") );
+				//AGREGAR PIES AL COMPONENTE
+				if(_componenteArregloPies == null){
+					_componenteArregloPies = new pqNetPiesChartDinamico();
+					this.grpGraficas.addElement(_componenteArregloPies);
+				}
+				_componenteArregloPies.iniciarGraficas( _listaGraficas );
+			}
+			private function setearGrafica(
+										   $lblTitulo:String,
+										   $arregloAlimentador:ArrayCollection = null,
+										   $tipoPie:int=0, 
+										   $fila:int=0, 
+										   $orientacion:String="vertical", 
+										   $filaMargenLeft:int=0, 
+										   $filaMargenRight:int=0, 
+										   $horizontalAlign:String="center", 
+										   $verticalAlign:String="middle",
+										   $margenLeft:int=0,
+										   $margenRight:int=0,
+										   $margenTop:int=0,
+										   $tamañoLetra:int=15,
+										   $margenBottom:int=0):PieDinamico{
+				var pie:PieDinamico = new PieDinamico();
+				pie.lblTitulo = $lblTitulo;
+				pie.arregloAlimentador = $arregloAlimentador;
+				pie.tipoPie = $tipoPie;
+				pie.fila = $fila;
+				pie.orientacion = $orientacion;
+				pie.filaMargenIzquierdo = $filaMargenLeft;
+				pie.filaMargenDerecho = $filaMargenRight;
+				pie.horizontalAlign = $horizontalAlign;
+				pie.verticalAlign = $verticalAlign;
+				pie.margenLeft = $margenLeft;
+				pie.margenRight = $margenRight;
+				pie.margenBottom = $margenBottom;
+				pie.margenTop = $margenTop;
+				pie.tituloSize = 20;
+				return pie;
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup id="grpGraficas" width="100%" height="100%"/>
+</s:VGroup>

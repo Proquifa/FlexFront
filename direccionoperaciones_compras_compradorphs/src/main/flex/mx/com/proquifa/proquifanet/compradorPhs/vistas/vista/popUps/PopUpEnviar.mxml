@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+				xmlns:s="library://ns.adobe.com/flex/spark"
+				xmlns:mx="library://ns.adobe.com/flex/mx"
+				xmlns:label="skins.skin.label.*"
+				xmlns:popUP="skins.popUp.*"
+				width="350" height="373" chromeColor="#FFFFFF"  xmlns:largo="skins.botones.largo.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoProveedoresConPAC;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.alertPqNet.EventoAlertaPqNet;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoPonderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RequisicionPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.controls.Alert;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			[Bindable]
+			private var _idFolioSeleccionado:Number;
+			[Bindable]
+			private var _requisicion:RequisicionPhs;
+			/**
+			 * funcion publica que inicia el componente, ademas determina si se pueden enviar una o varias variables.
+			 */ 
+			public function inicia( $requisicion:RequisicionPhs, $idFolioPartida:Number ):void{
+				var _laSeleccionadaSeEnvia:Boolean = false;
+				this._idFolioSeleccionado = new Number;
+				this._requisicion = new RequisicionPhs();
+				this._idFolioSeleccionado = $idFolioPartida;
+				this.btnEnviaTodo.enabled = false;
+				this.btnEnviaUno.enabled = false;
+				var contador:int = 0;
+				for( var i:int = 0; i < $requisicion.partidas.length; i++ ){
+					if( $requisicion.partidas[i]  != null ){
+						// p/c partida su envio se seta a falso y se vuelve a evaluar
+						($requisicion.partidas[i] as PartidaConfirmacion).enviar = false;
+						if( ($requisicion.partidas[i] as PartidaConfirmacion).estatus == false){
+							if( evaluaPartidaRechazada( $requisicion.partidas[i] as PartidaConfirmacion ) ){
+								($requisicion.partidas[i] as PartidaConfirmacion).enviar = true;
+								contador = contador + 1;
+								if( ( $requisicion.partidas[i] as PartidaConfirmacion ).idPCotPharma == this._idFolioSeleccionado ){
+									if( ($requisicion.partidas[i] as PartidaConfirmacion).enviar == true ){
+										_laSeleccionadaSeEnvia = true;
+									}
+								}
+							}
+						}else{
+							if( validacion( $requisicion.partidas[i] as PartidaConfirmacion ) ){
+								($requisicion.partidas[i] as PartidaConfirmacion).enviar = true;
+								contador = contador + 1;
+								if( ( $requisicion.partidas[i] as PartidaConfirmacion ).idPCotPharma == this._idFolioSeleccionado ){
+									if( ($requisicion.partidas[i] as PartidaConfirmacion).enviar == true ){
+										_laSeleccionadaSeEnvia = true;
+									}
+								}
+							}
+						}
+					}
+				}
+				if(contador == 1){
+					if( _laSeleccionadaSeEnvia ){
+						this.btnEnviaUno.enabled = true;
+					}
+				}else if( contador > 1 ){
+					if( _laSeleccionadaSeEnvia ){
+						this.btnEnviaUno.enabled = true;
+						this.btnEnviaTodo.enabled = true;
+					}
+				}
+				this._requisicion = $requisicion;
+			}
+			
+			/**
+			 * funcion que evalua una partidade tipo partidaConfirmacion cuando es Rechazada
+			 */ 
+			private function evaluaPartidaRechazada( partida:PartidaConfirmacion ):Boolean{
+				var _seEnvia:Boolean = true;
+				if( partida.comentariosRechazo == ""){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				if( partida.justificacionRechazo == null || partida.justificacionRechazo == "" ){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				return _seEnvia;
+			}
+			/**
+			 * funcion que evalua una partidade tipo partidaConfirmacion cuando su tipo de producto es Labware
+			 */ 
+			private function validacion( partida:PartidaConfirmacion ):Boolean{
+				var _seEnvia:Boolean = true;
+				if( partida.situacionDisponibilidad == null || partida.situacionDisponibilidad == ""){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				if( partida.tiempoEntrega == null || partida.tiempoEntrega == "" ){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				if(partida.tipoProducto == "Estandárd"){
+					if( partida.almacenamiento == null || partida.almacenamiento == "" ){
+						_seEnvia = false;
+						return _seEnvia;
+					}
+					if( partida.transporte == null || partida.transporte == "" ){
+						_seEnvia = false;
+						return _seEnvia;
+					}
+				}
+				if( partida.tipoProveedor == "Nuevo"){
+					if( partida.tipoMoneda == null || partida.tipoMoneda == "" ){
+						_seEnvia = false;
+						return _seEnvia;
+					}
+				}
+				if( isNaN( partida.costoBaseConfirmado ) || partida.costoBaseConfirmado == 0 ){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				return _seEnvia;
+			}
+			/**
+			 * funcion que evalua una partidade tipo partidaConfirmacion cuando su tipo de producto es Edicion
+			 */ 
+			private function evaluaPartidaConProductoTipoLabware( partida:PartidaConfirmacion ):Boolean{
+				var _seEnvia:Boolean = true;
+				if( partida.situacionDisponibilidad == null || partida.situacionDisponibilidad == ""){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				if( partida.tiempoEntrega == null || partida.tiempoEntrega == "" ){
+					_seEnvia = false;
+					return _seEnvia;
+				}
+				return _seEnvia;
+			}
+			
+			/**
+			 * funcion que evia solo la partida del folio seleccionado
+			 */ 
+			private function enviaFolioSeleccionado():void{
+				var _sePuedeEnviarLaSeleccionada:Boolean = false;
+				for( var i:int = 0; i < this._requisicion.partidas.length; i++){
+					if( ( this._requisicion.partidas[i] as PartidaConfirmacion ).idPCotPharma == this._idFolioSeleccionado ){
+						( this._requisicion.partidas[i] as PartidaConfirmacion ).enviar = true;
+					}else{
+						( this._requisicion.partidas[i] as PartidaConfirmacion ).enviar = false;
+					}
+				}
+				enviaPartidas();
+			}
+			/**
+			 * funcion que evia toda la requisicion, al mapaProveedoresConPac.mxml para enviar los pendientes
+			 * el resultado es resivido en la fincion recibeConfirmacionEnvio(); y tambien en el componente RquisicionAConfirmar.mxml.
+			 * en el metodo recibeConfirmacionEnvio();
+			 */ 
+			private function enviaPartidas():void{
+				var evento:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.ENVIA_PARTIDAS_REQUISICION );
+				evento.requisicion = this._requisicion;
+				evento.idUsuario = DatosGlobales.getInstance()._usuario.idEmpleado;
+				evento.modificaMedio = false;
+				dispatchEvent( evento );
+				
+				var eventoElimina:EventoProveedoresConPAC = new EventoProveedoresConPAC( EventoProveedoresConPAC.ELIMINA_ENVIADOS );
+				eventoElimina.requisicion = this._requisicion;
+				dispatchEvent( eventoElimina );
+			}
+			/**
+			 * Funcion que recibe del mapaProveedoresConPAc.xmml la confirmacion de envio de la o las partidas de forma exitosa
+			 * esta funcion a traves del inyector tambien se usa en el componente RquisicionAConfirmar.mxml.
+			 */ 
+			public function set recibeConfirmacionRequisicionActualizada( $confirmacion:Boolean ):void{
+				if( $confirmacion == false){
+					return;
+				}
+				/* var evento:EventoAlertaPqNet = new EventoAlertaPqNet( EventoAlertaPqNet.MOSTRAR_ALERTA);
+				evento.mensaje = "Operación Exitosa, se ha enviado la partida.";
+				evento.encabezado = "¡Atención!";
+				dispatchEvent( evento ); */
+				alertaSingleton.show(catalogoAlertas.CONF_seHaEnviadoLaPartida,catalogoAlertas.TIT_CONF_operacionExitosa);
+				cierraPopUp();
+			}
+			/**
+			 * Funcion privada q cierra este PopUp con un evento que cacha el padre ViewStackGeneral.mxml 
+			 */ 
+			private function cierraPopUp():void{
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+				evento.idOpcionSeleccionada = "cerrarPopUpEnviar";
+				dispatchEvent( evento );
+			}
+		]]>
+	</fx:Script>
+	<popUP:PopUpBlanco  width="100%" height="100%"/>
+	<s:VGroup width="100%" height="100%" horizontalAlign="center" >
+		<s:Spacer height="25"/>
+		<s:HGroup width="250" verticalAlign="middle">
+			<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_iconopopenviar}"/>
+			<label:labelTitulo text="Enviar" width="100%" textAlign="center" fontSize="30"/>
+		</s:HGroup>
+		<s:Spacer height="100%" />
+		<mx:Canvas width="250" height="60">
+			<s:Button width="100%" height="100%" id="btnEnviaTodo" click="enviaPartidas()"/>
+			<s:Label text="Enviar todo" fontWeight="bold" fontSize="20" horizontalCenter="0" verticalCenter="-10" color="white" fontFamily="Helvetica"/>
+			<s:Label text="Enviará todas las partidas disponibles" fontSize="11" horizontalCenter="0" verticalCenter="10" color="white" fontFamily="Helvetica"/>
+		</mx:Canvas>
+		<s:Spacer height="10"/>
+		<mx:Canvas width="250" height="60">
+			<s:Button width="100%" height="100%"  id="btnEnviaUno" click="enviaFolioSeleccionado()" />
+			<s:Label text="Enviar partida" fontWeight="bold" fontSize="20" horizontalCenter="0" verticalCenter="-10" color="white" fontFamily="Helvetica"/>
+			<s:Label text="Enviará sólo la partida seleccionada" fontSize="11" horizontalCenter="0" verticalCenter="10" color="white" fontFamily="Helvetica"/>
+		</mx:Canvas>
+		<s:Spacer height="10"/>
+		<mx:Canvas width="250" height="60">
+			<s:Button width="100%" height="100%" click="cierraPopUp()"/>
+			<s:Label text="CANCELAR" fontWeight="bold" fontSize="20" fontFamily="Helvetica" horizontalCenter="0" verticalCenter="0" color="white"/>
+		</mx:Canvas>
+		<s:Spacer height="20"/>
+	</s:VGroup>
+</s:Group>

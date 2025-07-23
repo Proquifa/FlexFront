@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		 creationComplete="init()" xmlns:acordeon="skins.skin.acordeon.*" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*">
+	<fx:Declarations>
+		<mx:DateFormatter formatString="DD/MMM/YY" id="formatoFecha"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoIncidenteAsociado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Ponderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.controls.Alert;
+			import mx.events.ValidationResultEvent;
+			import mx.managers.PopUpManager;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Producer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageFaultEvent;
+			import mx.messaging.messages.AsyncMessage;
+			import mx.utils.ObjectUtil;
+			import mx.validators.StringValidator;
+			
+			private var validarCuando:StringValidator;
+			private var validarDonde:StringValidator;
+			private var validarQue:StringValidator;
+			
+			private var _cmbSeleccionador:seleccionador = null;
+			
+			private var fechaHoy:Date = null;
+			
+			private var _ponderacionAsociada:Ponderacion = new Ponderacion();
+			
+			private var regresaA:String="";
+			
+			[Bindable]
+			private var _incidente:Incidente = new Incidente();
+			
+			[Bindable]
+			private var _empleado:ArrayCollection = new ArrayCollection();
+			
+			private var _listaDeReferencias:ArrayCollection = new ArrayCollection();
+			
+			
+			[Bindable]
+			private var _incidenteOrigen:Incidente = new Incidente();
+			
+			
+			[Bindable]
+			public var vieneD:String;
+			
+			private var productorAsociado:Producer = new Producer();
+			private var canalAsociado:AMFChannel;
+			private var canalesAsociado:ChannelSet;
+			
+			private function init():void{
+				this.productorAsociado.destination = "actualizacionService";
+				this.productorAsociado.addEventListener(MessageFaultEvent.FAULT,falloproductor);
+				this.canalAsociado = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesAsociado = new ChannelSet();
+				this.canalesAsociado.addChannel(canalAsociado);
+				this.productorAsociado.channelSet = this.canalesAsociado;
+			}
+			
+			private function falloproductor(event:MessageFaultEvent):void{
+				Alert.show("Se ha producido un error en el Productor de registro de incidente asociado","Error");
+			}
+			
+			private function cargarComboNavegacion():void{
+				if(this._cmbSeleccionador == null){
+					this._cmbSeleccionador = new seleccionador();
+				}
+				this._cmbSeleccionador.empleadoLogueado = new Empleado();
+				this._cmbSeleccionador.empleadoLogueado.usuario =DatosGlobales.getInstance()._usuario.usuario;
+				this._cmbSeleccionador.idIncidente = this._incidenteOrigen.idIncidente;
+				this._cmbSeleccionador.folioIncidente = this._incidenteOrigen.folio;
+				this._cmbSeleccionador.origen = "Implicado";
+				this._cmbSeleccionador.vieneDe = "url";
+				this._cmbSeleccionador.listaReferencias = this._incidenteOrigen.referencias;
+				this.contenedorCombo.addChild(this._cmbSeleccionador);
+			}
+			
+			
+			
+			
+			
+			public function recibirIncidente(incidente:Incidente):void{
+				if(incidente.idIncidente == 0 || isNaN(incidente.idIncidente)){
+					return;
+				}
+				this._incidente = incidente;
+			}
+			
+			private var popUpReferencias:ReferenciasIncidente = null;
+			
+			private function abreReferenciasIncidente():void{
+				if( popUpReferencias == null){
+					popUpReferencias = ReferenciasIncidente( PopUpManager.createPopUp( this, ReferenciasIncidente, true ) ); 
+					popUpReferencias.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cierraReferenciasIncidente );	
+					popUpReferencias.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE, actualizaListaReferencias );		
+					if( this._listaDeReferencias.source.length > 0 ){
+						popUpReferencias.listaReferencias = ObjectUtil.copy(this._listaDeReferencias) as ArrayCollection;
+					}	
+					if( vieneD == "gestionarincidente"){
+						popUpReferencias.vieneD = "url";	
+					}
+				}else{
+					PopUpManager.addPopUp( popUpReferencias,this,true );
+					popUpReferencias.addEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cierraReferenciasIncidente );	
+					popUpReferencias.addEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE, actualizaListaReferencias );		
+					if( this._listaDeReferencias.source.length > 0 ){
+						popUpReferencias.listaReferencias = ObjectUtil.copy(this._listaDeReferencias) as ArrayCollection;
+					}
+					popUpReferencias.iniciaReferencias();		
+					if( vieneD == "gestionarincidente"){
+						popUpReferencias.vieneD = "url";	
+					}	
+				}
+			}
+			
+			
+			private function cierraReferenciasIncidente( evento:EventoIncidente ):void{
+				this.popUpReferencias.removeEventListener( EventoIncidente.CERRAR_POP_UP_REFERENCIAS_INICIDENTE, cierraReferenciasIncidente );
+				this.popUpReferencias.removeEventListener( EventoIncidente.RECIBIR_ARRAY_COLLECTION_DE_REFERENCIAS_INCIDENTE, actualizaListaReferencias );
+				PopUpManager.removePopUp( popUpReferencias );
+			}
+			
+			private function actualizaListaReferencias(evento:EventoIncidente):void{
+				if (evento.vieneD == "Aceptar" ){
+					this._listaDeReferencias = evento.listaDeArchivos; 
+				}
+				evento.vieneD = "";
+			}
+			
+			
+					
+			private function cierraAplicacion():void{
+				var evento:EventoIncidenteAsociado = new EventoIncidenteAsociado(EventoIncidenteAsociado.EVENTO_ASOCIADO_CANCELAR);
+				evento._regresarA = this.regresaA;
+				this.dispatchEvent(evento);
+			}
+			
+		
+			public function set recibeIncidenteAsociado(_ponderacion:Ponderacion):void{
+				
+				this._ponderacionAsociada = new Ponderacion();
+				
+				if(_ponderacion.idPonderacion != 0){
+					iniciar();
+					this.btnGuardar.enabled = true;
+					this._incidenteOrigen.folio = _ponderacion.folioIncidente;
+					this._incidenteOrigen.idIncidente = _ponderacion.incidente;
+					this._incidenteOrigen.referencias = _ponderacion.referencias;
+					//this._incidenteOrigen.incidenteRelacionado = _ponderacion.pendiente;
+					this._incidenteOrigen.pendientePonderacion = _ponderacion.pendiente;
+					this.regresaA = "Ponderacionx";
+					this._ponderacionAsociada = _ponderacion;
+					this._listaDeReferencias = new ArrayCollection();
+					//valida el Que
+					validarQue = new StringValidator();				
+					validarQue.source = this.txtQue;
+					validarQue.property = "text";
+					validarQue.requiredFieldError = "Se debe redactar una explicacion en la pregunta: ¿Qué?";
+					//valida Donde
+					validarDonde = new StringValidator();
+					validarDonde.source = this.txtDonde;
+					validarDonde.property = "text";
+					validarDonde.requiredFieldError = "Se debe especificar el lugar en la pregunta: ¿Dónde?";
+					//valida Cuando
+					validarCuando = new StringValidator();
+					validarCuando.source = this.txtCuando;
+					validarCuando.property = "text";
+					validarCuando.requiredFieldError = "Se debe anotar un dato en la pregunta: ¿Cuándo?";
+					cargarComboNavegacion();
+				}
+			}
+			
+			public function set recibeIncidenteRechazado(_incidentex:Incidente):void{
+				this._incidenteOrigen = new Incidente();
+				if(_incidentex.idIncidente != 0 && !isNaN(_incidentex.idIncidente)){
+					iniciar();
+					this.btnGuardar.enabled = true;
+					this._incidenteOrigen = _incidentex;
+					this.regresaA = "Rechazado";
+					this._listaDeReferencias = new ArrayCollection();
+					//valida el Que
+					validarQue = new StringValidator();				
+					validarQue.source = this.txtQue;
+					validarQue.property = "text";
+					validarQue.requiredFieldError = "Se debe redactar una explicacion en la pregunta: ¿Qué?";
+					//valida Donde
+					validarDonde = new StringValidator();
+					validarDonde.source = this.txtDonde;
+					validarDonde.property = "text";
+					validarDonde.requiredFieldError = "Se debe especificar el lugar en la pregunta: ¿Dónde?";
+					//valida Cuando
+					validarCuando = new StringValidator();
+					validarCuando.source = this.txtCuando;
+					validarCuando.property = "text";
+					validarCuando.requiredFieldError = "Se debe anotar un dato en la pregunta: ¿Cuándo?";
+					cargarComboNavegacion();
+				}
+			}
+			
+			
+			
+			public function validarIfo():Boolean {
+				var validacionCompleta:Boolean = new Boolean();
+				var cuando:ValidationResultEvent = this.validarCuando.validate();
+				var donde:ValidationResultEvent = this.validarDonde.validate();
+				var que:ValidationResultEvent = this.validarQue.validate();
+				if (que.type == ValidationResultEvent.VALID && cuando.type == ValidationResultEvent.VALID && donde.type == ValidationResultEvent.VALID ) {
+					return validacionCompleta = true;
+				}else{
+					return validacionCompleta = false;
+				}
+			}	
+			
+			
+			private function guardaIncidente():void{
+				if( validarIfo() ){
+					registrarIncidente();
+				}else{
+					Alert.show("Debe ingresar información en los campos: ¿Qué?, ¿Dónde? y ¿Cuando?","Información incompleta",Alert.OK,this,null); 
+				}
+			}
+			
+			private function registrarIncidente():void{
+				this._incidente = new Incidente();
+				this._incidente.descripcion = this.txtQue.text;
+				this._incidente.lugar = this.txtDonde.text;
+				this._incidente.cuando = this.txtCuando.text;
+				this._incidente.comentarios = this.txtComentarios.text;
+				this._incidente.idEmpleado = DatosGlobales.getInstance()._usuario.idEmpleado;
+				this._incidente.fecha = this.fechaHoy;
+				if( this._listaDeReferencias == null ){
+					this._listaDeReferencias = new ArrayCollection();
+				}
+				if(this.regresaA == "Ponderacionx"){
+					this._incidente.pendientePonderacion = this._ponderacionAsociada.pendiente;
+					this._incidente.pendientePonderacion = this._incidenteOrigen.pendientePonderacion;
+				}else{
+					this._incidente.pendientePonderacion = this._incidenteOrigen.idPendiente;
+				}
+				this._incidente.referencias = this._listaDeReferencias;
+				this._incidente.incidenteRelacionadoS = "true";
+				this._incidente.incidenteRelacionado = this._incidenteOrigen.idIncidente;
+				var evento:EventoIncidenteAsociado = new EventoIncidenteAsociado (EventoIncidenteAsociado.EVENTO_ASOCIADO_REGISTRAR);
+				evento.incidente = this._incidente;
+				this.dispatchEvent( evento );
+				//this.btnGuardar.enabled = false;
+			}
+			
+			
+			public function iniciar():void{
+				this.fechaHoy = new Date();
+				this.lblFecha.text = (formatoFecha.format( fechaHoy ) ).toString();
+				this.lblredacto.text = DatosGlobales.getInstance()._usuario.nombre;
+				this.txtQue.text = "";
+				this.txtDonde.text = "";
+				this.txtCuando.text = "";
+				this.txtComentarios.text = "";
+			}
+			
+			
+			public function set recibeRegistrarIncidenteAsociado(_incidente:Incidente):void{
+				if(_incidente.folio == null  || isNaN(_incidente.idIncidente)){
+					return;
+				}
+				
+				//this._NoDeincidenteRegistrado = _incidente;
+				Alert.show( "El incidente " + _incidente.folio + " fue registrado","Operación exitosa");
+				this.btnGuardar.enabled = false;
+				var mensaje:AsyncMessage = new AsyncMessage();
+				mensaje.headers["Destino"] = "Gestion";
+				mensaje.headers["Usuario"] = _incidente.gestor;
+				mensaje.headers["Nivel"] = "Gerente";
+				mensaje.body = "Mensaje";
+				this.productorAsociado.send(mensaje);
+				mensaje = new AsyncMessage();
+				mensaje.headers["Destino"] = "tasaRealizacion";
+				mensaje.body = "Mensaje";
+				this.productorAsociado.send(mensaje);
+				cierraAplicacion();
+				var evento:EventoIncidenteAsociado = new EventoIncidenteAsociado(EventoIncidenteAsociado.EVENTO_ASOCIADO_TERMINO);
+				evento._regresarA = this.regresaA;
+				this.dispatchEvent(evento);
+			}
+			
+			/*private function regresaAListadoDeIncidentes():void{
+			}
+			
+			private function regresarAIndexOriginal():void{
+			
+			}
+			
+			
+			private function avanzaAlAnalisisDelIncidente():void{
+			
+			}*/
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" horizontalCenter="center">
+		<s:HGroup width="100%">
+			<!--<s:Label text="Incidente relacionado" fontSize="40" fontWeight="bold"/>-->
+			<label:labelTitulo_Otros text="Incidente relacionado" />
+			<mx:Spacer width="100%"/>
+			<s:Label id="lblIdIncidente" fontSize="40" color="red" visible="false"/>
+			<mx:HBox id="contenedorCombo"/>
+		</s:HGroup>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<!--<s:Label text="Datos generales" width="100%" fontSize="24" fontWeight="bold"/>-->
+		<label:labelSubtitulo text="Datos generales" width="100%" fontSize="24" fontWeight="bold"/>
+		<mx:FormItem width="100%" label="Fecha: " fontWeight="bold" paddingLeft="13"
+					 textAlign="right">
+			<s:Label id="lblFecha" fontWeight="normal" height="100%" verticalAlign="middle"/>
+		</mx:FormItem>
+		<s:HGroup width="100%"/>
+		<mx:FormItem width="100%" label="Redactó: " fontWeight="bold"  textAlign="right">
+			<s:Label fontWeight="normal" height="100%" verticalAlign="middle" id="lblredacto" />
+		</mx:FormItem>
+		
+		<!--<mx:HBox width="100%" height="0" id="hbxGestion">
+			<mx:FormItem label="Gestión: " fontWeight="bold" paddingLeft="5">
+				<s:DropDownList id="cmbEmpleadosHabilitados" dataProvider="{this._empleado}"  change="habilitarEnviar()"/>
+			</mx:FormItem>
+			<s:Button styleName="botonNegroOld" label="Enviar" id="btnEnviar" enabled="false" click="enviaPendiente()"/>
+		</mx:HBox>-->
+		<mx:Spacer height="0"/>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<s:HGroup width="100%">
+			<!--<s:Label text="Descripción" fontSize="20" fontWeight="bold"/>-->
+			<label:labelSubtitulo text="Descripción" fontSize="20" fontWeight="bold"/>
+			<mx:Spacer width="100%"/>
+			<mx:LinkButton textDecoration="underline" label="Referencias" color="#0C4AFC" click="abreReferenciasIncidente()" id="lnkReferencias"/>
+		</s:HGroup>
+		<acordeon:acordeonPqNet openDuration="250" width="100%" height="100%" creationPolicy="all" id="acordion">
+			<mx:VBox width="100%" height="100%" label="¿Qué?" >
+				<mx:TextArea width="100%" height="100%" id="txtQue"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" label="¿Dónde?" >
+				<mx:TextArea width="100%" height="100%" id="txtDonde"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" label="¿Cuándo?" >
+				<mx:TextArea width="100%" height="100%" id="txtCuando"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%" label="COMENTARIOS ADICIONALES">
+				<mx:TextArea width="100%" height="100%" id="txtComentarios"/>
+			</mx:VBox>
+		</acordeon:acordeonPqNet>
+		<mx:Spacer height="3"/>
+		<!--<mx:HRule width="100%"/>-->
+		<otros:division width="100%"/>
+		<mx:Spacer height="3"/>
+		<mx:VBox height="23" width="100%" id="vbxBotones" verticalGap="0">			
+			<mx:HBox width="100%" height="100%" id="hbxOriginal">
+				<!--<mx:Button label="Cancelar" click="cierraAplicacion()" width="80"/>-->
+				<s:Button styleName="botonNegroOld"  label="Cancelar" click="cierraAplicacion()" width="80"/>
+				<mx:Spacer width="100%"	/>
+				<!--<mx:Button label="Guardar"  click="guardaIncidente()" width="80"  id="btnGuardar"/>-->
+				<s:Button styleName="botonNegroOld" label="Guardar"  click="guardaIncidente()" width="80"  id="btnGuardar"/>
+			</mx:HBox>
+			<!--<mx:HBox width="100%" height="0" visible="false" id="hbxSiguienteAnterior">
+				<mx:Button label="LISTADO" width="80" click="regresaAListadoDeIncidentes()"/>
+				<mx:Spacer width="100%"/>
+				<mx:Button label="Análisis" width="80" click="avanzaAlAnalisisDelIncidente()" id="btnAnalisis"/>
+			</mx:HBox>
+			<mx:HBox width="100%" height="0" visible="false" id="hbxBotenesModoLectura">
+				<mx:Button label="LISTADO" width="80" visible="false"/>
+				<mx:Spacer width="100%"/>
+				<mx:Button label="Regresar" width="80"  id="bntRegresa" click="regresarAIndexOriginal()"/>
+			</mx:HBox>-->
+		</mx:VBox>
+		
+	</s:VGroup>
+</s:Group>

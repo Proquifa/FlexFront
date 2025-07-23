@@ -1,0 +1,751 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:analisisVentasJona="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisDeVentas.*"
+		  xmlns:analisisVentas="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.analisisVentas.*"
+		  xmlns:infoGrafica="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.ventasDelPeriodo.*"
+		  xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+		  xmlns:pqNet="skins.skin.datagrid.pqNet.*" 
+		  xmlns:grafica="skins.botones.grafica.*"
+		  xmlns:graficas="skins.skin.graficas.*"
+		  xmlns:pqNet1="skins.botones.pqNet.*" 
+		  xmlns:label="skins.skin.label.*" 
+		  xmlns:otros="skins.otros.*" 
+		  creationComplete="init()" gap="0"
+		  width="100%" height="100%" 
+		  >
+	
+	<fx:Declarations>
+		<mx:SeriesInterpolate id="fxInterpolateIn" duration="600"/>
+		<s:SolidColorStroke id = "sA" color="0x3b98af" weight="6"/>
+		<s:SolidColorStroke id = "s1" color="0xdd9c12" weight="3"/>
+		<s:SolidColorStroke id="trazoGruezo" color="0x{catalogoColores.LABEL_NEGRO}" weight="3"/>
+		<mx:SolidColor id="sc3" color="0x{catalogoColores.LABEL_NARANJA}" alpha="1"/>
+		<s:SolidColorStroke id="stroke2" color="0x{catalogoColores.LABEL_NARANJA}" weight="5"/>
+		
+		<s:SolidColorStroke id = "sObj" color="0xC54B8C" weight="3"/>
+		<mx:SolidColor id="sc4" color="0xC54BCC" alpha="1"/>
+		<s:SolidColorStroke id="stroke4" color="0xC54B8C" weight="5"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.clientes.EventoTableroClientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.comun.EventoTablero;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.VentasCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.events.ListEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			[Bindable]	private var _listadoVentasCliente:ArrayCollection = new ArrayCollection();
+			[Bindable]  private var _valorTotal:String;
+			private var _listaMontoObjetivo:ArrayCollection = new ArrayCollection();
+			private var _listaMontoObjetivoFundamental:ArrayCollection = new ArrayCollection();
+			
+			private var _montoObjetivo:Number = 0;
+			private var _montoFundamental:Number = 0;
+			private var _diferencial:Number = 0;
+			private var _porcentaje:String = '';
+			private var _signo:String = '';
+			private var _hoy:Date = new Date();
+			private var _cliente:Cliente = null;
+			private var totalLegend:Number = 0;
+			
+			private var _linealArrGrafica:ArrayCollection = new ArrayCollection();
+			private var time:Timer = new Timer(1000,2);
+			private var _keyAnterior:String = "";
+			private var _currentFiltroBusqueda:String = "";
+			
+			private var _desepenoAnterior:Number = 0;
+			private var _desempenoActual:Number = 0;
+			private var _mesesTrabajados:Number = 0;
+			private var fecha:Date = new Date();
+			
+			private var _listaMensual:ArrayCollection = new ArrayCollection(["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]);
+			
+			private var _listaQuincenal:ArrayCollection = new ArrayCollection([{11:"11",valor:"1ra. Enero"},{12:"12",valor:"2da. Enero"},{21:"21",valor:"1ra. Febrero"},{22:"22",valor:"2da. Febrero"},{31:"31",valor:"1ra. Marzo"},{32:"32",valor:"2da. Marzo"},{41:"41",valor:"1ra. Abril"},
+				{42:"42",valor:"2da. Abril"},{51:"51",valor:"1ra. Mayo"},{52:"52",valor:"2da. Mayo"},{61:"61",valor:"1ra. Junio"},{62:"62",valor:"2da. Junio"},{71:"71",valor:"1ra. Julio"},{72:"72",valor:"2da. Julio"},{81:"81",valor:"1ra. Agosto"},{82:"82",valor:"2da. Agosto"},
+				{91:"91",valor:"1ra. Septiembre"},{92:"92",valor:"2da. Septiembre"},{101:"101",valor:"1ra. Octubre"},{102:"102",valor:"2da. Octubre"},{111:"111",valor:"1ra. Noviembre"},{112:"112",valor:"2da. Noviembre"},{121:"121",valor:"1ra. Diciembre"},{122:"122",valor:"2da. Diciembre"}]);
+			
+			private var cont:Number=0;
+			private function init():void
+			{
+				cont=0;
+			}
+			
+			//VIENE DEL BOTON DE GRID DE LA GRÁFICA MINIMIZADA
+			public function seleccionaTabla():void
+			{			
+				stackGeneral.selectedChild = vistaAnalisisVentas;
+				_currentVistaSelected = "vistaAnalisisVentas";
+				
+				cambiarVistaTablaGrafica(_currentVistaSelected);
+				
+			}
+			
+			public function seleccionarGrafica():void
+			{
+				stackGeneral.selectedChild = vistaGrafico;
+				_currentVistaSelected = "vistaGrafico";
+				
+				if(_currentFiltroBusqueda != "CLIENTE")
+				{
+					grpGraficaNivelIngreso.includeInLayout = grpGraficaNivelIngreso.visible = true;
+				}
+				else
+				{
+					grpGraficaNivelIngreso.includeInLayout = grpGraficaNivelIngreso.visible = false;
+				}
+			}
+			
+			public function set recibeVentasCliente($lista:ArrayCollection):void
+			{
+				if($lista == null ) 
+					return;
+				
+				_listadoVentasCliente = $lista;
+			}
+			
+			public function set recibeLinealVentasPeriodo( $lista:ArrayCollection ):void
+			{
+				if($lista == null )
+					return;
+				_linealArrGrafica = ObjectUtil.copy($lista) as ArrayCollection;
+				time.removeEventListener(TimerEvent.TIMER,timerComplete)
+				time.addEventListener(TimerEvent.TIMER,timerComplete);
+				time.start();	
+			}
+			
+			public function set recibeMontosObjetivo($montos:ArrayCollection):void
+			{
+				if($montos == null) 
+					return;
+				
+				_listaMontoObjetivo = new ArrayCollection();
+				_listaMontoObjetivo = ordenarMontos($montos);
+			}
+			
+			public function set recibeMontosObjetivoFundamental($montos:ArrayCollection):void
+			{
+				if($montos == null) 
+					return;
+				
+				_listaMontoObjetivoFundamental = new ArrayCollection();
+				_listaMontoObjetivoFundamental = ordenarMontos($montos);
+			}
+			
+			private function ordenarMontos($arreglo:ArrayCollection):ArrayCollection
+			{
+				var ordenar:SortField = new SortField();
+				ordenar.name = "mes";
+				ordenar.numeric = true;
+				var tipo:Sort = new Sort();
+				tipo.fields = [ordenar];
+				$arreglo.sort = tipo;
+				$arreglo.refresh();
+				return $arreglo;
+			}
+			
+			public function set recibeCliente($cliente:Cliente):void
+			{
+				if($cliente == null) 
+					return;
+				_cliente = new Cliente();
+				_cliente = $cliente;
+				
+				var miString:String = _cliente.nivelIngreso;
+				var miStringArray:Array = miString.split("-");
+				_cliente.niAnual =  miString.substring(0,2);
+				_cliente.niTrimestral =  miStringArray[1];
+				_cliente.niActual =  miStringArray[2];
+			}
+			
+			public function timerComplete(evet:TimerEvent):void
+			{
+				if (_linealArrGrafica != null && _linealArrGrafica.length > 0 )
+					myChart.dataProvider = iniciarGrafica( _linealArrGrafica );
+			}
+			
+			private function iniciarGrafica( $lista:ArrayCollection ):ArrayCollection
+			{
+				_desempenoActual = 0;
+				var m:int = 0;
+				var arrReturn:ArrayCollection = new ArrayCollection();
+				var objeto:Object;
+				var contador:int = 0;
+				var contadorFundamental:int = 0;
+				var cuenta:int = 1;
+				var _anio:Number = ($lista[0] as ResumenConsulta).periodo;
+				var resumen:ResumenConsulta;
+				var mes:Number = fecha.month + 1;
+				
+				var _mesPrueba:Number = 0;
+				
+				_montoObjetivo = 0;
+				_montoFundamental = 0;
+				_diferencial = 0;
+				_porcentaje = '';
+				_signo = '';
+				_desepenoAnterior = 0;
+				arrReturn.addItem( new Object() );
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					objeto = new Object();
+					objeto.numeroMes = cuenta;
+					objeto.mes = _listaQuincenal[_event.parametros.rangoMinMes].valor;
+					objeto.montoUSD_0 = 0;
+					objeto.montoUSD_1 = 0;
+					objeto.montoUSD_2 = 0;
+					objeto.montoObjetivo = 0;
+					objeto.montoFundamental = 0;
+					
+					for( m = 0; m < $lista.length;m++ )
+					{
+						resumen = $lista[m] as ResumenConsulta;
+						if( resumen.etiqueta == "VENTAS_0" || resumen.etiqueta == "NOTA_0" )
+						{
+							objeto.montoUSD_0 += resumen.total;
+							_desempenoActual += resumen.total;	
+						}
+						else if( resumen.etiqueta == "VENTAS_1" || resumen.etiqueta == "NOTA_1" )
+						{
+							objeto.montoUSD_1 += resumen.total;		
+							_desepenoAnterior += resumen.total;
+						}
+						else if( resumen.etiqueta == "VENTAS_2" || resumen.etiqueta == "NOTA_2" )
+						{
+							objeto.montoUSD_2 += resumen.total;	
+						}
+					}
+					
+					if((_listaMontoObjetivo.length != 0) && (_listaMontoObjetivo.length != _maximoMeses - 1) )
+					{
+						objeto.montoObjetivo = _listaMontoObjetivo[contador].monto ;
+						_montoObjetivo += objeto.montoObjetivo ;
+						contador++;
+					}	
+					
+					if((_listaMontoObjetivoFundamental.length != 0) && (_listaMontoObjetivoFundamental.length != _maximoMeses - 1) )
+					{
+						objeto.montoFundamental = _listaMontoObjetivoFundamental[contadorFundamental].monto ; 
+						_montoFundamental += objeto.montoFundamental ;
+						contadorFundamental++;	
+					}	
+					
+					arrReturn.addItem( objeto );
+				}
+				else
+				{
+					while( cuenta < 13)
+					{
+						if(cuenta >= _minimoMeses && cuenta <= _maximoMeses)
+						{
+							_mesPrueba++;
+							objeto = new Object();
+							objeto.numeroMes = cuenta;
+							objeto.mes = _listaMensual[cuenta -1];
+							objeto.montoUSD_0 = 0;
+							objeto.montoUSD_1 = 0;
+							objeto.montoUSD_2 = 0;
+							objeto.montoObjetivo = 0;
+							objeto.montoFundamental = 0;
+							
+							for( m = 0; m < $lista.length;m++ )
+							{
+								resumen = $lista[m] as ResumenConsulta;
+								if(cuenta == resumen.mes)
+								{
+									if( resumen.etiqueta == "VENTAS_0" || resumen.etiqueta == "NOTA_0" )
+									{
+										objeto.montoUSD_0 += resumen.total;
+										//if(resumen.mes < mes)
+											_desempenoActual += resumen.total;	
+									}
+									else if( resumen.etiqueta == "VENTAS_1" || resumen.etiqueta == "NOTA_1" )
+									{
+										objeto.montoUSD_1 += resumen.total;	
+										_desepenoAnterior += resumen.total;
+									}
+									else if( resumen.etiqueta == "VENTAS_2" || resumen.etiqueta == "NOTA_2" )
+									{
+										objeto.montoUSD_2 += resumen.total;	
+									}
+								}
+							}
+							
+							if((_listaMontoObjetivo.length != 0) && (_listaMontoObjetivo.length != _maximoMeses - 1))
+							{
+								objeto.montoObjetivo = _listaMontoObjetivo[contador].monto ;
+								_montoObjetivo += objeto.montoObjetivo ;
+								contador++;
+							}	
+							if((_listaMontoObjetivoFundamental.length != 0) && (_listaMontoObjetivoFundamental.length != _maximoMeses - 1))
+							{
+								objeto.montoFundamental = _listaMontoObjetivoFundamental[contadorFundamental].monto ; 
+								_montoFundamental += objeto.montoFundamental ;
+								contadorFundamental++;	
+							}	
+							arrReturn.addItem( objeto );
+						}
+						cuenta++;
+					}
+				}
+				
+				establecerDatosObjetivos("deseado",_montoObjetivo,_anio,_mesesTrabajados);
+				establecerDatosObjetivos("fundamental",_montoFundamental,_anio,_mesesTrabajados);  
+				
+				if(_cliente)
+					etqNiAnual.text = _cliente.niAnual;
+				
+				arrReturn.addItem( new Object() );
+				lblPer1.text = _event.labelPeriodo1; 
+				return arrReturn;
+			}
+			
+			/**
+			 * SETTER RAGO MESES 
+			 */
+			private var _event:EventoTableroClientes;
+			private var _minimoMeses:int=1;
+			private var _maximoMeses:int=12;
+			private var _anioFiltro:Number;
+			private var _periodo:String = "";
+			
+			public function set recibirFiltros( $event:EventoTableroClientes ):void
+			{
+				if( $event == null )
+					return;
+				_event = $event;
+				
+				_minimoMeses = _event.parametros.rangoMinMes;
+				_maximoMeses = _event.parametros.rangoMaxMes;
+				_anioFiltro = _event.parametros.anio;
+				_periodo = _event.parametros.periodo;
+				
+				anioActual.text = fecha.getFullYear() == _anioFiltro ? "ACTUAL":"CERRADO";
+				lblinfoPerObjetivos.text = "D"+(_anioFiltro-1).toString();
+				_valorTotal = "D"+(_anioFiltro - 1).toString();
+				cont++;
+				
+			}
+			
+			private function formateoEje($valor:Number, valorPrevio:Object, eje:Object):String
+			{
+				var strRegreso:String = "";
+				if($valor != 0 ) strRegreso = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas( $valor );
+				return strRegreso;
+			}
+			
+			private function generaArchivo():void
+			{ 
+				var file2:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection();
+				var fila1:Array = null;
+				fila1 = new Array();
+				fila1[0] = hoja.addItem("#");
+				fila1[1] = hoja.addItem("Empresa");
+				fila1[2] = hoja.addItem("Factura");
+				fila1[3] = hoja.addItem("Monto");
+				fila1[4] = hoja.addItem("Moneda");
+				fila1[5] = hoja.addItem("T.Cambio");
+				fila1[6] = hoja.addItem("Conversión USD");
+				
+				for(var i:int = 0 ; i< _listadoVentasCliente.length ; i++ )
+				{
+					fila1 = new Array();	
+					fila1[0] = (_listadoVentasCliente[i] as VentasCliente).numFila;
+					fila1[1] = '"'+(_listadoVentasCliente[i] as VentasCliente).empresaFactura+'"';
+					fila1[2] = (_listadoVentasCliente[i] as VentasCliente).folio;
+					fila1[3] = '"'+(_listadoVentasCliente[i] as VentasCliente).montoString+'"';
+					fila1[4] = (_listadoVentasCliente[i] as VentasCliente).moneda;
+					fila1[5] = '"'+(_listadoVentasCliente[i] as VentasCliente).tipoCambioString+'"';
+					fila1[6] = '"'+(_listadoVentasCliente[i] as VentasCliente).conversionUSDString+'"';
+					hoja.addItem('\r' + fila1 );
+				}
+				file2.save( hoja, "Ventas_Periodo.csv");
+			}
+			
+			private function gridItemClickEvent(event:ListEvent):void
+			{
+				var urlreq:URLRequest;
+				var ruta:String;
+				if ((event.currentTarget.selectedItem as VentasCliente).tipoDocumento == "Factura")
+				{
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.FACTURAS_RUTA+ (event.currentTarget.selectedItem as VentasCliente).empresaFactura + '/' + (event.currentTarget.selectedItem as VentasCliente).folio + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}
+				else
+				{
+					ruta = RutasPdF.GENERAL_RUTA  + RutasPdF.NOTA_CREDITO+ (event.currentTarget.selectedItem as VentasCliente).empresaFactura + '/' + (event.currentTarget.selectedItem as VentasCliente).folio + ".pdf";
+					urlreq = new URLRequest ( ruta );
+					navigateToURL( urlreq );
+				}
+			}
+			
+			private function minimiza():void
+			{	
+				var evt:EventoTablero = new EventoTablero(EventoTablero.VOLVER_A_TABLERO);
+				dispatchEvent(evt);			
+			}
+			
+			public function set currentFiltroBusqueda($filtro:String):void
+			{
+				if($filtro == null) return;
+				_currentFiltroBusqueda = $filtro; 
+				
+				if(_currentVistaSelected == 'vistaAnalisisVentas')
+				{
+					grpPrincipal.percentWidth = 100;
+				}
+				else
+				{
+					if(_currentFiltroBusqueda == "CLIENTE")
+					{
+						grpGraficaNivelIngreso.includeInLayout = grpGraficaNivelIngreso.visible = false;
+						etqNiAnual.includeInLayout = etqNiAnual.visible = true;
+					}
+					else
+					{
+						grpGraficaNivelIngreso.includeInLayout = grpGraficaNivelIngreso.visible = true;
+						etqNiAnual.includeInLayout = etqNiAnual.visible = false;
+					}
+				}
+			}
+			
+			private var _currentVistaSelected:String;
+			private function cambiarVistaTablaGrafica($vistaSelected:String):void
+			{
+				_currentVistaSelected = $vistaSelected;
+				if($vistaSelected == 'vistaAnalisisVentas')
+				{
+					stackGeneral.selectedChild = vistaAnalisisVentas;
+				}
+				else
+				{
+					stackGeneral.selectedChild = vistaGrafico;
+					
+					if(_currentFiltroBusqueda == "CLIENTE")
+					{
+						grpGraficaNivelIngreso.includeInLayout = grpGraficaNivelIngreso.visible = false;
+						etqNiAnual.includeInLayout = etqNiAnual.visible = true;
+					}
+					else
+					{
+						grpGraficaNivelIngreso.includeInLayout = grpGraficaNivelIngreso.visible = true;
+						etqNiAnual.includeInLayout = etqNiAnual.visible = false;
+					} 
+				}
+			}
+			
+			private function lblFunction( $value:Object, $etiqueta:Object ):String
+			{
+				var currentLabel:String;
+				
+				if(_event != null && _event.parametros.periodo.toLowerCase() == "quincenal")
+				{
+					currentLabel = String(_listaQuincenal[_event.parametros.rangoMinMes].valor).toUpperCase();
+				}
+				else
+				{
+					currentLabel = _listaMensual[ int($etiqueta) -1 ].toUpperCase();
+					
+				}
+				
+				return currentLabel;
+			}
+			
+			private function compareFunction_Factura(item1:Object, item2:Object):int
+			{
+				return ObjectUtil.stringCompare(item1.folio,item2.folio);
+			}
+			
+			
+			protected function Regresar_VistaDefaultAnalisisVentasHandler(event:Event):void
+			{
+				 if(AnalisisVentas_Default(event.currentTarget).vistaARegresar == "grafica_VistaDefaultAnalisisVentas")
+				{
+					cambiarVistaTablaGrafica('vistaGrafico');
+					
+				}
+				else if(AnalisisVentas_Default(event.currentTarget).vistaARegresar == "incio_VistaDefaultAnalisisVentas")
+				{
+					minimiza();
+				} 
+			}
+			
+			public function get currentVistaSelected():String
+			{
+				return _currentVistaSelected;
+			}
+			
+			public function set currentVistaSelected(value:String):void
+			{
+				_currentVistaSelected = value;
+			}
+			
+			private function establecerDatosObjetivos($tipo:String, $monto:Number, $anio:Number, $contador:int):void
+			{
+				_porcentaje = '';
+				
+				var fecha:Date = new Date();
+				var promFacPer_Actual:Number = _desempenoActual / UtilsFormatosNumericos.getMesesTrabajados(_anioFiltro,false,_periodo);
+				var proyecPeriodo_actual:Number = promFacPer_Actual * getMesesTotales();
+				var promFacPer_Fund:Number = _montoFundamental / getMesesTotales();
+				var proyecPeriodo_Fund:Number = (promFacPer_Fund * getMesesTotales());
+				var promFacPer_Deseado:Number = _montoObjetivo / getMesesTotales();
+				var proyecPeriodo_Deseado:Number = (promFacPer_Deseado * getMesesTotales());
+				
+				lblinfoMontoAnterior.text = "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas( _desepenoAnterior );
+				lblDesempeno_Actual.text = "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas( _desempenoActual );
+				lblDifDesempeno_Actual.text = UtilsFormatosNumericos.precisionADosDecimales(((_desempenoActual/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDifDesempenoVSobj_Actual.text = "NA";
+				lblProyecPeriodo_Actual.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(proyecPeriodo_actual);
+				lblProyecCrecimiento_Actual.text =   UtilsFormatosNumericos.precisionADosDecimales(((proyecPeriodo_actual/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDiferObjetivos_Actual.text = "NA";
+				lblPromFactPeriodo_Actual.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(promFacPer_Actual);
+				lblDiferPromFacturacion_Actual.text = "NA";
+				
+				etqMontoObjetivoFund.text =  "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoFundamental);
+				lblDifDesempeno_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((_montoFundamental/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDifDesempenoVSobj_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((_desempenoActual/_montoFundamental)-1)*100).toString()+"%";
+				lblProyecPeriodo_Fund.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(proyecPeriodo_Fund);
+				lblProyecCrecimiento_Fund.text =   UtilsFormatosNumericos.precisionADosDecimales(((_montoFundamental/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDiferObjetivos_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((proyecPeriodo_actual/proyecPeriodo_Fund)-1)*100).toString()+"%";
+				lblPromFactPeriodo_Fund.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(promFacPer_Fund);
+				lblDiferPromFacturacion_Fund.text = UtilsFormatosNumericos.precisionADosDecimales(((promFacPer_Actual/promFacPer_Fund)-1)*100).toString()+"%";
+				
+				etqMontoObjetivo_Deseado.text =  "US $"+ UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoObjetivo);
+				lblDifDesempeno_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((_montoObjetivo/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDifDesempenoVSobj_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((_desempenoActual/_montoObjetivo)-1)*100).toString()+"%";
+				lblProyecPeriodo_Deseado.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(proyecPeriodo_Deseado);
+				lblProyecCrecimiento_Deseado.text =   UtilsFormatosNumericos.precisionADosDecimales(((_montoObjetivo/_desepenoAnterior)-1)*100).toString()+"%";
+				lblDiferObjetivos_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((proyecPeriodo_Fund/proyecPeriodo_Deseado)-1)*100).toString()+"%";
+				lblPromFactPeriodo_Deseado.text = "US $" + UtilsFormatosNumericos.precisionADosDecimalesConComas(promFacPer_Deseado);
+				lblDiferPromFacturacion_Deseado.text = UtilsFormatosNumericos.precisionADosDecimales(((promFacPer_Fund/promFacPer_Deseado)-1)*100).toString()+"%";
+				
+			}
+			
+			private function getMesesTotales():Number
+			{
+				var valor:Number = 0;
+				switch(_event.parametros.periodo)
+				{
+					case "Anual":
+					{
+						valor = 12;
+						break;
+					}
+					case "Semestral":
+					{
+						valor = 6;
+						break;
+					}
+					case "Trimestral":
+					{
+						valor = 3;
+						break;
+					}
+					default:
+					{
+						valor = 1;
+						break;
+					}
+				}
+				return valor;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<pq:MobViewStack id="stackGeneral" width="100%" height="100%" creationPolicy="all" >
+		<s:NavigatorContent id="vistaAnalisisVentas" width="100%" height="100%">
+			
+			<!--<analisisVentasJona:VistaDefaultAnalisisVentas id="grpVistaDefaultAnalisisVentas" width="100%" height="100%" Regresar_VistaDefaultAnalisisVentas="Regresar_VistaDefaultAnalisisVentasHandler(event)"/>-->
+			<analisisVentas:AnalisisVentas_Default id="grpVistaDefaultAnalisisVentas" width="100%" height="100%" Regresar_VistaDefaultAnalisisVentas="Regresar_VistaDefaultAnalisisVentasHandler(event)"/>
+			
+		</s:NavigatorContent>
+		<s:NavigatorContent id="vistaGrafico" width="100%" height="100%">
+			
+			
+			
+			
+			<s:HGroup width="100%" height="100%" gap="0">
+				
+				<s:VGroup width="100%" height="100%" paddingLeft="20" paddingTop="20" paddingBottom="20" paddingRight="20" id="grpPrincipal">
+					<s:HGroup width="100%">
+						<componentes:TituloChartMaxTablero width="100%" text="VENTAS DEL PERIODO"/>
+						<componentes:TituloChartMaxTablero id="lblPer1" textAlign="center"/>		
+					</s:HGroup>
+					
+					<otros:divisionGruesa width="100%"/>
+					<s:HGroup width="100%" id="grpVentasPeriodoLabels" visible="false" includeInLayout="false" paddingLeft="10" paddingTop="15" >
+						<s:Label id="etqNiAnual" fontSize="14" width="100%" textAlign="left" paddingRight="15" verticalAlign="middle" verticalCenter="0" horizontalCenter="0" fontStyle="normal" fontWeight="bold" fontFamily="Helvetica" paddingBottom="5"/>
+						<s:Spacer width="100%" />
+					</s:HGroup>
+						<mx:LineChart height="100%" width="100%" id="myChart"
+									  mouseSensitivity="5" 
+									  dataTipRenderer="{PeriodoToolTip}" 
+									  showDataTips="true" 
+									  showDataTipTargets="false"  
+									  dataTipMode="single" 
+									  paddingRight="30" paddingLeft="20" paddingTop="40"
+									  paddingBottom="40"
+									  seriesFilters="[]"
+									  >
+							<mx:series>
+								<!-- CURRENT -->
+								<mx:LineSeries  yField="montoObjetivo" xField="numeroMes" form="step"  lineStroke="{s1}" showDataEffect="{fxInterpolateIn}" />
+								
+								<mx:PlotSeries id="montoObjetivo" yField="montoObjetivo" xField="numeroMes" displayName="Ventas" showDataEffect="{fxInterpolateIn}" itemRenderer="mx.charts.renderers.TriangleItemRenderer" fill="{sc3}" stroke="{stroke2}"> 
+								</mx:PlotSeries>
+								
+								<mx:LineSeries yField="montoFundamental" xField="numeroMes" form="segment" lineStroke="{sObj}" width="100%" showDataEffect="{fxInterpolateIn}" />
+								<mx:PlotSeries id="montoObjetivoFundamental" yField="montoFundamental" xField="numeroMes" displayName="Ventas" showDataEffect="{fxInterpolateIn}" itemRenderer="mx.charts.renderers.TriangleItemRenderer" fill="{sc4}" stroke="{stroke4}"> 
+								</mx:PlotSeries>
+								
+								<mx:LineSeries yField="montoUSD_0" xField="numeroMes" form="segment" lineStroke="{sA}" width="100%" showDataEffect="{fxInterpolateIn}" />
+								<mx:PlotSeries yField="montoUSD_0" xField="numeroMes" displayName="Ventas" width="100%" showDataEffect="{fxInterpolateIn}" >
+									<mx:itemRenderer>
+										<fx:Component>
+											<s:MXItemRenderer>
+												<fx:Script>
+													<![CDATA[
+														import skins.catalogos.catalogoColores;
+													]]>
+												</fx:Script>
+												<s:Ellipse width="8" height="8" horizontalCenter="0" verticalCenter="0" depth="50">
+													<s:fill>
+														<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}"/>
+													</s:fill>		
+												</s:Ellipse>
+											</s:MXItemRenderer>
+										</fx:Component>
+									</mx:itemRenderer>
+								</mx:PlotSeries>
+							</mx:series>
+							
+							
+							<mx:horizontalAxis>
+								<mx:CategoryAxis id="ventasMes" categoryField="numeroMes"  />
+							</mx:horizontalAxis>
+							
+							<mx:horizontalAxisRenderers>
+								<mx:AxisRenderer axis="{ventasMes}" axisStroke="{trazoGruezo}" tickPlacement="none" showLine="true" showLabels="true"
+												 fontFamily="Helvetica" fontSize="11" fontWeight="bold" fontStyle="normal" labelFunction="lblFunction" />
+							</mx:horizontalAxisRenderers>
+							
+							
+							<mx:verticalAxis>
+								<mx:LinearAxis id="ventasDLS1" labelFunction="formateoEje" autoAdjust="false" padding="1"  minimum="0"/>
+							</mx:verticalAxis>
+							<mx:verticalAxisRenderers>
+								<mx:AxisRenderer axis="{ventasDLS1}" showLine="false" tickPlacement="none" styleName="axisVerticalLabels"/>
+							</mx:verticalAxisRenderers>
+						</mx:LineChart>
+					
+					
+					<s:Group width="100%" id="grpValoresGrid">
+						
+						<s:VGroup width="100%" paddingTop="135" paddingRight="20">
+							<otros:division width="100%" color="0x000000" />
+						</s:VGroup>
+						
+						<s:VGroup id="infoObjetivos" width="100%" paddingRight="20" paddingBottom="15">
+							<label:Titulo_22_pTop10 id="lblinfoPerObjetivos" textAlign="center" width="100%" paddingTop="0" />
+							<otros:division width="100%" colorLinea="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+							<label:Titulo_22_pTop10 id="lblinfoMontoAnterior" width="100%" textAlign="center" paddingTop="0" color="0x328faa"/>
+							<otros:division width="100%" color="0x000000" grueso="1.8"/>
+							<s:HGroup width="100%" paddingTop="10">
+								
+								<s:VGroup width="100%" horizontalAlign="right" gap="20">
+									<label:Texto id="Dummy" paddingTop="0" fontSize="12"/>
+									<label:Titulo text="DESEMPEÑO" fontSize="12" paddingTop="0" />
+									<label:Texto_16_GrisCasiNegro text="{'Dif desempeño '+_valorTotal}" fontSize="12" color="0xaaa9ab" />
+									<label:Texto_16_GrisCasiNegro text="Dif desempeño contra objetivos" fontSize="12" color="0xaaa9ab"/>
+									<label:Titulo text="Proyección del periodo" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro text="Proyección de crecimiento" fontSize="12" color="0xaaa9ab"/>
+									<label:Texto_16_GrisCasiNegro text="Diferencia de objetivos" fontSize="12" color="0xaaa9ab"/>
+									<label:Titulo text="Promedio facturación del Periodo" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro text="Diferencia Promedio de facturación" fontSize="12" color="0xaaa9ab"/>
+								</s:VGroup>
+								
+								
+								
+								<s:VGroup width="100%" horizontalAlign="center" gap="20">
+									<label:Titulo id="anioActual" text="ACTUAL" paddingTop="0" fontSize="12"/>
+									<label:Titulo id="lblDesempeno_Actual" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblDifDesempeno_Actual" fontSize="12" color="0x757578"/>
+									<label:Texto_16_GrisCasiNegro id="lblDifDesempenoVSobj_Actual" fontSize="12" color="0x757578"/>
+									<label:Titulo id="lblProyecPeriodo_Actual" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblProyecCrecimiento_Actual" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+									<label:Texto_16_GrisCasiNegro id="lblDiferObjetivos_Actual" fontSize="12" color="0x757578"/>
+									<label:Titulo id="lblPromFactPeriodo_Actual" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblDiferPromFacturacion_Actual" fontSize="12" color="0x757578"/>
+								</s:VGroup>
+								
+								
+								
+								<s:VGroup width="100%" horizontalAlign="center" gap="20">
+									<label:Titulo text="OBJETIVO FUNDAMENTAL" paddingTop="0" fontSize="12"/>
+									<label:Titulo id="etqMontoObjetivoFund" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblDifDesempeno_Fund" fontSize="12" color="0x757578"/>
+									<label:Texto_16_GrisCasiNegro id="lblDifDesempenoVSobj_Fund" fontSize="12" color="0x757578"/>
+									<label:Titulo id="lblProyecPeriodo_Fund" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblProyecCrecimiento_Fund" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+									<label:Texto_16_GrisCasiNegro id="lblDiferObjetivos_Fund" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+									<label:Titulo id="lblPromFactPeriodo_Fund" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblDiferPromFacturacion_Fund" fontSize="12" color="0x757578"/>
+								</s:VGroup>
+								
+								
+								<s:VGroup width="100%" horizontalAlign="center" gap="20">
+									<label:Titulo text="OBJETIVO DESEADO" paddingTop="0" fontSize="12"/>
+									<label:Titulo id="etqMontoObjetivo_Deseado" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblDifDesempeno_Deseado" fontSize="12" color="0x757578"/>
+									<label:Texto_16_GrisCasiNegro id="lblDifDesempenoVSobj_Deseado" fontSize="12" color="0x757578"/>
+									<label:Titulo id="lblProyecPeriodo_Deseado" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblProyecCrecimiento_Deseado" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+									<label:Texto_16_GrisCasiNegro id="lblDiferObjetivos_Deseado" fontSize="12" color="0x{catalogoColores.LABEL_ROJO_CLARO}"/>
+									<label:Titulo id="lblPromFactPeriodo_Deseado" fontSize="12" paddingTop="0"/>
+									<label:Texto_16_GrisCasiNegro id="lblDiferPromFacturacion_Deseado" fontSize="12" color="0x757578"/>
+								</s:VGroup>
+								
+								
+							</s:HGroup>
+							
+						</s:VGroup>
+					</s:Group>
+					<s:Label width="100%" paddingBottom="10" styleName="axisVerticalLabels">
+						<s:text>Los montos se refieren a precio de Venta</s:text>
+					</s:Label>
+					<otros:divisionHueca width="100%"/>
+					<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10">
+						<grafica:botonPopUp icono="tabla" click="cambiarVistaTablaGrafica('vistaAnalisisVentas')" />
+						<pqNet1:botonPqNetLargo label="Inicio" click="minimiza()" />
+					</s:HGroup>
+				</s:VGroup>
+				
+				<s:VGroup width="32%" height="100%" id="grpGraficaNivelIngreso">
+					<infoGrafica:PeriodoInfoGraficas width="100%" height="100%" />
+				</s:VGroup>
+			</s:HGroup>
+			
+		</s:NavigatorContent>
+		
+	</pq:MobViewStack>
+	
+</s:HGroup>

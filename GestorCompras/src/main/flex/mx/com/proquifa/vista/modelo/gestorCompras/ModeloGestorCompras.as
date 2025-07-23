@@ -1,0 +1,1542 @@
+package mx.com.proquifa.vista.modelo.gestorCompras
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	import flash.utils.ByteArray;
+	
+	import mx.collections.ArrayCollection;
+	import mx.collections.Sort;
+	import mx.collections.SortField;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ListaArribo;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empresa;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaPedido;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.utils.ObjectUtil;
+	
+	public class ModeloGestorCompras extends EventDispatcher
+	{
+		
+		private var comprasPagar:ArrayCollection;
+		private var comprasPagarPie:ArrayCollection;
+		private var total:Object
+		public static var query:Query;
+		
+		public function setObtenerComprasPorPagar(data:ArrayCollection):void
+		{
+			total = new Object();
+			total.totalOC = 0;
+			total.totalPiezas = 0;
+			total.totalMontos = 0;
+			comprasPagar = new ArrayCollection();
+			comprasPagarPie = new ArrayCollection();
+			query = new Query(data,['nombreProveedor']);
+			var punteroProveedores:Array = query.getPunteros(['nombreProveedor'],'nombreProveedor');
+			total.totalProveedores = punteroProveedores.length;
+			for each (var proveedor:String in punteroProveedores) 
+			{
+				var punteros:Array = query.getPunteros([proveedor]);
+				
+				var compra:Compra = ObjectUtil.copy(query.universo.getItemAt(punteros[0])) as Compra;
+				var resumen:ResumenConsulta = new ResumenConsulta();
+				resumen.total = compra.montoTotalDolares = query.getSumarCampo('montoTotalDolares',punteros);
+				resumen.piezasTotal = compra.totalPiezas = query.getSumarCampo('totalPiezas',punteros);
+				resumen.totalCompras = compra.totalOC = punteros.length;
+				resumen.etiqueta = compra.nombreProveedor;
+				resumen.clientes_proveedores = 1;
+				comprasPagar.addItem(compra);
+				comprasPagarPie.addItem(resumen);
+				total.totalOC += compra.totalOC;
+				total.totalPiezas += compra.totalPiezas;
+				total.totalMontos += compra.montoTotalDolares;
+			}
+			
+			dispatchEvent(new Event("obtenerComprasPorPagarModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerTotalesComprasPorPagarModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerResumenComprasPorPagarModeloGestorCompras"));
+		}
+		
+		[Bindable(event="obtenerComprasPorPagarModeloGestorCompras")]
+		public function get obtenerComprasPorPagar():ArrayCollection
+		{
+			return comprasPagar;
+		}
+		
+		[Bindable(event="obtenerTotalesComprasPorPagarModeloGestorCompras")]
+		public function get obtenerTotalesComprasPorPagar():Object
+		{
+			return total;
+		}
+		
+		[Bindable(event="obtenerResumenComprasPorPagarModeloGestorCompras")]
+		public function get obtenerResumenComprasPorPagar():Object
+		{
+			return comprasPagarPie;
+		}
+		
+		
+		private var partidas:ArrayCollection;
+		public static var totalesPartidas:Object;
+		public static var finPartidasAgregables:int = 0;
+		public function setObtenerPartidasOC(data:ArrayCollection):void
+		{
+			partidas = new ArrayCollection();
+			var partidasCerradas:ArrayCollection = new ArrayCollection();
+			totalesPartidas = new Object();
+			totalesPartidas.cantidad = 0;
+			totalesPartidas.monto = 0;
+			totalesPartidas.importe = 0;
+			totalesPartidas.partidas = 0;
+			if (data)
+			{
+				var numFila:int = 0;
+				for (var i:int = 0; i < data.length; i++) 
+				{
+					if ((data[i] as PartidaCompra).asignada || (data[i] as PartidaCompra).estado.toLowerCase() == "cancelada" )
+					{
+						if((data[i] as PartidaCompra).medioPago.toLowerCase() == "anticipo 50%" && ((data[i] as PartidaCompra).facturasTotal == 0 || (data[i] as PartidaCompra).facturasTotal > 0))
+						{
+							data[i].numFila = ++numFila;
+							partidas.addItem(data[i]);
+							data[i].asociar = true;
+						}
+						else
+						{
+							partidasCerradas.addItem(data[i]);
+						}
+					}
+					else
+					{
+						data[i].numFila = ++numFila;
+						partidas.addItem(data[i]);
+						data[i].asociar = true;
+					}
+					
+					totalesPartidas.cantidad += data[i].cantidadCompra;
+					totalesPartidas.monto += data[i].precioUnitario;
+					totalesPartidas.importe += data[i].precioTotal;
+				}
+				totalesPartidas.partidas = data.length;
+			}
+			finPartidasAgregables = numFila;
+			for (var j:int = 0; j < partidasCerradas.length; j++) 
+			{
+				partidasCerradas[j].numFila = ++numFila;
+			}
+			
+			
+			partidas.addAll(partidasCerradas);
+			dispatchEvent(new Event("obtenerPartidasPorOCModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerTotalesPartidasPorOCModeloGestorCompras"));
+			
+		}
+		
+		[Bindable(event="obtenerPartidasPorOCModeloGestorCompras")]
+		public function get obtenerPartidasOC():ArrayCollection
+		{
+			return partidas;
+		}
+		
+		[Bindable(event="obtenerTotalesPartidasPorOCModeloGestorCompras")]
+		public function get obtenerTotalesPartidasOC():Object
+		{
+			return totalesPartidas;
+		}
+		
+		
+		private var respuestaCargarFactura:int;
+		public function setObtenerRespuestaCargarFactura(data:int):void
+		{
+			respuestaCargarFactura = data;
+			dispatchEvent(new Event("enviarRespuesCargarFacturaModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarRespuesCargarFacturaModeloGestorCompras")]
+		public function get enviarRespuesta():int
+		{
+			return respuestaCargarFactura;
+		}
+		
+		private var respuestaGenerarListaArribo:String;
+		public function setObtenerRespuestaGenerarListaArribo(data:String):void
+		{
+			respuestaGenerarListaArribo = "";
+			respuestaGenerarListaArribo = data;
+			dispatchEvent(new Event("enviarRespuesListaArriboModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarRespuesListaArriboModeloGestorCompras")]
+		public function get enviarRespuestaLista():String
+		{
+			return respuestaGenerarListaArribo;
+		}
+		private var respuestaGenerarListaArribo_Public_MN:String;
+		public function setObtenerRespuestaGenerarListaArriboPMN(data:Boolean):void
+		{
+			if(data)
+				respuestaGenerarListaArribo_Public_MN = "Exito";
+			else
+				respuestaGenerarListaArribo_Public_MN = "Error";
+			dispatchEvent(new Event("enviarRespuesListaArriboPubliacionesMatrizModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarRespuesListaArriboPubliacionesMatrizModeloGestorCompras")]
+		public function get enviarRespuestaListaPMN():String
+		{
+			return respuestaGenerarListaArribo_Public_MN;
+		}
+		
+		////////////////// CONFIRMACION DEL CAMBIO DE PRECIO DE UNA OC //////////////////////////////////////////////////////
+		
+		private var creditoDisponible:Number;
+		public function setObtenerCreditoDisponible(data:Number):void
+		{
+			creditoDisponible = data;
+			dispatchEvent(new Event("enviarCreditoDisponibleModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarCreditoDisponibleModeloGestorCompras")]
+		public function get enviarCreditoDisponible():Number
+		{
+			return creditoDisponible;
+		}
+		////////////////// CONFIRMACION DEL CAMBIO DE PRECIO DE UNA OC //////////////////////////////////////////////////////
+		private var confirmacionCP:Boolean;
+		public function setConfirmaCambio(data:Boolean):void
+		{
+			confirmacionCP = data;
+			dispatchEvent(new Event("enviaConfirmacionDeCambioDePrecio"));
+			
+		}
+		
+		[Bindable(event="enviaConfirmacionDeCambioDePrecio")]
+		public function get enviarConfirmacionCambioPrecio():Boolean
+		{
+			return confirmacionCP;
+		}
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		
+		//////////////////  GENERA LISTA ARRIBO NACIONALES //////////////////
+		
+		private var respuestaGenerarListaArriboM_Nacional:String;
+		public function setObtenerRespuestaGenerarListaArriboMNACIONALES(data:Boolean):void
+		{
+			if(data)
+				respuestaGenerarListaArriboM_Nacional = "Exito";
+			else
+				respuestaGenerarListaArriboM_Nacional = "Error";
+			dispatchEvent(new Event("enviarRespuesListaArriboMatrizNacionalModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarRespuesListaArriboMatrizNacionalModeloGestorCompras")]
+		public function get enviarRespuestaListaMN():String
+		{
+			return respuestaGenerarListaArriboM_Nacional;
+		}
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		
+		//////////////////  OBTINE PARTIDAS POR ID LISTA ARRIBO  //////////////////
+		private var partidasDeListaArribo:ArrayCollection;
+		public function setObtenerPartidasxIdListaArribo($partidasListaArribo:ArrayCollection):void
+		{
+			partidasDeListaArribo = $partidasListaArribo;
+			dispatchEvent(new Event("obtenerPartidasXIdListaArribo"));
+		}
+		
+		[Bindable(event="obtenerPartidasXIdListaArribo")]
+		public function get obtenerPartidasDelistaArribo():ArrayCollection
+		{
+			return partidasDeListaArribo;
+		}
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		
+		//////////////////  OBTINE ORDEN DE DESPACHOS   //////////////////
+		private var _arregloInfo:ArrayCollection;
+		private var _arregloPie:ArrayCollection;
+		private var _totales:Object;
+		private var _proveedores:Array;
+		public static var _sql:Query;
+		
+		public function setObtenerOrdenDespachos($ordenes:ArrayCollection):void
+		{
+			var _numFila:int = 0;
+			if($ordenes == null || $ordenes.length ==0)
+				_arregloInfo = new ArrayCollection();
+			else
+			{
+				_arregloInfo = new ArrayCollection();
+				_arregloPie = new ArrayCollection();
+				_proveedores = new Array();
+				_sql = new Query($ordenes,["nombreProveedor","idProveedor","idListaArribo","idOrdenDespacho"],true);
+				_proveedores = _sql.getPunteros(["nombreProveedor"]);
+				_totales = new Object();
+				_totales.totalProveedores = "";
+				_totales.totalListasArribo = 0;
+				_totales.totalPiezas = 0;
+				_totales.totalMonto = 0;
+				_totales.et = 0;
+				_totales.ft = 0;
+				_totales.urgente = 0;
+				_totales.etPrecioTotal = 0;
+				_totales.ftPrecioTotal = 0;
+				_totales.urgentePrecioTotal  = 0;
+				_totales.etPiezasTotal = 0;
+				_totales.ftPiezasTotal = 0;
+				_totales.urgentePiezasTotal = 0;
+				
+				if(_proveedores.length > 0)
+				{
+					for(var i:int = 0; i < _proveedores.length; i++)
+					{
+						var resumen:ResumenConsulta = new ResumenConsulta();
+						var proveedor:String = _proveedores[i];
+						var tmp:ListaArribo = new ListaArribo();
+						
+						var _punteros:Array = _sql.getPunteros([proveedor]);
+						var totalPiezas:Number = _sql.getSumarCampo("totalPiezas",_punteros);
+						var totalMonto:Number = _sql.getSumarCampo("totalMonto",_punteros);
+						var _et:Number = 0;
+						var _ft:Number = 0;
+						var _urgente:Number = 0;
+						var _nFila:int = 0;
+						
+						for (var n:int = 0; n < _punteros.length; n++) 
+						{
+							if (_sql.universo.getItemAt(_punteros[n]).totalDiasMinEntrega > 2 )
+							{
+								_sql.universo.getItemAt(_punteros[n]).tiempo = 1;
+								_et += 1;
+								_totales.etPiezasTotal += _sql.universo.getItemAt(_punteros[n]).totalPiezas; 
+							}
+							else if (_sql.universo.getItemAt(_punteros[n]).totalDiasMinEntrega < 0 )
+							{
+								_sql.universo.getItemAt(_punteros[n]).tiempo = 2;
+								_ft += 1;
+								_totales.ftPiezasTotal += _sql.universo.getItemAt(_punteros[n]).totalPiezas; 
+							}
+							else
+							{
+								_sql.universo.getItemAt(_punteros[n]).tiempo = 3;
+								_urgente += 1;
+								_totales.urgentePiezasTotal += _sql.universo.getItemAt(_punteros[n]).totalPiezas; 
+							}
+							_sql.universo.getItemAt(_punteros[n]).numFila = ++_nFila;
+						}
+						
+						_totales.totalMonto += totalMonto;
+						_totales.totalPiezas += totalPiezas;
+						_totales.totalListasArribo += _punteros.length;
+						_totales.et += _et;
+						_totales.ft += _ft;
+						_totales.urgente += _urgente;
+						
+						for (var k:int = 0; k < $ordenes.length; k++) 
+						{
+							if ($ordenes[k].totalDiasMinEntrega > 2 )
+							{
+								_totales.etPrecioTotal += $ordenes[k].totalMonto;
+								/*_totales.etPiezasTotal += $ordenes[k].totalPiezas;*/
+							}
+							else if ($ordenes[k].totalDiasMinEntrega < 0 )
+							{
+								_totales.ftPrecioTotal += $ordenes[k].totalMonto;
+								/*_totales.ftPiezasTotal += $ordenes[k].totalPiezas;*/
+							}
+							else
+							{
+								_totales.urgentePrecioTotal += $ordenes[i].totalMonto;
+								/*_totales.urgentePiezasTotal += $ordenes[k].totalPiezas;*/
+							}
+						}
+						
+						resumen.etiqueta = tmp.nombreProveedor = proveedor.toUpperCase();
+						resumen.total = tmp.totalMonto = totalMonto;
+						resumen.piezasTotal = tmp.totalPiezas = totalPiezas;
+						resumen.totalCompras = tmp.totalListasArribo = _punteros.length;
+						resumen.clientes_proveedores = 1;
+						tmp.idProveedor = _sql.universo.getItemAt(_proveedores[i]).idProveedor;
+						tmp.folio = _sql.universo.getItemAt(_proveedores[i]).folio;
+						tmp.et = _et;
+						tmp.ft = _ft;
+						tmp.urgente = _urgente;
+						tmp.numFila = ++_numFila;
+						if (i == (_proveedores.length-1))
+						{
+							tmp.ultimo = true; //Es el ultimo reutilizando variables
+						}
+						
+						_arregloInfo.addItem(tmp);
+						_arregloPie.addItem(resumen);
+						
+					}
+					_totales.totalProveedores = _arregloInfo.length;
+				}
+			}
+			
+			dispatchEvent(new Event("obtenerOrdenDespachosModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerTotalesDespachosModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerResumenPieModeloGestorCompras"));
+		}
+		
+		[Bindable(event="obtenerOrdenDespachosModeloGestorCompras")]
+		public function get obtenerOrdenDespacho():ArrayCollection
+		{
+			return _arregloInfo;
+		}
+		
+		[Bindable(event="obtenerTotalesDespachosModeloGestorCompras")]
+		public function get obtenerTotalesOrdenDespacho():Object
+		{
+			return _totales;
+		}
+		
+		[Bindable(event="obtenerResumenPieModeloGestorCompras")]
+		public function get obtenerResumenPieOrdenDespacho():ArrayCollection
+		{
+			return _arregloPie;
+		}
+		
+		///////////////////////////// LISTA DE IMPORTADORES  ///////////////////////////// 
+		
+		private var _listaImportadores:ArrayCollection;
+		public function setObtenerListaImportadores(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaImportadores = data;
+			else
+				_listaImportadores = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaImportadoresModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaImportadoresModeloGestorCompras")]
+		public function get enviarListaImportadores():ArrayCollection
+		{
+			return _listaImportadores;
+		}
+		
+		///////////////////////////// LISTA DE IMPORTADORES PUBLICACIONES ///////////////////////////// 
+		
+		private var _listaImportadoresPub:ArrayCollection;
+		public function setObtenerListaImportadoresPub(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaImportadoresPub = data;
+			else
+				_listaImportadoresPub = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaImportadoresPubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaImportadoresPubModeloGestorCompras")]
+		public function get enviarListaImportadoresPub():ArrayCollection
+		{
+			return _listaImportadoresPub;
+		}
+		
+		///////////////////////////// LISTA DE EXPORTADORES  ///////////////////////////// 
+		
+		private var _listaExportadores:ArrayCollection;
+		public function setObtenerListaExportadores(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaExportadores = data;
+			else
+				_listaExportadores = new ArrayCollection();
+			
+			var tempEmp:Empresa = new Empresa;
+			tempEmp.idEmpresa = 0;
+			_listaExportadores.addItem(tempEmp);
+			
+			dispatchEvent(new Event("enviarListaExportadoresModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaExportadoresModeloGestorCompras")]
+		public function get enviarListaExportadores():ArrayCollection
+		{
+			return _listaExportadores;
+		}
+		
+		///////////////////////////// LISTA DE EXPORTADORES PUBLICACIONES ///////////////////////////// 
+		
+		private var _listaExportadoresPub:ArrayCollection;
+		public function setObtenerListaExportadoresPub(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaExportadoresPub = data;
+			else
+				_listaExportadoresPub = new ArrayCollection();
+			
+			var tempEmp:Empresa = new Empresa;
+			tempEmp.idEmpresa = 0;
+			_listaExportadoresPub.addItem(tempEmp);
+			
+			dispatchEvent(new Event("enviarListaExportadoresPubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaExportadoresPubModeloGestorCompras")]
+		public function get enviarListaExportadoresPub():ArrayCollection
+		{
+			return _listaExportadoresPub;
+		}
+		
+		///////////////////////////// LISTA DE AGENTES ADUANALES  ///////////////////////////// 
+		
+		private var _listaAgentes:ArrayCollection;
+		public function setObtenerListaAgentes(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaAgentes = data;
+			else
+				_listaAgentes = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaAgentesModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaAgentesModeloGestorCompras")]
+		public function get enviarListaAgentes():ArrayCollection
+		{
+			return _listaAgentes;
+		}
+		
+		///////////////////////////// LISTA DE AGENTES ADUANALES PUBLICACIONES  ///////////////////////////// 
+		
+		private var _listaAgentesPub:ArrayCollection;
+		public function setObtenerListaAgentesPub(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaAgentesPub = data;
+			else
+				_listaAgentesPub = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaAgentesPubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaAgentesPubModeloGestorCompras")]
+		public function get enviarListaAgentesPub():ArrayCollection
+		{
+			return _listaAgentesPub;
+		}
+		
+		/////////////////////////////    ORDENES DE DESPACHO    ///////////////////////////////////
+		
+		private var _ordenes:String;
+		public function setGuardarOrdenes(data:String):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_ordenes = data;
+			else
+				_ordenes = "";
+			
+			dispatchEvent(new Event("enviarOrdenesDespachoModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarOrdenesDespachoModeloGestorCompras")]
+		public function get GuardarOrdenes():String
+		{
+			return _ordenes;
+		}
+		
+		/////////////////////////////    ORDENES DE DESPACHO PUBLICACIONES   ///////////////////////////////////
+		
+		private var _ordenesPub:String;
+		public function setGuardarOrdenesPub(data:String):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_ordenesPub = data;
+			else
+				_ordenesPub = "";
+			
+			dispatchEvent(new Event("enviarOrdenesDespachoPubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarOrdenesDespachoPubModeloGestorCompras")]
+		public function get GuardarOrdenesPub():String
+		{
+			return _ordenesPub;
+		}
+		
+		private var _cerrar:Boolean;
+		public function setEsconderABC(cerrar:Boolean):void
+		{
+			_cerrar = cerrar;
+			dispatchEvent(new Event("esconderPopupABC"));
+		}
+		
+		[Bindable(event="esconderPopupABC")]
+		public function get enviarEsconderABC():Boolean
+		{
+			return _cerrar;
+		}
+		
+		/////////////////////////////    ORDENES DE DESPACHO  GUARDADAS  ///////////////////////////////////
+		private var _ordenesDespacho:ArrayCollection;
+		public function setObtenerOrdenesGuardadas($ordenes:ArrayCollection):void
+		{
+			if($ordenes == null || $ordenes.length ==0)
+				_ordenesDespacho = new ArrayCollection();
+			else
+			{
+				_ordenesDespacho = new ArrayCollection();
+				_ordenesDespacho = $ordenes;
+				
+			}
+			
+			dispatchEvent(new Event("enviarOrdenesDespachoGuardadasModelosGestorCompras"));
+		}
+		
+		[Bindable(event="enviarOrdenesDespachoGuardadasModelosGestorCompras")]
+		public function get obtenerOrdenDespachoGuardada():ArrayCollection
+		{
+			return _ordenesDespacho;
+		}
+		
+		/////////////////////////////    ORDENES DE DESPACHO  ELIMINADAS  ///////////////////////////////////
+		private var _ordeneEliminada:Boolean;
+		public function setOrdenesEliminadas($eliminada:Boolean):void
+		{
+			_ordeneEliminada = $eliminada;
+			
+			dispatchEvent(new Event("enviarOrdenesEliminadasModelosGestorCompras"));
+		}
+		
+		[Bindable(event="enviarOrdenesEliminadasModelosGestorCompras")]
+		public function get ordenesEliminadas():Boolean
+		{
+			return _ordeneEliminada;
+		}
+		
+		///////////////////////////// LISTA DE DOCUMENTOS  ///////////////////////////// 
+		
+		private var _listaDocumentos:ArrayCollection;
+		public function setObtenerListaDocumentos(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaDocumentos = data;
+				//_listaDocumentos = eliminarFacturasMicro(data);
+			else
+				_listaDocumentos = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaDocumentosModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaDocumentosModeloGestorCompras")]
+		public function get enviarListaDocumentos():ArrayCollection
+		{
+			return _listaDocumentos;
+		}
+		
+		private function eliminarFacturasMicro(value:ArrayCollection):ArrayCollection
+		{
+			var primera:Boolean = false;
+			var listaArreglada:ArrayCollection = new ArrayCollection;
+			
+			for (var i:int = 0; i < value.length; i++) 
+			{
+				if(value[i].tipo.toLowerCase() == "cartausomicro"){
+					if(!primera){
+						listaArreglada.addItem(value[i]);
+						primera = true;
+					}
+				}else{
+					listaArreglada.addItem(value[i]);
+				}
+			}
+			
+			return listaArreglada;
+		}
+		
+		///////////////////////////// DOCUMENTOS CON URL CARGADA  ///////////////////////////// 
+		
+		private var _listaDocumentosURL:ArrayCollection;
+		public function setObtenerListaDocumentosURL(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaDocumentosURL = data;
+			else
+				_listaDocumentosURL = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaDocumentosURLModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaDocumentosURLModeloGestorCompras")]
+		public function get enviarListaDocumentosURL():ArrayCollection
+		{
+			return _listaDocumentosURL;
+		}
+		
+		///////////////////////////// DOCUMENTOS CON URL CARGADA PUBLICACIONES  ///////////////////////////// 
+		
+		private var _listaDocumentosURLPub:ArrayCollection;
+		public function setObtenerListaDocumentosURLPub(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaDocumentosURLPub = data;
+			else
+				_listaDocumentosURLPub = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaDocumentosURLPubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaDocumentosURLPubModeloGestorCompras")]
+		public function get enviarListaDocumentosURLPub():ArrayCollection
+		{
+			return _listaDocumentosURLPub;
+		}
+		
+		///////////////////////////// LISTA DE DOCUMENTOS PUBLICACIONES  ///////////////////////////// 
+		
+		private var _listaDocumentosPub:ArrayCollection;
+		public function setObtenerListaDocumentosPub(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaDocumentosPub = data;
+			else
+				_listaDocumentosPub = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaDocumentosPublicacionesModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaDocumentosPublicacionesModeloGestorCompras")]
+		public function get enviarListaDocumentosPub():ArrayCollection
+		{
+			return _listaDocumentosPub;
+		}
+		
+		
+		
+		///////////////////////////// LISTA DE ORDENES (CONSOLIDADO)  ///////////////////////////// 
+		
+		private var _listaDocumentosConsolidos:ArrayCollection;
+		public function setObtenerListaConsolidpes(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaDocumentosConsolidos = data;
+			else
+				_listaDocumentosConsolidos = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaDocumentosConsolidadoesModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaDocumentosConsolidadoesModeloGestorCompras")]
+		public function get enviarListaDocumentosConsolidadoes():ArrayCollection
+		{
+			return _listaDocumentosConsolidos;
+		}
+		
+		
+		
+		
+		///////////////////////////// LISTA DE ORDENES (CONSOLIDADO) PUBLICACIONES  ///////////////////////////// 
+/*		
+		private var _listaDocumentosConsolidosPub:ArrayCollection;
+		public function setObtenerListaConsolidpesPub(data:ArrayCollection):void
+		{
+			if(data == null)
+				return;
+			
+			if(data.length > 0)
+				_listaDocumentosConsolidosPub = data;
+			else
+				_listaDocumentosConsolidosPub = new ArrayCollection();
+			
+			dispatchEvent(new Event("enviarListaDocumentosConsolidadoesPubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="enviarListaDocumentosConsolidadoesPubModeloGestorCompras")]
+		public function get enviarListaDocumentosConsolidadoesPub():ArrayCollection
+		{
+			return _listaDocumentosConsolidosPub;
+		}
+		*/
+		
+		
+		///////////////////////////// GENERAR ORDEN DESPACHO PARCIAL  ///////////////////////////// 
+		
+		private var _generarOrdenDespParcial:String;
+		public function setOrdenParcial(data:String):void
+		{
+			/*if(data)
+			{*/
+				_generarOrdenDespParcial = data;
+				dispatchEvent(new Event("enviarGenerarOrdenDespachoModeloGestorCompras"));
+			/*}*/
+		}
+		
+		[Bindable(event="enviarGenerarOrdenDespachoModeloGestorCompras")]
+		public function get enviarOrdenParcial():String
+		{
+			return _generarOrdenDespParcial;
+		}
+		
+		
+		
+		///////////////////////////// Respuesta de obtener Partidas de Orden Despacho  ///////////////////////////// 
+		
+		private var PartidasODD:ArrayCollection;
+		public function setPartidasOrdenDesPacho(data:ArrayCollection):void
+		{
+			/*if(data)
+			{*/
+			PartidasODD = data;
+			dispatchEvent(new Event("enviarPartidasDeOrdenDespacho"));
+			/*}*/
+		}
+		
+		[Bindable(event="enviarPartidasDeOrdenDespacho")]
+		public function get enviarPartidasOrdenDes():ArrayCollection
+		{
+			return PartidasODD;
+		}
+		
+		
+		
+		///////////////////////////// GENERAR ORDEN DESPACHO PARCIAL PUBLICACIONES  ///////////////////////////// 
+		
+		private var _generarOrdenDespParcialPub:Boolean;
+		public function setOrdenParcialPub(data:Boolean):void
+		{
+			if(data)
+			{
+				_generarOrdenDespParcialPub = data;
+				dispatchEvent(new Event("enviarGenerarOrdenDespachoPubModeloGestorCompras"));
+			}
+		}
+		
+		[Bindable(event="enviarGenerarOrdenDespachoPubModeloGestorCompras")]
+		public function get enviarOrdenParcialPub():Boolean
+		{
+			return _generarOrdenDespParcialPub;
+		}
+		
+		///////////////////////////// OBTIENE IMAGEN PARA VISUALIZADOR PDF  ///////////////////////////// 
+		private var rutaImagen:ArrayCollection;
+		public function setImagenVisualizaPDF($rutaImagen:ArrayCollection):void
+		{
+			if($rutaImagen != null){				
+				rutaImagen = $rutaImagen;
+			}else{
+				rutaImagen = new ArrayCollection();
+			}
+			dispatchEvent(new Event("enviarFotoVisualizadorPDF"));
+		}
+		[Bindable(event="enviarFotoVisualizadorPDF")]
+		public function get enviarDatosVisualizadorPDF():ArrayCollection
+		{
+			return rutaImagen;
+		}
+		
+		
+		///////////////////////////// OBTIENE IMAGEN PARA VISUALIZADOR PDF PUBLICACIONES///////////////////////////// 
+		private var rutaImagenPub:String;
+		public function setImagenVisualizaPDFPub($rutaImagen:String):void
+		{
+			if($rutaImagen != null)
+			{				
+				rutaImagenPub = $rutaImagen;
+			}
+			dispatchEvent(new Event("enviarFotoVisualizadorPDFPub"));
+		}
+		[Bindable(event="enviarFotoVisualizadorPDFPub")]
+		public function get enviarDatosVisualizadorPDFPub():String
+		{
+			return rutaImagenPub;
+		}
+		
+		
+		//////////////////  OBTINE ORDEN DE DESPACHOS PUBLICACIONES   //////////////////
+		
+		/*private var _arregloInfoPub:ArrayCollection;
+		private var _arregloPiePub:ArrayCollection;
+		private var _totalesPub:Object;
+		private var _proveedoresPub:Array;
+		public static var _sqlPub:Query;
+		
+		public function setObtenerOrdenDespachosPub($ordenes:ArrayCollection):void
+		{
+			var _numFila:int = 0;
+			if($ordenes == null || $ordenes.length ==0)
+				_arregloInfoPub = new ArrayCollection();
+			else
+			{
+				_arregloInfoPub = new ArrayCollection();
+				_arregloPiePub = new ArrayCollection();
+				_proveedoresPub = new Array();
+				_sqlPub = new Query($ordenes,["nombreProveedor","idProveedor","idListaArribo","idOrdenDespacho"],true);
+				_proveedoresPub = _sqlPub.getPunteros(["nombreProveedor"]);
+				_totalesPub = new Object();
+				_totalesPub.totalProveedores = "";
+				_totalesPub.totalListasArribo = 0;
+				_totalesPub.totalPiezas = 0;
+				_totalesPub.totalMonto = 0;
+				_totalesPub.et = 0;
+				_totalesPub.ft = 0;
+				_totalesPub.urgente = 0;
+				_totalesPub.etPrecioTotal = 0;
+				_totalesPub.ftPrecioTotal = 0;
+				_totalesPub.urgentePrecioTotal  = 0;
+				
+				if(_proveedoresPub.length > 0)
+				{
+					for(var i:int = 0; i < _proveedoresPub.length; i++)
+					{
+						var resumen:ResumenConsulta = new ResumenConsulta();
+						var proveedor:String = _proveedoresPub[i];
+						var tmp:ListaArribo = new ListaArribo();
+						
+						var _punteros:Array = _sqlPub.getPunteros([proveedor]);
+						var totalPiezas:Number = _sqlPub.getSumarCampo("totalPiezas",_punteros);
+						var totalMonto:Number = _sqlPub.getSumarCampo("totalMonto",_punteros);
+						var _et:Number = 0;
+						var _ft:Number = 0;
+						var _urgente:Number = 0;
+						var _nFila:int = 0;
+						
+						for (var n:int = 0; n < _punteros.length; n++) 
+						{
+							if (_sqlPub.universo.getItemAt(_punteros[n]).totalDiasMinEntrega > 2 )
+							{
+								_sqlPub.universo.getItemAt(_punteros[n]).tiempo = 1;
+								_et += 1;
+							}
+							else if (_sqlPub.universo.getItemAt(_punteros[n]).totalDiasMinEntrega < 0 )
+							{
+								_sqlPub.universo.getItemAt(_punteros[n]).tiempo = 2;
+								_ft += 1;
+							}
+							else
+							{
+								_sqlPub.universo.getItemAt(_punteros[n]).tiempo = 3;
+								_urgente += 1;
+							}
+							_sqlPub.universo.getItemAt(_punteros[n]).numFila = ++_nFila;
+						}
+						
+						_totalesPub.totalMonto += totalMonto;
+						_totalesPub.totalPiezas += totalPiezas;
+						_totalesPub.totalListasArribo += _punteros.length;
+						_totalesPub.et += _et;
+						_totalesPub.ft += _ft;
+						_totalesPub.urgente += _urgente;
+						
+						for (var k:int = 0; k < $ordenes.length; k++) 
+						{
+							if ($ordenes[k].totalDiasMinEntrega > 2 )
+							{
+								_totalesPub.etPrecioTotal += $ordenes[k].totalMonto;
+							}
+							else if ($ordenes[k].totalDiasMinEntrega < 0 )
+							{
+								_totalesPub.ftPrecioTotal += $ordenes[k].totalMonto;
+							}
+							else
+							{
+								_totalesPub.urgentePrecioTotal += $ordenes[i].totalMonto;
+							}
+						}
+						
+						resumen.etiqueta = tmp.nombreProveedor = proveedor.toUpperCase();
+						resumen.total = tmp.totalMonto = totalMonto;
+						resumen.piezasTotal = tmp.totalPiezas = totalPiezas;
+						resumen.totalCompras = tmp.totalListasArribo = _punteros.length;
+						resumen.clientes_proveedores = 1;
+						tmp.idProveedor = _sqlPub.universo.getItemAt(_proveedoresPub[i]).idProveedor;
+						tmp.folio = _sqlPub.universo.getItemAt(_proveedoresPub[i]).folio;
+						tmp.et = _et;
+						tmp.ft = _ft;
+						tmp.urgente = _urgente;
+						tmp.numFila = ++_numFila;
+						if (i == (_proveedoresPub.length-1))
+						{
+							tmp.ultimo = true; //Es el ultimo reutilizando variables
+						}
+						
+						_arregloInfoPub.addItem(tmp);
+						_arregloPiePub.addItem(resumen);
+						
+					}
+					_totalesPub.totalProveedores = _arregloInfoPub.length;
+				}
+			}
+			
+			dispatchEvent(new Event("obtenerOrdenDespachosPubModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerTotalesDespachosPubModeloGestorCompras"));
+			dispatchEvent(new Event("obtenerResumenPiePubModeloGestorCompras"));
+		}
+		
+		[Bindable(event="obtenerOrdenDespachosPubModeloGestorCompras")]
+		public function get obtenerOrdenDespachoPub():ArrayCollection
+		{
+			return _arregloInfoPub;
+		}
+		
+		[Bindable(event="obtenerTotalesDespachosPubModeloGestorCompras")]
+		public function get obtenerTotalesOrdenDespachoPub():Object
+		{
+			return _totalesPub;
+		}
+		
+		[Bindable(event="obtenerResumenPiePubModeloGestorCompras")]
+		public function get obtenerResumenPieOrdenDespachoPub():ArrayCollection
+		{
+			return _arregloPiePub;
+		}
+		*/
+		///////////////////////////// OBTIENE NUMERO PENDIENTES CARGAR FACTURA  ///////////////////////////// 
+		public var numPendientes:int;
+		public function setObtieneNumPendientesCargarFactura($listPend: ArrayCollection):void
+		{
+			if($listPend == null || $listPend.length == 0)
+				return;
+			numPendientes = $listPend.length
+			dispatchEvent(new Event("regresarNumPendientesCargarFactura"));
+		}
+		
+		[Bindable(event="regresarNumPendientesCargarFactura")]
+		public function get regresarNumPendCargarFactura():Object
+		{
+			return numPendientes;
+		}
+		
+		///////////////////////////// OBTIENE NUMERO PENDIENTES  ///////////////////////////// 
+		private var numeroPendientes:ArrayCollection;
+		public function setObtenerPendientesGestorCompras(data:ArrayCollection):void
+		{
+			var temp:ArrayCollection = new ArrayCollection();
+			var arrayAux:Array;
+			var objectAux:Object = new Object();
+			objectAux.pendiente = "";
+			objectAux.conteo = "";
+			if(data.length != 0){
+				for(var x:int=0; x < data.length; x++){
+					arrayAux = (data[x] as String).split("/");
+					objectAux.pendiente = arrayAux[0];
+					objectAux.conteo = arrayAux[1];
+					temp.addItem(ObjectUtil.copy(objectAux));
+				}
+			}
+			numeroPendientes = temp;
+			dispatchEvent(new Event("obtenerNumeroDePendientesModeloGestorCompras"));
+		}
+		
+		[Bindable(event="obtenerNumeroDePendientesModeloGestorCompras")]
+		public function get enviarObtenerPendientesGestorCompras():ArrayCollection
+		{
+			return numeroPendientes;
+		}
+		
+		
+		//////////////////  OBTINE ORDEN DE DESPACHOS GENERAR ACUSE DE RECIBIDO   //////////////////
+		private var _agentesAduanales:ArrayCollection;
+		private var agenteAduanalPie:ArrayCollection;
+		private var proveedoresPie:ArrayCollection;
+		private var ordenesGA:ArrayCollection;
+		public var _sqlAcuse:Query;
+		
+		public function setObtenerOrdenDespachosGenerarAcuse($ordenes:ArrayCollection):void
+		{
+			var punterosAgentes:Array;
+			var punterosProvee:Array;
+			var numFila:int = 1;
+			var queryProvee:Query;
+			var punteros:Array;
+			var orden:OrdenDespacho;
+			if($ordenes == null)
+				_agentesAduanales = new ArrayCollection();
+			else
+			{
+				ordenesGA = ObjectUtil.copy($ordenes) as ArrayCollection;
+				var resumenAgente:ResumenConsulta = new ResumenConsulta();
+				var resumenProveedor:ResumenConsulta = new ResumenConsulta();
+				_agentesAduanales = new ArrayCollection();
+				punterosAgentes = new Array();
+				agenteAduanalPie = new ArrayCollection();
+				////////////////////////////////Agentes Aduanales///////////////////////////////
+				_sqlAcuse = new Query($ordenes,["nombreAgenteAduanal","idAgenteAduanal","idOrdenDespacho"],true);
+				punterosAgentes = _sqlAcuse.getPunteros(["nombreAgenteAduanal"]);
+				
+				resumenAgente.totalAgentesAduanales = punterosAgentes.length;
+				for each (var agente:String in punterosAgentes) 
+				{
+					resumenAgente = new ResumenConsulta();
+					orden = new OrdenDespacho();
+					punteros = _sqlAcuse.getPunteros([agente]);
+					orden = ObjectUtil.copy(_sqlAcuse.universo.getItemAt(punteros[0])) as OrdenDespacho;
+					resumenAgente = new ResumenConsulta();
+					resumenAgente.etiqueta = ObjectUtil.copy(agente.toUpperCase()) as String;
+					orden.numFila = numFila;
+					orden.totalOD = _sqlAcuse.getPunteros([agente],"folio").length;
+					orden.totalProveedores = _sqlAcuse.getSumarCampo('totalProveedores',punteros,"nombreProveedor");
+					resumenAgente.totalAcuseRecibo = _sqlAcuse.getPunteros([agente],"acuseRecibo").length;
+					resumenAgente.totalAgentesAduanales = 1;
+					orden.totalPiezas = resumenAgente.piezasTotal = _sqlAcuse.getSumarCampo('totalPiezas',punteros);
+					orden.totalMonto = resumenAgente.monto = _sqlAcuse.getSumarCampo('totalMonto',punteros);
+					
+					_agentesAduanales.addItem(orden);
+					agenteAduanalPie.addItem(resumenAgente);
+					
+					numFila++;
+				}
+				////////////////////////////////Totales Proveedores///////////////////////////////
+				queryProvee = new Query($ordenes,["nombreProveedor"],true);
+				punterosProvee = queryProvee.getPunteros(["nombreProveedor"]);
+				proveedoresPie= new ArrayCollection();
+				var cont:int = 0;
+				for each (var proveedores:String in punterosProvee) 
+				{
+					punteros = new Array();
+					punteros = queryProvee.getPunteros([proveedores]);
+					resumenProveedor = new ResumenConsulta();
+					resumenProveedor.etiqueta = proveedores.toUpperCase();
+					resumenProveedor.totalProveedores = 1;
+					resumenProveedor.piezasTotal = queryProvee.getSumarCampo('totalPiezas',punteros);
+					resumenProveedor.monto = queryProvee.getSumarCampo('totalMonto',punteros);
+					resumenProveedor.totalAcuseRecibo = queryProvee.getPunteros([proveedores],"acuseRecibo").length;
+					
+					proveedoresPie.addItem(resumenProveedor);
+					cont++;
+				}
+			}
+			
+			dispatchEvent(new Event("obtenerUniversoODModeloGestorComprasGenerarAcuse"));
+			dispatchEvent(new Event("obtenerOrdenDespachosModeloGestorComprasGenerarAcuse"));
+			dispatchEvent(new Event("obtenerTotalesPiesModeloGestorComprasGenerarAcuse"));
+			dispatchEvent(new Event("obtenerTotalesPiesProveedorModeloGestorComprasGenerarAcuse"));
+		}
+		
+		
+		[Bindable(event="obtenerOrdenDespachosModeloGestorComprasGenerarAcuse")]
+		public function get obtenerOrdenDespachoGenerarAcuse():ArrayCollection
+		{
+			return _agentesAduanales;
+		}
+		[Bindable(event="obtenerTotalesPiesModeloGestorComprasGenerarAcuse")]
+		public function get obtenerTotalesPiesGenerarAcuse():ArrayCollection
+		{
+			return agenteAduanalPie;
+		}
+		[Bindable(event="obtenerTotalesPiesProveedorModeloGestorComprasGenerarAcuse")]
+		public function get obtenerTotalesPieProveedoresGenerarAcuse():ArrayCollection
+		{
+			return proveedoresPie;
+		}
+		[Bindable(event="obtenerUniversoODModeloGestorComprasGenerarAcuse")]
+		public function get obtenerUniversoODGenerarAcuse():ArrayCollection
+		{
+			return ordenesGA;
+		}
+		
+		//////////////////  OBTINE PENDIENTES CARGAR ACUSE RECIBIDO   //////////////////
+		private var agentesAduanalesCA:ArrayCollection;
+		private var agenteAduanalPieCA:ArrayCollection;
+		private var proveedoresPieCA:ArrayCollection;
+		private var ordenesCA:ArrayCollection;
+		public var _sqlAcuseCA:Query;
+		
+		public function setObtenerOrdenDespachosCargarAcuse($ordenes:ArrayCollection):void
+		{
+			var punterosAgentes:Array;
+			var punterosProvee:Array;
+			var numFila:int = 1;
+			var queryProvee:Query;
+			var punteros:Array;
+			var orden:OrdenDespacho;
+			if($ordenes == null || $ordenes.length ==0){
+				agentesAduanalesCA = new ArrayCollection();
+				ordenesCA = new ArrayCollection();
+				agenteAduanalPieCA = new ArrayCollection();
+				proveedoresPieCA= new ArrayCollection();
+			}
+			else
+			{
+				ordenesCA = ObjectUtil.copy($ordenes) as ArrayCollection;
+				var resumenAgente:ResumenConsulta = new ResumenConsulta();
+				var resumenProveedor:ResumenConsulta = new ResumenConsulta();
+				agentesAduanalesCA = new ArrayCollection();
+				punterosAgentes = new Array();
+				agenteAduanalPieCA = new ArrayCollection();
+				////////////////////////////////Agentes Aduanales///////////////////////////////
+				_sqlAcuse = new Query($ordenes,["nombreAgenteAduanal","idAgenteAduanal","idOrdenDespacho","nombreProveedor"],true);
+				punterosAgentes = _sqlAcuse.getPunteros(["nombreAgenteAduanal"]);
+				
+				resumenAgente.totalAgentesAduanales = punterosAgentes.length;
+				for each (var agente:String in punterosAgentes) 
+				{
+					resumenAgente = new ResumenConsulta();
+					orden = new OrdenDespacho();
+					punteros = _sqlAcuse.getPunteros([agente]);
+					orden = ObjectUtil.copy(_sqlAcuse.universo.getItemAt(punteros[0])) as OrdenDespacho;
+					resumenAgente = new ResumenConsulta();
+					resumenAgente.etiqueta = ObjectUtil.copy(agente.toUpperCase()) as String;
+					orden.numFila = numFila;
+					orden.totalOD = _sqlAcuse.getPunteros([agente],"folio").length;
+					orden.totalProveedores = _sqlAcuse.getSumarCampo('totalProveedores',punteros,"nombreProveedor");
+					resumenAgente.totalAcuseRecibo = _sqlAcuse.getPunteros([agente],"acuseRecibo").length;
+					resumenAgente.totalAgentesAduanales = 1;
+					orden.totalPiezas = resumenAgente.piezasTotal = _sqlAcuse.getSumarCampo('totalPiezas',punteros);
+					orden.totalMonto = resumenAgente.monto = _sqlAcuse.getSumarCampo('totalMonto',punteros);
+					
+					agentesAduanalesCA.addItem(orden);
+					agenteAduanalPieCA.addItem(resumenAgente);
+					
+					numFila++;
+				}
+				////////////////////////////////Totales Proveedores///////////////////////////////
+				queryProvee = new Query($ordenes,["nombreProveedor"],true);
+				punterosProvee = queryProvee.getPunteros(["nombreProveedor"]);
+				proveedoresPieCA= new ArrayCollection();
+				var cont:int = 0;
+				for each (var proveedores:String in punterosProvee) 
+				{
+					punteros = new Array();
+					punteros = queryProvee.getPunteros([proveedores]);
+					resumenProveedor = new ResumenConsulta();
+					resumenProveedor.etiqueta = proveedores.toUpperCase();
+					resumenProveedor.totalProveedores = 1;
+					resumenProveedor.piezasTotal = queryProvee.getSumarCampo('totalPiezas',punteros);
+					resumenProveedor.monto = queryProvee.getSumarCampo('totalMonto',punteros);
+					resumenProveedor.totalAcuseRecibo = queryProvee.getPunteros([proveedores],"acuseRecibo").length;
+					
+					proveedoresPieCA.addItem(resumenProveedor);
+					cont++;
+				}
+				
+			}
+			
+			dispatchEvent(new Event("obtenerUniversoODModeloGestorComprasCargarAcuse"));
+			dispatchEvent(new Event("obtenerOrdenDespachosModeloGestorComprasCargarAcuse"));
+			dispatchEvent(new Event("obtenerTotalesPiesModeloGestorComprasCargarAcuse"));
+			dispatchEvent(new Event("obtenerTotalesPiesProveedorModeloGestorComprasCargarAcuse"));
+		}
+		
+		[Bindable(event="obtenerOrdenDespachosModeloGestorComprasCargarAcuse")]
+		public function get obtenerOrdenDespachoCargarAcuse():ArrayCollection
+		{
+			return agentesAduanalesCA;
+		}
+		[Bindable(event="obtenerTotalesPiesModeloGestorComprasCargarAcuse")]
+		public function get obtenerTotalesPiesCargarAcuse():ArrayCollection
+		{
+			return agenteAduanalPieCA;
+		}
+		[Bindable(event="obtenerTotalesPiesProveedorModeloGestorComprasCargarAcuse")]
+		public function get obtenerTotalesPieProveedoresCargarAcuse():ArrayCollection
+		{
+			return proveedoresPieCA;
+		}
+		[Bindable(event="obtenerUniversoODModeloGestorComprasCargarAcuse")]
+		public function get obtenerUniversoODCargarAcuse():ArrayCollection
+		{
+			return ordenesCA;
+		}
+		
+		//////////////////  OBTINE RUTAS IMAGENES GENERAR ACUSE DE RECIBIDO  //////////////////
+		[Bindable]public var listaRutas:String;
+		public function setObtenerRutasImagenesGenerarAcuse($ruta:ArrayCollection):void
+		{
+			if($ruta == null || $ruta.length ==0)
+				listaRutas = "";
+			else
+				listaRutas = $ruta[0];
+			
+			dispatchEvent(new Event("enviarRutaImagenesModeloGestorComprasGenerarAcuse"));
+		}
+		[Bindable(event="enviarRutaImagenesModeloGestorComprasGenerarAcuse")]
+		public function get enviarRutasImagenesGenerarAcuse():String
+		{
+			return listaRutas;
+		}
+		//////////////////  OBTINE RUTAS IMAGENES IMPRIMIR GENERAR ACUSE DE RECIBIDO  //////////////////
+		[Bindable]public var listaRutasImprimir:String;
+		public function setObtenerRutasImagenesImprimirGenerarAcuse($ruta:ArrayCollection):void
+		{
+			if($ruta == null || $ruta.length ==0)
+				listaRutasImprimir = "";
+			else
+				listaRutasImprimir = $ruta[0];
+			
+			dispatchEvent(new Event("enviarRutaImagenesImprimirModeloGestorComprasGenerarAcuse"));
+		}
+		[Bindable(event="enviarRutaImagenesImprimirModeloGestorComprasGenerarAcuse")]
+		public function get enviarRutasImagenesImprimirGenerarAcuse():String
+		{
+			return listaRutasImprimir;
+		}
+		//////////////////  OBTINE RUTAS DE PDF CARGADO CARGAR ACUSE DE RECIBIDO  //////////////////
+		[Bindable]public var rutaImagenCargarAcuse:String;
+		public function setObtenerRutaPDFCargarAcuseRecibido($ruta:ArrayCollection):void
+		{
+			if($ruta == null || $ruta.length ==0)
+				rutaImagenCargarAcuse = "";
+			else
+				rutaImagenCargarAcuse = $ruta[0];
+			
+			dispatchEvent(new Event("enviarRutaImagenPDFCargarAcuseModeloGestorComprasGenerarAcuse"));
+		}
+		[Bindable(event="enviarRutaImagenPDFCargarAcuseModeloGestorComprasGenerarAcuse")]
+		public function get enviarRutaPDFCargarAcuseRecibido():String
+		{
+			return rutaImagenCargarAcuse;
+		}
+		//////////////////  OBTINE RUTAS DE PDF CARGADO CARGAR ACUSE DE RECIBIDO  //////////////////
+		[Bindable]public var rutaImagenAnteriorCargarAcuse:String;
+		public function setObtenerRutaPDFAnteriorCargarAcuseRecibido($ruta:ArrayCollection):void
+		{
+			if($ruta == null || $ruta.length ==0)
+				rutaImagenAnteriorCargarAcuse = "";
+			else
+				rutaImagenAnteriorCargarAcuse = $ruta[0];
+			
+			dispatchEvent(new Event("enviarRutaImagenPDFAnteriorCargarAcuseModeloGestorComprasGenerarAcuse"));
+		}
+		[Bindable(event="enviarRutaImagenPDFAnteriorCargarAcuseModeloGestorComprasGenerarAcuse")]
+		public function get enviarRutaPDFAnteriorCargarAcuseRecibido():String
+		{
+			return rutaImagenAnteriorCargarAcuse;
+		}
+		//////////////////  OBTINE RESPUESTA GUARDADO CARGAR ACUSE DE RECIBIDO  //////////////////
+		[Bindable]public var cerradoCargarAcuse:Boolean;
+		public function setObtenerRespuestaCargarAcuse($respuesta:Boolean):void
+		{
+			cerradoCargarAcuse = $respuesta;
+			dispatchEvent(new Event("respuestaCargarAcuseModeloGestorComprasGenerarAcuse"));
+		}
+		[Bindable(event="respuestaCargarAcuseModeloGestorComprasGenerarAcuse")]
+		public function get enviarRespuestaCargarAcuseRecibido():Boolean
+		{
+			return cerradoCargarAcuse;
+		}
+		
+		
+		//////////////////  OBTINE RESPUESTA GUARDADO GENERAR ACUSE DE RECIBIDO  //////////////////
+		[Bindable]public var cerradoGenerarAcuse:Boolean;
+		public function setObtenerRespuestaGenerarAcuse($respuesta:Boolean):void
+		{
+			cerradoGenerarAcuse = $respuesta;
+			dispatchEvent(new Event("respuestaGenerarAcuseModeloGestorComprasGenerarAcuse"));
+		}
+		[Bindable(event="respuestaGenerarAcuseModeloGestorComprasGenerarAcuse")]
+		public function get enviarRespuestaGenerarAcuseRecibido():Boolean
+		{
+			return cerradoGenerarAcuse;
+		}
+		
+		
+		//////////////////  OBTINE ADUANAS //////////////////
+		[Bindable]public var listaAduanas:ArrayCollection;
+		public function setObtenerAduanas($aduanas:ArrayCollection):void
+		{
+			if($aduanas == null )
+				listaAduanas = new ArrayCollection();
+			else
+				listaAduanas = $aduanas;
+			
+			dispatchEvent(new Event("enviarListaAduanasModeloGestorCompras"));
+		}
+		[Bindable(event="enviarListaAduanasModeloGestorCompras")]
+		public function get enviarAduanas():ArrayCollection
+		{
+			return listaAduanas;
+		}
+		
+		
+		//////////////////  OBTINE ADUANAS PUBLICACIONES //////////////////
+		[Bindable]public var listaAduanasPub:ArrayCollection;
+		public function setObtenerAduanasPub($aduanas:ArrayCollection):void
+		{
+			if($aduanas == null )
+				listaAduanasPub = new ArrayCollection();
+			else
+				listaAduanasPub = $aduanas;
+			
+			dispatchEvent(new Event("enviarListaAduanasPubModeloGestorCompras"));
+		}
+		[Bindable(event="enviarListaAduanasPubModeloGestorCompras")]
+		public function get enviarAduanasPub():ArrayCollection
+		{
+			return listaAduanasPub;
+		}
+		
+		
+		//////////////////  OBTINE LISTA PARTIDAS DE ORDENES (RESUMEN) //////////////////
+		[Bindable]public var listaPartidas:ArrayCollection;
+		public function setObtenerPartidasOrden($aduanas:ArrayCollection):void
+		{
+			if($aduanas == null )
+				listaPartidas = new ArrayCollection();
+			else
+				listaPartidas = $aduanas;
+			
+			dispatchEvent(new Event("enviarListaPartidasResumenModeloGestorCompras"));
+		}
+		[Bindable(event="enviarListaPartidasResumenModeloGestorCompras")]
+		public function get enviarPartidasOrden():ArrayCollection
+		{
+			return listaPartidas;
+		}
+		
+		
+		
+		
+		
+		
+		/**
+		 ***************************************** LISTA UNIVERSO PRODUCTOS  **************************************
+		 */ 
+		private var _universoProd:ArrayCollection;
+		public function setObtenerUniverso($universo:ArrayCollection):void{
+			
+			_universoProd = $universo;
+			if($universo.length > 0)
+			{
+			/*	for (var h:int = 0; h < _universoProd.length; h++) 
+				{
+					if((_universoProd[h] as PartidaPedido).stock)
+						(_universoProd[h] as PartidaPedido).trafico = "stock";
+				}*/
+				
+			}
+			dispatchEvent(new Event ("universoProductosTramitarCompraEventoResumen"));
+		}
+		
+		[Bindable(event="universoProductosTramitarCompraEventoResumen")]
+		public function get getUniversoProductos():ArrayCollection{
+			return this._universoProd;
+		}
+		/**
+		 ***************************************** METODOS PARA ORDENAR  **************************************
+		 */
+		
+		public static function ordenarAlfabeto(ar:ArrayCollection, fieldName:String):ArrayCollection 
+		{
+			var dataSortField:SortField = new SortField();
+			dataSortField.name = fieldName;
+			/*dataSortField.numeric = isNumeric;*/
+			var numericDataSort:Sort = new Sort();
+			numericDataSort.fields = [dataSortField];
+			ar.sort = numericDataSort;
+			ar.refresh();
+			return ar;
+		}
+		public static function ordenarFecha(ar:ArrayCollection, fieldName:String):ArrayCollection
+		{
+			var dateSort:Sort = new Sort();
+			dateSort.fields = [new SortField(fieldName, false, false, true)];
+			ar.sort = dateSort; 
+			ar.refresh();	
+			return ar;
+		}
+		
+		/**
+		 ************************************************************** error **************************************************************
+		 */
+		public function errorOrdenDespacho(objeto:Object):void
+		{
+			trace("ERROR ORDEN DESPACHO")
+			trace(objeto.toString())
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		public function errorListaImportadores(objeto:Object):void
+		{
+			trace("ERROR LISTA IMPORTADORES")
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		public function errorListaExportadores(objeto:Object):void
+		{
+			trace("ERROR LISTA EXPORTADORES")
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		public function errorListaAgentes(objeto:Object):void
+		{
+			trace("ERROR LISTA AGENTES")
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		public function errorGuardarOrden(objeto:Object):void
+		{
+			trace("ERROR GUARDAR ORDENES")
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		public function errorListaProveedores(objeto:Object):void
+		{
+			trace("ERROR LISTA PROVEEDORES")
+			alertaSingleton.show( objeto.toString() );
+		}
+		public function errorOrdenesGuardadas(objeto:Object):void
+		{
+			trace("ERROR ORDENES GUARDADAS")
+			trace(objeto.toString())
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		
+		public function errorListaDocumentacion(objeto:Object):void
+		{
+			trace("ERROR LISTA DOCUMENTACION \n")
+			trace(objeto.toString())
+			alertaSingleton.show( objeto.toString() );
+		}
+		public function errorObtieneImagenVisualizarPPDF(objeto:Object):void
+		{
+			trace("ERROR ORDEN DESPACHO OBTENIENDO IMAGEN VISUALIZADOR PDF")
+			trace(objeto.toString())
+			alertaSingleton.show( objeto.toString() );
+		}
+		
+		public function ModeloGestorCompras(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+	}
+}
+

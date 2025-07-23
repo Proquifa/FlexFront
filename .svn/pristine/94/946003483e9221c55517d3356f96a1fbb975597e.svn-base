@@ -1,0 +1,60 @@
+package mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos
+{
+	import flash.events.Event;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+	import mx.messaging.channels.StreamingAMFChannel;
+
+	public class EventoPopUpContactos extends Event
+	{
+		
+		public var idEmpleado:int;
+		public var vieneDE_PopUp:String = "";
+		public var nuevoContacto:Contacto; 
+		public var nombre:String;
+		public var correo:String;
+		public var empresa:String;
+		public var idContacto:int;
+		public var idCliente:int;
+		public var estatusContacto:String;
+		public var cmbTipo: String;
+		public var origen:String;
+		public var lista:ArrayCollection;
+		public var objeto:Object;
+		public var canalizado:Boolean;
+		public var busca:String;
+		public var tipoBusca:int;
+		public var buscarEn:int;
+		public var NombreProvedor:String;
+		public var contactoSelecionado:Contacto;
+		
+		public static const CARAGAR_CONTACTOS:String = "cargarContactosEventoPopUpContactosAIESC";
+		public static const CARAGAR_CONTACTOS_ID_CLIENTE:String = "cargarContactosXIdClienteEventoPopUpContactosAIESC";
+		public static const RECIBE_DATOS_CONTACTO_POUP:String = "recibeDatosContactoPopUpEventoPopUpContactosAIESC";
+		public static const MUESTRA_POP_UP:String = "recibeDatosContactoPopUpEventoPopUpContactosAIESC";
+		public static const ENVIA_CONTACTO_ASOCIADO:String = "enviaContactoAsociadoEventoPopUpContactos";
+		public static const CANCELA_DATOS_CONTACTO_POUP:String = "cancelaDatosContactoPopUpEventoPopUpContactosAIESC";
+		public static const RECIBE_DIRECCION_SELECCIONADA:String = "recibeDireccionSeleccionadaEventoPopUpContactosAIESC";
+		public static const SELECCIONA_CONTACTO:String = "seleccionaContactoEventoEventoPopUpContactosAIESC";
+		public static const LIMPIA_ID_CONTACTO:String = "limpiaIdContactoEventoPopUpContactosAIESC";
+		public static const GUARDA_CONTACTO_NUEVO:String = "guardaContactoNuevoventoPopUpContactosAIESC";
+		public static const ASOCIA_CLIENTE_CONTACTO_NUEVO:String = "guardaClienteContactoClienteNuevoEventoPopUpContactosAIESC";
+		public static const ASOCIA_CLIENTE_CONTACTO_NUEVO_VISTA:String = "guardaClienteContactoVistaClienteNuevoEventoPopUpContactosAIESC";
+		public static const CAMBIA_CRM:String = 'cambiaCRMEventoPopUpContactosAIESC';
+		public static const ENVIO_DE_OBJETO_SELECCIONADO:String = "envioDeObjetoSeleccionadoEventoPopUpContactosAIESC";
+		public static const ENVIO_DE_CONTACTO_SELECCIONADO:String = "envioDeContactoSeleccionadoEventoPopUpContactosAIESC";
+		public static const LIMPIAR_INFORMACION_POPUP:String = "limpiarInformacionPopUpEventoPopUpContactosAIESC";
+		public static const OBTENER_CONTACTOS_GLOBALES:String = "obtenerContactosGlobalesPopUpEventoPopUpContactosAIESC";
+		public static const ENVIA_NOMBRE_CLIENTE:String = "enviaNombreCliente";
+		
+		public function EventoPopUpContactos(type:String, bubbles:Boolean=true, cancelable:Boolean=false){
+			super(type, bubbles, cancelable);
+		}
+		
+		public override function clone():Event{
+			return new EventoPopUpContactos( type, bubbles, cancelable );
+		}
+		
+	}
+}

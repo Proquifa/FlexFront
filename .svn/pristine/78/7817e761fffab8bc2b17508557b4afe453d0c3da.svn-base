@@ -1,0 +1,233 @@
+package vista.modelo
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.DailyScrum;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.HorarioCalendario;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.controls.Alert;
+	import mx.utils.ObjectUtil;
+
+	public class ModeloRealizarDailyScrum extends EventDispatcher
+	{
+		/**
+		 ***************************************************** GUARDAR SPRINT *************************************************************
+		 */
+		
+		private var visitasCliente:ArrayCollection;
+		private var visitaAgrupadasEV:ArrayCollection;
+		private var graficaVisitas:ArrayCollection;
+		private var graficaSprint:ArrayCollection;
+		private var _sql:Query;
+		private var objDaily:DailyScrum;
+		public function setObtenerTodasVisitasClientes( value:ArrayCollection ):void{
+			if(value){
+				
+				visitaAgrupadasEV = new ArrayCollection;
+				_sql = new Query(value,["usuarioEV","tipo"],false);
+				
+				var totalCreditos:int;
+				var totalValores:int;
+				var totalVisitasSolicitud:int;
+				var totalVisitasCRM:int;
+				var arrayEV:Array = _sql.getPunteros(["usuarioEV"],"usuarioEV");
+				for each (var ev:String in arrayEV) 
+				{
+					
+					
+					var array:Array = _sql.getPunteros([ev]);
+					if(array.length > 0){
+						var visitaCliente:VisitaCliente = ObjectUtil.copy(_sql.universo.getItemAt(array[0])) as VisitaCliente;
+						visitaCliente.numVisitas = array.length;
+						visitaCliente.numSolicitud = _sql.getPunteros([ev,"solicitud"]).length;
+						visitaCliente.numCRM = _sql.getPunteros([ev,"crm"]).length;
+						visitaAgrupadasEV.addItem(visitaCliente);
+						
+						totalCreditos += _sql.getSumarCampo("credito",array);
+						totalValores += _sql.getSumarCampo("valor",array);
+						
+						visitaCliente.credito = _sql.getSumarCampo("credito",array);
+							
+						totalVisitasSolicitud += visitaCliente.numSolicitud;
+						totalVisitasCRM += visitaCliente.numCRM;
+					}
+				}
+				
+				/////////////////// GRAFICA SPRINT
+				graficaSprint = new ArrayCollection;
+				var resumen:ResumenConsulta = new ResumenConsulta;
+				resumen.etiqueta = "Créditos";
+				resumen.totalVisita = totalCreditos; ///////SE USA PARA LA GRAFICACION NADAMAS
+				resumen.totalCreditos = totalCreditos;
+				resumen.totalValores = 0;
+				graficaSprint.addItem(resumen);
+				
+				resumen = new ResumenConsulta;
+				resumen.etiqueta = "Valores";
+				resumen.totalVisita = totalValores; ///////SE USA PARA LA GRAFICACION NADAMAS
+				resumen.totalCreditos = 0;
+				resumen.totalValores = totalValores;
+				graficaSprint.addItem(resumen);
+				
+				
+				/////////////////// GRAFICA SPRINT
+				graficaVisitas = new ArrayCollection;
+				resumen = new ResumenConsulta;
+				resumen.totalVisita = totalVisitasCRM;
+				resumen.totalSolicitudes = 0;
+				resumen.totalCRM = totalVisitasCRM;
+				graficaVisitas.addItem(resumen);
+				
+				resumen = new ResumenConsulta;
+				resumen.etiqueta = "Solicitud";
+				resumen.totalVisita = totalVisitasSolicitud;
+				resumen.totalSolicitudes = totalVisitasSolicitud;
+				resumen.totalCRM = 0;
+				graficaVisitas.addItem(resumen);
+				
+				
+				visitasCliente = value;
+				
+				objDaily = new DailyScrum;
+				if(value.length > 0){
+					objDaily = obtenerNumeroDaily(value[0].sprint.fechaInicio,value[0].sprint.fechaFin);
+					objDaily.sprint = value[0].sprint;
+				}
+				
+				
+				
+			}else{
+				visitasCliente = new ArrayCollection;
+			}
+			
+			dispatchEvent( new Event("obtenerTodasLasVisitasModeloEVRealizarDailyScrum") );
+			dispatchEvent( new Event("obtenerVisitasAgrupadasPorEVModeloEVRealizarDailyScrum") );
+			dispatchEvent( new Event("enviarDatosGraficaSprintModeloEVRealizarDailyScrum") );
+			dispatchEvent( new Event("enviarDatosGraficaVisitaModeloEVRealizarDailyScrum") );
+			dispatchEvent( new Event("enviarDailyCorrespondienteModeloEVRealizarDailyScrum") );
+		}
+		[Bindable(event="obtenerTodasLasVisitasModeloEVRealizarDailyScrum")]
+		public function get enviarTodasVisitasClientes():ArrayCollection{
+			return visitasCliente;
+		}
+		[Bindable(event="obtenerVisitasAgrupadasPorEVModeloEVRealizarDailyScrum")]
+		public function get enviarVisitasAgrupadas():ArrayCollection{
+			return visitaAgrupadasEV;
+		}
+		[Bindable(event="enviarDatosGraficaSprintModeloEVRealizarDailyScrum")]
+		public function get enviarListaGraficasSprint():ArrayCollection{
+			return graficaSprint;
+		}
+		[Bindable(event="enviarDatosGraficaVisitaModeloEVRealizarDailyScrum")]
+		public function get enviarListaGraficasVisita():ArrayCollection{
+			return graficaVisitas;
+		}
+		[Bindable(event="enviarDailyCorrespondienteModeloEVRealizarDailyScrum")]
+		public function get enviarDailyActual():DailyScrum{
+			return objDaily;
+		}
+		
+		///////////////////////////////////////////   REGISTRO DE VISITA
+		
+		private var exitoRegistroDaily:Boolean;
+		public function setObtenerRespuestaRegistrarDaily( value:Boolean ):void{
+			exitoRegistroDaily = value;
+			dispatchEvent( new Event("obtenerRespuestaRegistroDailyModeloEVRealizarDailyScrum") );
+		}
+		[Bindable(event="obtenerRespuestaRegistroDailyModeloEVRealizarDailyScrum")]
+		public function get enviarRespuestaRegistrarDaily():Boolean{
+			return exitoRegistroDaily;
+		}
+		
+		///////////////////////////////////////////   REVISAR SI EXISTE ALGUN DAILY
+		private var dailyExistente:int;
+		public function setDailyExistente( value:int ):void{
+			dailyExistente = value;
+			dispatchEvent( new Event("obtenerSiExisteDailyModeloEVRealizarDailyScrum") );
+		}
+		[Bindable(event="obtenerSiExisteDailyModeloEVRealizarDailyScrum")]
+		public function get enviarDailyExistente():int{
+			return dailyExistente;
+		}
+		
+		public static function obtenerNumeroDaily(fechaInicio:Date,fechaFin:Date):DailyScrum
+		{
+			var nombreDiasCorto:Array = ["Dom","Lun","Mar","Miér","Jue","Vie","Sáb"];
+			var nombreDias:Array = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+			var meses:Array = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+			/*var lista:ArrayCollection = new ArrayCollection;*/
+			var numeroDaily:int = 0;
+			var contador:int = 0;
+			var temp:Date;
+			var fechaActual:Date = new Date;
+			
+			var diaInicio:int = fechaInicio.getDate();
+			var diaFin:int = fechaFin.getDate();
+			
+			if(fechaInicio.getMonth() == fechaFin.getMonth()){
+				for (var i:int = diaInicio; i <= diaFin; i++) 
+				{
+					temp = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth(),i);
+					if(temp.day == 1 || temp.day == 2 || temp.day == 3 || temp.day == 4 || temp.day == 5){
+						contador++;
+						if(fechaActual.getDate() == temp.getDate() && fechaActual.getMonth() == temp.getMonth()
+						&& fechaActual.getFullYear() == temp.getFullYear()){
+							numeroDaily = contador;
+						}
+					}
+				}
+			}else{
+				temp = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth());
+				var finMes:int = getNumeroDias(fechaInicio.getFullYear(),fechaInicio.getMonth());
+				
+				for (var j:int = diaInicio; j <= finMes; j++) 
+				{
+					var temp1:Date = new Date(fechaInicio.getFullYear(),fechaInicio.getMonth(),j);
+					if(temp1.day == 1 || temp1.day == 2 || temp1.day == 3 || temp1.day == 4 || temp1.day == 5){
+						contador++;
+						if(fechaActual.getDate() == temp1.getDate() && fechaActual.getMonth() && temp1.getMonth()
+							&& fechaActual.getFullYear() == temp1.getFullYear()){
+							numeroDaily = contador;
+						}
+					}
+				}
+				for (var k:int = 1; k <= diaFin; k++) 
+				{
+					var temp2:Date = new Date(fechaFin.getFullYear(),fechaFin.getMonth(),k);
+					if(temp2.day == 1 || temp2.day == 2 || temp2.day == 3 || temp2.day == 4 || temp2.day == 5){
+						contador++;
+						if(fechaActual.getDate() == temp2.getDate() && fechaActual.getMonth() && temp2.getMonth()
+							&& fechaActual.getFullYear() == temp2.getFullYear()){
+							numeroDaily = contador;
+						}
+					}
+				}
+				
+			}
+			var obj:DailyScrum = new DailyScrum();
+			obj.numeroDaily = numeroDaily;
+			obj.totaDailys = contador;
+			
+			return obj;
+		}
+		
+		private static function getNumeroDias(year:int, month:int):int{
+			var d:Date=new Date(year, month, 0);
+			return d.getDate();
+		}
+		
+		public function ModeloRealizarDailyScrum(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+		
+		public function errorRealizarDailyScrum(objeto:Object):void{
+			Alert.show( objeto.toString() );
+		}
+	}
+}

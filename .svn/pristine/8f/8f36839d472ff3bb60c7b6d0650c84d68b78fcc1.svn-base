@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 creationComplete="PanelContactosAnimado_creationCompleteHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.agenteAduanal.EventoCatAgenteContactos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.agenteAduanal.AgenteAduanal;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Contacto;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			private var arregloCubos:ArrayCollection;
+			private var numCubosPorFila:uint;
+			private var _dataProvider:ArrayCollection;
+			
+			public var isCurrentHabilitados:Boolean = true;
+			
+			protected function reorganizarFilas():void
+			{
+				if(currentArray != null && currentArray.length > 0){
+					
+					if(numCubosPorFila >0){
+						
+						arregloCubos = new ArrayCollection;
+						
+						var filasCompletas:uint =int(currentArray.length / numCubosPorFila);
+						
+						var arrayTemp:Array = currentArray.source;
+						var starIndex:uint;
+						var tmp:Array;
+						
+						for (var i:int = 0; i < filasCompletas; i++) 
+						{
+							starIndex = i * numCubosPorFila;
+							tmp = arrayTemp.slice(starIndex,starIndex + (numCubosPorFila));
+							
+							arregloCubos.addItem(tmp);
+						}
+						
+						if(filasCompletas == 0)
+						{
+							starIndex = 0;
+							tmp = arrayTemp.slice(starIndex,(currentArray.length));
+							arregloCubos.addItem(tmp);
+							
+						}else{
+							if((currentArray.length % numCubosPorFila) > 0 ){
+								starIndex = starIndex + (numCubosPorFila);
+								tmp = arrayTemp.slice(starIndex,(currentArray.length));
+								arregloCubos.addItem(tmp);
+							}
+						}
+						
+						myList.dataProvider = arregloCubos;
+					}
+				}
+			}
+			
+			private var currentWidth:int;
+			public var currentCubosPorFila:int;
+			override public function setActualSize(w:Number, h:Number):void{
+				super.setActualSize(w,h);
+				
+				var sobrante:Number;
+				if(currentWidth != w){
+					currentWidth = w;			
+					numCubosPorFila = int(w/255);
+					
+					sobrante = w%255;
+					sobrante = sobrante/255;
+					if(sobrante > 0.6){
+						numCubosPorFila += 1;
+					}
+					
+					if(currentCubosPorFila != numCubosPorFila){
+						currentCubosPorFila = numCubosPorFila;
+						reorganizarFilas();
+					}
+				}
+			}
+			
+			private var currentArray:ArrayCollection;
+			public function get dataProvider():ArrayCollection
+			{
+				return _dataProvider;
+			}
+			
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				myList.dataProvider = new ArrayCollection;
+				_dataProvider = value;
+				currentArray = _dataProvider;
+				
+				if(isCurrentHabilitados){
+					var agregarContacto:Object = new Object;
+					agregarContacto.CuboAgregar = "agregarContacto";
+					currentArray.addItem(agregarContacto);
+				}
+				
+				reorganizarFilas();
+			}
+			
+			//============================================================TIENE QUE VER CON LA EDICIÓN DEL CONTACTO ============================================================
+			
+			public function set recibeAgenteSeleccionado($age:AgenteAduanal):void{
+				if( $age == null )
+					return;
+				_agente = $age;
+				obtenerContactosDelProveedorSeleccionado();
+			}
+			
+			private var _soloUnaVez:Boolean;
+			private var _contacto:Contacto; 
+			
+			public function set recibeDelAlert( $dato:ResultAlert ):void{
+				if( $dato == null || $dato.vieneD == null ){
+					return;
+				}
+				if( _soloUnaVez ){
+					if( $dato.vieneD == "catAgenteAEliminarContacto" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						var evtElimina:EventoCatAgenteContactos = new EventoCatAgenteContactos( EventoCatAgenteContactos.ELIMINAR_CONTACTO_SERVER_AGENTE );
+						evtElimina.idContacto = _contacto.idContacto;
+						evtElimina.ventana = "CatAgenteAduanal_Contactos deshabilita( idContacto:"+_contacto.idContacto+" )";
+						dispatchEvent( evtElimina );
+					}else if( $dato.vieneD == "catAgenteAEditaContacto" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						var evtEdita:EventoCatAgenteContactos = new EventoCatAgenteContactos( EventoCatAgenteContactos.EDITA_CONTACTO_SERVICE_AGENTE );
+						evtEdita.contacto = _contacto;
+						evtEdita.ventana = "CatAgenteAduanal_Contactos ( idContacto:"+_contacto.idContacto+" )";
+						dispatchEvent( evtEdita );
+					}
+				}
+			}
+			
+			private var _agente:AgenteAduanal;
+			
+			private function obtenerContactosDelProveedorSeleccionado():void{
+				var evt:EventoCatAgenteContactos = new EventoCatAgenteContactos( EventoCatAgenteContactos.OBTENER_CONTACTOS_AGENTE );
+				evt.idAgente = _agente.idAgenteAduanal;
+				evt.habilitado = isCurrentHabilitados;
+				dispatchEvent( evt );
+			}
+			
+			protected function PanelContactosAnimado_creationCompleteHandler(event:FlexEvent):void
+			{
+				myList.addEventListener( EventoCatAgenteContactos.MODIFICAR_CONTACTO_VISTA_AGENTE , escucharModificarContacto, false,0,true);
+				myList.addEventListener( EventoCatAgenteContactos.AGREGAR_CONTANTO_VISTA_AGENTE, agregaNuevoContacto,false,0,true);
+				myList.addEventListener( EventoCatAgenteContactos.ELIMINAR_CONTACTO_VISTA_AGENTE,escucharEliminarContacto,false,0,true);
+			}
+			
+			private function escucharEliminarContacto(e:EventoCatAgenteContactos):void
+			{
+				_soloUnaVez = true;
+				_contacto = e.contacto;
+				alertaSingleton.show( '¿Desea deshabilitar el contacto?' ,catalogoAlertas.TIT_ADV_atencion,'catAgenteAEliminarContacto','','','SI','NO');
+			}
+			
+			private function escucharModificarContacto(eve:EventoCatAgenteContactos):void
+			{
+				_contacto = eve.contacto;
+				_soloUnaVez = true;
+				alertaSingleton.show( '¿Desea modificar el contacto?' ,catalogoAlertas.TIT_ADV_atencion,'catAgenteAEditaContacto','','','SI','NO');
+			}
+			
+			private function agregaNuevoContacto(evt:EventoCatAgenteContactos):void{
+				
+			 	var evtAgrega:EventoCatAgenteContactos = new EventoCatAgenteContactos( EventoCatAgenteContactos.AGREGA_CONTACTO_SERVICE_AGENTE );
+				evtAgrega.tipo = 'inserta';
+				evtAgrega.contacto = evt.contacto;
+				evtAgrega.contacto.tipo = 'AgenteAduanal';
+				evtAgrega.contacto.empresa = '';
+				evtAgrega.contacto.idAgenteAduanal = _agente.idAgenteAduanal;
+				evtAgrega.ventana = "CatAgenteAduanal_Contactos nuevo( Nombre:"+evt.contacto.nombre+" )";
+				dispatchEvent( evtAgrega ); 
+			}
+			
+			public function set confirmaNuevoContacto( $dato:Number):void
+			{
+				if( isNaN( $dato ) || $dato < 0 ){
+					return;
+				} 
+				obtenerContactosDelProveedorSeleccionado();
+			}
+						
+			public function set confirmaModificacionAContacto( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				obtenerContactosDelProveedorSeleccionado();
+				alertaSingleton.show('El contacto fue modificado.', catalogoAlertas.TIT_CONF_operacionExitosa );
+			}
+			
+			public function set confirmaEliminacionDeContacto( $dato:Boolean ):void{
+				if( !$dato ){
+					return;
+				}
+				obtenerContactosDelProveedorSeleccionado();
+				alertaSingleton.show('El contacto fue deshabilitado.', catalogoAlertas.TIT_CONF_operacionExitosa );
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:List id="myList" height="100%" width="100%" contentBackgroundAlpha="0" borderVisible="false"	horizontalScrollPolicy="off" 
+			itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.agenteAduanal.itemRenderer.empresaGeneral.ItemRendererAgentePanelContactosAnimado">
+	</s:List>	
+</s:Group>
+
+
+

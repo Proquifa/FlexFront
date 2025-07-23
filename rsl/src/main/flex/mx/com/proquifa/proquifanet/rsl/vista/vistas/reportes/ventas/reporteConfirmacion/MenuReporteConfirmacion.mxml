@@ -1,0 +1,527 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+								   xmlns:s="library://ns.adobe.com/flex/spark" xmlns:mx="library://ns.adobe.com/flex/mx"
+								   titulo="REPORTE CONFIRMACIÓN DE DATOS" xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*" 
+								   creationComplete="initReporte()"
+								   xmlns:otros="skins.otros.*"
+								   xmlns:comboCata="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+								   xmlns:chekbox="skins.skin.chekbox.*"
+								   xmlns:btnToggleEstados="skins.botonesToggle.btnToggleEstados.*" xmlns:botonesToggle="skins.botonesToggle.*"
+								   >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoCambioIndex;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.reporteConfirmacion.EventoReporteConfirmacionDeDatos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.CatalogoItem;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.botonesToggle.btnToggleEstados.LayoutBotoneraReporteAHyM;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.plantillaproquifa.menu.botonflecha.btnArrow;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]	private var _arrTipoProveedor:ArrayCollection = new ArrayCollection(
+				["--TODOS--",
+					"REGULAR",
+					"TEMPORAL"]
+			);
+			[Bindable]	private var _arrTipoProducto:ArrayCollection = new ArrayCollection(
+				["--TODOS--",
+					"ESTÁNDARES",
+					"BIOLÓGICOS",
+					"REACTIVOS",
+					"PUBLICACIONES",
+					"LABWARE"]
+			);
+			
+			[Bindable]	private var _listaBotones:ArrayCollection = new ArrayCollection( [{ valor:'Avanzada', llave: 0 }, 
+				        { valor:'Rápida', llave: 1 } ]);
+			
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizar.png")]
+			private var imgNormal:Class;
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizarverde.png")]
+			private var imgDown:Class;
+			
+			[Bindable]	public var _vistaAvanzada:Boolean = true;
+			[Bindable]	private var _clickeado:String = "HOY";
+			private var _vistaSelected:String;
+			[Bindable]	private var _esGerente:Boolean = false;
+			private var _isActualizando:Boolean= false;
+			private var _emp:Empleado = DatosGlobales.getInstance()._usuario;
+			
+			protected function initReporte():void
+			{
+				imgActualizar.source = imgNormal;
+				if( _emp.idFuncion == 5 || _emp.idFuncion == 7){
+					_esGerente = false;
+					cmbCliente.cargaClientes( (_emp.idFuncion == 7 ? _emp.idEmpleado.toString(): _emp.usuario), '--TODOS--' );
+				}else{
+					_esGerente = true;
+					if( _emp.usuario == "CTirado" ){
+						cmbCliente.cargaClientes( '--TODOS--');
+						cmbResponsable.cargarEmpleadosXTipoTablero( 'esac_master-esac-eve', '', '--TODOS--' );
+					}else if( _emp.idFuncion == 3 || _emp.idFuncion == 4){
+						cmbCliente.cargaClientes( '--TODOS--');
+						_emp.idFuncion == 4 ? cmbResponsable.cargarEmpleadosXTipoTablero( 'esac', '', '--TODOS--' ) : cmbResponsable.cargarEmpleadosXTipoTablero( 'ev', '', '--TODOS--' );
+					}else if( _emp.idFuncion == 37 ){ // esac master
+						cmbResponsable.cargarEmpleadosXTipoTablero( "esac_master", _emp.usuario, '--TODOS--' );
+						cmbCliente.cargaClientes( _emp.usuario,'--TODOS--');
+					}else{
+						cmbResponsable.cargarEmpleadosXTipoTablero( 'esac_master-esac-eve', '', '--TODOS--' );
+						cmbCliente.cargaClientes( '--TODOS--');
+					}
+				}
+				
+				addEventListener("clickCustomButton", escucharBotonTablaGrafica); 
+				cargarUniversoXEmpleado();
+				upperCmbEsac();
+			}
+			
+			protected function escucharBotonTablaGrafica(event:Event):void
+			{
+				var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+				eventoindex.vieneD = "reporteConfirmacion"; 
+				_vistaSelected = event.target.imagen;
+				if(event.target.imagen == "tabla"){
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+					eventoindex.nuevoIndex = 0;
+				}else if(event.target.imagen == "grafica"){
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablaminigris;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficamini;
+					eventoindex.nuevoIndex = 1;
+				}
+				dispatchEvent(eventoindex);
+				if( event.target.id != null )	
+					var id:String = event.target.id.toString();
+				if( id == "btn0" ) _clickeado = "PASADO";
+				if( id == "btn1" ) _clickeado = "ANTE ANTIER";
+				if( id == "btn2" ) _clickeado = "ANTIER";
+				if( id == "btn3" ) _clickeado = "AYER";
+				if( id == "btn4" ) _clickeado = "HOY";
+				if( id == "btn5" ) _clickeado = "MAÑANA";
+				/* 	if( id == "btn6" ) _clickeado = "DIA2";
+				if( id == "btn7" ) _clickeado = "DIA3";
+				if( id == "btn8" ) _clickeado = "FUTURO"; */
+				if( id == "btnTodo" ) _clickeado = "TODO";
+			}
+			
+			protected function seleccionaButtonBar(event:IndexChangeEvent):void
+			{
+				if( event.currentTarget.selectedItem == null || _isActualizando) {
+					event.preventDefault();
+				}else{
+					
+					var evento:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.SETTEAR_FILTROS_PARA_BUSQUEDA);
+					if(event.currentTarget.selectedItem.llave == 0)
+					{
+						_vistaAvanzada = true;
+						evento.tipoProveedor = cmbTipoProveedor.selectedItem == '--TODOS--' ? '  ' : cmbTipoProveedor.selectedItem;
+						evento.proveedor = cmbProveedor.selectedItem.valor == '--TODOS--' ? ' ' : cmbProveedor.selectedItem.valor;
+						evento.cliente = cmbCliente.selectedItem.valor == '--TODOS--' ? '': cmbCliente.selectedItem.valor;
+						evento.tipoProducto = cmbTipoProducto.selectedItem == '--TODOS--' ? '': cmbTipoProducto.selectedItem; 
+						evento.fabrica = cmbMarca.selectedItem.valor == '--TODOS--' ? '': cmbMarca.selectedItem.valor;
+						evento.diaSeleccionado = _clickeado;
+						evento.isBusquedaAvanzada = true;
+						_vistaSelected =  "tabla";
+						evento.vistaSelected = _vistaSelected;
+						
+						_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+						_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+						
+						if( _emp.idFuncion == 5 ){
+							evento.esac = _emp.usuario.toUpperCase();
+							evento.ev = '';
+						}else if(_emp.idFuncion == 7){
+							evento.ev = _emp.usuario.toLocaleUpperCase();
+							evento.esac ='';
+						}else{
+							if((cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "ev"){
+								evento.ev = (cmbResponsable.selectedItem as CatalogoItem).valor;
+							}else if((cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac" || (cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac_master"){
+								evento.esac = (cmbResponsable.selectedItem as CatalogoItem).valor;
+							}else{
+								if((cmbResponsable.selectedItem as CatalogoItem).valor=='--TODOS--' ){
+									evento.ev = '';
+									evento.esac = '';
+								}
+							}
+						}
+						
+						dispatchEvent(evento);
+						cargarUniversoXEmpleado();
+					}else
+					{
+						_vistaAvanzada = false;
+						evento.tipoProveedor = '';
+						evento.proveedor = '';
+						evento.esac = '';
+						evento.ev = '';
+						evento.cliente = '';
+						evento.tipoProducto = ''; 
+						evento.fabrica = '';
+						evento.diaSeleccionado = '';
+						dispatchEvent(evento);
+						if(StringUtil.trim(txtFolioCotizacion.text).length!=0){
+							busquedaPorFolio();
+						}
+						
+						
+						if(_vistaSelected == "grafica"){
+							_vistaSelected =  "tabla";
+							var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+							eventoindex.vieneD = "reporteConfirmacion";
+							eventoindex.nuevoIndex = 0;
+							dispatchEvent( eventoindex ); 
+						}
+					}
+					
+					//Resetear botones para que apunten a Gráfica
+					switch(_clickeado)
+					{
+						case 'PASADO': btn0.imagen = 'tabla';	break;
+						case 'ANTE ANTIER': btn1.imagen = 'tabla';	break;
+						case 'ANTIER': btn2.imagen = 'tabla';	break;
+						case 'AYER': btn3.imagen = 'tabla';	break;
+						case 'HOY': btn4.imagen = 'tabla';	break;
+						case 'MAÑANA': btn5.imagen = 'tabla';	break;
+						case 'TODO': btnTodo.imagen = 'tabla';	break;
+					}
+				}
+			}
+			
+			protected function busquedaPorFolio():void
+			{
+				var evento:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.OBTENER_UNIVERSO_COTIZACIONES);
+				evento.empleado = _emp.usuario;
+				evento.folioCotizacion = txtFolioCotizacion.text;
+				dispatchEvent(evento);
+			}
+			
+			protected function cargarUniversoXEmpleado():void
+			{
+				imgActualizar.source = imgDown;
+				_isActualizando = true;
+				
+				if(_vistaAvanzada){
+					
+					var evento:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.OBTENER_UNIVERSO_COTIZACIONES);
+					evento.empleado = _emp.usuario;
+					evento.folioCotizacion = null;
+					dispatchEvent(evento);
+				}else{
+					var eventoRap:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.OBTENER_UNIVERSO_COTIZACIONES);
+					eventoRap.empleado = _emp.usuario;
+					eventoRap.folioCotizacion = txtFolioCotizacion.text;
+					dispatchEvent(eventoRap);
+				}
+				
+			}
+			private var _cronometro:Date = new Date();
+			
+			protected function filtrarDatos( ):void{
+				var evento:EventoReporteConfirmacionDeDatos = null;
+				if( _vistaAvanzada ){ // primer buttonbar
+					evento = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.FILTRAR_COTIZACIONES_VISTA);
+				}else{ // busqueda
+					//evento = new EventoReporteConfirmacionDeDatos(EventoReporteSeguimiento.BUSCAR_COTIZACION_POR_CLIENTE);
+				}
+				evento.tipoProveedor = cmbTipoProveedor.selectedItem == '--TODOS--' ? '  ' : cmbTipoProveedor.selectedItem;
+				evento.proveedor = cmbProveedor.selectedItem.valor == '--TODOS--' ? ' ' : cmbProveedor.selectedItem.valor;
+				evento.cliente = cmbCliente.selectedItem.valor == '--TODOS--' ? '': cmbCliente.selectedItem.valor;
+				evento.tipoProducto = cmbTipoProducto.selectedItem == '--TODOS--' ? '': cmbTipoProducto.selectedItem; 
+				evento.fabrica = cmbMarca.selectedItem.valor == '--TODOS--' ? '': cmbMarca.selectedItem.valor;
+				evento.diaSeleccionado = _clickeado;
+				evento.vistaSelected = _vistaSelected;
+				
+				if( _emp.idFuncion == 5 ){
+					evento.esac = _emp.usuario.toUpperCase();
+					evento.ev = '';
+				}else if(_emp.idFuncion == 7){
+					evento.ev = _emp.usuario.toLocaleUpperCase();
+					evento.esac ='';
+				}else{
+					if((cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "ev"){
+						evento.ev = (cmbResponsable.selectedItem as CatalogoItem).valor;
+					}else if((cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac" || (cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac_master"){
+						evento.esac = (cmbResponsable.selectedItem as CatalogoItem).valor;
+					}else{
+						if((cmbResponsable.selectedItem as CatalogoItem).valor=='--TODOS--' ){
+							evento.ev = '';
+							evento.esac = '';
+						}
+					}
+				}
+				
+				
+				//evento.responsable = cmbResponsable.selectedItem.valor == '--TODOS--' ? '' : cmbResponsable.selectedItem.valor;
+				dispatchEvent( evento );
+				//_cronometro = new Date();
+			}
+			public function set recibirObjLabels( $objLabel:Object ):void{
+				if( $objLabel == null ){
+					imgActualizar.source = imgNormal;
+					return;
+				}
+				btn0.total = validaDisplay( $objLabel["PASADO"] );
+				btn1.total = validaDisplay( $objLabel["ANTE ANTIER"] );
+				btn2.total = validaDisplay( $objLabel["ANTIER"] );
+				btn3.total = validaDisplay( $objLabel["AYER"] );
+				btn4.total = validaDisplay( $objLabel["HOY"] );
+				btn5.total = validaDisplay( $objLabel["MAÑANA"] );
+				/* btn6.total = validaDisplay( $objLabel["DIA2"] );
+				btn7.total = validaDisplay( $objLabel["DIA3"] );
+				btn8.total = validaDisplay( $objLabel["FUTURO"] ); */
+				btn6.enabled = false;
+				btn7.enabled = false;
+				btn8.enabled = false;
+				btnTodo.total = validaDisplay( $objLabel["todasPartidas"] );
+				btn3.label2 = validaDisplay( $objLabel.etiquetaAyer);
+				btn4.label2 = validaDisplay( $objLabel.etiquetaHoy);
+				btn5.label2 = validaDisplay( $objLabel.etiquetaManiana);
+				//lblTazaRealizacion.text = validaDisplay( $objLabel.tazaRealizacion );
+				imgActualizar.source = imgNormal;
+				_isActualizando = false;
+			}
+			
+			private function validaDisplay( $propiedad:* ):String{
+				if( $propiedad == null ) return '';
+				return $propiedad.toString();
+			}
+			
+			[Bindable]	private var _icoGrafica:Class = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+			[Bindable]	private var _icoTabla:Class = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+			
+			private var _origenAnterior:String = "";
+			private var _resposableAnterior:String = "";
+			
+			private function ActualizarInformacion():void
+			{
+				if(!_isActualizando){
+					imgActualizar.source = imgDown;
+					_isActualizando = true;
+					
+					if(_vistaSelected == "grafica"){
+						_vistaSelected =  "tabla";
+						var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+						eventoindex.vieneD = "reporteConfirmacion";
+						eventoindex.nuevoIndex = 0;
+						dispatchEvent( eventoindex ); 
+					}
+					
+					var evento:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.SETTEAR_FILTROS_PARA_BUSQUEDA);
+					if(btnBarra.selectedIndex ==0)
+					{
+						_vistaAvanzada = true;
+						evento.tipoProveedor = '';
+						evento.proveedor = '';
+						evento.esac = '';
+						evento.ev = '';
+						evento.cliente = '';
+						evento.tipoProducto = ''; 
+						evento.fabrica = '';
+						evento.diaSeleccionado = 'HOY';
+						evento.isBusquedaAvanzada = _vistaAvanzada;
+						evento.vistaSelected = _vistaSelected;
+						
+						_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+						_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+						
+						if( _emp.idFuncion == 5 ){
+							evento.esac = _emp.usuario.toUpperCase();
+							evento.ev = '';
+						}else if(_emp.idFuncion == 7){
+							evento.ev = _emp.usuario.toLocaleUpperCase();
+							evento.esac ='';
+						}else{
+							if((cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "ev"){
+								evento.ev = (cmbResponsable.selectedItem as CatalogoItem).valor;
+							}else if((cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac" || (cmbResponsable.selectedItem as CatalogoItem).tipoEmpleado == "esac_master"){
+								evento.esac = (cmbResponsable.selectedItem as CatalogoItem).valor;
+							}else{
+								if((cmbResponsable.selectedItem as CatalogoItem).valor=='--TODOS--' ){
+									evento.ev = '';
+									evento.esac = '';
+								}
+							}
+						}
+						
+						dispatchEvent(evento);
+						
+						//Resetear botones para que apunten a Gráfica y seleccionar HOY
+						switch(_clickeado)
+						{
+							case 'PASADO': {btn0.imagen = 'tabla'; btn0.currentState = 'normal';	break;}
+							case 'ANTE ANTIER': {btn1.imagen = 'tabla';btn1.currentState = 'normal';	break;}
+							case 'ANTIER': {btn2.imagen = 'tabla';btn2.currentState = 'normal';	break;}
+							case 'AYER': {btn3.imagen = 'tabla';btn3.currentState = 'normal';	break;}
+							case 'HOY': {btn4.imagen = 'tabla';btn4.currentState = 'normal';	break;}
+							case 'MAÑANA': {btn5.imagen = 'tabla';btn5.currentState = 'normal';	break;}
+							case 'TODO': {btnTodo.imagen = 'tabla';btnTodo.currentState = 'normal';	break;}
+						}
+						btn4.currentState = 'seleccionado';
+						_clickeado = 'HOY';
+						
+					}else
+					{
+						_vistaAvanzada = false;
+						evento.tipoProveedor = '';
+						evento.proveedor = '';
+						evento.esac = '';
+						evento.ev = '';
+						evento.cliente = '';
+						evento.tipoProducto = ''; 
+						evento.fabrica = '';
+						evento.diaSeleccionado = '';
+						evento.isBusquedaAvanzada = false;
+						dispatchEvent(evento);
+						if(StringUtil.trim(txtFolioCotizacion.text).length!=0){
+							busquedaPorFolio();
+						}
+					}
+					
+					if(_vistaAvanzada){
+						
+						var eventoUni:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.OBTENER_UNIVERSO_COTIZACIONES);
+						eventoUni.empleado = _emp.usuario;
+						eventoUni.folioCotizacion = null;
+						dispatchEvent(eventoUni);
+					}else{
+						if(StringUtil.trim(txtFolioCotizacion.text).length !=0){
+							var eventoRap:EventoReporteConfirmacionDeDatos = new EventoReporteConfirmacionDeDatos(EventoReporteConfirmacionDeDatos.OBTENER_UNIVERSO_COTIZACIONES);
+							eventoRap.empleado = _emp.usuario;
+							eventoRap.folioCotizacion = txtFolioCotizacion.text;
+							dispatchEvent(eventoRap);
+						}
+					}
+				}
+			}
+			protected function upperCmbEsac():void
+			{
+				if(cmbResponsable.dataProvider != null){
+					for (var i:int = 0; i < cmbResponsable.dataProvider.length; i++) 
+					{
+						var currentItem:CatalogoItem = cmbResponsable.dataProvider[i];
+						currentItem.valor = currentItem.valor.toUpperCase();
+					}
+				}
+				else{
+					setTimeout( upperCmbEsac, 300 );
+				}
+			} 
+			
+			private function cargarProveedor($tipo:String,$isFiltrarDatos:Boolean):void
+			{
+				var temp:ArrayCollection = new ArrayCollection();
+				var itemTodos:CatalogoItem = new CatalogoItem();
+				itemTodos.llave = 0;
+				itemTodos.valor = '--TODOS--';
+				
+				if($tipo == "TODOS"){
+					temp.addItem(itemTodos);
+					cmbProveedor.dataProvider = temp;
+					cmbProveedor.selectedIndex =0;
+					if($isFiltrarDatos)
+						filtrarDatos();
+				}else {
+					if($tipo == "TEMPORAL"){
+						cmbProveedor.cargaProveedoresPorTipo("reporteConfirmacion","Temporal");
+					}else{
+						cmbProveedor.cargaProveedoresPorTipo("reporteConfirmacion","Regular");
+					}
+					
+					if($isFiltrarDatos)
+						llamarAFiltrarDatos();
+				}
+			}
+			
+			private function llamarAFiltrarDatos():void
+			{
+				if(cmbProveedor._isInfoProveedorPorTipoComplete){
+					filtrarDatos();
+				}else{
+					setTimeout(llamarAFiltrarDatos,100);
+				}
+			} 
+			private function cargarComboDeProvedores():void
+			{
+				var tipoProveedor:String = cmbTipoProveedor.selectedItem == '--TODOS--' ? 'TODOS': cmbTipoProveedor.selectedItem;
+				cargarProveedor(tipoProveedor,true);
+			}
+			
+		]]>
+	</fx:Script>
+	<vistas:contenido>
+		<s:VGroup width="100%" height="100%" gap="15" >
+			<s:HGroup horizontalAlign="center" width="100%" ><!--visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"-->
+				<s:Image id="imgActualizar" click="ActualizarInformacion()"/>
+			</s:HGroup>
+			<otros:divisionHueca width="100%"/>
+			<s:ButtonBar changing="seleccionaButtonBar(event)" requireSelection="true"
+						 selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._listaBotones}" width="100%" />
+			<otros:divisionHueca width="100%"/>
+			
+			<s:Label text="Cliente:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="-10" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}"/>
+			<comboCata:ComboCatalogos   id="cmbCliente" width="100%"  selectedIndex="0"  change="filtrarDatos()" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}"/>
+			
+			<s:Label visible="{this._vistaAvanzada &amp;&amp; this._esGerente}" includeInLayout="{this._vistaAvanzada &amp;&amp; this._esGerente}" text="Responsable:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="-10" />
+			<comboCata:ComboCatalogos id="cmbResponsable" visible="{this._vistaAvanzada &amp;&amp; this._esGerente}" includeInLayout="{this._vistaAvanzada &amp;&amp; this._esGerente}" width="100%" selectedIndex="0"
+									  change="filtrarDatos()"/>
+			
+			<s:Label text="Tipo Proveedor:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<s:ComboBox id="cmbTipoProveedor"  width="100%" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" selectedIndex="0"
+						dataProvider="{ this._arrTipoProveedor }" change="cargarComboDeProvedores()"/>
+			
+			<s:Label text="Proveedor:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<comboCata:ComboCatalogos id="cmbProveedor"  width="100%" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" selectedIndex="0"
+									  change="filtrarDatos()" creationComplete="cargarProveedor('TODOS',false)"/>
+			
+			<s:Label text="Tipo Producto:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<s:ComboBox id="cmbTipoProducto"  width="100%" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" selectedIndex="0"
+						dataProvider="{ this._arrTipoProducto }" change="filtrarDatos()"/>
+			
+			<s:Label text="Marca:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" visible="{this._vistaAvanzada}" includeInLayout="{ this._vistaAvanzada}" paddingBottom="-10" />
+			<comboCata:ComboCatalogos id="cmbMarca" width="100%" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"
+									  creationComplete="{ cmbMarca.cargarMarcas( 'reporteConfirmacion' ) }" change="filtrarDatos()"/>
+			
+			<s:Label visible="{!this._vistaAvanzada}" includeInLayout="{!this._vistaAvanzada}" text="Busqueda por Folio:" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="-10" />
+			<s:TextInput id="txtFolioCotizacion" width="100%" visible="{!this._vistaAvanzada}" includeInLayout="{!this._vistaAvanzada}" enter="busquedaPorFolio()"/>
+			
+			<s:HGroup width="100%" horizontalAlign="right" gap="9" paddingRight="5" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" >
+				<s:Image id="icoGrafica" source="{ this._icoGrafica }" />
+				<s:Image id="icoTabla" source="{ this._icoTabla }" />
+			</s:HGroup>
+			
+			<s:Group width="100%" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}" >
+				<s:layout>
+					<btnToggleEstados:LayoutBotoneraReporteAHyM minGap="2" minWidthElement="92" /> 		
+				</s:layout>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="ayer" id="btn3" label1="AYER" currentState="{_clickeado == 'AYER' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="hoy" id="btn4" label1="HOY" currentState="{_clickeado == 'HOY' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="manana" id="btn5" label1="MAÑANA" currentState="{_clickeado == 'MAÑANA' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="antier" id="btn2" label1="ANTIER" currentState="{_clickeado == 'ANTIER' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pasadomanana"  id="btn6" label1="PASADO MAÑANA" currentState="{_clickeado == 'DIA2' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="anteantier" id="btn1" label1="ANTE ANTIER" currentState="{_clickeado == 'ANTE ANTIER' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="todo" id="btnTodo" label1="TODO" currentState="{_clickeado == 'TODO' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pospasado" id="btn7" label1="POS PASADO" currentState="{_clickeado == 'DIA3' ? 'seleccionado': 'normal' }" click="filtrarDatos()" />
+				
+				<btnToggleEstados:botonReporteAHyM tipoBoton="pasado" id="btn0" label1="PASADO" currentState="{_clickeado == 'PASADO' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+				<btnToggleEstados:botonReporteAHyM tipoBoton="futuro" id="btn8" label1="FUTURO" currentState="{_clickeado == 'FUTURO' ? 'seleccionado': 'normal' }" click="filtrarDatos()"/>
+			</s:Group>
+			
+			<otros:divisionHueca width="100%" visible="{this._vistaAvanzada}" includeInLayout="{this._vistaAvanzada}"/>
+			<s:Label id="lblTazaRealizacion" width="100%" textAlign="center" fontWeight="bold" fontSize="12" fontFamily="Helvetica" fontStyle="normal" paddingBottom="50" />
+		</s:VGroup>
+	</vistas:contenido>
+</vistas:PanelPropiedadesPlantillas>

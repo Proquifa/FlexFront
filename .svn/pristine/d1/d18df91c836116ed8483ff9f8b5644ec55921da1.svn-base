@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:itemRenderer="vista.vistas.reporte.visita.itemRenderer.*" 
+		 xmlns:reportatVisita="vista.vistas.reportatVisita.*" 
+		 xmlns:visita="vista.vistas.reporte.visita.*"
+		 xmlns:botonera="skin.botonera.*"
+		 width="100%" height="100%" 
+		 creationComplete="group1_creationCompleteHandler(event)" 
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComun;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import vista.evento.reportarVisita.EventoReportarVisita;
+			
+			[Bindable]
+			private var lstVistaCliente:ArrayCollection;
+			
+			[Bindable]
+			private var visitaCliente:VisitaCliente;
+			
+			private var universo:ArrayCollection;
+			private var query:Query;;
+			private var botoneraData:ArrayCollection = new ArrayCollection(["TODOS","FINALIZADAS","NO REALIZADAS","PENDIENTES","REPORTADAS"]);
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				botonera.dataProvider = botoneraData;
+			}
+			
+			public function set recibeVisitasCliente(data:ArrayCollection):void {
+				if (!data || data.length <= 0)
+					return;
+				
+				lstVistaCliente = data;
+				universo = ObjectUtil.copy(data) as ArrayCollection;
+				visitaCliente = lstVistaCliente.getItemAt(0) as VisitaCliente;
+				
+				query = new Query(data,["estado"]);
+				filtrarBotonera();
+			}
+			
+			protected function botonera_clickBotoneraHandler(event:EventoComun):void
+			{
+				filtrarBotonera();
+			}
+			
+			private function filtrarBotonera():void {
+				lstVistaCliente = new ArrayCollection();
+				var filtro:String = botonera.selectedObject ? botonera.selectedObject.value : 'TODOS';
+				var arrayTemp:ArrayCollection = ObjectUtil.copy(universo) as ArrayCollection;
+				if (filtro == "TODOS" )
+					lstVistaCliente = arrayTemp;
+				else {
+					var punteros:Array = query.getPunteros([filtro]);
+					/*for (var i:int = 0; i < punteros.length; i++) 
+					{
+						var index:int = punteros[i];*/
+						
+						lstVistaCliente = query.armarLista(punteros);
+					/*}*/
+					
+				}
+				
+				lstCuadricula.dataProvider = lstVistaCliente;
+			}
+			
+			[Bindable] private var fontFooter:Number;
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+				botonera.invalidateDisplayList();
+				trace("Reporte: " + unscaledWidth);
+				
+				var font:Number = (unscaledWidth/2007) * 14;
+				fontFooter = font < 10 ? 10 : font > 14 ? 14 : font;
+				
+				font = (unscaledWidth / 2007) * 30;
+				lblTitulo.setStyle("fontSize", font < 16 ? 16 : font > 30 ? 30 : font);
+				
+				font = (unscaledWidth / 2007) * 24;
+				lblUsuario.setStyle("fontSize", font < 16 ? 16 : font > 24 ? 24 : font);
+			}
+			
+			protected function lstCuadricula_clickCuadriculaHandler(event:EventoComun):void
+			{
+				
+				if(lstCuadricula.selectedItem.estado == 'REPORTADAS' || lstCuadricula.selectedItem.estado == 'REPORTADA')
+				{
+					alertaSingleton.show("Esta visita ya fue reportada ");
+				}
+				else if(lstCuadricula.selectedItem.estado == 'PENDIENTES' || lstCuadricula.selectedItem.estado == 'PENDIENTE' || lstCuadricula.selectedItem.estado == 'NO REALIZADAS' || lstCuadricula.selectedItem.estado == 'NO REALIZADA')
+				{
+					alertaSingleton.show("No se puede reportar esta visita");
+				}
+				else
+				{
+					var evento:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.CAMBIAR_VISTA);
+					evento.index = 1;
+					evento.solicitudIndex = event.selectedIndex;
+					evento.current = lstCuadricula.selectedItem;
+					dispatchEvent(evento);
+					
+					var eventEsperar:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEsperar.mensaje = "iniciarEspera";
+					eventEsperar.idButtons = [];
+					eventEsperar.tipoEventos  = [];
+					eventEsperar.idButtons.push("lstCuadricula");
+					eventEsperar.tipoEventos.push("OBTENER_INFORMACION_TIME_LINE");
+					dispatchEvent(eventEsperar);
+					
+					
+					var evtCam:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.OBTENER_CAMPANAS_COMERCIALES_REPORTAR);
+					evtCam.idProveedor = 0;
+					evtCam.idCliente = lstCuadricula.selectedItem.cliente.idCliente;
+					evtCam.nivelCliente = lstCuadricula.selectedItem.cliente.nivelIngreso;
+					dispatchEvent(evtCam);
+					
+					setTimeout(dispararEvento, 500); lstCuadricula.selectedItem
+				}
+			
+			}
+			
+			private function dispararEvento():void{
+				var eventoTimeLine:EventoReportarVisita = new EventoReportarVisita(EventoReportarVisita.OBTENER_INFORMACION_TIME_LINE);
+				eventoTimeLine.current = lstCuadricula.selectedItem.idVisitaCliente;
+				dispatchEvent(eventoTimeLine);
+			}
+			
+			public static var proveedores:ArrayCollection;
+			public function set recibirListaProveedores(data:ArrayCollection):void {
+				proveedores = data;
+			}
+			
+		
+			
+		]]>
+	</fx:Script>
+	
+	
+	
+	<s:HGroup width="100%" height="100%" id="vgHeader" verticalAlign="middle"> 
+		<s:Label id="lblTitulo" styleName="cat_pro_titulo_bgothl_30" text="Reportar Visita" /> 
+		<s:Label id="lblUsuario" width="100%" textAlign="right" styleName="cat_pro_titulo_novecento_24" text="{DatosGlobales.getInstance()._usuario.nombre}" />
+	</s:HGroup>  
+	
+	<s:VGroup width="100%" height="100%" paddingRight="20" paddingTop="20" paddingLeft="10" >
+		<s:HGroup width="100%" verticalAlign="middle" >
+			<s:Label text="Visitas · Sprint #{visitaCliente.sprint.numeroSprint}" fontSize="16" 
+					 styleName="tab_titulo_Helvetica" fontWeight="bold" color="#404040" />
+			<s:Label text="({visitaCliente.sprint.fechaInicio.getDate()} {visitaCliente.sprint.fechaInicio.getMonth() != visitaCliente.sprint.fechaFin.getMonth() ? (UtilsFecha.formatoFechaGenerico(visitaCliente.sprint.fechaInicio, ' / MMMM')) : ''} - {UtilsFecha.formatoFechaGenerico(visitaCliente.sprint.fechaFin, 'DD / MMMM / YYYY')})" />
+			
+			<s:HGroup width="100%" paddingLeft="30" horizontalAlign="right" >
+				<botonera:Botonera id="botonera" width="100%" height="40" clickBotonera="botonera_clickBotoneraHandler(event)"
+								   styleNameText="headerGridGestorCompra" percentWidthItem="20" horizontalAlign="right" />
+			</s:HGroup>
+			
+		</s:HGroup> 
+		
+		<s:VGroup width="100%" height="100%" paddingTop="20" paddingBottom="10" >
+				<visita:CuadriculaVisita width="100%" height="100%" 
+												 id="lstCuadricula" clickCuadricula="lstCuadricula_clickCuadriculaHandler(event)" />
+		</s:VGroup>  
+		
+		
+		
+		
+		<s:HGroup width="100%" paddingBottom="30" fontSize="10" >
+			<s:HGroup width="9%" horizontalAlign="center" gap="10" color="#4FA733" >
+				<s:Label text="CRM" width="100%" fontSize="{fontFooter}" textAlign="right" />
+				<s:Label text="10/20" width="100%" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			<s:HGroup width="20%" horizontalAlign="center" gap="10" color="#F3991D" >
+				<s:Label text="SOLICITUDES" width="100%" fontSize="{fontFooter}" textAlign="right" />
+				<s:Label text="10/15" width="100%" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			<s:HGroup width="12%" horizontalAlign="center" gap="10" verticalAlign="middle" >
+				<mx:Image source="{catalogoIconosEtiquetas.getInstance().visita_pendiente}" width="18" height="18" id="noFinalizada"/>
+				<s:Label text="Visita No Realizada" width="100%" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			<s:HGroup width="14%" horizontalAlign="center" gap="10" verticalAlign="middle">
+				<mx:Image source="{catalogoIconosEtiquetas.getInstance().visita_finalizada}" width="18" height="18" id="finalizada"/>
+				<s:Label text="Visita Realizada sin Reporte" width="100%" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			<s:HGroup width="15%" horizontalAlign="center" gap="10" verticalAlign="middle">
+				<mx:Image source="{catalogoIconosEtiquetas.getInstance().reporte_pendiente}" width="18" height="18" id="pendiente"/>
+				<s:Label text="Visita Pendiente" width="100%" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			<s:HGroup width="14%" horizontalAlign="center" gap="10" verticalAlign="middle">
+				<s:HGroup gap="0" id="imgReportada">
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().visita_reportada}" width="18" height="18" />
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().visita_reportada}" width="18" height="18" />
+				</s:HGroup>
+				<s:Label text="Visita Reportada" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			<s:HGroup width="14%" horizontalAlign="center" gap="10" verticalAlign="middle">
+				<mx:Image source="{catalogoIconosEtiquetas.getInstance().documento_azul}" width="16" height="16"  />
+				<s:Label text="Archivos Cargados" width="100%" fontSize="{fontFooter}" />
+			</s:HGroup>  
+			
+		</s:HGroup>  
+		
+	</s:VGroup> 
+	
+</s:Group>

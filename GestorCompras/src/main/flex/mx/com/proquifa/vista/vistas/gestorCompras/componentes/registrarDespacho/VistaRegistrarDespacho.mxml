@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:arribo="mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.*" 
+		 xmlns:componentes="mx.com.proquifa.vista.vistas.gestorCompras.componentes.*" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:label="skins.skin.label.*"
+		 xmlns:registrarDespacho="mx.com.proquifa.vista.vistas.gestorCompras.componentes.registrarDespacho.*" 
+		 xmlns:Graficas="mx.com.proquifa.vista.vistas.gestorCompras.componentes.registrarDespacho.Graficas.*" 
+		 xmlns:plantilla="mx.com.proquifa.vista.vistas.plantilla.*"
+		 width="100%" height="100%" 
+		 creationComplete="group1_creationCompleteHandler(event)" 
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComun;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.registrarDespacho.EventoRegistrarDespacho;
+			import mx.com.proquifa.vista.modelo.registrarDespacho.ModeloRegistrarDespacho;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.GraficaBarrasArriboGestorCompras;
+			import mx.com.proquifa.vista.vistas.gestorCompras.componentes.arribo.GraficaProveedoresArriboGestorCompra;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			
+			private var graficaProveedor:GraficaProveedoresArriboGestorCompra;
+			private var graficaBarras:GraficaBarrasArriboGestorCompras;
+			public static var proveedor:Boolean;
+			public var universoProvee:ArrayCollection = new ArrayCollection();
+			[Bindable] public var sizeFontAgente:Number;
+			[Bindable] public var agenteNombre:String;
+			
+			protected function vistaAnterior(event:EventoGestorCompras):void
+			{
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				cmpTitulo.subTitulo = "";
+				div.visible = div.includeInLayout = true;
+				vgpOrdenes.divArriba.visible = false;
+			}
+			protected function vistaAnteriorVacio():void
+			{
+				plantilla.indice = 0;
+				cmpTitulo.isVisble = false;
+				cmpTitulo.subTitulo = "";
+				div.visible = div.includeInLayout = true;
+				vgpOrdenes.divArriba.visible = false;
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				addEventListener(EventoRegistrarDespacho.IR_ORDEN_SELECCIONADA, mostrarOrdenesRegistradas);
+				cmpGridOD.addEventListener(EventoComun.ORDENAR_PROVEE_LETRA,ordenarProveedor);
+				addEventListener("volverVistaAnterior",vistaAnteriorVacio);
+				cargarPlantilla();
+			}
+			private function ordenarProveedor(evt:EventoComun):void
+			{
+				calcularTotales(cmpGridOD.dataProvider);  
+			}
+			
+			private function bucar(array:ArrayCollection, letra:String):ArrayCollection
+			{
+				array = UtilsGrid.queryCampoXLikeDosCampos(array,"ordenCompra","agenteAduanal",letra);
+				return array;
+			}
+			
+			protected function mostrarOrdenesRegistradas(evet:EventoRegistrarDespacho):void
+			{
+				plantilla.indice = 1;
+				cmpTitulo.isVisble = true;
+				div.visible = div.includeInLayout = false;
+				cmpTitulo.subTitulo = evet.ordenDespacho.nombreAgenteAduanal;
+				vgpOrdenes.vistaModificar.currentState = "mostrarOrden";
+				agenteNombre = evet.ordenDespacho.nombreAgenteAduanal;
+				enviarOrdenDeDespacho(evet.ordenDespacho);
+			}
+			
+			private function enviarOrdenDeDespacho(orden:OrdenDespacho):void
+			{
+				var array:ArrayCollection = new ArrayCollection();
+				var query:Query = ModeloRegistrarDespacho.query;
+				var ordenAux:OrdenDespacho;
+				
+				var totalPiezas:int = 0;
+				var totalMonto:Number = 0;
+				
+				var punteros:Array = query.getPunteros([orden.nombreAgenteAduanal.toLowerCase()]);
+				for(var x:int = 0;x < punteros.length;x++){
+					ordenAux = new OrdenDespacho();
+					ordenAux = ObjectUtil.copy( query.universo.getItemAt(punteros[x])) as OrdenDespacho;
+					ordenAux.numFila = x+1;
+
+					totalPiezas += ordenAux.totalPiezas;
+					totalMonto += ordenAux.totalMonto;
+					array.addItem(ordenAux);
+				}
+				vgpOrdenes.dataProvider = array;
+				vgpOrdenes.totalMonto = totalMonto;
+				vgpOrdenes.totalPiezas = totalPiezas;
+				EventoRegistrarDespacho.bloquearOrdenes = false;
+			}
+			
+			public function set obtenerOrdenesRegistradas(data:ArrayCollection):void
+			{
+				if(data == null){
+					calcularTotales(new ArrayCollection());
+					return;
+				}
+				var noEncontrado:Boolean = false;
+				cmpGridOD.dataProvider = data;
+				if(vgpOrdenes.recargado){
+					for (var i:int = 0; i < data.length; i++) 
+					{
+						if (data[i].nombreAgenteAduanal.toUpperCase() == agenteNombre)
+						{
+							/*var evento:EventoGestorCompras = new EventoGestorCompras("");
+							evento.partida = data[i];*/
+							enviarOrdenDeDespacho(data[i] as OrdenDespacho);
+							noEncontrado = true;
+							break;
+						}
+						else{
+							noEncontrado = false;
+						}
+					}
+					if(!noEncontrado){
+						vistaAnteriorVacio();
+						calcularTotales(new ArrayCollection());
+						
+					}
+					
+					vgpOrdenes.recargado = false;
+				}
+			}
+			
+			private function calcularTotales(array:ArrayCollection):Object
+			{
+				var i:int;
+				var total:Object = new Object();
+				total.totalOC = 0;
+				total.totalPiezas = 0;
+				total.totalMontos = 0;
+				total.et = 0;
+				total.ft = 0;
+				total.urgente = 0;
+				
+				total.etPartida = 0;
+				total.ftPartida = 0;
+				total.urgentePartida = 0;
+				total.listaArribo = true;
+				
+				for(var k:int = 0;k < array.length; k++){
+					
+					total.totalPiezas += array[k].totalPiezas;
+					total.totalMontos += array[k].precioTotal;
+					total.et += array[k].object.et;
+					total.ft += array[k].object.ft;
+					total.urgente += array[k].object.urgente;
+					
+					total.totalOC += array[k].object.oc.length;
+					
+				}	
+				total.totalProveedores = array.length;
+				
+				return total;
+			}
+			override protected function updateDisplayList($width:Number, $height:Number):void
+			{
+				super.updateDisplayList($width,$height);
+				
+				sizeFontAgente = (20 / 2005) * ($width);
+				sizeFontAgente = sizeFontAgente > 20 ? 20:sizeFontAgente;
+				sizeFontAgente = sizeFontAgente < 15 ? 15:sizeFontAgente;
+			}
+			
+			public function set recibeTotalPie($datos:ArrayCollection):void
+			{
+				graficaPie_AgenteA.dataProvider = $datos;
+			}
+			private function cargarPlantilla():void
+			{
+				plantilla.cargarEncabezado(cmpTitulo);
+				plantilla.cargarLista(cmpGridOD);
+				plantilla.cargarGraficas(hgpGraficas);
+				plantilla.cargarOperacion(vgpOrdenes);
+				plantilla.cargarLeyenda(footer);
+			}
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" gap="0" visible="false" includeInLayout="false">
+		<componentes:HeaderGestorCompras id="cmpTitulo" width="100%" titulo="REGISTRAR DESPACHO" vistaAnterior="vistaAnterior(event)" />
+		
+		<registrarDespacho:ListaRegistrarDespacho id="cmpGridOD" width="100%" height="100%" />
+		
+		<s:VGroup id="hgpGraficas" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" gap="0" paddingBottom="43" paddingTop="44" >
+			<s:VGroup width="100%" height="100%"  verticalAlign="middle" horizontalAlign="center" gap="30">
+				<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="PROVEEDORES" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+				<Graficas:GraficaDonaProveedoresRegistrarDespacho id="graficaPie_AgenteA" width="100%" height="100%" maxHeight="465" maxWidth="457"/>
+			</s:VGroup>
+			<s:Spacer width="100%" maxHeight="138" height="10%"/>
+			<s:VGroup width="100%" height="50%"  verticalAlign="middle" horizontalAlign="center" gap="30">
+				<s:Label styleName="TituloNovecento_18" fontWeight="bold" width="100%" text="SEMÁFORO DE ENTREGA" textAlign="center" fontSize="{sizeFontAgente}" color="#404040"/>
+				<Graficas:GraficaBarraTipoTransitoRegistrarDespacho width="100%" height="100%" maxHeight="349" maxWidth="734"/>
+			</s:VGroup>
+		</s:VGroup>  
+		<registrarDespacho:VistaOperacionOrdenesRegistradas id="vgpOrdenes" width="100%" height="100%" />
+		<s:VGroup width="100%" height="100%" gap="0" id="footer" verticalAlign="middle">
+			<s:HGroup width="100%" height="1" id="div" paddingLeft="-14">
+				<otros:division width="100%" height="1" />
+			</s:HGroup>  
+			<s:HGroup height="100%" width="100%" horizontalAlign="center" gap="30" verticalAlign="middle">
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#de0014"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="Fuera de Tiempo" fontSize="16"/>
+				</s:HGroup>  
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#f09500"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="Urgente" fontSize="16"/>
+				</s:HGroup>
+				<s:HGroup height="100%" horizontalAlign="center" verticalAlign="middle">
+					<s:Ellipse width="10" height="10" >
+						<s:fill>
+							<s:SolidColor color="#4fa834"/>
+						</s:fill>
+					</s:Ellipse>
+					<label:Texto_14_Helvetica text="En Tiempo" fontSize="16"/>
+				</s:HGroup>
+			</s:HGroup>
+		</s:VGroup>  
+		
+	</s:VGroup>  
+	
+	<plantilla:Plantilla_VistaInicial id="plantilla" width="100%" height="100%" />
+</s:Group>

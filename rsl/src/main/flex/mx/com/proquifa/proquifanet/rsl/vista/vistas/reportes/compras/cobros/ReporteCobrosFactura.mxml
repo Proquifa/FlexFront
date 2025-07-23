@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+		  xmlns:listas="mx.com.proquifa.proquifanet.rsl.vista.vistas.comun.*"
+		  xmlns:reportes="skins.skin.comun.reportes.*"
+		  xmlns:pqNet="skins.botones.pqNet.*" 
+		  xmlns:otros="skins.otros.*" 
+		  width="100%" height="100%" 
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.ventas.cobros.EventoReporteCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.compras.cobros.itemRenderer.IRenderReporteCobroCPedidos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.reportes.compras.cobros.itemRenderer.ReporteCobrosCPedidos_IR;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var cobro:Cobros = new Cobros();
+			
+			[Bindable] private var cpedidos:String;
+			[Bindable] private var _cobrar:ArrayCollection;
+			[Bindable] private var _diaSeleccionado:String;
+			private var _enfocar:Boolean = false;
+			
+			public function set obtenerPedidosCliente($partidas:ArrayCollection):void{
+				if($partidas == null || $partidas.length <= 0 ) {
+					cpedidos = "";
+					lstFactura.dataProvider = new ArrayCollection;
+					var evento:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.LIMPIAR_LISTA_CPEDIDOS_COBROS );
+					evento.clasificacion = "listaHistorial";
+					dispatchEvent(evento);
+					return;
+				}
+				if ( $partidas.length > 0 ){
+					$partidas[0].cpedido == null ? cpedidos = '' : cpedidos = "PI-" + $partidas[0].cpedido;
+				}
+				else{
+					cpedidos = '';
+				}
+				
+				lstFactura.dataProvider = ObjectUtil.copy($partidas) as ArrayCollection;
+				if (lstFactura.dataProviderEnfocados == null){
+					lstFactura.areClikeablesDesenfocados = true;
+				}
+				
+				lstFactura.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			}
+			
+			public function organizarFacturas($temp:ArrayCollection):ArrayCollection{
+				var cobrar:ArrayCollection = new ArrayCollection;
+				var cobrada:ArrayCollection = new ArrayCollection;
+				_cobrar = new ArrayCollection;
+				var $numFila:int = 0;
+				if (cobrar.length > 0 ){
+					$numFila = cobrar[cobrar.length-1].numFila;
+					cobrar[cobrar.length-1].estado = "finaly";
+				}
+				for (var j:int = 0; j < cobrada.length; j++){
+					cobrada[j].numFila = ++$numFila;
+				}
+				_cobrar = ObjectUtil.copy(cobrar) as ArrayCollection;
+				cobrar.addAll(cobrada);
+				return cobrar;
+			}
+			
+			public function historialFactura(event:Event):void{
+				lstFactura.areClikeablesDesenfocados = false;
+				var currentItem:Object = (event.currentTarget as ListaConItemsEnfocados).currentItemTarget;
+				
+				if (currentItem != null && !currentItem.hasOwnProperty("isTotales")){
+					var evt:EventoReporteCobros = new EventoReporteCobros( EventoReporteCobros.OBTENER_HISTORIAL_FACTURA_SIG_VISTA);
+					evt.idFactura = currentItem.idFactura;
+					dispatchEvent(evt);
+					
+					var evento:EventoReporteCobros = new EventoReporteCobros ( EventoReporteCobros.OBTENER_FACTURA_SELECCIONADA_SIG_VISTA);
+					evento.cobro = (currentItem as Cobros);
+					dispatchEvent(evento);
+				}
+				else{
+					event.preventDefault();
+				}
+			}
+			
+			public function set obtenerFacturaCliente($folio:Cobros):void{
+				if($folio == null) return;
+				cobro = ObjectUtil.copy($folio) as Cobros;
+			}
+			
+			protected function enfoqueHandler(event:Event):void{
+				if( _enfocar ){
+					_enfocar = false;	
+					lstFactura.isEnfoqueActivado = _enfocar;
+				}else{
+					_enfocar = true;
+					lstFactura.isEnfoqueActivado = _enfocar;
+				}
+				grpEnfoque.btnEnfoque.rendererPq =! _enfocar ? "enfoque" : "enfoquedown"; 
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+
+	<s:Group width="100%" height="100%">
+		<s:Rect height="100%" width="100%">
+			<s:fill>
+				<s:SolidColor color="0xf4f4f4"/>
+			</s:fill>
+		</s:Rect>
+		<s:VGroup gap="0" width="100%" height="100%" paddingLeft="10" paddingRight="10" >
+			
+			<reportes:HeaderConBotonEnfoque id="grpEnfoque" btnEnfoqueMouseClickEvent="enfoqueHandler(event)" label="{this.cpedidos}" />
+			<listas:ListaConItemsEnfocados id="lstFactura" width="100%" height="100%" 
+										   itemRenderer1="{ReporteCobrosCPedidos_IR}"
+										   itemSeleccionado="historialFactura(event)"
+										   propiedadesASumar="{['partidas','montoDolares','piezas']}"
+										   etiquetasTotal="{([{singular:'Factura',plural:'Facturas'},{singular:'USD',plural:'USD'},{singular:'Pieza',plural:'Piezas'}])}" />
+			
+		</s:VGroup>
+	</s:Group>	
+	
+</s:VGroup>

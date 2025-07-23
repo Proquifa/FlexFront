@@ -1,0 +1,1479 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:oferta="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.comerciales.oferta.*" 
+		  xmlns:listas="mx.com.proquifa.proquifanet.rsl.vista.vistas.comun.*"
+		  xmlns:coverflow="mx.com.proquifa.proquifanet.rsl.vista.vistas.comun.coverflowpqnet.*" 
+		  xmlns:shaders="skins.skin.shaders.*"
+		  xmlns:pqNet="skins.botones.pqNet.*"  
+		  xmlns:otros="skins.otros.*" 
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:contenedores="skins.skin.contenedores.*"
+		  width="100%" height="100%" 
+		  
+		  creationComplete="ofertaDefaultAnimacion_creationComplete(event)" 
+		  >
+	<!--width="100%" height="100%"-->
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoAuxiliarEnLaActualizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoCatProOferta;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ClasificacionConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecioProducto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Producto;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.comerciales.oferta.catProOfertaPopUp.CatProOferta_VigenciaYRestringido_PopUp;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatProOferta_IR_ListaClasificacionEnfoque;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatProOferta_IR_ListaCostoEnfoque;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatProOferta_IR_ListaProductosEnfoque;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.effects.Fade;
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			
+			
+			//================================= PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION =======
+			private var arregroTitulosPorFamilia:ArrayCollection;
+			//================================= PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION ============ PARA EL CINTURON DE ORION =======
+			
+			private const flechaIzq:Class =  catalogoIconosBotones.getInstance().tabGrisIzq;
+			private const flechaDer:Class =  catalogoIconosBotones.getInstance().tabGrisDer;
+			
+			private var _listaTemporalCostos:ArrayCollection;
+			private var _listaTemporalClasificacion:ArrayCollection;
+			private var _universoProductos:ArrayCollection;
+			private var _universoCostos:ArrayCollection;
+			private var _universoClasificaciones:ArrayCollection;
+			
+			private var _proveedor:Proveedor;
+			private var _configuracionSeleccionada:ConfiguracionPrecio;
+			private var _currentNivel:String;
+			private var _vistaEdicion:Boolean;
+			private var alfa:Number = 0.4;
+			private var _isPlayingAnimation:Boolean=false;
+			public var _minimizado:Boolean;
+			private var _minMenuClasif:Boolean;
+			
+			public function get currentNivel():String
+			{
+				return _currentNivel;
+			}
+			
+			public function set currentNivel(value:String):void
+			{
+				_currentNivel = value;
+				grpFormulaPrecioLista.currentNivel = value;
+			}
+			
+			public function get vistaEdicion():Boolean
+			{
+				return _vistaEdicion;
+			}
+			
+			public function set vistaEdicion(value:Boolean):void
+			{
+				_vistaEdicion = value;
+			}
+			
+			public function get minMenuClasif():Boolean
+			{
+				return _minMenuClasif;
+			}
+			
+			public function set minMenuClasif(value:Boolean):void
+			{
+				_minMenuClasif = value;
+			}
+			
+			private var currentItemSelected:int;
+			private var solicitudFromVigenciaRestringido:Boolean;
+			
+			protected function ofertaDefaultAnimacion_creationComplete(event:FlexEvent):void
+			{
+				addEventListener( EventoCatProOferta.CAMBIA_NIVEL_EN_VISTA_OFERTA, cambiarNivelesDeVista,false,0,true );
+				//addEventListener( EventoCatProOferta.ABRIR_POPUP_PARA_VIGENCIA_Y_RESTRINGIDO, abrirPopUpVigenciaRestringido,false,0,true );
+				addEventListener( EventoCatProOferta.GUARDA_CONFIGURACION_VISTA, guardarConfiguracionCostoYFactor,false,0,true);
+				addEventListener( EventoCatProOferta.CAMBIA_VISTA_EDICION, cambiaEdicion,false,0,true);
+				addEventListener( ResizeEvent.RESIZE, resize,false,0,true);
+				
+				//img_flecha.addEventListener( MouseEvent.CLICK, clickHandler, false, 0, true );
+				img_flecha.addEventListener( MouseEvent.MOUSE_OVER, rowHoverHandler, false, 0, true );
+				img_flecha.addEventListener( MouseEvent.MOUSE_OUT, rowOutHandler, false, 0, true );
+				
+				habilitarGrpFormula(false);
+				habilitarGrpTodosLosFactores(false);
+			}
+			
+			public function resize(evt:ResizeEvent):void
+			{
+				//invalidateDisplayList();
+			}
+			
+			private function cambiaEdicion(eto:EventoCatProOferta):void
+			{
+				_vistaEdicion = eto.vistaEdicion;
+				validateDisplayList();
+			}
+			
+			public function estableceInicio():void
+			{
+				_vistaEdicion = false;
+				grpEdicionTodosFactores.vistaVisible();
+				validateDisplayList();
+			}
+			
+			public function habilitarGrpFormula($habilitar:Boolean):void
+			{
+				grpFormulaPrecioLista.mouseEnabled = $habilitar;
+				grpFormulaPrecioLista.mouseFocusEnabled = $habilitar;
+				grpFormulaPrecioLista.mouseChildren = $habilitar;
+			}
+			
+			public function habilitarGrpTodosLosFactores($habilitar:Boolean):void
+			{
+				grpEdicionTodosFactores.mouseEnabled = $habilitar;
+				grpEdicionTodosFactores.mouseChildren = $habilitar;
+				grpEdicionTodosFactores.mouseFocusEnabled = $habilitar;
+			}
+			
+			public function set recibeProveedorSeleccionado($pro:Proveedor):void
+			{
+				if($pro == null)
+					return;
+				
+				_proveedor = $pro;
+				
+				/* var obtenerFamilias:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_TODAS_LAS_FAMILIAS_DEL_PROVEEDOR);
+				obtenerFamilias.idProveedor = _proveedor.idProveedor;
+				dispatchEvent(obtenerFamilias); */
+				
+			}
+			
+			public function set recibeProveedorSeleccionadoDesdeProductos($pro:Proveedor):void
+			{
+				if($pro == null)
+					return;
+				
+				_proveedor = $pro;
+				
+				var obtenerFamilias:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_TODAS_LAS_FAMILIAS_DEL_PROVEEDOR);
+				obtenerFamilias.idProveedor = _proveedor.idProveedor;
+				dispatchEvent(obtenerFamilias);
+				
+			}
+			
+			public function set recibeConfiguracionesProducto( $listConfProductos:ArrayCollection ):void
+			{
+				lstProductoEnfoque.dataProvider = new ArrayCollection;
+				//cmpCoverFlow.desbloquearInteraccion();
+				if( $listConfProductos == null || $listConfProductos.length == 0 )
+				{
+					/* mandarALimpiarTodo(); */
+					return;
+				}
+				
+				if($listConfProductos.length > 0 )
+				{
+					for( var d:int = 0; d < $listConfProductos.length; d++ )
+					{
+						( $listConfProductos[d] as ConfiguracionPrecioProducto).totalProductos = 1;
+						( $listConfProductos[d] as ConfiguracionPrecioProducto).costoFactorProducto.totalPiezas =  ( $listConfProductos[d] as ConfiguracionPrecioProducto).costoFactorProducto.cantidadAA;//calcularTotalPiezas(( _arregloConfiguraciones[d] as ConfiguracionPrecioProducto).costoFactorProducto);
+						
+						if (( $listConfProductos[d] as ConfiguracionPrecioProducto).nivel == "Producto")
+						{
+							( $listConfProductos[d] as ConfiguracionPrecioProducto).isEnfocado = true;
+						}
+						if (( $listConfProductos[d] as ConfiguracionPrecioProducto).producto.licencia == null || ( $listConfProductos[d] as ConfiguracionPrecioProducto).producto.licencia == '--NINGUNO--' ){
+							( $listConfProductos[d] as ConfiguracionPrecioProducto).producto.licencia = "";
+						}
+						
+						//SE UTILIZA LA MISMA VARIABLE PARA DESHABILITAR EL FLETE EXPRESS/ TANTO POR SI VIENE DISABLE, O SI ESTA RESTRINGIDO POR LA
+						// CONFIGURACIÓN EN GENERAL
+						if(_configuracionSeleccionada.restringirFExpress) 
+						{
+							($listConfProductos[d] as ConfiguracionPrecioProducto).costoFactorProducto.fleteExpressDisable = true;
+						}
+						
+						if(_configuracionSeleccionada.restringirStock)
+						{
+							($listConfProductos[d] as ConfiguracionPrecioProducto).costoFactorProducto.stockDisable = true;
+						}
+						
+						if(_configuracionSeleccionada.restringirDistribuidor)
+						{
+							($listConfProductos[d] as ConfiguracionPrecioProducto).costoFactorProducto.distDisable = true;
+						}
+					}
+					
+					$listConfProductos.source.sortOn(["isEnfocado","costoProducto"],[Array.DESCENDING,Array.NUMERIC]);
+					enumerarLista($listConfProductos);
+					
+					_universoProductos = ObjectUtil.copy( $listConfProductos ) as ArrayCollection;
+					lstProductoEnfoque.dataProvider = _universoProductos;
+					
+					//enviaInformacionAgrupada( _currentNivel );
+				}
+			}
+			
+			public function set recibeConfiguracionesPrecioCosto($listaConfCosto:ArrayCollection):void
+			{
+				//cmpCoverFlow.desbloquearInteraccion();
+				lstCostoEnfoque.dataProvider = new ArrayCollection;
+				if( $listaConfCosto == null)
+				{
+					/* mandarALimpiarTodo(); */
+					return;
+				}
+				
+				if($listaConfCosto.length > 0 )
+				{
+					calcularItemsDeLaListaDeCostos($listaConfCosto);
+					_universoCostos = ObjectUtil.copy(_listaTemporalCostos) as ArrayCollection;
+					
+					_listaTemporalCostos.source.sortOn(["isEnfocado","costoProducto"],[Array.DESCENDING,Array.NUMERIC]);
+					enumerarLista(_listaTemporalCostos);
+					
+					if(_currentNivel == "Precio lista")
+						lstCostoEnfoque.dataProvider = _listaTemporalCostos;
+					
+					//_universoCostos = $listaConfCosto;
+					//enviaInformacionAgrupada( _currentNivel );
+				}
+				else
+				{
+					habilitarGrpFormula(false);
+					grpFormulaPrecioLista.dataProvider = new Array;
+				}
+			}
+			
+			public function set recibeConfiguracionesClasificacion($listaConfClasif:ArrayCollection):void
+			{
+				lstClasificacionEnfoque.dataProvider = new ArrayCollection;
+				if( $listaConfClasif == null)
+				{
+					/* mandarALimpiarTodo(); */
+					return;
+				}
+				//cmpCoverFlow.desbloquearInteraccion();
+				
+				
+				if($listaConfClasif.length > 0)
+				{
+					calcularItemsListaClasificacion($listaConfClasif); 
+					_universoClasificaciones = ObjectUtil.copy(_listaTemporalClasificacion) as ArrayCollection;
+					
+					if(_listaTemporalClasificacion.length > 1)
+					{
+						_listaTemporalClasificacion.source.sortOn(["ordenarIsEnfocado","conceptoMinuscula"]);
+					}
+					enumerarLista(_listaTemporalClasificacion);
+					
+					lstClasificacionEnfoque.dataProvider = new ArrayCollection;
+					lstClasificacionEnfoque.dataProvider = _listaTemporalClasificacion;
+					
+					/* enviaInformacionAgrupada( _currentNivel ); */
+				}
+				
+				//_universoClasificaciones = $listaConfClasif;
+			}
+			
+			
+			public function set recibeLasFamiliasDelProveedorSeleccionado($familias:ArrayCollection):void
+			{
+				if($familias == null || $familias.length ==0 )
+				{
+					/* mandarALimpiarTodo(); */
+					arregroTitulosPorFamilia = new ArrayCollection;
+					return;
+				}
+				
+				arregroTitulosPorFamilia = $familias;
+				
+				if(solicitudFromVigenciaRestringido)
+				{
+					solicitudFromVigenciaRestringido = false;
+					//cmpCoverFlow.recibeFamilias(arregroTitulosPorFamilia,true);
+				}
+				else
+				{
+					//cmpCoverFlow.recibeFamilias(arregroTitulosPorFamilia);
+				}
+				
+				var enviaTodasLasFamilias:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.ENVIAR_FAMILIAS_ORDENADAS_PARA_CINTURON_EN_OTRAS_VISTAS);
+				enviaTodasLasFamilias.todasLasFamilias = arregroTitulosPorFamilia;
+				dispatchEvent(enviaTodasLasFamilias);
+			}
+			
+			//			private function enviaInformacionAgrupada( $nivel:String ):void
+			//			{
+			//				if($nivel == 'Producto')
+			//				{
+			//					/* grpZonaTrabajo.iniciaGenerales( _universoProductos, _currentNivel, _proveedor); */
+			//					if(_universoProductos.length > 0)
+			//					{
+			//						//lstProductoEnfoque.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			//						lstProductoEnfoque.selectedIndex(0);
+			//					}
+			//				}
+			//				else if($nivel == "Clasificacion")
+			//				{
+			//					/* grpZonaTrabajo.iniciaGenerales(_universoClasificaciones,_currentNivel,_proveedor); */
+			//					
+			//					if(_universoClasificaciones.length > 0)
+			//					{
+			//						//lstClasificacionEnfoque.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			//						lstClasificacionEnfoque.selectedIndex(0);
+			//					}
+			//				}
+			//				else if($nivel == "Precio lista")
+			//				{
+			//					/* grpZonaTrabajo.iniciaGenerales(_universoClasificaciones,_currentNivel,_proveedor); */
+			//					if(_universoClasificaciones.length > 0)
+			//					{
+			//						//lstCostoEnfoque.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			//						lstCostoEnfoque.selectedIndex(0);
+			//					}
+			//				}
+			//				else 
+			//				{
+			//					/* grpZonaTrabajo.iniciaGenerales( _universoCostos, _currentNivel, _proveedor); */
+			//					
+			//					var evt:EventoCatProOferta = new EventoCatProOferta( EventoCatProOferta.OBTENER_CONFIGURACION_FAMILIA );
+			//					evt.idConfigFamilia = _configuracionSeleccionada.idConfiguracionPrecio;
+			//					dispatchEvent( evt );
+			//					
+			//					//calcularItemsDeLaListaDeCostos(_universoCostos);
+			//				}
+			//			}
+			
+			//RECIBE CONFIGURACIÓN DEL NIVEL PRECIO GENERALES
+			public function set recibeConfiguracionFamilia( $configuraGenerales:ArrayCollection ):void
+			{
+				if( $configuraGenerales == null || $configuraGenerales.length == 0 )
+					return;
+				
+				if($configuraGenerales[0])
+					habilitarGrpTodosLosFactores(true);
+				
+				grpEdicionTodosFactores.cargaInformacion($configuraGenerales[0],"Generales",_proveedor);
+			}
+			//RECIBE CONFIGURACIÓN DEL NIVEL PRECIO LISTA PRECIO LISTA
+			public function set recibirConfiguracionPLista(conf:ConfiguracionPrecioProducto):void
+			{
+				if(conf== null)
+					return;
+				
+				habilitarGrpTodosLosFactores(true);
+				
+				conf.producto.licencia = listaCostoEnfoqueCurrentItem.producto.licencia;
+				grpEdicionTodosFactores.cargaInformacion(conf, 'Precio lista',_proveedor); 
+			}
+			//RECIBE CONFIGURACION PARA LA CLASIFICACIÓN
+			public function set recibirConfiguracionPrecioClasificacion(conf:ConfiguracionPrecioProducto):void
+			{
+				if(conf== null)
+					return;
+				
+				habilitarGrpTodosLosFactores(true);
+				grpEdicionTodosFactores.cargaInformacion(conf, 'Clasificacion',_proveedor); 
+			}
+			
+			private function calcularItemsDeLaListaDeCostos($listaCostos:ArrayCollection):void
+			{
+				_listaTemporalCostos = new ArrayCollection();
+				var keyPiezas:Object = new Object;
+				var keyEnfoque:Object = new Object;
+				var currentItem:ConfiguracionPrecioProducto;
+				
+				
+				for (var i:int = 0; i < $listaCostos.length; i++)
+				{
+					currentItem = $listaCostos[i]  as ConfiguracionPrecioProducto;
+					currentItem.producto.cant = 1;
+					
+					armartextosParaBotonesNivelesIngreso(currentItem);
+					
+					currentItem.totalProductos = currentItem.cantProductos;
+					currentItem.costoFactorProducto.totalPiezas = currentItem.costoFactorProducto.cantidadAA;
+					
+					//SE UTILIZA LA MISMA VARIABLE PARA DESHABILITAR EL FLETE EXPRESS/ TANTO POR SI VIENE DISABLE, O SI ESTA RESTRINGIDO POR LA
+					// CONFIGURACIÓN EN GENERAL
+					if(_configuracionSeleccionada.restringirFExpress) 
+					{
+						currentItem.costoFactorProducto.fleteExpressDisable = true;
+					}
+					
+					if(_configuracionSeleccionada.restringirStock)
+					{
+						currentItem.costoFactorProducto.stockDisable = true;
+					}
+					
+					if(_configuracionSeleccionada.restringirDistribuidor)
+					{
+						currentItem.costoFactorProducto.distDisable = true;
+					}
+					
+					if ( currentItem.idConfiguracionCosto != 0) 
+					{
+						currentItem.isEnfocado = true;
+					}
+					
+					_listaTemporalCostos.addItem(currentItem);
+				}
+				
+				if(_listaTemporalCostos != null && _listaTemporalCostos.length > 0 && _currentNivel == "Generales")
+				{
+					habilitarGrpFormula(true);
+					grpFormulaPrecioLista.currentMonedaVenta = _proveedor.monedaVentaAbreviatura;
+					grpFormulaPrecioLista.currentSimboloVenta = _proveedor.monedaVentaSimbolo;
+					grpFormulaPrecioLista.dataProvider = _listaTemporalCostos.source;
+				}
+			}
+			
+			private function calcularItemsListaClasificacion($listaClasif:ArrayCollection):void
+			{
+				_listaTemporalClasificacion = new ArrayCollection;
+				_listaTemporalClasificacion = ObjectUtil.copy($listaClasif) as ArrayCollection;
+				
+				for (var i:int = 0; i < _listaTemporalClasificacion.length; i++) 
+				{
+					var currentItem:ClasificacionConfiguracionPrecio = _listaTemporalClasificacion[i] as ClasificacionConfiguracionPrecio;
+					currentItem.cantidadConceptos = 1;
+					
+					if(currentItem.idConfigFamilia != currentItem.idConfigClasificacion)
+					{
+						currentItem.isEnfocado = true;
+					}
+				}
+				
+			}
+			
+			private function armartextosParaBotonesNivelesIngreso($currentItem:ConfiguracionPrecioProducto):void
+			{
+				if($currentItem)
+				{
+					$currentItem.costoFactorProducto.precioUAAplus_String ="AA+ · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAAplus) + " · " + $currentItem.costoFactorProducto.diferencialAAplus + "%";
+					$currentItem.costoFactorProducto.precioUAA_String ="AA · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAA) + " · " + $currentItem.costoFactorProducto.diferencialAA + "%";
+					$currentItem.costoFactorProducto.precioUAM_String ="AM · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAM) + " · " + $currentItem.costoFactorProducto.diferencialAM + "%";
+					$currentItem.costoFactorProducto.precioUAB_String ="AB · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUAB) + " · " + $currentItem.costoFactorProducto.diferencialAB + "%";
+					$currentItem.costoFactorProducto.precioUBajo_String ="BAJO · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUBajo) + " · " + $currentItem.costoFactorProducto.diferencialBajo + "%";
+					$currentItem.costoFactorProducto.precioUDistribuidor_String ="Dist · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUDistribuidor) + " · " + $currentItem.costoFactorProducto.diferencialDistribuidor + "%";
+					
+					$currentItem.costoFactorProducto.precioUMA_String ="MA · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUMA) + " · " + $currentItem.costoFactorProducto.diferencialMM + "%";
+					$currentItem.costoFactorProducto.precioUMM_String ="MM · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUMM) + " · " + $currentItem.costoFactorProducto.diferencialMM + "%";
+					$currentItem.costoFactorProducto.precioUMB_String ="MB · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUMB) + " · " + $currentItem.costoFactorProducto.diferencialMB + "%";
+					$currentItem.costoFactorProducto.precioUFExpress_String ="FE · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUFExpress) + " · " + $currentItem.costoFactorProducto.diferencialFExpress + "%";
+					$currentItem.costoFactorProducto.precioUStock_String ="WEB · "+ _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUStock) + " · " + $currentItem.costoFactorProducto.diferencialStock + "%";
+					$currentItem.costoFactorProducto.precioUPublico_String = _proveedor.monedaVentaSimbolo + UtilsFormatosNumericos.precisionADosDecimalesConComas($currentItem.costoFactorProducto.precioUPublico) + " · " + $currentItem.costoFactorProducto.diferencialPublico + "%";
+				}
+			}
+			
+			private function enumerarLista($array:ArrayCollection):void
+			{
+				for (var i:int = 0; i < $array.length; i++)
+				{
+					$array[i].numFila = i + 1;
+				}
+			}
+			
+			private var _popUpVigenciaRestringido:CatProOferta_VigenciaYRestringido_PopUp;
+			private function abrirPopUpVigenciaRestringido(ev:EventoCatProOferta):void
+			{
+				var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+				
+				if(_popUpVigenciaRestringido == null)
+				{
+					_popUpVigenciaRestringido = CatProOferta_VigenciaYRestringido_PopUp(PopUpManager.createPopUp(app,CatProOferta_VigenciaYRestringido_PopUp,true));
+					_popUpVigenciaRestringido.addEventListener("CerrarElPopupCatProOferta_VigenciaYRestringido_PopUp",escucharCerrarPopUp,false,0,true);
+				}
+				else
+				{
+					PopUpManager.addPopUp(_popUpVigenciaRestringido,app,true);
+				}
+				
+				PopUpManager.centerPopUp(_popUpVigenciaRestringido);
+				
+				_popUpVigenciaRestringido.currentConfiguracion = ev.configuracionPrecio;
+			}
+			
+			
+			protected function escucharCerrarPopUp(eve:Event = null):void
+			{
+				PopUpManager.removePopUp(_popUpVigenciaRestringido);
+				_popUpVigenciaRestringido = null;
+			}
+			
+			public function set confirmaActualizacionMontoMinOC( $dato:Boolean):void
+			{
+				if($dato)
+				{
+					dispatchEvent( new EventoAuxiliarEnLaActualizacion(EventoAuxiliarEnLaActualizacion.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES));
+				}
+				
+			}
+			
+			public function set confirmaActualizacionVigenciaYRestringido( $dato:Boolean):void
+			{
+				if($dato)
+				{
+					/* _popUpVigenciaRestringido.dispatchEvent(new Event("CerrarElPopupCatProOferta_VigenciaYRestringido_PopUp")); */
+					escucharCerrarPopUp();
+					
+					solicitudFromVigenciaRestringido = true;
+					
+					var obtenerFamilias:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_TODAS_LAS_FAMILIAS_DEL_PROVEEDOR);
+					obtenerFamilias.idProveedor = _proveedor.idProveedor;
+					dispatchEvent(obtenerFamilias);
+				}
+			}
+			
+			public function recibeConfiguracionSeleccionada($evt:EventoCatProOferta):void
+			{
+				_configuracionSeleccionada = $evt.configuracionPrecio;
+			}
+			
+			private function cambiarNivelesDeVista($evt:EventoCatProOferta):void
+			{ 
+				if($evt.nivel != _currentNivel)
+				{
+					_currentNivel =$evt.nivel;
+					invalidateDisplayList();
+				}
+				else
+				{
+					_currentNivel =$evt.nivel;
+				}
+				
+				_configuracionSeleccionada = $evt.configuracionPrecio;
+				
+				var enviarConfiguracion:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.ENVIAR_CONFIGURACION_SELECCIONADA_PARA_LEER_SUS_PROPIEDADES);
+				enviarConfiguracion.configuracionPrecio = $evt.configuracionPrecio;
+				dispatchEvent(enviarConfiguracion);
+				
+				/* 	if(_currentNivel == 'Clasificacion')
+				{
+				lblSeccion.text = 'CLASIFICACIÓN';
+				
+				if(_universoClasificaciones.length > 0)
+				{
+				habilitarGrpFormula(true);
+				habilitarGrpTodosLosFactores(true);
+				}
+				}
+				else if(_currentNivel == 'Producto')
+				{
+				lblSeccion.text = 'PRODUCTO';
+				
+				if(_universoProductos.length > 0)
+				{
+				habilitarGrpFormula(true);
+				habilitarGrpTodosLosFactores(true);
+				}
+				}
+				else// NIVELES GENERALES  Y PRECIO DE LISTA 
+				{
+				if(_currentNivel == 'Precio lista')
+				{
+				lblSeccion.text = 'PRECIO LISTA';
+				
+				if(_universoCostos.length > 0)
+				{
+				habilitarGrpFormula(true);
+				habilitarGrpTodosLosFactores(true);
+				}
+				}
+				else //NIVEL GENERALES
+				{
+				lblSeccion.text = 'GENERALES';
+				
+				var evt:EventoCatProOferta = new EventoCatProOferta( EventoCatProOferta.OBTENER_CONFIGURACION_FAMILIA );
+				evt.idConfigFamilia = _configuracionSeleccionada.idConfiguracionPrecio;
+				dispatchEvent( evt );
+				}
+				} */
+				
+				dispatchEvent(new EventoAuxiliarEnLaActualizacion(EventoAuxiliarEnLaActualizacion.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES)); 
+			}
+			
+			/* 			private function mandarALimpiarTodo():void 
+			{
+			enviaInformacionAgrupada(_currentNivel);
+			} */
+			
+			public function set escucharPeticionDeActualizarConfiguraciones(event:EventoAuxiliarEnLaActualizacion):void
+			{
+				if(event == null)
+				{
+					return;
+				}
+				_universoProductos = null;
+				_universoCostos = null;
+				_universoClasificaciones = null;
+				var obtenerFamilias:EventoCatProOferta;
+				
+				//cmpCoverFlow.bloquearInteraccion();
+				habilitarGrpFormula(false);
+				habilitarGrpTodosLosFactores(false);
+				
+				if(_currentNivel == "Producto")
+				{
+					//lblSeccion.text = 'PRODUCTO';
+					
+					var productosXProducto:EventoCatProOferta = new EventoCatProOferta (EventoCatProOferta.OBTENER_CONFIGURACIONES_PRECIO_PRODUCTO);
+					productosXProducto.idConfiguracion = _configuracionSeleccionada.idConfiguracionPrecio;
+					dispatchEvent(productosXProducto);
+				} 
+				else if(_currentNivel == "Clasificacion")
+				{
+					//lblSeccion.text = 'CLASIFICACIÓN';
+					
+					if(event.actualizarCinturonFamilias)
+					{
+						obtenerFamilias = new EventoCatProOferta(EventoCatProOferta.OBTENER_TODAS_LAS_FAMILIAS_DEL_PROVEEDOR);
+						obtenerFamilias.idProveedor = _proveedor.idProveedor;
+						dispatchEvent(obtenerFamilias);
+					}
+					else
+					{
+						var obtenerTodasLasClasif:EventoCatProOferta = new EventoCatProOferta (EventoCatProOferta.OBTENER_CONFIGURACIONES_CLASIFICACION);
+						obtenerTodasLasClasif.idConfiguracion = _configuracionSeleccionada.idConfiguracionPrecio;
+						dispatchEvent(obtenerTodasLasClasif);
+					}
+					
+				}
+				else // NIVELES GENERAL Y PRECIO LISTA 
+				{
+					if(_currentNivel == 'Precio lista')
+					{
+						//lblSeccion.text = 'PRECIO LISTA';
+					}
+					else
+					{
+						//lblSeccion.text = 'GENERALES';
+						if(!event.actualizarCinturonFamilias)
+						{
+							var evt:EventoCatProOferta = new EventoCatProOferta( EventoCatProOferta.OBTENER_CONFIGURACION_FAMILIA );
+							evt.idConfigFamilia = _configuracionSeleccionada.idConfiguracionPrecio;
+							dispatchEvent( evt );
+						}
+					}
+					
+					if(event.actualizarCinturonFamilias)
+					{
+						obtenerFamilias = new EventoCatProOferta(EventoCatProOferta.OBTENER_TODAS_LAS_FAMILIAS_DEL_PROVEEDOR);
+						obtenerFamilias.idProveedor = _proveedor.idProveedor;
+						dispatchEvent(obtenerFamilias);
+					}
+					else
+					{
+						var productosXCosto:EventoCatProOferta = new EventoCatProOferta (EventoCatProOferta.OBTENER_CONFIGURACIONES_PRECIO_COSTO);
+						productosXCosto.idConfiguracion = _configuracionSeleccionada.idConfiguracionPrecio;
+						dispatchEvent(productosXCosto);
+					}	
+				}
+			}
+			
+			/* 			private function habilitar($habilita:Boolean ):void
+			{
+			grpEdicionTodosFactores.mouseEnabled = $habilita;
+			grpEdicionTodosFactores.mouseChildren = $habilita;
+			grpEdicionTodosFactores.mouseFocusEnabled = $habilita;
+			} */
+			
+			public function set recibeCostosRelacionadosConLaClasificacion($costos:ArrayCollection):void
+			{
+				if($costos == null)
+				{
+					return;
+				}
+				
+				for (var i:int = 0; i < $costos.length; i++) 
+				{
+					armartextosParaBotonesNivelesIngreso($costos[i] as ConfiguracionPrecioProducto); 
+				}
+				
+				grpFormulaPrecioLista.dataProvider = $costos.source;
+			}
+			
+			public function set confirmaCostoFactor( $dato:Boolean ):void
+			{
+				if( !$dato )
+					return;
+				dispatchEvent(new EventoAuxiliarEnLaActualizacion(EventoAuxiliarEnLaActualizacion.SOLICITAR_ACTUALIZACION_DE_LAS_CONFIGURACIONES));
+			}
+			
+			//======================================================================== TIENE QUE VER CON LA SELECCION DE LAS LISTAS ========================================================================
+			
+			private var listaCostoEnfoqueCurrentItem:ConfiguracionPrecioProducto;
+			protected function lstCostoEnfoque_itemSeleccionadoHandler(event:Event):void
+			{
+				if ((event.currentTarget as ListaConItemsEnfocados).currentItemTarget is ConfiguracionPrecioProducto )
+				{
+					listaCostoEnfoqueCurrentItem = (event.currentTarget as ListaConItemsEnfocados).currentItemTarget as ConfiguracionPrecioProducto;
+					
+					var obtenerConfLista:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_CONFIGURACION_PRECIO_LISTA);
+					if((listaCostoEnfoqueCurrentItem as ConfiguracionPrecioProducto).idConfiguracionCosto == 0)
+					{
+						obtenerConfLista.idCurrentSolicitud =  (listaCostoEnfoqueCurrentItem as ConfiguracionPrecioProducto).idConfiguracionFamilia;
+					}
+					else
+					{
+						obtenerConfLista.idCurrentSolicitud =  (listaCostoEnfoqueCurrentItem as ConfiguracionPrecioProducto).idConfiguracionCosto;
+					}
+					
+					if(listaCostoEnfoqueCurrentItem.producto.licencia == null)
+						obtenerConfLista.licencia = null;
+					else
+						obtenerConfLista.licencia = listaCostoEnfoqueCurrentItem.producto.licencia ;
+					
+					obtenerConfLista.idCategoriaPrecioLista = (listaCostoEnfoqueCurrentItem as ConfiguracionPrecioProducto).producto.categoriaPrecioLista;
+					dispatchEvent(obtenerConfLista);
+				}
+			}
+			
+			private	var listaClasifEnfoqueCurrentItem:ClasificacionConfiguracionPrecio;
+			protected function lstClasificacionEnfoque_itemSeleccionadoHandler(event:Event):void
+			{
+				if((event.currentTarget as ListaConItemsEnfocados).currentItemTarget is ClasificacionConfiguracionPrecio)
+				{
+					
+					//ESTO ES PARA LLAMAR LA CONFIGURACIÓN DE LA CLASIFICACIÓN
+					
+					listaClasifEnfoqueCurrentItem = (event.currentTarget as ListaConItemsEnfocados).currentItemTarget as ClasificacionConfiguracionPrecio;
+					
+					var obtenerConfClasificacion:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_CONFIGURACION_CLASIFICACION);
+					
+					if(listaClasifEnfoqueCurrentItem.idConfigClasificacion != listaClasifEnfoqueCurrentItem.idConfigFamilia)
+					{
+						obtenerConfClasificacion.idCurrentSolicitud = listaClasifEnfoqueCurrentItem.idConfigClasificacion;
+					}
+					else
+					{
+						obtenerConfClasificacion.idCurrentSolicitud = listaClasifEnfoqueCurrentItem.idConfigFamilia;
+					}
+					obtenerConfClasificacion.idClasificacion = listaClasifEnfoqueCurrentItem.idClasificacion;
+					dispatchEvent(obtenerConfClasificacion);
+					
+					
+					//ESTA PARTE ES PARA LLENAR EL PANEL DE LA FORMULA, LLAMAR A LOS CONSTOS RELACIONADOS CON LA CLASIFICACIÓN
+					if(listaClasifEnfoqueCurrentItem.totalProductos > 0)
+					{
+						var obtenerPreciosPorClasificacion:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.OBTENER_LOS_COSTOS_RELACIONADOS_CON_LA_CLASIFICACION);
+						obtenerPreciosPorClasificacion.idClasificacion = listaClasifEnfoqueCurrentItem.idClasificacion;
+						dispatchEvent(obtenerPreciosPorClasificacion);
+						
+						habilitarGrpFormula(true);
+					}
+					else
+					{
+						habilitarGrpFormula(false);
+						grpFormulaPrecioLista.dataProvider = new Array;
+					}
+					
+				}
+			}
+			
+			protected function lstProductoEnfoque_itemSeleccionadoHandler(event:Event):void
+			{
+				var currentItem:Object = (event.currentTarget as ListaConItemsEnfocados).currentItemTarget;
+				
+				if (currentItem is ConfiguracionPrecioProducto )
+				{
+					grpEdicionTodosFactores.cargaInformacion( currentItem as ConfiguracionPrecioProducto, 'Producto',_proveedor );
+				}
+				
+			}
+			
+			protected function lstProductoEnfoque_desenfoqueAutomaticoHandler(event:Event):void
+			{
+				btnEnfoqueProducto.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+			}
+			
+			protected function lstCostoEnfoque_desenfoqueAutomaticoHandler(event:Event):void
+			{
+				btnEnfoqueCosto.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+			}
+			
+			protected function lstClasificacionEnfoque_desenfoqueAutomaticoHandler(event:Event):void
+			{
+				btnEnfoqueClasificacion.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+			}
+			
+			protected function generaArchivoClasificacion(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Concepto");
+				fila[2] = hoja.addItem("No. Productos");
+				
+				var tamano:int = lstClasificacionEnfoque.dataProviderEnfocados == null ? 0 : lstClasificacionEnfoque.dataProviderEnfocados.length -1;
+				
+				for(var i:int = 0; i < tamano; i++)
+				{
+					fila = new Array();
+					fila[0] = '"' + lstClasificacionEnfoque.dataProviderEnfocados[i].numFila + '"';
+					fila[1] = '"' + lstClasificacionEnfoque.dataProviderEnfocados[i].concepto + '"';
+					fila[2] = '"' + lstClasificacionEnfoque.dataProviderEnfocados[i].totalProductos + '"';
+					hoja.addItem('\r' + fila );
+				}
+				file.save(hoja,"Producto-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date) + ".csv");
+			}
+			
+			protected function restablecerTodasConfiguracionesPorNivel($nivel:String):void
+			{
+				var event:EventoCatProOferta = new EventoCatProOferta(EventoCatProOferta.RESTABLECER_TODAS_CONFIGURACIONES_POR_NIVEL);
+				event.nivel = $nivel;
+				event.idConfigFamilia = _configuracionSeleccionada.idConfiguracionPrecio;
+				event.ventana = "CatProveedor_Oferta "+ event.nivel + " ( idProveedor:" + _proveedor.idProveedor + 
+					", idCofigFamilia:"+ _configuracionSeleccionada.idConfiguracionPrecio +" )";
+				
+				dispatchEvent(event);
+				
+			}
+			
+			protected function generaArchivoProducto(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Precio");
+				fila[2] = hoja.addItem("Catalogo");
+				fila[3] = hoja.addItem("Concepto");
+				fila[4] = hoja.addItem("AA");
+				fila[5] = hoja.addItem("AM");
+				fila[6] = hoja.addItem("AB");
+				fila[7] = hoja.addItem("MA");
+				fila[8] = hoja.addItem("MM");
+				fila[9] = hoja.addItem("MB");
+				fila[10] = hoja.addItem("Dist.");
+				fila[11] = hoja.addItem("FE.");
+				fila[12] = hoja.addItem("WEB");
+				fila[13] = hoja.addItem("Público");
+				
+				var tamano:int = lstProductoEnfoque.dataProviderEnfocados == null ? 0 : lstProductoEnfoque.dataProviderEnfocados.length -1;
+				
+				for(var i:int = 0; i < tamano; i++)
+				{
+					fila = new Array();
+					fila[0] = '"' + lstProductoEnfoque.dataProviderEnfocados[i].numFila + '"';
+					fila[1] = '"' + lstProductoEnfoque.dataProviderEnfocados[i].producto.costo + '"';
+					fila[2] = '"' + lstProductoEnfoque.dataProviderEnfocados[i].producto.codigo + '"';
+					fila[3] = '"' + lstProductoEnfoque.dataProviderEnfocados[i].producto.concepto + '"';
+					fila[4] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoAA) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialAA + '"';
+					fila[5] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoAM) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialAM + '"';
+					fila[6] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoAB) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialAB + '"';
+					fila[7] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoMA) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialMA + '"';
+					fila[8] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoMM) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialMM + '"';
+					fila[9] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoMB) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialMB + '"';
+					fila[10] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoDistribuidor) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialDistribuidor + '"';
+					fila[11] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoFExpress) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialFExpress + '"';
+					fila[12] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoStock) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialStock + '"';
+					fila[13] = '"'+ lstProductoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoPublico) + " · " + lstProductoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialPublico + '"';
+					hoja.addItem('\r' + fila );
+				}
+				file.save(hoja,"Producto-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date) + ".csv");
+			}
+			
+			protected function generaArchivoCosto(event:MouseEvent):void
+			{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Total");
+				fila[2] = hoja.addItem("# Productos");
+				fila[3] = hoja.addItem("AA");
+				fila[4] = hoja.addItem("AM");
+				fila[5] = hoja.addItem("AB");
+				fila[6] = hoja.addItem("MA");
+				fila[7] = hoja.addItem("MM");
+				fila[8] = hoja.addItem("MB");
+				fila[9] = hoja.addItem("Dist.");
+				fila[10] = hoja.addItem("FE.");
+				fila[11] = hoja.addItem("WEB");
+				fila[12] = hoja.addItem("Público");
+				
+				var tamano:int = lstCostoEnfoque.dataProviderEnfocados == null ? 0 : lstCostoEnfoque.dataProviderEnfocados.length -1;
+				
+				for(var i:int = 0; i < tamano; i++)
+				{
+					fila = new Array();
+					fila[0] = '"' + lstCostoEnfoque.dataProviderEnfocados[i].numFila + '"';
+					fila[1] = '"' + lstCostoEnfoque.dataProviderEnfocados[i].producto.costo + '"';
+					fila[2] = '"' + lstCostoEnfoque.dataProviderEnfocados[i].totalProductos + '"';
+					fila[3] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + '' + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoAA) + ' · ' + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialAA + '"';
+					fila[4] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoAM) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialAM + '"';
+					fila[5] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoAB) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialAB + '"';
+					fila[6] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoMA) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialMA + '"';
+					fila[7] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoMM) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialMM + '"';
+					fila[8] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoMB) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialMB + '"';
+					fila[9] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoDistribuidor) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialDistribuidor + '"';
+					fila[10] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoFExpress) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialFExpress + '"';
+					fila[11] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoStock) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialStock + '"';
+					fila[12] = '"'+ lstCostoEnfoque.dataProviderEnfocados[i].producto.monedaSimboloString + " " + UtilsFormatosNumericos.precisionADosDecimalesConComas(lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.montoPublico) + " · " + lstCostoEnfoque.dataProviderEnfocados[i].costoFactorProducto.diferencialPublico + '"';
+					hoja.addItem('\r' + fila );
+				}
+				file.save(hoja,"PrecioLista-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date) + ".csv");
+			}
+			
+			
+			private var _enfocarCosto:Boolean = false;
+			private var _enfocarClasificacion:Boolean = false;
+			private var _enfocarProducto:Boolean = false;
+			
+			protected function enfoqueHandlerCosto(event:MouseEvent):void
+			{
+				habilitarGrpTodosLosFactores(true);
+				if( _enfocarCosto )
+				{
+					_enfocarCosto = false;	
+					lstCostoEnfoque.isEnfoqueActivado = _enfocarCosto;
+					grpBtnExpListaCostoEnfocados.visible = grpBtnExpListaCostoEnfocados.includeInLayout = _enfocarCosto;
+				}
+				else
+				{
+					_enfocarCosto = true;
+					lstCostoEnfoque.isEnfoqueActivado = _enfocarCosto;
+					if (lstCostoEnfoque.dataProviderEnfocados != null && 
+						lstCostoEnfoque.dataProviderEnfocados.length > 0 && 
+						!lstCostoEnfoque.dataProviderEnfocados[0].hasOwnProperty("isTotales"))
+					{
+						grpBtnExpListaCostoEnfocados.visible = grpBtnExpListaCostoEnfocados.includeInLayout = _enfocarCosto;
+					}
+					else
+					{
+						grpEdicionTodosFactores.limpiaCampos();
+						var confi:ConfiguracionPrecioProducto = new ConfiguracionPrecioProducto;
+						confi.producto = new Producto;
+						var pro:Proveedor = new Proveedor;
+						pro.monedaVenta= "";
+						pro.monedaVentaAbreviatura= "";
+						pro.monedaVentaSimbolo= "";
+						grpEdicionTodosFactores.cargaInformacion(confi, 'Precio Lista',pro); 
+						habilitarGrpTodosLosFactores(false);
+					}
+				}
+				
+				btnEnfoqueCosto.rendererPq = !_enfocarCosto ? "enfoque" : "enfoquedownNaranja"; 
+			}
+			
+			protected function enfoqueHandlerClasificacion(event:MouseEvent):void
+			{
+				habilitarGrpTodosLosFactores(true);
+				if( _enfocarClasificacion )
+				{
+					_enfocarClasificacion = false;	
+					lstClasificacionEnfoque.isEnfoqueActivado = _enfocarClasificacion;
+					grpBtnExpListaClasificacionEnfocados.visible = grpBtnExpListaClasificacionEnfocados.includeInLayout = _enfocarClasificacion;
+				}
+				else
+				{
+					_enfocarClasificacion = true;
+					lstClasificacionEnfoque.isEnfoqueActivado = _enfocarClasificacion;
+					if (lstClasificacionEnfoque.dataProviderEnfocados != null && 
+						lstClasificacionEnfoque.dataProviderEnfocados.length > 0 && 
+						!lstClasificacionEnfoque.dataProviderEnfocados[0].hasOwnProperty("isTotales"))
+					{
+						grpBtnExpListaClasificacionEnfocados.visible = grpBtnExpListaClasificacionEnfocados.includeInLayout = _enfocarClasificacion;
+					}
+					else
+					{
+						grpEdicionTodosFactores.limpiaCampos();
+						var confi:ConfiguracionPrecioProducto = new ConfiguracionPrecioProducto;
+						confi.producto = new Producto;
+						var pro:Proveedor = new Proveedor;
+						pro.monedaVenta= "";
+						pro.monedaVentaAbreviatura= "";
+						pro.monedaVentaSimbolo= "";
+						grpEdicionTodosFactores.cargaInformacion(confi, 'Clasificacion',pro); 
+						habilitarGrpTodosLosFactores(false);
+					}
+				}
+				
+				btnEnfoqueClasificacion.rendererPq = !_enfocarClasificacion ? "enfoque" : "enfoquedownNaranja"; 
+			}
+			
+			protected function enfoqueHandleProducto(event:MouseEvent):void
+			{
+				habilitarGrpTodosLosFactores(true);
+				if( _enfocarProducto )
+				{
+					_enfocarProducto = false;	
+					lstProductoEnfoque.isEnfoqueActivado = _enfocarProducto;
+					grpBtnExpListaProductoEnfocados.visible = grpBtnExpListaProductoEnfocados.includeInLayout = _enfocarProducto;
+				}
+				else
+				{
+					_enfocarProducto = true;
+					lstProductoEnfoque.isEnfoqueActivado = _enfocarProducto;
+					if (lstProductoEnfoque.dataProviderEnfocados != null && 
+						lstProductoEnfoque.dataProviderEnfocados.length > 0 && 
+						!lstProductoEnfoque.dataProviderEnfocados[0].hasOwnProperty("isTotales") ){
+						grpBtnExpListaProductoEnfocados.visible = grpBtnExpListaProductoEnfocados.includeInLayout = _enfocarProducto;
+					}
+					else
+					{
+						grpEdicionTodosFactores.limpiaCampos();
+						var confi:ConfiguracionPrecioProducto = new ConfiguracionPrecioProducto;
+						confi.producto = new Producto;
+						var pro:Proveedor = new Proveedor;
+						pro.monedaVenta= "";
+						pro.monedaVentaAbreviatura= "";
+						pro.monedaVentaSimbolo= "";
+						grpEdicionTodosFactores.cargaInformacion(confi, 'Producto',pro); 
+						habilitarGrpTodosLosFactores(false);
+					}
+				}
+				
+				btnEnfoqueProducto.rendererPq = !_enfocarProducto ? "enfoque" : "enfoquedownNaranja";
+			}
+			
+			protected function filtrarListaCosto():void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				listaAFiltrar = ObjectUtil.copy( _universoCostos ) as ArrayCollection;
+				
+				if( txtCosto.text != '' )
+				{
+					_listaVisual  = new ArrayCollection(listaAFiltrar.source.filter(buscarCoincidenciasCosto));
+				}else
+				{
+					_listaVisual = ObjectUtil.copy( listaAFiltrar ) as ArrayCollection;
+				}
+				for( var i:int = 0; i < _listaVisual.length; i++ )
+				{
+					if ( (_listaVisual[i] as ConfiguracionPrecioProducto ).idConfiguracionCosto != 0)
+					{
+						( _listaVisual[i] as ConfiguracionPrecioProducto ).isEnfocado = true;
+					} 
+				}
+				if(_listaVisual.length > 1)
+				{
+					_listaVisual.source.sortOn(["isEnfocado","costoProducto"],[Array.DESCENDING,Array.NUMERIC]);
+				}
+				enumerarLista(_listaVisual);
+				lstCostoEnfoque.dataProvider = new ArrayCollection();
+				lstCostoEnfoque.dataProvider = _listaVisual;
+				lstCostoEnfoque.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			}
+			
+			protected function buscarCoincidenciasCosto($item:ConfiguracionPrecioProducto,id:uint, array:Array):Boolean
+			{
+				if( UtilsFormatosNumericos.redondearNEAREST_WithOutSeparator($item.producto.costo).indexOf(txtCosto.text.toUpperCase()) != -1 )
+				{
+					return true; 
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function filtrarListaClasificacion():void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				listaAFiltrar = ObjectUtil.copy( _universoClasificaciones ) as ArrayCollection;
+				
+				if( StringUtil.trim(txtClasificacion.text).length > 0 )
+				{
+					_listaVisual  = new ArrayCollection(listaAFiltrar.source.filter(buscarCoincidenciasClasificacion));
+				}
+				else
+				{
+					_listaVisual = listaAFiltrar;
+				}
+				
+				for( var i:int = 0; i < _listaVisual.length; i++ )
+				{
+					if ( (_listaVisual[i] as ClasificacionConfiguracionPrecio ).idConfigClasificacion != (_listaVisual[i] as ClasificacionConfiguracionPrecio ).idConfigFamilia)
+					{
+						( _listaVisual[i] as ClasificacionConfiguracionPrecio ).isEnfocado = true;
+					} 
+				}
+				
+				if(_listaVisual.length > 1)
+				{
+					_listaVisual.source.sortOn(["ordenarIsEnfocado","conceptoMinuscula"],[Array.NUMERIC]);
+				}
+				enumerarLista(_listaVisual);
+				lstClasificacionEnfoque.dataProvider = new ArrayCollection();
+				lstClasificacionEnfoque.dataProvider = _listaVisual;
+				lstClasificacionEnfoque.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			}
+			
+			protected function buscarCoincidenciasClasificacion($item:ClasificacionConfiguracionPrecio,id:uint, array:Array):Boolean
+			{
+				if( $item.concepto.toUpperCase().indexOf(txtClasificacion.text.toUpperCase()) != -1 )
+				{
+					return true; 
+				}
+				else
+				{
+					return false;
+				}
+			}
+			
+			protected function filtrarListaProducto():void
+			{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				listaAFiltrar = ObjectUtil.copy( _universoProductos ) as ArrayCollection;
+				
+				if( StringUtil.trim(txtProducto.text).length > 0 )
+				{
+					if (checkBusqueda.selected )
+					{
+						_listaVisual  = new ArrayCollection(listaAFiltrar.source.filter(buscarCoincidenciasPrecioListaProducto));
+					}
+					else
+					{
+						_listaVisual  = new ArrayCollection(listaAFiltrar.source.filter(buscarCoincidenciasProducto));
+					}
+				}
+				else
+				{
+					_listaVisual = ObjectUtil.copy( _universoProductos ) as ArrayCollection;
+				}
+				
+				for( var i:int = 0; i < _listaVisual.length; i++ )
+				{
+					if (_listaVisual[i] is ConfiguracionPrecioProducto && ( _listaVisual[i] as ConfiguracionPrecioProducto ).nivel == "Producto")
+					{
+						( _listaVisual[i] as ConfiguracionPrecioProducto ).isEnfocado = true;
+					}
+				}
+				var totales:ConfiguracionPrecioProducto = new ConfiguracionPrecioProducto();
+				if(_listaVisual.length > 1)
+				{
+					_listaVisual.source.sortOn(["isEnfocado","costoProducto"],[Array.DESCENDING,Array.NUMERIC]);
+					if(_listaVisual[0] is Object)
+					{
+						var tmp:Object = _listaVisual[0] as Object;
+						_listaVisual.removeItemAt(0);
+					}
+				}
+				
+				enumerarLista(_listaVisual);
+				lstProductoEnfoque.dataProvider = new ArrayCollection();
+				lstProductoEnfoque.dataProvider = _listaVisual;
+				lstProductoEnfoque.dispatchEvent(new IndexChangeEvent(IndexChangeEvent.CHANGING));
+			}
+			
+			protected function changePrompt():void
+			{
+				if(checkBusqueda.selected)
+				{
+					txtProducto.prompt = 'Precio Lista';
+					txtProducto.restrict = "0-9.";
+				}
+				else
+				{
+					txtProducto.prompt =  'Producto';
+					txtProducto.restrict = null;
+				}
+			}		
+			
+			protected function buscarCoincidenciasProducto($item:* ,id:uint, array:Array):Boolean
+			{
+				if( $item is ConfiguracionPrecioProducto && $item.producto.concepto.toUpperCase().indexOf(txtProducto.text.toUpperCase()) != -1 )
+				{
+					return true; 
+				}
+				else if($item is ConfiguracionPrecioProducto &&  $item.producto.codigo.toUpperCase().indexOf(txtProducto.text.toUpperCase()) != -1 )
+				{
+					return true;
+				}
+				else{
+					return false;
+				}
+			}
+			
+			protected function buscarCoincidenciasPrecioListaProducto($item:* ,id:uint, array:Array):Boolean
+			{
+				if( $item is ConfiguracionPrecioProducto && UtilsFormatosNumericos.redondearNEAREST_WithOutSeparator($item.producto.costo).indexOf(txtProducto.text.toUpperCase()) != -1 )
+				{
+					return true; 
+				}
+				else
+				{
+					return false;
+				}
+			}
+			//======================================================================================================================================================================	
+			
+			
+			
+			private var _idConfiguracionGuardada:int;
+			private function guardarConfiguracionCostoYFactor( $evt:EventoCatProOferta ):void
+			{
+				var evt:EventoCatProOferta;
+				_idConfiguracionGuardada = 0;
+				
+				if( _currentNivel == 'Producto' )
+				{
+					evt = new EventoCatProOferta( EventoCatProOferta.GUARDA_CONFIGURACION_LSITA );	
+					evt.configuracionPrecioProducto = $evt.configuracionPrecioProducto ;
+					evt.configuracionPrecioProducto.nivel = 'Producto';
+					evt.ventana = "CatProveedor_Oferta Producto( idProveedor:"+evt.configuracionPrecioProducto.idProveedor+
+						", idConf:"+evt.configuracionPrecioProducto.idConfiguracion+", idCofigFamilia:"+evt.configuracionPrecioProducto.idConfiguracionFamilia+" )";
+					
+					dispatchEvent( evt );	
+					
+					_idConfiguracionGuardada = $evt.configuracionPrecioProducto.idConfiguracionFamilia;
+					
+				}
+				else if( _currentNivel == 'Precio lista' )
+				{
+					evt = new EventoCatProOferta( EventoCatProOferta.GUARDA_CONFIGURACION_LSITA );	
+					
+					evt.configuracionPrecioProducto = $evt.configuracionPrecioProducto;
+					evt.configuracionPrecioProducto.nivel = "Costo";
+					evt.ventana = "CatProveedor_Oferta Costo( idProveedor:"+evt.configuracionPrecioProducto.idProveedor+
+						", idConf:"+evt.configuracionPrecioProducto.idConfiguracionPrecioProducto+", idCofigFamilia:"+evt.configuracionPrecioProducto.idConfiguracionFamilia+" )";
+					dispatchEvent(evt);
+					
+					_idConfiguracionGuardada = $evt.configuracionPrecioProducto.idConfiguracionFamilia;
+					
+				}
+				else if( _currentNivel == 'Clasificacion' )
+				{
+					evt = new EventoCatProOferta( EventoCatProOferta.GUARDA_CONFIGURACION_LSITA );	
+					
+					evt.configuracionPrecioProducto = $evt.configuracionPrecioProducto;
+					evt.configuracionPrecioProducto.nivel = "Clasificacion";
+					evt.ventana = "CatProveedor_Oferta   Clasificacion( idProveedor:"+evt.configuracionPrecioProducto.idProveedor+
+						", idConf:"+evt.configuracionPrecioProducto.idConfiguracionPrecioProducto+", idCofigFamilia:"+evt.configuracionPrecioProducto.idConfiguracionFamilia+" )";
+					dispatchEvent(evt);
+					
+					_idConfiguracionGuardada = $evt.configuracionPrecioProducto.idConfiguracionFamilia;
+					
+				}
+				else if( _currentNivel == 'Generales' )
+				{
+					evt = new EventoCatProOferta( EventoCatProOferta.GUARDA_COSTO_FACTOR_FAMILIA );
+					evt.configuracionPrecioProducto = $evt.configuracionPrecioProducto;
+					evt.ventana = "CatProveedor_Oferta General( idProveedor:"+evt.configuracionPrecioProducto.idProveedor+
+						", idConf:"+evt.configuracionPrecioProducto.idConfiguracion+", idCofigFamilia:"+evt.configuracionPrecioProducto.idConfiguracionFamilia+" )";
+					dispatchEvent( evt );
+					_idConfiguracionGuardada = $evt.configuracionPrecioProducto.idConfiguracionFamilia;
+				}
+			}
+			
+			
+			
+			private function clickHandler(event:MouseEvent):void
+			{
+				
+				if(_minMenuClasif)
+					minMenuClasif = false;
+				else
+					minMenuClasif = true;
+				
+				estableceInicio();
+					
+				/* if(!_isPlayingAnimation)
+				{
+				
+				if(event.currentTarget.id == "flechaDer"){
+				(event.currentTarget as Image).source = flechaIzq;
+				(event.currentTarget as Image).id =  "flechaIzq";
+				}else if(event.currentTarget.id == "flechaIzq"){
+				(event.currentTarget as Image).source = flechaDer;
+				(event.currentTarget as Image).id = "flechaDer";
+				}
+				
+				var currentFlecha:GroupItemCompresor = ((event.currentTarget as Image).parent as GroupItemCompresor)
+				if(_isOneMaximixed){
+				if((getElementAt(currentFlecha.relacionPanelIndex) as GroupItemCompresor).isMaximized){
+				resizeOut(getElementAt(currentFlecha.relacionPanelIndex));
+				}else{
+				switchFlecha((getElementAt(currentMaximixed) as GroupItemCompresor).relacionFlechaIndex);					
+				resizeOut(getElementAt(currentMaximixed));
+				animacionPND.addItem(getElementAt(currentFlecha.relacionPanelIndex));
+				}
+				}else{
+				_currentMaximixed = currentFlecha.relacionPanelIndex;
+				_isOneMaximixed = true;
+				resizeIn(getElementAt(currentFlecha.relacionPanelIndex));
+				}
+				} */
+			}
+			
+			protected function rowHoverHandler( event:MouseEvent ):void
+			{
+				fadeIn( event.currentTarget ); 
+			}
+			
+			protected function rowOutHandler( event:MouseEvent ):void
+			{
+				fadeOut( event.currentTarget ); 
+			}
+			protected function fadeIn( $target:Object ):void
+			{
+				var fade:Fade = new Fade();
+				fade.target = $target;
+				fade.alphaFrom = ($target as Image).alpha;
+				fade.duration = 200;
+				fade.alphaTo = 1;
+				fade.play();
+			}
+			
+			protected function fadeOut( $target:Object ):void
+			{
+				var fade:Fade = new Fade();
+				fade.target = $target;
+				fade.duration = 200;
+				fade.alphaFrom = 1;
+				fade.alphaTo = alfa;
+				fade.play();
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:Group width="100%" height="100%">
+		
+		<s:layout>
+			<oferta:LayoutPlantillaOfertaCatProveedores id="layoutOferta"/>
+		</s:layout>
+		
+		
+		<!--======================================================================== AQUI SE ESTA COLOCANDO TODO LO QUE ESTABA EL OTRO NIVEL =========================================================================================================-->
+		
+		<s:VGroup width="100%" gap="0" id="grpListaCosto" paddingTop="10" paddingLeft="15" paddingRight="15" paddingBottom="10">
+			<s:VGroup width="100%" horizontalAlign="right" gap="10">
+				<s:Group width="100%" >
+					<s:HGroup width="100%" horizontalAlign="right" paddingRight="20">
+						<pqNet:botonPqNetLargo id="btnEnfoqueCosto"  rendererPq="enfoque" click="enfoqueHandlerCosto(event)" verticalCenter="0" horizontalCenter="0"  />
+					</s:HGroup>
+				</s:Group>
+			</s:VGroup>
+			<s:TextInput fontStyle="normal" id="txtCosto" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Costo" change="filtrarListaCosto()" enter="filtrarListaCosto()" restrict="0-9." />
+			<s:Spacer height="20"/>
+			<listas:ListaConItemsEnfocados id="lstCostoEnfoque" width="100%" height="100%"
+										   itemRenderer1="{CatProOferta_IR_ListaCostoEnfoque}"
+										   areClikeablesDesenfocados="true"
+										   itemSeleccionado="lstCostoEnfoque_itemSeleccionadoHandler(event)" 
+										   desenfoqueAutomatico="lstCostoEnfoque_desenfoqueAutomaticoHandler(event)"
+										   propiedadesASumar="{['producto.cant','cantProductos']}"
+										   etiquetasTotal="{([{singular:'Costo',plural:'Costos'},{singular:'Producto',plural:'Productos'}])}"
+										   generarKey="{(['producto.categoriaPrecioLista','producto.licencia'])}"/>
+			
+			<s:VGroup id="grpBtnExpListaCostoEnfocados" width="100%" horizontalAlign="right" gap="10" visible="false" includeInLayout="false">
+				<otros:division width="100%" />
+				<s:HGroup width="100%">
+					<pqNet:botonPqNetLargo label="Restablecer Todo" click="restablecerTodasConfiguracionesPorNivel('Costo') "/>
+					<s:Spacer width="100%"/>
+					<pqNet:botonPqNetLargo icono="exportar" label="Exportar" click="generaArchivoCosto(event) "/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:VGroup>
+		
+		
+		
+		<s:VGroup gap="0" id="grpListaClasificacion" paddingTop="10" paddingLeft="15" paddingRight="15" paddingBottom="10" >
+			<s:VGroup width="100%" horizontalAlign="right" gap="10">
+				<s:Group width="100%" >
+					<s:HGroup width="100%" horizontalAlign="right" paddingRight="20">
+						<pqNet:botonPqNetLargo id="btnEnfoqueClasificacion"  rendererPq="enfoque" click="enfoqueHandlerClasificacion(event)" verticalCenter="0" horizontalCenter="0"  />
+					</s:HGroup>
+				</s:Group>
+			</s:VGroup>
+			<s:TextInput fontStyle="normal" id="txtClasificacion" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Concepto" change="filtrarListaClasificacion()" enter="filtrarListaClasificacion()"/>
+			<s:Spacer height="20"/>
+			<listas:ListaConItemsEnfocados id = "lstClasificacionEnfoque" width="100%" height="100%"
+										   itemRenderer1 = "{CatProOferta_IR_ListaClasificacionEnfoque}"
+										   itemSeleccionado="lstClasificacionEnfoque_itemSeleccionadoHandler(event)"
+										   desenfoqueAutomatico="lstClasificacionEnfoque_desenfoqueAutomaticoHandler(event)"
+										   propiedadesASumar="{'cantidadConceptos'}" areClikeablesDesenfocados="true"
+										   etiquetasTotal="{([{singular:'Concepto',plural:'Conceptos'}])}"
+										   generarKey="{(['idClasificacion'])}"
+										   />
+			<s:VGroup id="grpBtnExpListaClasificacionEnfocados" width="100%" horizontalAlign="right" gap="10" visible="false" includeInLayout="false">
+				<otros:division width="100%" />
+				<s:HGroup width="100%" gap="0">
+					<pqNet:botonPqNetLargo label="Restablecer Todo" click="restablecerTodasConfiguracionesPorNivel('Clasificacion')"/>
+					<s:Spacer width="1%"/>
+					<pqNet:botonPqNetLargo icono="exportar" label="Exportar" click="generaArchivoClasificacion(event)"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:VGroup>
+		
+		
+		<s:VGroup gap="0" id="grpListaProducto" paddingTop="10" paddingLeft="15" paddingRight="15" paddingBottom="10" >
+			<s:VGroup width="100%"  gap="10">
+				<s:Group width="100%" >
+					<s:HGroup width="100%" horizontalAlign="center" verticalAlign="middle">
+						<chekbox:CheckBoxPq id="checkBusqueda" selected="false" labelLeft="Producto" labelRight="Precio Lista"  width="180" change="filtrarListaProducto(); changePrompt();" />
+					</s:HGroup>
+					<s:HGroup width="100%" horizontalAlign="right" paddingRight="20" verticalAlign="middle">
+						<pqNet:botonPqNetLargo id="btnEnfoqueProducto"  rendererPq="enfoque" click="enfoqueHandleProducto(event)"   />
+					</s:HGroup>
+				</s:Group>
+			</s:VGroup>
+			<s:TextInput fontStyle="normal" id="txtProducto" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" prompt="Producto" change="filtrarListaProducto()" enter="filtrarListaProducto()" />		
+			<s:Spacer height="20"/>
+			<listas:ListaConItemsEnfocados id="lstProductoEnfoque" width="100%" height="100%"
+										   itemRenderer1="{CatProOferta_IR_ListaProductosEnfoque}"
+										   itemSeleccionado="lstProductoEnfoque_itemSeleccionadoHandler(event)"
+										   desenfoqueAutomatico="lstProductoEnfoque_desenfoqueAutomaticoHandler(event)"
+										   propiedadesASumar="{'totalProductos'}" areClikeablesDesenfocados="true"
+										   etiquetasTotal="{([{singular:'Producto',plural:'Productos'}])}"
+										   generarKey="{(['producto.categoriaPrecioLista','producto.idProducto','producto.licencia'])}"/>
+			
+			<s:VGroup id="grpBtnExpListaProductoEnfocados" width="100%" horizontalAlign="right" gap="10" visible="false" includeInLayout="false">
+				<otros:division width="100%" />
+				<s:HGroup width="100%">
+					<pqNet:botonPqNetLargo label="Restablecer Todo" click="restablecerTodasConfiguracionesPorNivel('Producto')"/>
+					<s:Spacer width="100%"/>
+					<pqNet:botonPqNetLargo icono="exportar" label="Exportar" click="generaArchivoProducto(event)"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:VGroup>
+		
+		<s:Group id="grpCentroDadFactores" width="100%" height="100%" maxHeight="1200">
+			<s:Rect id="fondoGris" width="100%" height="100%" visible="false">
+				<s:filters>
+					<shaders:sombraBevelFilter direccion="left"/>
+				</s:filters>
+				<s:fill>
+					<s:SolidColor color="#eaeaea" />
+				</s:fill>
+			</s:Rect>
+			<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" horizontalCenter="0" horizontalAlign="center"> 
+				<oferta:CatPro_Barra_tipoControl id="grpEdicionTodosFactores" width="100%" height="100%"/>
+			</contenedores:VGroupConPaddingStandardPqNet>
+		</s:Group>
+		
+		<oferta:PanelFactoresPrecioLista id="grpFormulaPrecioLista" width="100%" height="100%"/>
+		
+		<s:VGroup id="flechaMenu">
+			<s:Image id="img_flecha" verticalCenter="0" source="{catalogoIconosBotones.getInstance().tabGrisIzq}" depth="90000" />
+		</s:VGroup>
+		
+	</s:Group>
+	
+</s:VGroup>

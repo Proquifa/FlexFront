@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.DocumentoRecibido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			public var _currentType:String;
+			private var keys:Object;
+			private var _infoAbiertoVsCerradoET:ArrayCollection;
+			private var _infoAbiertoVsCerradoFT:ArrayCollection;
+			private var _totalClie: int = 0;
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET")
+						myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoAbiertoVsCerradoET,null,'totalDocumentos');
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoAbiertoVsCerradoFT,null,'totalDocumentos');
+				}
+			}
+			
+			public function set recibirDocumentos($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoAbiertoVsCerradoET = new ArrayCollection();
+				_infoAbiertoVsCerradoFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				_totalClie = 0;				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				/**
+				 * Se elimina el último elemento del arreglo que trae el conteo de las filas.
+				 * */
+				if(arrayTemp.length>1)
+					// arrayTemp.pop();
+				
+				/**
+				 * Se dividen todos los tipos de Documentos Recibidos que estan en tiempo vs las fuera de tiempo y se ordenan
+				 * */ 
+				arrayTemp.forEach(setearElEstado);
+				var arrayAbiertoCerradoET:Array = new Array();
+				var arrayAbiertoCerradoFT:Array = new Array();
+				
+				arrayAbiertoCerradoET = arrayTemp.filter(ObtenerTodosLosTipoDoctoET);
+				arrayAbiertoCerradoFT = arrayTemp.filter(ObtenerTodosLosTipoDoctoFT);
+				arrayAbiertoCerradoET.sortOn("estado");
+				arrayAbiertoCerradoFT.sortOn("estado");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada  tipo de Documentos Recibidos
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalAbiertoCerradosET:Array = new Array();
+				arrayTotalAbiertoCerradosET = arrayAbiertoCerradoET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalAbiertoCerradosFT:Array = new Array();
+				arrayTotalAbiertoCerradosFT = arrayAbiertoCerradoFT.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Estatus y/o situación
+				 * */
+				
+				FormarLosEstados(arrayTotalAbiertoCerradosET,arrayAbiertoCerradoET,_infoAbiertoVsCerradoET);
+				FormarLosEstados(arrayTotalAbiertoCerradosFT,arrayAbiertoCerradoFT,_infoAbiertoVsCerradoFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoAbiertoVsCerradoET,null,'totalDocumentos', _totalClie);
+				else if(_currentType =="FT")
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoAbiertoVsCerradoFT,null,'totalDocumentos', _totalClie);
+				
+				//Para liberar memoria
+				arrayTotalAbiertoCerradosET = new Array();
+				arrayAbiertoCerradoET= new Array();
+				arrayTotalAbiertoCerradosFT= new Array();
+				arrayAbiertoCerradoFT= new Array();
+			}
+			private function FormarLosEstados(TotalEstados:Array,estadosInfo:Array,infoEstados:ArrayCollection):void
+			{
+				
+				var totalDoctoRecibido:int;
+				var currentDoctoRecibido:DocumentoRecibido; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				var totalClientes:int;
+				keys = new Object();
+				var keysCerrados:Object;
+				var keysC:Object;
+				for(var i:int =0; i<TotalEstados.length; i++){
+					j=0;
+					totalDoctoRecibido =0;
+					totalClientes =0;
+					keysCerrados = new Object();
+					
+					currentDoctoRecibido = estadosInfo[j] as DocumentoRecibido;
+					while( (TotalEstados[i] as DocumentoRecibido).estado == currentDoctoRecibido.estado ){
+						
+						totalDoctoRecibido++;
+						if(!keysC.hasOwnProperty(currentDoctoRecibido.nombreEmpresa)){
+							keysC[currentDoctoRecibido.nombreEmpresa] = currentDoctoRecibido.nombreEmpresa;
+							_totalClie++;
+						}
+						if(currentDoctoRecibido.estado == 'Abierto'){
+							if(!keys.hasOwnProperty(currentDoctoRecibido.nombreEmpresa)){
+								keys[currentDoctoRecibido.nombreEmpresa] = currentDoctoRecibido.nombreEmpresa;
+								totalClientes++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentDoctoRecibido.nombreEmpresa) && !keysCerrados.hasOwnProperty(currentDoctoRecibido.nombreEmpresa)){
+								keysCerrados[currentDoctoRecibido.nombreEmpresa] = currentDoctoRecibido.nombreEmpresa;
+								totalClientes++;
+							}
+						}
+						
+						estadosInfo.shift();
+						if(estadosInfo.length >0)
+							currentDoctoRecibido = estadosInfo[j] as DocumentoRecibido;
+						else
+							currentDoctoRecibido =new DocumentoRecibido();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalEstados[i] as DocumentoRecibido).estado.toLocaleUpperCase();
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalDocumentos = totalDoctoRecibido;
+					
+					infoEstados.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+				
+				if(infoEstados.length == 2){
+					/**
+					 * Se invierte el orden para que los de estado cerrado sean los primeros que lleguen a la gráfica y asigne correctamente 
+					 * los colores, El verde para los Cerrados, y rojo para los Abiertos
+					 * */
+					infoEstados.addItem(ObjectUtil.copy(infoEstados[0]));
+					infoEstados.removeItemAt(0);
+					
+				}else if(infoEstados.length ==1){
+					if((infoEstados[0] as ResumenConsulta).etiqueta == 'ABIERTO'){
+						itemResumenConsulta = new ResumenConsulta();
+						itemResumenConsulta.etiqueta = 'CERRADO';
+						itemResumenConsulta.totalClientes = 0;
+						itemResumenConsulta.totalDocumentos = 0;
+						
+						infoEstados.addItemAt(itemResumenConsulta,0);
+					}
+				}
+			}	
+			private function setearElEstado(item:DocumentoRecibido, id:uint, docto:Array):void
+			{
+				var temp:String = item.cerradoAbierto;
+				if(temp != 'Abierto'){
+					item.estado = 'Cerrado';
+				}else{
+					item.estado = 'Abierto';
+				}
+			}
+			private function quitaDuplicados(item:DocumentoRecibido, id:uint, docto:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.estado)){
+					return false;
+				}else{
+					keys[item.estado]= item.estado;
+					return true;
+				}
+			}
+			private function ObtenerTodosLosTipoDoctoET(item:DocumentoRecibido, id:uint, doctoRecibido:Array):Boolean
+			{
+				return item.enTiempo == "ET" ? true : false;
+			}
+			private function ObtenerTodosLosTipoDoctoFT(item:DocumentoRecibido, id:uint, array:Array):Boolean
+			{
+				return item.enTiempo == "FT" ? true : false;
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesVS field="totalDocumentos"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="ABIERTO VS CERRADO" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>

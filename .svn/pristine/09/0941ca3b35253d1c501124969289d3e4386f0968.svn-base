@@ -1,0 +1,747 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:componentes="mx.com.proquifa.vista.vistas.tramitarCompra.componentes.*"
+				xmlns:texto="skins.skin.comun.consultas.panelCtaDetalle.*"
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" 
+				xmlns:label="skins.skin.label.*"
+				xmlns:otros="skins.otros.*"
+				autoDrawBackground="false"
+				xmlns:dateField="skins.skin.dateField.*"
+				xmlns:input="skins.skin.textinput.*"
+				height="100%" width="100%" 
+				resize="calcular(event)" 
+				xmlns:checkBox="mx.com.proquifa.vista.vistas.skin.checkBox.*" 
+				xmlns:chekbox="skins.skin.chekbox.*"
+				xmlns:componentes1="mx.com.proquifa.vista.vistas.registrarConfirmacion.componentes.*" 
+				creationComplete="ini(event)"
+				>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filters.BitmapFilterQuality;
+			import flash.utils.ByteArray;
+			
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RegistroConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.EventoGestorCompras;
+			import mx.com.proquifa.vista.eventos.RegistarArribo.EventoRegistrarArribo;
+			import mx.com.proquifa.vista.eventos.registrarConfirmacion.EventoRegistrarConfirmacion;
+			import mx.com.proquifa.vista.vistas.registrarConfirmacion.toolTip.toolTipCambioPrecioRegistroConfirmacion;
+			import mx.core.IToolTip;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.events.ToolTipEvent;
+			import mx.managers.ToolTipManager;
+			
+			import spark.components.supportClasses.GroupBase;
+			
+			import skins.catalogos.catalogoIconosBotones;
+			import skins.skin.toolTip.toolTipCambioprecios;
+			
+			[Bindable] private var current:RegistroConfirmacion;
+			[Bindable] private var currentObj:Object;
+			[Bindable] private var tipoSegundaVista:String;
+		    [Bindable] private var fechaStringEntrega:String;
+			[Bindable] private var casoStock:Boolean;
+			
+			private var fecha123:Date = new Date;
+			
+			
+			[Bindable] public var sizeFont:Number = 14;
+			[Bindable] public var heightComponentes:Number = 25;
+			[Bindable] public var sizeFont24:Number;	
+			[Bindable] public var indiceActual:String;
+			
+			[Bindable] public var bloqueo:Boolean;
+			[Bindable] public var cambiosAplicados:Boolean;
+			[Bindable] public var colorBoton:uint;
+			[Bindable] public var colorFondo:uint;
+			[Bindable] public var fechaPrefijo:String;
+			
+			[Bindable] public var colorCheck:uint = 0xFFFFFF;
+			public var tipoVistaActual:String;
+			
+			
+			override public function set data(value:Object):void{
+				super.data = value;
+				
+				if(value == null)
+					return ;
+				
+				vistaSecundaria.feaPartida = value.fechaAlmacen;
+				vistaSecundaria.feePartida = value.fechaEstimadaEntrega;
+			    current = value as RegistroConfirmacion;
+				currentObj = value;
+				
+				indiceActual = value.indiceTabla;
+				
+			     if(current.tipoFlete.toLowerCase() == "regular"){
+					if(current.piezasEntregaUnica > 0)
+						imagenTransito.source = catalogoIconosBotones.getInstance().unico_azul;
+					else
+						imagenTransito.source = catalogoIconosBotones.getInstance().programado_azul;
+				}
+				else if(current.tipoFlete.toLowerCase() == "programado"){
+					imagenTransito.source = catalogoIconosBotones.getInstance().programado_azul;
+				}
+				 
+				else if(current.tipoFlete.toLowerCase() == "flete express"){
+					imagenFlete.source = catalogoIconosBotones.getInstance().flete_express_azul
+					imagenTransito.source = catalogoIconosBotones.getInstance().unico_azul;
+				}
+				/*else if(current.tipoFlete.toLowerCase() == "flete"){
+					imagenTransito.source = catalogoIconosBotones.getInstance().flete_express_azul;
+				}*/
+				 
+				 if(current.piezasFleteNormal > 0)
+					 imagenFlete.source = catalogoIconosBotones.getInstance().flete_normal_azul;
+				 else if(current.piezasExpress > 0)
+					 imagenFlete.source = catalogoIconosBotones.getInstance().flete_express_azul
+				
+				definirEstado(current.estadoDisponible,'chkDisponible');
+				definirEstado(current.estadoCancelar,'chkCancelar');
+				definirEstado(current.estadoCambio,'chkCambio');
+				definirEstado(current.estadoBackOrder,'chkBack');
+				bloquear();
+				vistaSecundaria.piezas = current.cantidadCompra;
+				if(!current.modificado)
+					resetAll();
+				else
+					asignarValores();
+			
+				
+				var diferencia:int;
+				if(current.fechaEstimadaEntrega){
+					diferencia = UtilsFecha.regresaDiferenciaEntreFechasEnDias(new Date,current.fechaEstimadaEntrega);
+					if(diferencia > 2 )
+						lblFEE.setStyle("color",0x72a641);//VERDE
+					else if(diferencia < 0)
+						lblFEE.setStyle("color",0xbe0016);//ROJO
+					else
+						lblFEE.setStyle("color",0xda941b);//AMARILLO
+				}else{
+					lblFEE.setStyle("color",0x72a641);
+				}
+				
+				if(current.entregarEn.toLowerCase() == "rm trading")
+					fechaPrefijo = "RMT";
+				else if(current.entregarEn.toLowerCase() == "proveedora" || current.entregarEn.toLowerCase() == "proquifa")
+					fechaPrefijo = "PQF";
+				else if(current.entregarEn.toLowerCase() == "phs-usa" || current.entregarEn.toLowerCase() == "pharma")
+					fechaPrefijo = "PHS";
+					
+				vistaSecundaria.fechaPrefijo = fechaPrefijo;
+				if(current.segundaVista){
+					abrirSegundaVista(current.segundaVistaTipo);
+					seleccionarChkCorrecto(current.segundaVistaTipo);
+			
+				}
+				else{
+					grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = false;
+					
+				}
+				this.invalidateDisplayList();
+		
+				
+				if (current.cliente == "STOCK")
+				{
+					fechaStringEntrega =  "N/A";	
+					casoStock = false;
+					
+				}
+				else{
+				
+				
+					fechaStringEntrega = UtilsFecha.formatoFechaDDMMMYYYY (current.fechaEstimadaEntrega);
+					casoStock = true;
+				}
+				
+				
+				
+				
+			}
+			
+			protected function calcular(event:ResizeEvent):void
+			{
+				sizeFont = (14 / 1257) * (unscaledWidth);
+				sizeFont = sizeFont > 14 ? 14:sizeFont;
+				sizeFont = sizeFont < 12 ? 12:sizeFont;
+			}
+			
+			protected function cambio(event:EventoRegistrarConfirmacion):void
+			{
+				var eve:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion(EventoRegistrarConfirmacion.CLIC_MANDAINDEX);
+				eve.indiceActual = itemIndex;
+				eve.indiceActualDividido = current.indiceTabla;
+				dispatchEvent(eve);
+				
+				var tipo:String = event.currentTarget.id;
+				abrirSegundaVista(tipo);
+				seleccionarChkCorrecto(tipo);
+				/*current.segundaVista = true;*/
+				
+				var eventSegundo:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion(EventoRegistrarConfirmacion.SEGUNDA_VISTA_ACTIVA);
+				eventSegundo.indiceActual = itemIndex;
+				eventSegundo.indiceActualDividido = current.indiceTabla;
+				eventSegundo.tipoSelect = tipo;
+				dispatchEvent(eventSegundo);
+			}
+			private function abrirSegundaVista(tipo:String):void
+			{
+				
+				switch(tipo)
+				{
+					case "chkDisponible":
+					{
+						colorFondo = 0xe5f0ea;
+						colorBoton = 0x274727;
+						colorCheck = 0x0a6430;
+						tipoSegundaVista = "disponible";
+						break;
+					}
+					case "chkCambio":
+					{
+						colorBoton = 0xac3c0b;
+						colorFondo = 0xfbede5;
+						colorCheck = 0xdc4e12;
+						tipoSegundaVista = "cambio";
+						break;
+					}
+					case "chkBack":
+					{
+						colorBoton = 0x390f51;
+						colorFondo = 0xece6f0;
+						colorCheck = 0x471369;
+						tipoSegundaVista = "back";
+						break;
+					}
+					case "chkCancelar":
+					{
+						colorBoton = 0x790313;
+						colorFondo = 0xf5e5e7;
+						colorCheck = 0x9a0314;
+						tipoSegundaVista = "cancelar";
+						break;
+					}
+						
+					default:
+					{
+						
+						break;
+					}
+				}
+				grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = true;
+				
+				
+				
+			}
+			private function seleccionarChkCorrecto(tipo:String):void
+			{
+				switch(tipo)
+				{
+					case "chkDisponible":
+					{
+						chkDisponible.selected = true;
+						chkCambio.selected = false;
+						chkBack.selected = false;
+						chkCancelar.selected = false;
+						break;
+					}
+					case "chkCambio":
+					{
+						chkDisponible.selected = false;
+						chkCambio.selected = true;
+						chkBack.selected = false;
+						chkCancelar.selected = false;
+						break;
+					}
+					case "chkBack":
+					{
+						chkDisponible.selected = false;
+						chkCambio.selected = false;
+						chkBack.selected = true;
+						chkCancelar.selected = false;
+						break;
+					}
+					case "chkCancelar":
+					{
+						chkDisponible.selected = false;
+						chkCambio.selected = false;
+						chkBack.selected = false;
+						chkCancelar.selected = true;
+						break;
+					}
+						
+					default:
+					{
+						
+						break;
+					}
+				}
+			}
+			
+			protected function desmarcar(event:EventoRegistrarConfirmacion):void
+			{
+				if(cambiosAplicados){
+					grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = false;
+				}else{
+					var eve:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion(EventoRegistrarConfirmacion.CLIC_DESMARCAR);
+					try{
+						if(current.indice != null)
+							eve.indiceActual = int(current.indice);
+						else
+							eve.indiceActual = int(itemIndex+1);
+					}
+					catch(error:Error){
+						trace("No es un numero,"+errorString);						
+					}
+					/*eve.tipoSelect = target;*/
+					eve.tipoSelect = event.tipoSelect;
+					dispatchEvent(eve);
+					grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = false;
+					/*resetAll();*/
+				}
+				
+			}
+			
+			protected function aceptar(event:EventoRegistrarConfirmacion):void
+			{
+				
+				var piezasUsadas:int = vistaSecundaria.obtenerPiezas();
+				var piezasTotal:int = current.cantidadCompra;
+				var tipoChk:String = "";
+				/*data.estadoDisponible = "editar";*/
+				
+				var datefeeProveedor:Date = vistaSecundaria.feeProveedor;
+				var datefechaAlmacen:Date = vistaSecundaria.feaRMT;
+				var datefechaMonitoreo:Date = vistaSecundaria.fechaMonitoreo;
+				var fechaNueva:Date = vistaSecundaria.fechaNueva;
+				var justificacion:String = vistaSecundaria.justificacion;
+				var motivo:String = vistaSecundaria.motivo;
+				var archivo:ByteArray = vistaSecundaria.archivo;
+				var nombreArchivo:String = vistaSecundaria.nombreArchivo;
+				switch(event.tipoSelect)
+				{
+					case "disponible":
+					{
+						/*current.fechaAlmacen = vistaSecundaria.feaRMT;*/
+						current.fechaAlmacen = datefechaAlmacen;
+						tipoChk = "disponible";
+						break;
+					}
+					case "back":
+					{
+						/*piezasUsadas = int(txtBackPiezas.text);*/
+						current.fechaProveedor = datefeeProveedor;
+						/*current.fechaAlmacen = vistaSecundaria.fea1rAlmacen;*/
+						current.fechaAlmacen = datefechaAlmacen;
+						current.fechaNueva = fechaNueva;
+						current.fechaMonitoreo = datefechaMonitoreo;
+						current.comentarios = justificacion;
+						current.documento = archivo;
+						current.nombreDocumento = nombreArchivo;
+						tipoChk = "back";
+						break;
+					}
+					case "cambio":
+					{
+						/*piezasUsadas = int(txtPiezasCambio.text);*/
+						current.fechaNueva = fechaNueva;
+						current.fechaAlmacen = datefechaAlmacen;
+						current.motivo = motivo;
+						current.comentarios = justificacion;
+						current.documento = archivo;
+						current.nombreDocumento = nombreArchivo;
+						tipoChk = "cambio";
+						break;
+					}
+					case "cancelar":
+					{
+						/*piezasUsadas = int(txtCancelarPiezas.text);*/
+						current.motivo = motivo;
+						current.comentarios = justificacion;
+						tipoChk = "cancelar";
+						
+						break;
+					}
+						
+					default:
+					{
+						break;
+					}
+						
+				}
+				
+				if((piezasTotal-piezasUsadas) >= 0){
+					var eve:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion(EventoRegistrarConfirmacion.CLIC_ACEPTAR_DIVIDIR_LISTA);
+					eve.indiceDividir = itemIndex;
+					eve.indiceActualDividido = current.indiceTabla;
+					eve.piezas = piezasUsadas;
+					eve.tipoSelect = tipoChk;
+					dispatchEvent(eve);
+					grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = false;
+					
+				}else{
+					cambiosAplicados = true;
+				}
+			}
+			
+			protected function ini(event:FlexEvent):void
+			{
+			}
+			
+			private function definirEstado(value:String,id:String):void
+			{
+				if(value == "normal")
+					this[id].currentState = "normal";
+				else if(value == "editar")
+					this[id].currentState = "editar";
+				else if(value == "restablecer")
+					this[id].currentState = "restablecer";
+				
+				if(id == 'chkDisponible' && value == "editar")
+					tipoSegundaVista = 'disponible';
+				else if(id == 'chkCancelar' && value == "editar")
+					tipoSegundaVista = 'cancelar';
+				else if(id == 'chkCambio' && value == "editar")
+					tipoSegundaVista = 'cambio';
+				else if(id == 'chkBack' && value == "editar")
+					tipoSegundaVista = 'back';
+				
+			}
+			private function bloquear():void
+			{
+				chkDisponible.enabled = true;
+				chkCancelar.enabled = true;
+				chkCambio.enabled = true;
+				chkBack.enabled = true;
+				vistaSecundaria.currentState = "normal";
+				
+				if(current.estadoDisponible == "editar"){
+					/*if(current.estadoCancelar == "restablecer")*/
+					vistaSecundaria.currentState = "editar";
+					chkCancelar.enabled = false;
+					chkCambio.enabled = false;
+					chkBack.enabled = false;
+				}
+				else if(current.estadoCancelar == "editar"){
+					vistaSecundaria.currentState = "editar";
+					chkDisponible.enabled = false;
+					chkCambio.enabled = false;
+					chkBack.enabled = false;
+				}
+				else if(current.estadoBackOrder == "editar"){
+					vistaSecundaria.currentState = "editar";
+					chkDisponible.enabled = false;
+					chkCambio.enabled = false;
+					chkCancelar.enabled = false;
+				}
+				else if(current.estadoCambio == "editar"){
+					vistaSecundaria.currentState = "editar";
+					chkDisponible.enabled = false;
+					chkCancelar.enabled = false;
+					chkBack.enabled = false;
+				}
+				
+				if(current.bloqueoRestablecer == "disponible")
+					chkDisponible.enabled = true;
+				else if(current.bloqueoRestablecer == "back")
+					chkBack.enabled = true;
+				else if(current.bloqueoRestablecer == "cambio")
+					chkCambio.enabled = true;
+				else if(current.bloqueoRestablecer == "cancelar")
+					chkCancelar.enabled = true;
+				
+				if(current.estadoDisponible == "restablecer" && current.bloqueoRestablecer != "disponible")
+					chkDisponible.enabled = false;
+				if(current.estadoCancelar == "restablecer" && current.bloqueoRestablecer != "cancelar")
+					chkCancelar.enabled = false;
+				if(current.estadoCambio == "restablecer" && current.bloqueoRestablecer != "cambio")
+					chkCambio.enabled = false;
+				if(current.estadoBackOrder == "restablecer" && current.bloqueoRestablecer != "back")
+					chkBack.enabled = false;
+			}
+			
+			protected function restablecer(event:EventoRegistrarConfirmacion,target:String):void
+			{
+				var eve:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion(EventoRegistrarConfirmacion.CLIC_ACEPTAR_RESTABLECER_LISTA);
+				eve.indiceActual = itemIndex -1;
+				eve.indiceDividir = itemIndex;
+				eve.piezas = current.cantidadCompra;
+				eve.tipoSelect = target;
+				dispatchEvent(eve);
+			}
+			
+			private function resetAll():void
+			{
+				chkDisponible.selected = false;
+				chkCambio.selected = false;
+				chkBack.selected = false;
+				chkCancelar.selected = false;
+				vistaSecundaria.resetAll();
+			}
+			
+			protected function cancelar(event:EventoRegistrarConfirmacion):void
+			{
+				if(cambiosAplicados){
+					grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = false;
+				}else{
+					chkDisponible.selected = false;
+					chkCambio.selected = false;
+					chkBack.selected = false;
+					chkCancelar.selected = false;
+					
+					grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = false;
+				}
+				
+				
+				if(event.tipoSelect == "aceptarEditar")
+				{
+					tipoVistaActual = vistaSecundaria.tipoSegundaVista;
+				
+					if(tipoVistaActual == "cambio" )
+					{
+						if( vistaSecundaria.fechaNueva >= vistaSecundaria.fechaHoy && vistaSecundaria.fechaNueva > vistaSecundaria.feePartida && vistaSecundaria.fechaNueva > vistaSecundaria.dateFeaRmtCambio.selectedDate)
+						{
+							current.fechaMonitoreo = vistaSecundaria.fechaMonitoreo;
+							current.motivo = vistaSecundaria.motivo;
+							current.documento = vistaSecundaria.archivo;
+							current.nombreDocumento = vistaSecundaria.nombreArchivo;
+							current.comentarios = vistaSecundaria.justificacion; 
+							current.fechaAlmacen = vistaSecundaria.feaRMT;
+							current.fechaProveedor = vistaSecundaria.feeProveedor;
+							current.fechaNueva = vistaSecundaria.fechaNueva;
+							data.segundaVista = false;
+						}
+						else
+						{
+							if(vistaSecundaria.archivo != null)
+							{
+								vistaSecundaria.pdfVerde.visible = vistaSecundaria.pdfVerdeC.includeInLayout = true;
+								vistaSecundaria.pdfGris.visible = vistaSecundaria.pdfGrisC.includeInLayout = false;
+								
+							}
+							alertaSingleton.show("Tu NUEVA FEE no es válida ");	
+							grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = true;
+						}
+					}
+					else if(tipoVistaActual == "back" )
+					{
+						if( vistaSecundaria.fechaNueva >= vistaSecundaria.fechaHoy && vistaSecundaria.fechaNueva> vistaSecundaria.feePartida && vistaSecundaria.fechaNueva > vistaSecundaria.dateFea1Back.selectedDate)
+						{
+							
+							current.fechaMonitoreo = vistaSecundaria.fechaMonitoreo;
+							current.motivo = vistaSecundaria.motivo;
+							current.documento = vistaSecundaria.archivo;
+							current.nombreDocumento = vistaSecundaria.nombreArchivo;
+							current.comentarios = vistaSecundaria.justificacion; 
+							current.fechaAlmacen = vistaSecundaria.feaRMT;
+							current.fechaProveedor = vistaSecundaria.feeProveedor;
+							current.fechaNueva = vistaSecundaria.fechaNueva;
+							data.segundaVista = false;
+						}
+						else
+						{
+							if(vistaSecundaria.archivo != null)
+							{
+								vistaSecundaria.pdfVerde.visible = vistaSecundaria.pdfVerdeC.includeInLayout = true;
+								vistaSecundaria.pdfGris.visible = vistaSecundaria.pdfGrisC.includeInLayout = false;
+								
+							}
+							alertaSingleton.show("Tu NUEVA FEE no es válida ");	
+							grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = true;
+						}
+						
+						
+					}
+				}
+				else{
+					vistaSecundaria.feaRMT = current.fechaAlmacen;
+					vistaSecundaria.feeProveedor = current.fechaProveedor;
+					vistaSecundaria.fechaNueva = current.fechaNueva;
+					vistaSecundaria.fechaMonitoreo = current.fechaMonitoreo;
+					vistaSecundaria.justificacion = current.comentarios; 
+					vistaSecundaria.motivo = current.motivo;
+					vistaSecundaria.archivo = current.documento;
+					vistaSecundaria.nombreArchivo = current.nombreDocumento;
+					data.segundaVista = false;
+				}
+				
+			}	
+			
+			
+			
+			protected function editar(event:EventoRegistrarConfirmacion):void
+			{
+				var tipo:String = event.currentTarget.id;
+				abrirSegundaVista(tipo);
+				grpVistaSecundaria.visible = grpVistaSecundaria.includeInLayout = true;
+				
+				bloquear();
+				
+				var eventSegundo:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion(EventoRegistrarConfirmacion.SEGUNDA_VISTA_ACTIVA);
+				eventSegundo.indiceActual = itemIndex;
+				eventSegundo.tipoSelect = tipo;
+				dispatchEvent(eventSegundo);
+			}
+			private function esperarReset():void
+			{
+				resetAll();
+			}
+			private function asignarValores():void
+			{
+				vistaSecundaria.feaRMT = current.fechaAlmacen;
+				vistaSecundaria.feeProveedor = current.fechaProveedor;
+				vistaSecundaria.fechaNueva = current.fechaNueva;
+				vistaSecundaria.fechaMonitoreo = current.fechaMonitoreo;
+				vistaSecundaria.justificacion = current.comentarios; 
+				vistaSecundaria.motivo = current.motivo;
+				vistaSecundaria.archivo = current.documento;
+				vistaSecundaria.nombreArchivo = current.nombreDocumento;
+			}
+			
+			protected function hgroup1_toolTipShowHandler(event:ToolTipEvent):void
+			{
+				var myTip:IToolTip;
+				myTip = ToolTipManager.currentToolTip;
+				var currentWidth:Number = event.currentTarget.width;
+				var point:Point = new Point(event.currentTarget.x,event.currentTarget.y);
+				var gPoint:Point = (event.currentTarget.parent as GroupBase).localToGlobal(point);
+				myTip.x = (gPoint.x + (preciio.width - 83));
+				myTip.y = (gPoint.y + (preciio.height + 16));
+				
+			}
+			
+			protected function createCustomToolTip($text:String,eve:ToolTipEvent):void
+			{
+				var customTolTip:toolTipCambioPrecioRegistroConfirmacion = new toolTipCambioPrecioRegistroConfirmacion;
+				customTolTip.bodyText = $text;	
+				eve.toolTip = customTolTip;
+			}
+			
+			protected function enviarCambioMonto(event:MouseEvent):void
+			{
+				var eve:EventoRegistrarConfirmacion = new EventoRegistrarConfirmacion (EventoRegistrarConfirmacion.OBTENER_ID_ORDENCOMPRA_MODIFICADA);
+				eve.indiceAcambiar = itemIndex;
+				eve.idOC = data.idPartidaCompra;
+				eve.numPiezas = data.cantidadCompra;
+				dispatchEvent(eve);
+				
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="normal"/>
+		<s:State name="hovered"/>
+		<s:State name="selected"/>
+	</s:states>
+	
+	<s:Group width="100%" height="100%" >
+		<s:Rect width="100%" height="100%" bottom="0">
+			<s:fill>
+				<!--<s:SolidColor color="#FFFFFF" color.selected="#FFFFFF" color.hovered="#f4f4f5" />-->
+				<s:SolidColor color="#FFFFFF" color.selected="#FFFFFF" color.hovered="#FFFFFF" />
+			</s:fill>
+		</s:Rect>
+		
+		<s:VGroup width="100%" height="100%" gap="0">
+			
+			
+			<!--//////////////////////////////  GRUPO PRINCIPAL QUE SE MUESTRA //////////////////////////////-->
+			<s:HGroup width="100%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center" paddingTop="10" paddingBottom="10">
+				<s:HGroup width="6%" height="100%" verticalAlign="middle" horizontalAlign="center" id="grpNormal">
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="{''+(indiceActual)}" textAlign="center" color="#3e3e3d" width="100%" height="100%" verticalAlign="middle"/>
+				</s:HGroup>
+				<s:VGroup width="24%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<s:Label styleName="tab_texto_14_Helvetica" width="100%" fontSize="{sizeFont}" fontWeight="normal" color="#3e3e3d" 
+							 text="{current.codigo+' '+current.concepto+' '+current.fabrica}" textAlign="left" maxDisplayedLines="2"/>
+					<!-- current.cantidad+' '+current.unidad+ -->
+					<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="left">
+						
+						<s:VGroup>
+							<s:HGroup verticalAlign="middle" >
+								<mx:Image id="imagenTransito" source="{catalogoIconosBotones.getInstance().programado_azul}" smoothBitmapContent="true"/>
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="·" fontFamily="Helvetica" color="#008894" maxDisplayedLines="1"/>
+								<mx:Image id="imagenFlete" smoothBitmapContent="true" source="{catalogoIconosBotones.getInstance().flete_normal_azul}"/>
+								<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" text="· {data.cantidadCompra} pzas ·" fontFamily="Helvetica" color="#008894" maxDisplayedLines="1"/>
+							</s:HGroup>
+							
+							<s:Label height="1" text=""  maxDisplayedLines="1"/>
+							
+						</s:VGroup> 
+						 
+						<s:VGroup>
+							<s:Label id="preciio" styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" toolTip=" " toolTipCreate="createCustomToolTip('Modificar Costo',event)" toolTipShow="hgroup1_toolTipShowHandler(event)"
+									 text=" CU {current.monedaSimbolo}{UtilsFormatosNumericos.precisionADosDecimalesConComas(data.precioUnitario)}" fontFamily="Helvetica" color="#008894" maxDisplayedLines="1" click="enviarCambioMonto(event)"/>
+							<otros:LineaPunteada color="#990099" width="{preciio.width}" height="1"  bottom="0" />
+						</s:VGroup> 
+						
+						<s:VGroup>
+							<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" id="montoTotalL"  text="· CT: {current.monedaSimbolo}{UtilsFormatosNumericos.precisionADosDecimalesConComas(data.montoTotal)}"  fontFamily="Helvetica" color="#008894" maxDisplayedLines="1"/>
+							<s:Label height="1" text=""  maxDisplayedLines="1"/>
+						</s:VGroup> 
+					</s:HGroup>  
+				</s:VGroup> 
+				<s:VGroup width="16%" height="100%" verticalAlign="middle" horizontalAlign="center">
+					<s:Label styleName="tab_texto_14_Helvetica" id="lblCliente" width="100%" fontSize="{sizeFont}" color="#424242" verticalAlign="middle" 
+							 text="{current.cliente}" maxDisplayedLines="2" textAlign="center" />
+					<s:Label styleName="tab_texto_14_Helvetica" id="lblFolio" width="100%"  fontSize="{sizeFont}" fontWeight="bold" color="#008894" verticalAlign="middle" 
+							 text="{current.cpedido}" maxDisplayedLines="1" textAlign="center"/>
+					<s:Label styleName="tab_texto_14_Helvetica" id="lblFEE" width="100%"  fontSize="{sizeFont}" color="#000000" verticalAlign="middle" 
+							 text="FEE: {fechaStringEntrega}" maxDisplayedLines="1" textAlign="center"/>
+				</s:VGroup>  
+				<s:VGroup width="14%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:HGroup width="100%" height="100%" verticalAlign="middle" horizontalAlign="center">
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" color="#424242" text="{fechaPrefijo}:" />
+						<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFont}" color="#008894" text="{current.fechaAlmacenString}" />
+					</s:HGroup>  
+				</s:VGroup>  
+				<s:VGroup width="10%" height="100%" verticalAlign="middle" horizontalAlign="center" paddingBottom="-10" paddingTop="-10" >
+					<componentes1:casillaCheckCR id="chkCancelar" width="100%" height="100%" tipo="chkCancelar" fontSize="{sizeFont}" 
+												 clickOverCheck="cambio(event)" clickOverRestablecer="restablecer(event,'cancelar')" clickOverEditar="editar(event)" />
+				</s:VGroup>
+				<s:VGroup width="10%" height="100%" verticalAlign="middle" horizontalAlign="center" paddingBottom="-10" paddingTop="-10" >
+					<componentes1:casillaCheckCR id="chkBack" width="100%" height="100%" tipo="chkBack" fontSize="{sizeFont}" 
+												 clickOverCheck="cambio(event)" clickOverRestablecer="restablecer(event,'back')" clickOverEditar="editar(event)" />
+				</s:VGroup> 
+				<s:VGroup width="10%" height="100%" verticalAlign="middle" horizontalAlign="center" paddingBottom="-10" paddingTop="-10" enabled="{casoStock}">
+					<componentes1:casillaCheckCR id="chkCambio" width="100%" height="100%" tipo="chkCambio" fontSize="{sizeFont}" 
+												 clickOverCheck="cambio(event)" clickOverRestablecer="restablecer(event,'cambio')" clickOverEditar="editar(event)" />
+				</s:VGroup>  
+				<s:VGroup width="10%" height="100%" verticalAlign="middle" horizontalAlign="center" paddingBottom="-10" paddingTop="-10" enabled="{casoStock}">
+					<componentes1:casillaCheckCR id="chkDisponible" width="100%" height="100%" tipo="chkDisponible" fontSize="{sizeFont}" 
+												 clickOverCheck="cambio(event)" clickOverRestablecer="restablecer(event,'disponible')" clickOverEditar="editar(event)" />
+				</s:VGroup>  
+				
+				
+				
+			</s:HGroup>  
+			
+			
+			<!--<otros:LineaDivision id="linea" width="100%" height="2" color="#f4f4f4" />-->
+			<s:Rect id="recta" width="100%" height="1" depth="2">
+				<s:fill>
+					<s:SolidColor id="solidC" color="#f3f3f3"/>
+				</s:fill>
+				<s:filters>
+					<s:DropShadowFilter alpha="{grpVistaSecundaria.visible==true?0.5:0}" angle="90" blurX="4" blurY="4" color="#000000" 
+										distance="2" knockout="false" 
+										quality="{BitmapFilterQuality.HIGH}" strength="1"/>
+				</s:filters>
+			</s:Rect>
+			<!--//////////////////////////////  GRUPO PARA VISTA SECUNDARIA //////////////////////////////-->
+			<s:Group width="100%" height="100%" id="grpVistaSecundaria" visible="false" includeInLayout="false" >
+				<componentes1:segundaVista_PartidasOperacionesCR width="100%" height="100%" id="vistaSecundaria" tipoSegundaVista="{tipoSegundaVista}" 
+																 colorBoton="{colorBoton}" colorFondo="{colorFondo}" clickCancelarBoton="cancelar(event)"
+																 clickDesmarcarBoton="desmarcar(event)" clickAceptarBoton="aceptar(event)" piezas="{data.cantidadCompra}"/>
+			</s:Group>
+		</s:VGroup> 
+		
+	</s:Group> 
+</s:ItemRenderer>

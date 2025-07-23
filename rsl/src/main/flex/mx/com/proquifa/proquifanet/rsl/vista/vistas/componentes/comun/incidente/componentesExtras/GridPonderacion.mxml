@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox  xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" creationComplete="init()" xmlns:label="skins.skin.label.*">
+	<mx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoPonderacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.controls.Alert;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.events.MessageEvent;
+			import mx.messaging.events.MessageFaultEvent;
+			
+			public var totalPendientes:int;
+			[Bindable]
+			public var Incidentes:ArrayCollection = new ArrayCollection();
+			
+			private var usuario:String ="";
+			
+			[Bindable]
+			public var DatosGrafica:ArrayCollection = new ArrayCollection();
+			
+			private var consecutivogrid:int = 0;
+			
+			private var consumidorPonderacion:Consumer = new Consumer();
+			private var canalPonderacion:AMFChannel;
+			private var canalesPonderacion:ChannelSet;
+			
+			
+			private function init():void{
+				this.consumidorPonderacion.destination = "actualizacionService";
+				this.consumidorPonderacion.addEventListener("fault",falloconsumidor);
+				this.consumidorPonderacion.addEventListener(MessageEvent.MESSAGE,actualizar);
+				this.canalPonderacion = new AMFChannel("my-polling-amf", Destinos.END_POINT_MENSAJERIA);
+				this.canalesPonderacion = new ChannelSet();
+				this.canalesPonderacion.addChannel(canalPonderacion);
+				this.consumidorPonderacion.channelSet = this.canalesPonderacion;
+				this.consumidorPonderacion.subscribe();
+				this.usuario = DatosGlobales.getInstance()._usuario.usuario;
+				this.traerponderacion();
+			}
+			
+			
+			private function falloconsumidor(event:MessageFaultEvent):void{
+				Alert.show("Error en el consumidor de Ponderacion","Error");
+			}
+			
+			private function actualizar(mensaje:MessageEvent):void{
+				if(mensaje.message.headers["Destino"] == "Ponderacion" && mensaje.message.headers["Usuario"] == this.usuario){
+					this.traerponderacion();
+				}
+			}
+			
+			public function traerponderacion():void{
+				
+				var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.TRAER_PONDERACION);
+				evento._usuario = this.usuario;
+				this.dispatchEvent(evento);
+			}
+			
+			public function set recibir_IncidentesPonderacion(datos:ArrayCollection):void{
+				this.Incidentes = new ArrayCollection();
+				this.DatosGrafica = new ArrayCollection();
+				if(datos.length != 0){
+					this.consecutivogrid =0;
+					this.Incidentes = datos;
+					var atiempo:Object = {};
+					var fueradetiempo:Object = {};
+					atiempo["valor"] = 0;
+					fueradetiempo["valor"] = 0;
+					for(var m:int = 0; m<this.Incidentes.length;m++){
+						this.Incidentes[m].diasAtraso > 0 ? fueradetiempo.valor = fueradetiempo.valor + 1 : atiempo.valor = atiempo.valor + 1;
+					}					
+					atiempo["label"] = "Total de pendientes En tiempo ( " + atiempo.valor + " )";
+					fueradetiempo["label"] = "Total de pendientes Fuera de tiempo ( " + fueradetiempo.valor + " )";
+					this.DatosGrafica.addItem(atiempo);
+					this.DatosGrafica.addItem(fueradetiempo);
+					this.totalPendientes = atiempo.valor + fueradetiempo.valor;
+					
+					//se encoge la tabla y crece la grafica. 
+					this.dtgPoderacion.percentHeight = 50;
+					this.spcr.percentHeight = 1;	
+					this.vbxGrafica.percentHeight = 50
+				}else{
+					this.dtgPoderacion.percentHeight = 100;
+					this.spcr.percentHeight = 0;	
+					this.vbxGrafica.height = 0;
+				}
+			}
+			
+			/* private function formatofecha(item:Object, column:DataGridColumn):String{
+				var fecha:String = "";
+				fecha = this.validadorfecha.format(item[column.dataField]);
+				return fecha;
+			}
+			
+			private function porcentaje(item:Object,colum:DataGridColumn):String{
+				return item[colum.dataField].toString() + "%";
+			}
+			 */
+			
+			public function consecutivos():String{
+				this.consecutivogrid = this.consecutivogrid + 1;
+				return this.consecutivogrid.toString();
+			}
+			/**
+			 * Metodo usado para darle formato a los DATATIPS del la grafica del Pie (en tiempo y fuera de tiempo)
+			 */ 
+			public function dtFunc(hd:HitData):String {
+				var porcentaje:Number = new Number;
+				porcentaje = (hd.item.valor * 100 ) /this.totalPendientes;
+				if( hd.item.label.substring(0,35) == "Total de pendientes Fuera de tiempo"){
+					return 	"<B>Fuera de Tiempo:</B> "+ porcentaje + "<B>%</B>" + "<BR>" +"<B>No. de pendientes:</B> "+ hd.item.valor + "<BR>";
+				}else{
+					return 	"<B>En Tiempo:</B> "+ porcentaje + "<B>%</B>" + "<BR>" +"<B>No. de pendientes:</B> "+ hd.item.valor + "<BR>";
+				}
+			}
+		]]>
+	</mx:Script>
+	<mx:SolidColor id="sc1" color="0x32CD32"/>
+	<mx:SolidColor id="scPorCobrar" color="0xFF0000"/>
+	<mx:SeriesInterpolate id="interpolarpiechart" duration="1000"/>
+	<mx:DateFormatter id="validadorfecha" formatString="DD/MM/YYYY"/>
+	<mx:VBox width="100%" height="100%" verticalGap="0">
+		<mx:DataGrid dataProvider="{this.Incidentes}" rowCount="10" width="100%" textAlign="center"  height="100%" id="dtgPoderacion">
+			<mx:columns>
+				<mx:DataGridColumn headerText="#" dataField="numFila"/>
+				<mx:DataGridColumn headerText="INC" dataField="folio"/>
+				<mx:DataGridColumn headerText="Número de Acciones" dataField="numeroAcciones"/>
+				<!--Las columnas que en su dataField presentan  la palabra Formato al final de su propiedad fueron modificadas en el modelo para darles formato-->
+				<mx:DataGridColumn headerText="En espera desde" dataField="fechaFormato" />
+				<mx:DataGridColumn headerText="Días de atraso" dataField="diasAtraso"/>
+				<mx:DataGridColumn headerText="Verificó" dataField="verifico" />
+				<mx:DataGridColumn headerText="Tipo" dataField="tipo"/>
+				<mx:DataGridColumn headerText="Eficacia global esperada" dataField="eficaciaGlobalFormato"/>
+				<mx:DataGridColumn headerText="Eficacia global en verificación" dataField="eficaciaGlobalVFormato"/>
+				<mx:DataGridColumn headerText="">
+					<mx:itemRenderer>
+						<mx:Component>
+							<mx:LinkButton textDecoration="underline" color="#0C4AFC"  label="Ponderar" click="ejecutar()">
+								<mx:Script>
+									<![CDATA[
+										import mx.com.proquifa.proquifanet.rsl.vista.eventos.incidentes.EventoPonderacion;
+										import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.incidentes.Incidente;
+										private function ejecutar():void{
+											var evento:EventoPonderacion = new EventoPonderacion(EventoPonderacion.OBTENER_PONDERACION);
+											evento._incidente = data as Incidente;
+											dispatchEvent(evento);
+										}
+									]]>
+								</mx:Script>
+							</mx:LinkButton>
+						</mx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:Spacer width="0" id="spcr"/>
+		<mx:VBox height="0" width="100%" borderStyle="solid" id="vbxGrafica">
+			<!--<mx:Label text="Tasa de espera" fontSize="20" width="100%" paddingTop="10" paddingLeft="10"/>-->
+			<label:labelSubtitulo text="Tasa de espera" paddingTop="10" paddingLeft="10"/>
+			<mx:PieChart showDataTips="true" dataProvider="{this.DatosGrafica}" height="100%" width="100%" id="piechart1" dataTipFunction="dtFunc" >
+				<mx:series>
+					<mx:PieSeries showDataEffect="{interpolarpiechart}" displayName="Incidentes" field="valor" nameField="label" labelPosition="callout" labelField= "label" fills="{[sc1, scPorCobrar]}"/>
+				</mx:series>
+			</mx:PieChart>
+		</mx:VBox>
+	</mx:VBox>	
+</mx:VBox>

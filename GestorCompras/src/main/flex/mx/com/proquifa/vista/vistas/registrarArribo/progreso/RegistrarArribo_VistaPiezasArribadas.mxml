@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:otros="skins.otros.*"
+		  width="100%" height="100%" paddingTop="40" gap="0" paddingBottom="20"
+		  creationComplete="init()"
+		  >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.vista.eventos.RegistarArribo.EventoRegistrarArribo;
+			import mx.com.proquifa.vista.modelo.RegistrarArribp.OrdenDespachoArribado;
+			import mx.com.proquifa.vista.modelo.RegistrarArribp.ProductosArribados;
+			import mx.events.FlexEvent;
+			
+			[Bindable] private var font16:int;
+			[Bindable] private var font18:int;
+			private var _partidasFinal:ArrayCollection;
+			
+			public function init():void
+			{
+				addEventListener("realizarCalculoUpdate",calculo,false,0,true);
+			}
+			
+			private var sqlRecibe:Query;
+			private var arreglo:ArrayCollection;
+			public function set recibePartidasArribadas($partidas:ArrayCollection):void
+			{
+				if(!$partidas)
+					return;
+				
+				sqlRecibe = new Query($partidas,['fabrica']);
+				arreglo = new ArrayCollection();
+				
+				
+				var fabricas:Array = sqlRecibe.getPunteros(['fabrica']);
+				
+				for (var i:int = 0; i < fabricas.length; i++) 
+				{
+					if (fabricas[i] !== 'null' ) {
+						var fabricasTemp:Array = sqlRecibe.getPunteros([fabricas[i]]);	
+						if(fabricasTemp.length > 0){
+							var currentPa:PartidaCompra = sqlRecibe.universo.getItemAt(fabricasTemp[0]) as PartidaCompra
+							var tmp:ProductosArribados = new ProductosArribados();
+							tmp.numFila = i + 1;  
+							tmp.nombreFletera = currentPa.fabrica;
+							tmp.pzsXarribar = sqlRecibe.getSumarCampo('cantidadCompra',fabricasTemp);
+							tmp.listaProductos = generaListaInterna( sqlRecibe.armarLista(fabricasTemp));
+							arreglo.addItem(tmp);
+						}
+					}
+				}
+				
+				listProductos.dataProvider = arreglo; 
+				generaFooter(arreglo);
+			}
+			
+			public function refresh():void
+			{
+				if(arreglo)
+					listProductos.dataProvider = arreglo; 
+			}
+			
+			protected function generaListaInterna($productos:ArrayCollection):ArrayCollection
+			{
+				var arregloFinal:ArrayCollection = new ArrayCollection();
+				for (var i:int = 0; i < $productos.length; i++) 
+				{
+					var cur:PartidaCompra = $productos[i] as PartidaCompra;
+					var tmp:ProductosArribados = new ProductosArribados();
+					tmp.descripcion =  cur.codigo + " " + cur.descripcionProducto;
+					tmp.pzsXarribar = cur.cantidadCompra;
+					arregloFinal.addItem(tmp);
+				}
+				
+				return arregloFinal;
+			}
+			
+			public function clear():void
+			{
+				lblArribado.text = "";
+				lblFaltante.text = "";
+				lblporArribar.text = "";
+				lblSobrante.text = "";
+				lbltotalProductos.text = "";
+				listProductos.dataProvider = null;
+				listProductos.dataProvider = new ArrayCollection();
+				sqlRecibe = null;
+				sql = null;
+				arreglo = null;
+				_partidasFinal = null;
+			}
+			
+			private function calculo(eert:Event):void
+			{
+				var arre:ArrayCollection = listProductos.dataProvider as ArrayCollection;
+				generaFooter(arre);
+				var error:Boolean = false;
+				
+				var update:EventoRegistrarArribo = new EventoRegistrarArribo(EventoRegistrarArribo.VALIDAR_ACTUALIZAR_BOTONERA);
+				update.vieneDe = "piezasArribadas";
+				
+				for (var i:int = 0; i < arre.length; i++) 
+				{
+					var tmp:ProductosArribados = arre[i] as ProductosArribados;
+					if(tmp.pzsArribadas < 0)
+					{
+						update.validado = false;
+						dispatchEvent(update);
+						error = true;
+						break;
+					}
+				}
+				
+				if(!error)
+				{
+					update.validado = true;
+					dispatchEvent(update);
+				}
+				
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				
+				font16 = (16 / 1965) * (unscaledWidth);
+				font18 = (18 / 1965) * (unscaledWidth);
+				
+				font16 = font16 > 16 ? 16:font16;
+				font16 = font16 < 10 ? 10:font16;
+				
+				font18 = font18 > 18 ? 18:font18;
+				font18 = font18 < 12 ? 12:font18;
+				
+			}
+			
+			private var sql:Query;
+			private function generaFooter($arreglo:ArrayCollection):void
+			{
+				sql = new Query($arreglo,['nombreFletera'],true);
+				lbltotalProductos.text = "#" + $arreglo.length.toString();
+				lblporArribar.text =  sql.getSumarCampo('pzsXarribar',new Array,'',true).toString();
+				var arribado:int =  sql.getSumarCampo('pzsArribadas',new Array,'',true);
+				var faltante:Number =  sql.getSumarCampo('pzsFaltantes',new Array,'',true);
+				var sobrante:Number =  sql.getSumarCampo('pzsSobrantes',new Array,'',true);
+				
+				lblArribado.text =  arribado == -1 ? '0':arribado.toString();
+				
+				if(faltante > 0)
+				{
+					lblFaltante.text = "-"+faltante.toString();
+					lblFaltante.setStyle("color",0xec911c);
+				}
+				else
+				{
+					lblFaltante.text = "0";
+					lblFaltante.setStyle("color",0x52a434);
+				}
+				
+				if(sobrante > 0)
+				{
+					lblSobrante.text = "+"+sobrante.toString();
+					lblSobrante.setStyle("color",0xec911c);
+				}
+				else
+				{
+					lblSobrante.text = "0";
+					lblSobrante.setStyle("color",0x52a434);
+				}
+			}
+			
+			public function get partidasFinal():ArrayCollection
+			{
+				_partidasFinal = new ArrayCollection();
+				
+				for (var i:int = 0; i < arreglo.length; i++) 
+				{
+					var curr:ProductosArribados = arreglo[i] as ProductosArribados;
+					var tmp:OrdenDespachoArribado = new OrdenDespachoArribado();
+					tmp.proveedor = curr.nombreFletera;
+					tmp.arribadas = curr.pzsArribadas;
+					tmp.porArribar = curr.pzsXarribar;
+					tmp.faltantes = curr.pzsFaltantes;
+					tmp.sobrantes = curr.pzsSobrantes;
+					_partidasFinal.addItem(tmp);
+				}
+				return _partidasFinal;
+			}
+			
+			public function set partidasFinal(value:ArrayCollection):void
+			{
+				_partidasFinal = value;
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	
+	<!--  HEADER  -->
+	<s:HGroup width="100%" gap="0" paddingBottom="10" verticalAlign="middle">
+		
+		<label:TituloNovecento_22 text="PROVEEDOR" fontSize="{font18}" width="30%" />
+		
+		<s:VGroup width="20%" horizontalAlign="center"  >
+			<label:TituloNovecento_22 text="POR ARRIBAR" fontSize="{font18}" width="100%" textAlign="center"/>
+			<label:Texto_16_Helvetica text="( PZAS )"  fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+		
+		<s:VGroup width="20%" horizontalAlign="center">
+			<label:TituloNovecento_22 text="ARRIBADO" fontSize="{font18}" width="100%" textAlign="center"/>
+			<label:Texto_16_Helvetica text="( PZAS )" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+		
+		<s:VGroup width="20%" horizontalAlign="center">
+			<label:TituloNovecento_22 text="FALTANTE" fontSize="{font18}" width="100%" textAlign="center"/>
+			<label:Texto_16_Helvetica text="( PZAS )" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+		
+		<s:VGroup width="10%" horizontalAlign="center">
+			<label:TituloNovecento_22 text="SOBRANTE" fontSize="{font18}" width="100%" textAlign="center"/>
+			<label:Texto_16_Helvetica text="( PZAS )" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+	</s:HGroup>  
+	
+	<otros:LineaDivision id="linea" width="100%" height="1"  />
+	
+	
+	
+	
+	<!--  LISTA DE LOS PRODUCTOS  -->
+	<s:VGroup width="100%" height="100%" >
+		<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+				id="listProductos" contentBackgroundAlpha="0" 
+				itemRenderer="mx.com.proquifa.vista.vistas.registrarArribo.progreso.RegistrarArribo_GridProductos_IR"
+				/>
+	</s:VGroup>  
+	
+	
+	
+	
+	
+	<!--  FOOTER  -->
+	<otros:division width="100%" />
+	<s:HGroup width="100%" gap="0" paddingTop="10" >
+		<label:Texto_16_Helvetica  id="lbltotalProductos" fontSize="{font16}" width="30%" paddingLeft="10" />
+		
+		<s:VGroup width="20%" horizontalAlign="center"  >
+			<label:Texto_16_Helvetica id="lblporArribar" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+		
+		<s:VGroup width="20%" horizontalAlign="center">
+			<label:Texto_16_Helvetica id="lblArribado" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+		
+		<s:VGroup width="20%" horizontalAlign="center">
+			<label:Texto_16_Helvetica id="lblFaltante" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+		
+		<s:VGroup width="10%" horizontalAlign="center">
+			<label:Texto_16_Helvetica id="lblSobrante" fontSize="{font16}" width="100%" textAlign="center"/>
+		</s:VGroup>  
+	</s:HGroup>  
+	
+	
+	
+</s:VGroup>

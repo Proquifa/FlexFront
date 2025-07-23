@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%"
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*"
+		 resize="group1_resizeHandler(event)"
+		 creationComplete="group1_creationCompleteHandler(event)"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComun;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Compra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemGridListaArribo_IR;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.TextOperationEvent;
+			
+			import skins.textinput.busqueda.skinTextInputBusqueda2D;
+			
+			public var universoGridProvee:ArrayCollection = new ArrayCollection;
+			[Bindable] 
+			public var totales:Object = new Object;
+			[Bindable] public var sizeWidth:Number;
+			[Bindable] public var sizeHeight:Number;
+			[Bindable] public var sizeRow:Number;
+			[Bindable] public var sizeFootRow:Number;
+			public static var query:Query;
+			[Bindable]private var sizeFont:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]private var circulo:Number;
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				gridProveedores.addEventListener(EventoComun.ORDENAR_PROVEE_LETRA, ordenarProveedor);
+			}
+			
+			private function ordenarProveedor(evt:EventoComun):void
+			{
+				var arrayTemp: ArrayCollection;
+				arrayTemp = ordenarLista(universoGridProvee,evt.current.text);
+				recalculatotales(arrayTemp);
+				gridProveedores.dataProvider = arrayTemp;
+				
+			}
+			
+			private function ordenarLista(array:ArrayCollection, letra:String):ArrayCollection
+			{
+				if(letra != "TODOS")
+					array = UtilsGrid.queryCampoXLike(array,"sortChar",letra);
+				else
+					array = universoGridProvee;
+				return array;
+			}
+			
+			private function recalculatotales($array:ArrayCollection):void
+			{				
+			    totales = new Object();
+				totales.totalOC = 0;
+				totales.totalPiezas = 0;
+				totales.totalMontos = 0;
+				query = new Query($array,['nombreProveedor']);
+				var punteroProveedores:Array = query.getPunteros(['nombreProveedor'],'nombreProveedor');
+				totales.totalProveedores = punteroProveedores.length;
+				
+				for each (var proveedor:String in punteroProveedores) 
+				{
+					var punteros:Array = query.getPunteros([proveedor]);
+					
+					var compra:Compra = ObjectUtil.copy(query.universo.getItemAt(punteros[0])) as Compra;
+					var resumen:ResumenConsulta = new ResumenConsulta();
+					totales.totalOC += compra.totalOC;
+					totales.totalPiezas += compra.totalPiezas;
+					totales.totalMontos += compra.montoTotalDolares;
+				}
+				
+				lblTotalProveedores.text = totales.totalProveedores;
+				lblTotalOrdenes.text = totales.totalOC > 0 ? totales.totalOC+" Ordenes de Compra" : "0 Ordenes de Compra";
+				lblTotalPiezas.text = totales.totalPiezas == 1 ? totales.totalPiezas+' pza':totales.totalPiezas+' pzas';
+				lblTotal.text = "Monto Total: $ " + UtilsFormatosNumericos.precisionADosDecimalesConComas(totales.totalMontos);
+				
+				
+			}
+				
+			
+			protected function gridProveedores_reajustarTamanoLetraHandler(event:EventoComun):void
+			{
+				sizeFont = event.current;
+			}
+			
+			protected function group1_resizeHandler(event:ResizeEvent):void
+			{
+				sizeWidth = (20/2005) * (unscaledWidth);
+				sizeHeight = (30/612) * (unscaledHeight);
+				sizeRow = (70/612) * (unscaledHeight);
+				sizeFootRow = (30/612) * (unscaledHeight);	
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				/*gridProveedores.popUp = true;*/
+				sizeFont = (15/602) * (unscaledWidth);
+				sizeFontProvee = (18/602) * (unscaledWidth);
+				circulo = (14/602) * (unscaledWidth);
+				
+				sizeFont = sizeFont > 15 ? 15:sizeFont;
+				sizeFont = sizeFont < 8 ? 8:sizeFont;
+				sizeFontProvee = sizeFontProvee > 18 ? 18:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 15 ? 15:sizeFontProvee;
+				circulo = circulo > 14 ? 14:circulo;
+			}
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				gridProveedores.dataProvider = UtilsGrid.queryCampoXLike(universoGridProvee,"nombreProveedor",txtBuscador.text);
+			}
+			public function set dataProvider(value:ArrayCollection):void
+			{
+				for(var x:int = 0;x<value.length;x++){
+					value[x].numFila = x+1;
+				}
+				universoGridProvee = value;
+				recalculatotales(ObjectUtil.copy(universoGridProvee) as ArrayCollection);
+			}
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" paddingLeft="2" paddingRight="20" paddingBottom="0" paddingTop="14">
+		<s:VGroup id="grpProvee" width="100%" height="100%" gap="0">
+			<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="PROVEEDORES" width="100%" textAlign="left" />
+			<s:Spacer height="100%" maxHeight="13" width="100%"/>
+			<s:TextInput id="txtBuscador" prompt="Proveedor" width="100%" maxWidth="{grpProvee.width}" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)" />
+			<s:Spacer height="100%" maxHeight="17" width="100%"/>
+			<otros:division width="100%" grueso="1"/>
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="gridProveedores" contentBackgroundAlpha="0"
+					itemRenderer="mx.com.proquifa.vista.vistas.gestorCompras.itemrender.itemCargarFacturaProveedores_IR"
+					/>
+			<otros:division width="100%" grueso="1"/>
+			<s:HGroup width="100%" height="80" paddingBottom="0">
+				<!--20,15,15,15,25,9-->
+				<s:VGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" paddingLeft="10" paddingRight="10" verticalAlign="middle">
+						<s:HGroup width="10%" maxWidth="50" height="100%" verticalAlign="middle" >
+							<s:Label styleName="tab_texto_14_Helvetica" id="lblTotalProveedores" fontSize="{sizeFont}" text="" textAlign="left" width="100%"/>
+						</s:HGroup>  
+						<s:VGroup width="100%" height="100%" gap="5" verticalAlign="middle">
+								<s:HGroup width="100%" height="50%" verticalAlign="middle">
+										<s:Label styleName="tab_texto_14_Helvetica" width="34%" fontSize="{sizeFont}" text="" textAlign="left" id="lblTotalOrdenes" maxDisplayedLines="2"/>
+										<s:Label styleName="tab_texto_14_Helvetica" width="23%" fontSize="{sizeFont}" text="" textAlign="left" id="lblTotalPiezas"/>
+										<s:Label styleName="tab_texto_14_Helvetica" width="42%" fontSize="{sizeFont}" text="" textAlign="left" id="lblTotal" maxDisplayedLines="2"/>
+								</s:HGroup>  
+						</s:VGroup>  
+					</s:HGroup>  
+					
+				</s:VGroup>
+				
+			</s:HGroup>  
+			
+		</s:VGroup>
+	</s:VGroup>
+	
+</s:Group>

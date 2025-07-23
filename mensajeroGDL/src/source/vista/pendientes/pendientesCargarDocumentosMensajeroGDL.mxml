@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:amparar="skins.botones.colores.amparar.*"
+		 xmlns:ver="skins.botones.colores.ver.*" 
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:shaders="skins.skin.shaders.*" 
+		 xmlns:textarea="skins.skin.textarea.*" 
+		 xmlns:chekbox="skins.skin.chekbox.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:linkButton="skins.skin.linkButton.*" 
+		 width="100%" height="100%" 
+		 >
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.despachos.Ruta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			
+			import source.eventos.EventoPendientesMensajeroGdl;
+			
+			private var file:File;
+			private var docResultante:ByteArray = null;
+			private var amparaConformidad:ByteArray = null;
+			private var amparaRevision:ByteArray = null;
+			private var _docSeleccionado:Number = 0;
+			public var _rutaDoc:String;
+			public var bytes:ByteArray;
+			[Bindable] public var _pendienteSeleccionado:Ruta;
+			[Bindable] public var _rutaSave1:String = null;
+			[Bindable] public var _rutaSave2:String = null;
+			[Bindable] public var _rutaSave3:String = null;
+			
+			public function recibePendiente($current:Ruta):void
+			{
+				if ($current == null) return;
+				
+				limpiarCampos();
+				_pendienteSeleccionado = new Ruta();
+				_pendienteSeleccionado = $current;
+				
+			}
+			
+			public function browseFileSystem($valor:Number):void {
+				
+				_docSeleccionado = $valor;
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				var docFilter:FileFilter = new FileFilter("Documents", "*.pdf");
+				file.browse([docFilter]);
+			}
+			
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				/*  Alert.show((file.data is ByteArray).toString()); */ 
+				var tmpFile:ByteArray = null
+				tmpFile = file.data;
+				//lblAmpa.text = file.nativePath;
+				_rutaDoc = file.nativePath;
+				
+				switch(_docSeleccionado)
+				{
+					case 1:
+					{
+						_rutaSave1 = _rutaDoc;
+						docResultante = tmpFile;
+						_docSeleccionado=0;
+						break;
+					}
+					case 2:
+					{
+						_rutaSave2 = _rutaDoc;
+						amparaConformidad = tmpFile;
+						_docSeleccionado=0;
+						break;
+					}
+					case 3:
+					{
+						_rutaSave3 = _rutaDoc;
+						amparaRevision = tmpFile;
+						_docSeleccionado=0;
+						break;
+					}
+					default:
+					{
+						break;
+					}
+				}
+			}
+			
+			private function mostrarDocumento(ruta:String):void
+			{
+				var request:URLRequest = new URLRequest( ruta.indexOf('http') == -1 ? "file://"+ encodeURI(ruta) : ruta);//"file://"+ 
+				navigateToURL(request);
+			}
+			
+			protected function changeRadios(event:MouseEvent):void
+			{
+				if (event.currentTarget.id == 'chkSi' )
+				{
+					chkNo.selected = false;
+					chkSi.selected = true;
+				}
+				else
+				{
+					chkNo.selected = true;
+					chkSi.selected = false;
+				}
+			}
+			
+			protected function cancelarGuardado(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("hideCerrarDocumentos",true));
+				_pendienteSeleccionado = new Ruta();
+				limpiarCampos();
+			}
+			
+			private function limpiarCampos():void
+			{
+				txtDescripcion.text="";
+				txtDescripcion.errorString = '';
+				chkEntregaRev.selected = false;
+				chkSi.selected = false;
+				chkNo.selected = false;
+				btnAmparo.errorString = '';
+				btnVerAmparo0.includeInLayout = btnVerAmparo0.visible = false;
+				btnAmparo1.errorString = '';
+				btnVerAmparo1.includeInLayout = btnVerAmparo1.visible = false;
+				btnAmparo2.errorString = '';
+				btnAmparo2.enabled = false;
+				btnVerAmparo2.includeInLayout = btnVerAmparo2.visible = false;
+				amparaConformidad = null;
+				amparaRevision = null;
+				docResultante = null;
+				_rutaSave1 = null;
+				_rutaSave2 = null;
+				_rutaSave3 = null;
+			}
+			
+			protected function chkEntregaRev_changeHandler(event:Event):void
+			{
+				if (chkEntregaRev.selected)
+				{
+					btnAmparo2.enabled = true;
+				}
+				else
+				{
+					btnAmparo2.enabled = false;
+				}
+			}
+			
+			private function validarInfo():Boolean
+			{
+				var error:Boolean = true;
+				
+				if(!verificarConforme())
+					error = false;
+				
+				if(!verificaDescripcion())
+					error = false;
+				
+				if(!verificarDocumento("docResultante"))
+					error = false;
+				
+				if(!verificarDocumento("amparaConformidad"))
+					error = false;
+				
+				if(chkEntregaRev.selected)
+				{
+					if(!verificarDocumento("amparaRevision"))
+						error = false;
+				}
+				else
+				{
+					btnAmparo2.errorString = '';
+				}
+				
+				return error;
+			}
+			
+			private function verificaDescripcion():Boolean
+			{
+				var info:String = StringUtil.trim(txtDescripcion.text);
+				if(info.length == 0)
+				{
+					txtDescripcion.errorString = "Es necesario escribir la descripción";
+					return false;
+				}
+				else
+				{
+					txtDescripcion.errorString='';
+					return true;
+				}
+				
+			}
+			
+			private function verificarConforme():Boolean
+			{
+				var valor:Boolean = false;
+				
+				if(chkSi.selected)
+					valor = true;
+				
+				if(chkNo.selected)
+					valor = true;
+				
+				if(!valor)
+				{
+					chkSi.errorString = "Tiene que ser seleccionado alguno."; 
+					chkNo.errorString = "Tiene que ser seleccionado alguno."; 
+				}
+				else
+				{
+					chkSi.errorString = ""; 
+					chkNo.errorString = ""; 
+				}
+				
+				return valor; 
+			}
+			
+			private function verificarDocumento($doc:String):Boolean
+			{
+				var resul:Boolean = false;
+				switch($doc)
+				{
+					case "docResultante":
+					{
+						if (docResultante == null)
+						{
+							btnAmparo.errorString = "Falta amparar el documento resultante.";
+							resul = false;
+						}
+						else
+						{
+							btnAmparo.errorString = '';
+							resul = true;
+						}
+						break;
+					}
+						
+					case "amparaConformidad":
+					{
+						if (amparaConformidad == null)
+						{
+							btnAmparo1.errorString = "Falta amparar el documento de conformidad.";
+							resul = false;
+						}
+						else
+						{
+							btnAmparo1.errorString = '';
+							resul = true;
+						}
+						break;
+					}
+						
+					case "amparaRevision":
+					{
+						if (amparaRevision == null)
+						{
+							btnAmparo2.errorString = "Falta amparar el documento de revisión.";
+							resul = false;
+						}
+						else
+						{
+							btnAmparo2.errorString = '';
+							resul = true;
+						}
+						break;
+					}
+						
+				}
+				return resul;
+			}
+			
+			protected function guardarDocumento(event:MouseEvent):void
+			{
+				if (validarInfo())
+				{
+					var current:Ruta = new Ruta();
+					current = ObjectUtil.copy( _pendienteSeleccionado ) as Ruta;
+					var evnt:EventoPendientesMensajeroGdl = new EventoPendientesMensajeroGdl(EventoPendientesMensajeroGdl.GUARDAR_PENDIENTE_MENSAJERO);
+					current.doctosCierre = txtDescripcion.text;
+					current.conforme = chkSi.selected ? '1':'0';
+					current.entregayRevision =  chkEntregaRev.selected;
+					current.docto = amparaConformidad;
+					current.docto2 = amparaRevision;
+					current.docto3 = docResultante;
+					evnt.pendienteSeleccionado = current;
+					dispatchEvent( evnt );
+					
+					limpiarCampos();
+				}
+				else
+				{
+					alertaSingleton.show("La informacion esta incompleta, favor de verificarla.",catalogoAlertas.TIT_ADV_atencion);
+					return;
+				}
+			}
+			
+			protected function abrirPDF():void
+			{
+				var _url:URLRequest = new URLRequest();
+				_url.url = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + _pendienteSeleccionado.FPor + "/" + _pendienteSeleccionado.factura + ".pdf"
+				navigateToURL(_url ); 
+			}
+			
+		]]>
+	</fx:Script>
+	<s:filters>
+		<shaders:sombraVertical direccion="right"/>
+	</s:filters>
+	<s:Rect width="100%" height="100%">
+		<s:fill>
+			<s:SolidColor color="#eaeaea"/>
+		</s:fill>
+	</s:Rect>
+	<s:VGroup width="100%" height="100%" paddingBottom="0" paddingTop="20">
+		<s:Scroller width="100%" height="100%" id="grpPrincipal" >
+			<contenedores:VGroupConPaddingStandardPqNet width="100%" height="100%" paddingBottom="0" paddingTop="0">
+				
+				
+				<s:HGroup width="100%" horizontalAlign="center">
+					<label:TextoBankGothic_24 width="100%" text="{_pendienteSeleccionado.nombreCliente}" fontWeight="bold" paddingBottom="5" maxDisplayedLines="2" />	 
+				</s:HGroup>
+				<otros:divisionHueca width="100%"/>
+				<s:HGroup width="100%" height="30" verticalAlign="middle">
+					<label:TituloBankGothic_20 width="100%" text="Datos de cierre" textAlign="left" />
+				</s:HGroup>  
+				<otros:divisionHueca width="100%"/>
+				<s:Spacer height="20"/>
+				
+				<label:Titulo text="Documentación:" fontWeight="bold" />
+				<label:Titulo_12_VerdeAzul_pTop10 text="{_pendienteSeleccionado.idEvento}" paddingTop="0" />
+				<s:Spacer height="20"/>
+				
+				<label:Titulo text="Factura:" fontWeight="bold" />
+				<linkButton:LinkButtonPQNet label="{_pendienteSeleccionado.factura}" paddingTop="0" click="abrirPDF()"/>
+				<s:Spacer height=" 20"/>
+				<s:VGroup width="100%">
+					<label:Titulo text="Conforme: " paddingTop="-2" fontWeight="bold"/>
+					<s:HGroup  height="100%" width="100%" verticalAlign="middle" id="grpMonto" paddingBottom="3" >
+						<chekbox:CheckRadioDefaultPQNet  id="chkSi" click="changeRadios(event)" label="Si"/>
+						<chekbox:CheckRadioDefaultPQNet  id="chkNo" click="changeRadios(event)" label="No"/>
+					</s:HGroup>
+					<label:Titulo text="Descripción de la documentación resultante:" fontWeight="bold" maxDisplayedLines="3"/>
+					<textarea:txtAreaBlancoDefaultPQNet id="txtDescripcion" width="100%" height="200" />
+				</s:VGroup>
+				<s:Spacer height="60"/>
+				
+				
+				<s:VGroup width="100%" >
+					<label:Titulo text="Documentos resultantes" id="lblDocResultante" fontWeight="bold" paddingTop="0"/>
+					<otros:divisionHueca width="100%"/>
+					<s:Spacer height="20"/>
+					<s:HGroup width="100%" horizontalAlign="center">
+						<pqNet:botonPqNetLargo id="btnAmparo" label="Amparar" width="200" click="{browseFileSystem(1)}" icono="amparo" colorBase="0x26B357" sizeFuente="22" gradientePqnet="true"/>
+						<pqNet:botonPqNetLargo id="btnVerAmparo0" icono="ojomordor" click="{mostrarDocumento(_rutaSave1)}" visible="{_rutaSave1 ? true:false}" includeInLayout="{_rutaSave1 ? true:false}" width="100"/>
+					</s:HGroup>
+					<s:Spacer height="40"/>
+					<label:Titulo text="Ampara conformidad" fontWeight="bold" paddingTop="0"/>
+					<otros:divisionHueca width="100%"/>
+					<s:Spacer height="20"/>
+					<s:HGroup width="100%" horizontalAlign="center">
+						<pqNet:botonPqNetLargo id="btnAmparo1" label="Amparar" width="200" click="{browseFileSystem(2)}" icono="amparo" colorBase="0x26B357" sizeFuente="22" gradientePqnet="true"/>
+						<pqNet:botonPqNetLargo id="btnVerAmparo1" icono="ojomordor" click="{mostrarDocumento(_rutaSave2)}" visible="{_rutaSave2 ? true:false}" includeInLayout="{_rutaSave2 ? true:false}" width="100" />
+					</s:HGroup>
+					<s:Spacer height="40"/>
+					<chekbox:CheckRadioDefaultPQNet  id="chkEntregaRev" label="Entrega y revisión mismo día" tipoCheck="cuadrado" change="chkEntregaRev_changeHandler(event)"/>
+					<otros:divisionHueca width="100%"/>
+					<s:Spacer height="20"/>
+					<s:HGroup width="100%" horizontalAlign="center">
+						<pqNet:botonPqNetLargo id="btnAmparo2" label="Amparar" width="200" click="{browseFileSystem(3)}" icono="amparo" colorBase="0x26B357" sizeFuente="22" gradientePqnet="true" enabled="false"/>
+						<pqNet:botonPqNetLargo id="btnVerAmparo2" icono="ojomordor" click="{mostrarDocumento(_rutaSave3)}" visible="{_rutaSave3 ? true:false}" includeInLayout="{_rutaSave3 ? true:false}" width="100"/>
+					</s:HGroup>
+				</s:VGroup>
+				
+				<s:VGroup width="100%" height="100%" verticalAlign="bottom" paddingBottom="20">
+					<otros:divisionGruesa width="100%"/>
+					<s:HGroup width="100%">
+						<pqNet:botonPqNetLargo icono="guardar" label="Guardar" id="btnGuardar" click="guardarDocumento(event)"/>
+						<s:Spacer width="100%"/>
+						<pqNet:botonPqNetLargo icono="tache" label="Cancelar" colorBase="0x{catalogoColores.LABEL_ROJO_CLARO }"  id="btnCancelar" click="cancelarGuardado(event)"/>
+					</s:HGroup>
+				</s:VGroup>
+				
+			</contenedores:VGroupConPaddingStandardPqNet>
+		</s:Scroller>
+	</s:VGroup>
+	
+</s:Group>

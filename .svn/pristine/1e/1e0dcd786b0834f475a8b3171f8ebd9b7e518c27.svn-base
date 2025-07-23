@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="0" height="0"
+			   skinClass="skins.titleWindow.skinTitleWindowBlanca" 
+			   xmlns:largo="skins.botones.largo.*" 
+			   xmlns:label="skins.skin.label.*" 
+			   xmlns:otros="skins.otros.*"
+			   xmlns:largosinicono="skins.botones.largosinicono.*" xmlns:pqNet="skins.botones.pqNet.*" xmlns:grafica="skins.botones.grafica.*"
+			   >
+	<fx:Declarations>
+		<!-- 365 400 -->
+		<s:Resize id="fxResize"  target="{this}" duration="300" effectEnd="{this.grpTodo.visible = true }" />
+		<s:Resize id="fxCierraPop" target="{this}" widthTo="0" heightTo="0" duration="150" effectEnd="cierraPopUp()"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.charts.PieChart;
+			import mx.charts.events.ChartItemEvent;
+			import mx.charts.series.PieSeries;
+			import mx.charts.series.items.PieSeriesItem;
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.pieChartDinamico.PieDinamico;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			
+			import skins.skin.graficas.pieSeriesPqNet;
+			import skins.skin.graficas.pieSeriesVS;
+			
+			[Bindable]	private var _titulo:String;
+			[Bindable]	private var _subtitulo:String; 
+			[Bindable]	private var _informacion:String;
+			
+			private function centraEstePop(event:ResizeEvent):void{
+				PopUpManager.centerPopUp( this );
+			}
+			public function iniciarGrafica( $pieRecibido:PieDinamico ):void{
+				this.fxResize.widthTo = stage.width/3;
+				this.fxResize.heightTo = stage.height/2;
+				gotoChart();
+				this.addEventListener(ResizeEvent.RESIZE, centraEstePop );
+				this._titulo = $pieRecibido.lblTitulo.split('\n').join(' ');
+				this._subtitulo = $pieRecibido.subTitulo;
+				this._informacion = $pieRecibido.infoGeneralDeLaGrafica;
+				var _seriesss:pieSeriesVS;
+				var _seriesss2:pieSeriesPqNet;
+				if( $pieRecibido.tipoPie == 1){
+					_seriesss = new pieSeriesVS();
+					_seriesss.nameField = "tipo";
+					_seriesss.field = "total";
+					//if( $pieRecibido.posicionLabel == 1 ) _seriesss.labelField = "tipo";
+					//if( $pieRecibido.posicionLabel == 1 ) _seriesss.setStyle( "labelPosition", "callout");
+					//_seriesss.labelField = "tipo";
+					//_seriesss.setStyle( "labelPosition", "callout");
+				}else{
+					_seriesss2 = new pieSeriesPqNet();
+					_seriesss2.nameField = "tipo";
+					_seriesss2.field = "total";
+					//if( $pieRecibido.posicionLabel == 1 ) _seriesss2.setStyle( "labelPosition", "callout");
+					//if( $pieRecibido.posicionLabel == 1 ) _seriesss2.labelField = "tipo";
+					//_seriesss2.setStyle( "labelPosition", "callout");
+					//_seriesss2.labelField = "tipo";
+				}
+				var _chart:PieChart = new PieChart();
+				_chart.percentWidth = 100;
+				_chart.percentHeight = 100;
+				_chart.visible = false;
+				_chart.showDataTips = true;
+				_chart.setStyle("fontSize", "12" );
+				_chart.dataProvider = agregaSaltosDeLineaATipo( $pieRecibido.arregloAlimentador );
+				_chart.series = [( $pieRecibido.tipoPie == 1 ? _seriesss : _seriesss2)];
+				_chart.dataTipFunction = dtFunc;
+				_chart.addEventListener(ChartItemEvent.ITEM_CLICK, rebanadas);
+				_chart.addEventListener(FlexEvent.CREATION_COMPLETE, pieCreado);
+				this.grpGrafica.addElement( _chart );
+			}
+			private function pieCreado(evt:FlexEvent):void{
+				var pieObject:PieChart = evt.currentTarget as PieChart;
+				var provider:Object = (evt.currentTarget as PieChart).dataProvider;
+				setTimeout(agregaDataProvider, 360, pieObject, provider);//350
+				pieObject.dataProvider = [];
+				this.fxResize.stop();
+				this.fxResize.play();
+				//this.grpTodo.visible = true;
+			}
+			private function agregaSaltosDeLineaATipo($lista:ArrayCollection):ArrayCollection{
+				var arrRegreso:ArrayCollection = new ArrayCollection();
+				arrRegreso = $lista;
+				for(var g:int=0; g< arrRegreso.length; g++){
+					//if( arrRegreso[g].tipo.length > 9){
+					if( arrRegreso[g].tipo == null ) arrRegreso[g].tipo = "null";
+						sustituyeEspacio( arrRegreso[g].tipo );
+					//}
+				}
+				return arrRegreso;
+			}
+			private function sustituyeEspacio($char:String):String{
+				var stringRegreso:String = $char.split(' ').join('X');
+				return stringRegreso;
+			}
+			private function agregaDataProvider($pie:PieChart, $dataProvider:Object ):void {
+				$pie.dataProvider = $dataProvider;
+				$pie.visible = true;
+			}
+			private function cierraPopUp():void{
+				PopUpManager.removePopUp( this );
+			}
+			private var _seleccionAnterior:PieSeriesItem = null;
+			private function rebanadas(evt:ChartItemEvent):void{
+				var item:PieSeriesItem = evt.hitData.chartItem as PieSeriesItem;
+				var degrees:Number = radiansToDegrees(item.startAngle);
+				var arr:Array = [];
+				if(_seleccionAnterior != null){
+					((this._seleccionAnterior as PieSeriesItem).element as PieSeries).perWedgeExplodeRadius = [];
+				}
+				arr[item.index] = 0.1;
+				(evt.hitData.element as PieSeries).perWedgeExplodeRadius = arr;
+				(evt.hitData.element as PieSeries).startAngle -= degrees;
+				( (evt.currentTarget as PieChart).dataProvider as ArrayCollection).refresh();
+				this._seleccionAnterior = evt.hitData.chartItem as PieSeriesItem;
+			}
+			private function radiansToDegrees(radians:Number):Number {
+				return radians * (180 / Math.PI);
+			}
+			private function gotoChart():void{
+				this.elViewStack.selectedIndex = 0;
+				this.btnInfo.visible = true;
+				this.btnInfo.width = 36;
+				this.btnGrafica.width = 0;
+				this.btnGrafica.visible = false;
+			}
+			private function gotoInfo():void{
+				this.elViewStack.selectedIndex = 1;
+				this.btnInfo.width = 0;
+				this.btnInfo.visible = false;
+				this.btnGrafica.visible = true;
+				this.btnGrafica.width = 36;
+			}
+			private function dtFunc(hd:HitData):String {
+				return 	"<B>"+hd.item.tipo+" % "+ int((hd.chartItem as PieSeriesItem).percentValue) +"</B><BR>" + 
+					hd.item.total + " " + (!hd.item.etiquetaElemento ? 'Partida(s)' :hd.item.etiquetaElemento);
+			}
+		]]>
+	</fx:Script>
+<s:VGroup id="grpTodo" width="100%" height="100%" paddingLeft="20" paddingRight="20" paddingBottom="10" visible="false">
+	<s:Label text="{ _titulo }" width="100%" fontFamily="Bank Gothic" fontWeight="bold" fontSize="14" />
+	<s:Label text="{ _subtitulo }" width="100%" fontSize="12"  color="#999999"/>
+	<otros:divisionHueca width="100%"/>
+	<mx:ViewStack id="elViewStack" width="100%" height="100%" creationPolicy="all">
+		<s:NavigatorContent id="grpG">
+			<s:HGroup id="grpGrafica" width="100%" height="100%"/>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="grpInfo">
+			<s:VGroup width="100%" height="100%" paddingBottom="0">
+				<s:Label text="Información" fontWeight="bold" fontSize="14" />
+				<s:Scroller width="100%" height="100%">
+						<s:RichEditableText width="100%" height="100%" id="contenido" color="#000000" textAlign="justify" text="{this._informacion}" editable="false" paddingTop="3" paddingBottom="0" selectable="false"/>
+				</s:Scroller>
+			</s:VGroup>
+		</s:NavigatorContent>
+	</mx:ViewStack>
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%" horizontalAlign="left" gap="0">
+		<grafica:botonPopUp id="btnInfo" icono="infopopup" click="gotoInfo()" width="0" />
+		<grafica:botonPopUp id="btnGrafica" icono="chart" click="gotoChart()" width="0" />
+		<s:Spacer width="100%"/>
+		<grafica:botonPopUp id="btnCerrar" icono="tache" click="fxCierraPop.play(); this.grpTodo.visible = false" />
+	</s:HGroup>
+</s:VGroup>
+</s:TitleWindow>

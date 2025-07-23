@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:controls="mx.com.adobe.flex.extras.controls.*"
+				width="800" height="514" close="cerrar()" paddingBottom="5"  x="350" y="150"
+				paddingLeft="5" paddingRight="5" paddingTop="5" creationComplete="init()" showCloseButton="true" 
+				xmlns:events="flash.events.*" xmlns:utils="flash.utils.*" xmlns:otros="skins.otros.*" xmlns:s="library://ns.adobe.com/flex/spark" xmlns:label="skins.skin.label.*">
+	<mx:states>
+		<mx:State name="Comentarios">
+			<!--<mx:RemoveChild target="{PanelPrincipal}"/>-->
+			<mx:RemoveChild target="{panel1}"/>
+			<mx:RemoveChild target="{panel2}"/>
+			<mx:RemoveChild target="{controlbar1}"/>
+			<mx:AddChild relativeTo="{vbox1}" position="lastChild">
+				<mx:VBox width="95%" height="100%" horizontalAlign="center" paddingBottom="10">					
+					<mx:Panel width="100%" height="100%" layout="vertical" id="PanelSecundario" title="Comentarios para el envío" backgroundColor="#FFFFFF">
+						<mx:TextArea width="100%" id="txtComentarios" height="100%" contentBackgroundColor="#FAFFC0" contentBackgroundAlpha="1.0"/>					
+					</mx:Panel>
+					<mx:Spacer width="15"/>	
+					<mx:HRule width="100%"/>
+					<mx:Spacer width="15"/>	
+					<mx:HBox horizontalAlign="left" width="100%">
+						<mx:Button label="ç" id="btnRegresar" click="this.currentState=''" width="80" fontFamily="Wingdings" fontSize="15" toolTip="Regresar"/>
+					</mx:HBox>
+				</mx:VBox>
+			</mx:AddChild>
+		</mx:State>
+	</mx:states>
+	
+
+<mx:Script>
+	<![CDATA[
+		import com.asfusion.mate.events.DispatcherEvent;
+		
+		import mx.collections.ArrayCollection;
+		import mx.com.adobe.flex.extras.controls.eventotextinputemail.EventoTextInputEmail;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.eventos.EventoPendientesPorEnviar;
+		import mx.com.proquifa.proquifanet.admonComunicacion.vistas.vista.recepcion.CotizacionPorEnviar.Cotizaciones;
+		import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoGenerico;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Correo;
+		import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+		import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+		import mx.controls.Alert;
+		import mx.controls.LinkButton;
+		import mx.controls.Spacer;
+		import mx.controls.Text;
+		import mx.effects.*;
+		import mx.events.CloseEvent;
+		import mx.events.ModuleEvent;
+		import mx.events.ValidationResultEvent;
+		import mx.managers.PopUpManager;
+		import mx.rpc.events.FaultEvent;
+		import mx.validators.EmailValidator;
+		
+		[Bindable]
+		public var folios:String = new String;
+		[Bindable]
+		public var tipoDoc:String = new String;
+		
+		[Bindable]
+		public var doctoFolio:String; 
+		
+		public var fPor:String;
+		public var folioPendiente:Number;
+		public var medioEnvio:String;
+		public var origen:String;
+		public var idCorreo:Number;
+		public var correoPara:String;
+		public var correoAsunto:String;
+		public var cco:String;
+		public var correoCuerpo:String;
+		public var ComentariosEntrega:String;
+		private var observoComentarios:Boolean = new Boolean;
+		private var ListDoc:Array = new Array;
+		
+		private var correoPorEnviar:Correo;
+
+		private var visor:VisorPDF = null;
+		private var enviar:Mail = null;
+		private var fax:Fax = null;
+				
+		private var validaCorreoPara:Boolean = new Boolean;
+		
+		private function cerrar():void{
+ 			this.txtPara.text = "";
+			this.txtCCopia.text = "";
+			this.txtAsunto.text = "";
+			this.txtCCo.text = "";
+			this.txtCuerpoCorreo.text = ""; 	
+			this.ContenedorLinks.removeAllChildren();	 
+			if(tipoDoc == "Cotizaciones"){				
+				var cotizas:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+				cotizas.folioPendiente = folioPendiente;
+				cotizas.origen = "correo";
+				dispatchEvent( cotizas ); 				
+			}else if(tipoDoc == "Pedidos") {
+				var pedidos:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+				pedidos.folioPendiente = folioPendiente;
+				pedidos.origen = "correo";
+				dispatchEvent( pedidos ); 		
+			}else if(tipoDoc == "Notificaciones") {
+				var notificaciones:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+				notificaciones.folioPendiente = folioPendiente;
+				notificaciones.origen = "correo";
+				dispatchEvent( notificaciones ); 		
+			}else if(tipoDoc == "Facturas") {
+				var compra:EventoPendientesPorEnviar = new EventoPendientesPorEnviar (EventoPendientesPorEnviar.BORRA_REGISTRO);
+				compra.folioPendiente = folioPendiente;
+				compra.origen = "correo";
+				dispatchEvent( compra ); 		
+			}
+		}
+		
+		public function init():void{
+			var i:int;
+			PopUpManager.centerPopUp(this);
+			this.txtPara.text = this.correoPara;
+			this.txtAsunto.text = this.correoAsunto;
+			this.txtCuerpoCorreo.text = this.correoCuerpo;
+			this.txtCCo.text = this.cco;
+			observoComentarios = false;
+			if(folios != "" ){
+			ListDoc = folios.split(",");
+				for(i=0;i<ListDoc.length;i++){
+					var enlaceDocumento:LinkButton = new LinkButton();
+					enlaceDocumento.label = this.ListDoc[i] + ".pdf";
+					enlaceDocumento.id = "Archivo" + (i+1);
+					enlaceDocumento.addEventListener("click",VerDocumento)
+					enlaceDocumento.toolTip = "Ver Documento"
+					enlaceDocumento.setStyle("color","#0C4AFC");
+					this.ContenedorLinks.addChild(enlaceDocumento);
+				}
+			}else{
+				var etiqueta:Label = new Label;
+				etiqueta.text = "N/A";
+				this.ContenedorLinks.addChild( etiqueta );
+			}
+			if(ComentariosEntrega == ""){
+				this.verComentarios.enabled = false;
+			}else{
+				this.verComentarios.enabled = true;
+			}  
+		}
+		
+		private function VerDocumento(evet:Event):void{	
+	        var folioSeleccionado:String;
+	        folioSeleccionado = evet.target.label;   
+	        folioSeleccionado = folioSeleccionado.substring(0,folioSeleccionado.length - 4);
+	        var tipoDocto:String = new String;
+	        var ruta:String = new String;
+	        var directorio:String;
+			var path:Object;
+	        tipoDocto = obtenerCarpeta( folioSeleccionado )
+	        if (tipoDocto=="DoctoR"){
+		            		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOSR_RUTA;
+		             	}else if (tipoDocto=="AmparaRevision"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.AMPARA_REVISION_RUTA + path.ruta;
+		             	}else if (tipoDocto=="Pedido"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.PEDIDOS_RUTA + path.ruta;
+		             	}else if (tipoDocto=="Factura"){
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_RUTA + fPor + "/";
+		             	}else if (tipoDocto=="OC"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.OC_RUTA + path.ruta;
+		             		folioSeleccionado = folioSeleccionado + "-P";
+		             	}else if (tipoDocto=="DoctoDC"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.DOCTOS_CIERRE_RUTA + path.ruta;
+		             	}else if (tipoDocto == "Factura proveedor"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.FACTURAS_PROVEEDOR_RUTA + path.ruta;	             		
+		             	}else if (tipoDocto == "Pago"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.PAGOS_RUTA + path.ruta;	             		
+		             	}else if (tipoDocto == "Cobro"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.COBROS_RUTA + path.ruta;           		
+		             	}else if (tipoDocto == "Cotizacion"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.COTIZACIONES_RUTA + path.ruta;	             		
+		             	}else if (tipoDocto == "Aviso de Cambios"){
+							path = Util.rutaNueva(folioSeleccionado);
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.NOTIFICACIONES_RUTA + path.ruta;       		
+		             	}else if (tipoDocto == "Cartas"){
+		             		directorio = RutasPdF.GENERAL_RUTA + RutasPdF.CARTAS_RUTA;
+		             		if(folioSeleccionado == "Carta fin de año Proquifa"){
+		             			folioSeleccionado = "Carta fin de anio Proquifa";
+		             		}
+		             	}		             	
+		             	ruta = directorio + folioSeleccionado + ".pdf";
+	       
+	        var request:URLRequest = new URLRequest(ruta);
+	        navigateToURL(request);
+        }
+        
+		private function cerrarVisor(evento:EventoGenerico):void{
+			visor.removeEventListener( EventoGenerico.CERRAR_PDF, cerrarVisor );
+			PopUpManager.removePopUp( visor );	
+			flash.system.System.gc();
+		}
+		
+		private function mostrarComentarios():void{
+			observoComentarios = true;
+			this.currentState='Comentarios';	
+			this.txtComentarios.text = this.ComentariosEntrega;
+		}
+		
+		private function obtenerCarpeta(Doc:String):String{
+			var ubicacion:String;
+	     	if(tipoDoc == "Notificaciones"){
+ 		   		if(Doc.substring(0,2) == "NT"){
+		   			ubicacion = "Aviso de Cambios";
+		   		}else if (Doc.substring(0,5) == "Carta" || Doc.substring(0,5) == "Aviso" ){
+		   			ubicacion = "Cartas";
+		   		}else if (Doc.indexOf("-", 0) != -1 && Doc.length >= 11){
+		   			ubicacion = "Pedido";
+		   		} else{
+		   			ubicacion = "DoctoR";
+		   		}
+		   	}else if(tipoDoc == "Pedidos"){
+		   		if (Doc.substring(0,5) == "Carta" || Doc.substring(0,5) == "Aviso"){
+		   			ubicacion = "Cartas";		   			
+		   		}else{
+		   			ubicacion = "Pedido";
+		   		}		   		
+		   	}else if(tipoDoc == "Cotizaciones"){
+		   		if (Doc.substring(0,5) == "Carta" || Doc.substring(0,5) == "Aviso" ){
+		   			ubicacion = "Cartas";		   			
+		   		}else{
+		   			ubicacion = "Cotizacion";
+		   		}				
+		   	}else if(tipoDoc == "Facturas"){
+		   		if ( Doc.substring(0,5) == "Carta" || Doc.substring(0,5) == "Aviso" ){
+		   			ubicacion = "Cartas";		   			
+		   		}else{
+		   			ubicacion = "Factura";
+		   		}				
+		   	}    		
+		   return ubicacion;	
+		}
+		
+		private function validaCorreoCC():void{
+			if ( txtPara.text != "" ){
+			this.txtPara.addEventListener( EventoTextInputEmail.VALIDADO_EMAILS, correoParaVerdadero );
+			var vieneD:String = "Para"
+			this.txtPara.validarEmails( vieneD );
+			}else{
+				Alert.show("Debe indicar al menos una dirección de correo en el campo Para","Información incompleta");
+				return;
+			}		
+		}
+		
+		private function sendMail():void{
+			if(ComentariosEntrega == ""){
+		  	  	this.enviarCorreo();
+		  	  	this.folioPendiente = 0
+		  	  	cerrar();
+	  		}else{
+	  	 		if(observoComentarios){		  	 	
+		  	 	this.enviarCorreo();
+		  	 	this.folioPendiente = 0
+		  	 	cerrar();
+	  	 	}else{
+	  	 		Alert.show("Debe consultar los comentarios","¡Atención!",Alert.OK,this,null);
+	  	 	}
+	  }	
+			
+		}
+		private function correoParaVerdadero(evento:EventoTextInputEmail):void{			
+			if ( evento.type == "EventoValidadoEmails"){
+				//validaCorreoPara = true;
+				if(this.txtCCopia.text != ""){
+					this.txtCCopia.addEventListener(EventoTextInputEmail.VALIDADO_EMAILS, correoCcopiaVerdadero);
+					this.txtCCopia.addEventListener(EventoTextInputEmail.ERROR_EMAILS, correoCcopiaVerdadero);
+					var vieneD:String = "CC"
+					this.txtCCopia.validarEmails( vieneD );
+				}else{
+					sendMail();
+				}
+			}
+		}
+		
+		private function correoCcopiaVerdadero(evento:EventoTextInputEmail):void{	
+			if ( evento.type == "EventoValidadoEmails" ){
+				sendMail();
+			}
+		}
+		/**
+		 * Metodo para enviarr el objeto correo al Mapa
+		 */
+		private function enviarCorreo():void{			
+			var evento:EventoPendientesPorEnviar = null;
+			if( this.tipoDoc ==  "Cotizaciones" ){
+				evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.CORREO_POR_ENVIAR_COTIZACIONES );
+			}else if( this.tipoDoc == "Pedidos" ){
+				evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.CORREO_POR_ENVIAR_PEDIDOS );
+			}else if( this.tipoDoc == "Notificaciones" ){
+				evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.CORREO_POR_ENVIAR_NOTIFICACIONES );
+			}else if( this.tipoDoc == "Facturas" ){
+				evento = new EventoPendientesPorEnviar( EventoPendientesPorEnviar.CORREO_POR_ENVIAR_FACTURAS );
+			}
+		    this.correoPorEnviar = new Correo();
+		    this.correoPorEnviar.origen = this.origen;
+		    this.correoPorEnviar.cuerpoCorreo = this.txtCuerpoCorreo.text;
+		    this.correoPorEnviar.tipo = this.tipoDoc;
+		    this.correoPorEnviar.archivoAdjunto = folios;    
+		    this.correoPorEnviar.FolioDocumento = folios;
+		    this.correoPorEnviar.asunto = this.txtAsunto.text;
+		    this.correoPorEnviar.correo = this.txtPara.text;
+		    this.correoPorEnviar.ccorreo = this.txtCCopia.text;
+			this.correoPorEnviar.cocorreo = this.txtCCo.text;
+		    this.correoPorEnviar.idCorreo = this.idCorreo;
+		    this.correoPorEnviar.medio = this.medioEnvio;
+		    this.correoPorEnviar.facturadaPor = this.fPor;	
+		    this.correoPorEnviar.idPendiente = this.folioPendiente;	  
+			correoPorEnviar.idEmpleado = parentApplication.datosUsuarioLogueado.idEmpleado;
+		    evento.correo = correoPorEnviar;
+		    dispatchEvent( evento );
+		    evento = null;
+		} 
+		
+		/**
+		 * Recibe la inyeccion q trae todos los datos de la llamada GUARDADA
+		 */
+		public function set recibeLlamadasGuardadas ( datos:Boolean ):void{
+			if(datos == false){
+				return;
+			}
+			if(datos == true){
+				Alert.show("Correo enviado", "Operación exitosa");
+			}
+		}	
+		
+		/**
+		 *	Metodo para limpiar los campos de la ventana
+		 */ 
+		public function limpiaVentana():void{
+			this.txtPara.text = "";
+			this.txtCCopia.text = "";
+			this.txtComentarios.text = "";
+			this.txtCuerpoCorreo.text = "";
+			this.txtPara.text = "";		  	
+		}
+		
+		private function  servicioFaultEvent(e:FaultEvent):void{
+           trace(e.message);
+   		}
+	]]>
+</mx:Script>
+	<mx:VBox width="100%" height="100%" id="vbox1" horizontalAlign="center" paddingTop="30">		
+		<!--<mx:Label text="CORREO ELECTRÓNICO" fontSize="30" width="95%" height="10%"/>-->
+		<label:labelSubtitulo text="CORREO ELECTRÓNICO" width="95%" height="10%"/>
+	    <mx:Spacer width="15"/>	
+		<!--<mx:HRule width="95%"/>-->
+		<otros:division width="95%"/>
+		<mx:Spacer width="15"/>	     
+		<mx:Panel width="95%" id="panel1" layout="vertical" title="DATOS" height="40%"  backgroundColor="#FFFFFF">		
+			<mx:ControlBar width="100%">
+				<mx:VBox width="100%">					
+					<mx:VBox width="100%">									
+						<mx:FormItem label="Para:"  width="100%" fontWeight="bold" id="formitem4" paddingLeft="56">
+							<!--<mx:TextInput width="100%" id="txtPara" />-->
+							<controls:TextInputEmail activarAlerta="true" x="40" y="51" id="txtPara" width="100%" />		
+						</mx:FormItem>
+						<mx:FormItem label="CC:" width="100%" fontWeight="bold" id="formitem1" paddingLeft="67">
+							<!--<mx:TextInput width="100%" id="txtCCopia" />-->
+							<controls:TextInputEmail activarAlerta="true" x="40" y="51" id="txtCCopia" width="100%" />		
+						</mx:FormItem>
+						<mx:FormItem label="CCO:" width="100%" fontWeight="bold" id="formitem6" paddingLeft="58">
+							<!--<mx:TextInput width="100%" id="txtCCopia" />-->
+							<controls:TextInputEmail activarAlerta="true" x="40" y="51" id="txtCCo" width="100%" />		
+						</mx:FormItem>
+						<mx:FormItem label="Asunto:" width="100%" fontWeight="bold" id="formitem2" paddingLeft="45">
+							<mx:Label width="100%" id="txtAsunto" />
+						</mx:FormItem>
+					</mx:VBox>
+					<mx:HBox width="100%">						
+						<mx:FormItem label="Archivo adjunto:" fontWeight="bold" id="formitem3"/>
+						<mx:HBox width="100%" height="100%" id="ContenedorLinks">
+						</mx:HBox>
+						<mx:Button label="^" fontSize="10" fontFamily="Webdings" enabled="true" id="verComentarios" click="mostrarComentarios()" width="100" toolTip="Ver comenatrios"/>
+					</mx:HBox>
+				</mx:VBox>
+			</mx:ControlBar>
+		</mx:Panel>
+		<mx:Spacer height="10"/>
+		<mx:Panel width="95%" height="50%" title="CUERPO" fontWeight="normal" id="panel2" backgroundColor="#FFFFFF">			
+			<mx:TextArea borderStyle="none" height="100%" id="txtCuerpoCorreo" width="100%" editable="false" contentBackgroundColor="#FAFFC0" contentBackgroundAlpha="1.0"/>
+		</mx:Panel>
+		<mx:Spacer width="15"/>	
+		<!--<mx:HRule width="95%"/>-->
+		<otros:division width="95%"/>
+		<mx:Spacer width="15"/>	
+		<mx:HBox width="95%" id="controlbar1" paddingBottom="10">
+			<s:Button label="Cancelar" width="80"  id="button2" click="cerrar()"/>
+			<mx:Spacer width="100%"/>
+			<s:Button label="Enviar" width="80" id="button1" click="validaCorreoCC()"/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:TitleWindow>

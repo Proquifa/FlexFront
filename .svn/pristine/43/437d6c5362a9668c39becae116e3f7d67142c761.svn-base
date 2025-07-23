@@ -1,0 +1,994 @@
+<?xml version="1.0" encoding="utf-8"?>
+<comun:ContenedorComparacionConsultas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+									  xmlns:s="library://ns.adobe.com/flex/spark"
+									  xmlns:mx="library://ns.adobe.com/flex/mx"
+									  xmlns:comun="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.*"
+									  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*"
+									  xmlns:AdvancedDataGrid="skins.skin.AdvancedDataGrid.*"
+									  xmlns:consultas="skins.skin.comun.consultas.*"
+									  xmlns:pqNet1="skins.botones.pqNet.*"
+									  xmlns:otros="skins.otros.*" 
+									  xmlns:label="skins.skin.label.*"
+									  width="100%" height="100%"
+									  creationComplete="completeHandler()" xmlns:chekbox="skins.skin.chekbox.*" 
+									  >
+	<fx:Declarations>
+		<s:Fade id="fadeOcultar" duration="200" alphaFrom="1.0" alphaTo="0.0"/>
+		<s:Fade id="fadeMostrar" duration="500" alphaFrom="0.0" alphaTo="1.0"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.cobros.EventoConsultaCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ParametrosBusquedaCobros;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.ContenedorGraficas;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosAbiertoVsCerrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosCPagoCobrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosCPagoPorCobrar;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosDRC;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosETVsFT;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosMedioDPagoProgramado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosNICobrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosNIPorCobrar;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.GraficoCobrosProgramadoVsPorProgramar;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.graficosCobrosETvsFT.GraficoCobrosETVsFT_Secundaria;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.graficosCobrosETvsFT.GraficoCobrosETvsFT_AbiertoVsCerrado;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.graficosCobrosETvsFT.GraficoCobrosETvsFT_CPagoPorCobrar;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.graficosCobrosETvsFT.GraficoCobrosETvsFT_Clientes;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.graficosCobrosETvsFT.GraficoCobrosETvsFT_Cobrador;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.cobros.componentesGraficas.graficosCobrosETvsFT.GraficoCobrosETvsFT_DRC;
+			import mx.core.IVisualElement;
+			import mx.events.CalendarLayoutChangeEvent;
+			import mx.graphics.SolidColor;
+			import mx.utils.ObjectUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotoneras;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			import skins.skin.chekbox.CheckBoxPq;
+			
+			import spark.components.Group;
+			
+			[Bindable] private var _finicio:String;
+			[Bindable] private var _ffin:String;
+			[Bindable] private var _imgPiezas:Class;
+			[Bindable] private var _imgMonto:Class;
+			[Bindable] private var _imgCobros:Class;
+			
+			/**
+			 * variables para llevar el control de las comparativas tienen que estar de manera global para poder actualizar los comparativos
+			 * de diferentes rangos, seleccionados de forma individual
+			 * */
+			private var _montoTotal:Number = 0;
+			private	var _piezasTotal:int = 0;
+			private var _compraTotal:int = 0;
+			private	var _montoPasado:Number = 0;
+			private	var _piezaPasado:int = 0;
+			private	var _compraPasado:int = 0;
+			private	var _montoPosPasado:Number = 0;
+			private	var _piezaPosPasado:int = 0;
+			private	var _compraPosPasado:int = 0;
+			public static var switchCombo:CheckBoxPq = new CheckBoxPq;
+			/**
+			 * Estas variables son para validar que una fecha a cambiado y si es así proceder a solicitar la info al servicio
+			 * de lo contrario no hara nada
+			 * */
+			[Bindable] public var _InfoCondicionesTotales:EventoConsultaCobros;
+			
+			private var catalogoGraficas:ArrayCollection = new ArrayCollection();
+			private var _graficos:ContenedorGraficas = new ContenedorGraficas();
+			
+			public function set obtenerListaCobros(cobros:ArrayCollection):void{
+				if(cobros == null){ return }
+				var arrTemp:ArrayCollection = ObjectUtil.copy(cobros) as ArrayCollection;
+				if(btnExportar.checkCombo.selected == true)
+				{
+				gridCobrosBanco.dataProvider = arrTemp;					
+				}
+				else{					
+				gridCobros.dataProvider = arrTemp;
+				}
+			}
+			
+			public function limpiarGrid():void
+			{
+				gridCobros.dataProvider =new ArrayCollection();
+				gridCobrosBanco.dataProvider = new ArrayCollection();
+			}
+			
+			public function set mostrarOcultarTab($tabGrafica:Boolean):void{
+				this.imgTab.visible = $tabGrafica;
+				
+				if(vistaSelected == _GRAFICAS){
+					compararVistas();
+				}
+			}
+			[Bindable]
+			public var actualizarVistaActual:Boolean;
+			private function solicitarInfoGraficas(event:MouseEvent):void
+			{
+				if(imgTab.visible){
+					compararVistas();
+					var seleccionarVista:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.SETTEAR_CURRENT_VISTA_SELECTED);
+					
+					//Configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					
+					if( vistaSelected == _TABLA_GRID ){
+						seleccionarVista.selectedVista = _GRAFICAS;
+						
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnTotales");
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_TOTALES_COBROS");
+							dispatchEvent(eventEspera);
+							
+							var eventoTotales:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_TOTALES_COBROS);
+							eventoTotales.parametros.fechaInicio = _InfoCondicionesTotales.parametros.fechaInicio;
+							eventoTotales.parametros.fechaFin = _InfoCondicionesTotales.parametros.fechaFin;
+							eventoTotales.parametros.idCliente = _InfoCondicionesTotales.parametros.idCliente;
+							eventoTotales.parametros.medioPago =_InfoCondicionesTotales.parametros.medioPago;
+							eventoTotales.parametros.fpor = _InfoCondicionesTotales.parametros.fpor;
+							eventoTotales.parametros.estado =_InfoCondicionesTotales.parametros.estado;
+							eventoTotales.parametros.cpago =_InfoCondicionesTotales.parametros.cpago;
+							eventoTotales.parametros.drc = _InfoCondicionesTotales.parametros.drc;
+							eventoTotales.parametros.factura = _InfoCondicionesTotales.parametros.factura;
+							eventoTotales.parametros.individual = false;
+							dispatchEvent(eventoTotales);
+							
+							//Para Researt filtros
+							resetControlDeCambiosEnFiltros();
+						}
+					}else{
+						seleccionarVista.selectedVista = _TABLA_GRID;
+						if(actualizarVistaActual){
+							actualizarVistaActual = false;	
+							
+							//Configurar Espera
+							eventEspera.idButtons.push("btnBusqueda");
+							eventEspera.tipoEventos.push("OBTENER_CONSULTA_COBROS");
+							dispatchEvent(eventEspera);
+							
+							var grid:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_CONSULTA_COBROS);
+							grid.parametros.fechaInicio = _InfoCondicionesTotales.parametros.fechaInicio;
+							grid.parametros.fechaFin = _InfoCondicionesTotales.parametros.fechaFin;
+							grid.parametros.idCliente = _InfoCondicionesTotales.parametros.idCliente;
+							grid.parametros.medioPago =_InfoCondicionesTotales.parametros.medioPago;
+							grid.parametros.fpor = _InfoCondicionesTotales.parametros.fpor;
+							grid.parametros.estado =_InfoCondicionesTotales.parametros.estado;
+							grid.parametros.cpago =_InfoCondicionesTotales.parametros.cpago;
+							grid.parametros.drc = _InfoCondicionesTotales.parametros.drc;
+							grid.parametros.factura = _InfoCondicionesTotales.parametros.factura;
+							dispatchEvent(grid);	
+							
+							//Para Researt filtros
+							resetControlDeCambiosEnFiltros();
+						}
+					}
+					dispatchEvent(seleccionarVista);
+				}
+			}
+			
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados =0;
+				keyModificados=  new Object();
+			}
+			
+			protected function completeHandler():void
+			{
+				btnGraficaTabla.addEventListener(MouseEvent.CLICK,solicitarInfoGraficas,false,0,true);
+				
+				var graficas1erNivel:ArrayCollection = new ArrayCollection();
+				var graficas:ArrayCollection = new ArrayCollection();
+				graficas.addItem(new GraficoCobrosNIPorCobrar());
+				graficas.addItem(new GraficoCobrosNICobrado());
+				graficas.addItem(new GraficoCobrosCPagoPorCobrar());
+				graficas.addItem(new GraficoCobrosCPagoCobrado());
+				graficas.addItem(new GraficoCobrosAbiertoVsCerrado());
+				graficas.addItem(new GraficoCobrosDRC());
+				graficas.addItem(new GraficoCobrosProgramadoVsPorProgramar()); 
+				graficas.addItem(new GraficoCobrosMedioDPagoProgramado());
+				
+				graficas1erNivel.addItem(new GraficoCobrosETVsFT());
+				
+				this._graficos.insertarGraficas(graficas,graficas1erNivel);
+				agregarEspacioTrabajo(_graficos);
+				
+				var graficas2doNivel:ContenedorGraficas = new ContenedorGraficas();
+				graficas2doNivel.tipoDeBotonBack = "flecha";
+				graficas2doNivel.addEventListener("btnRegresarConsultasGraficasPrincipal",buttonRegresar_clickEventListener,false,0,true);
+				var arrayGraficas:ArrayCollection = new ArrayCollection();
+				
+				arrayGraficas.addItem(new GraficoCobrosETvsFT_Cobrador);
+				var groupBlanco:Group = new Group();
+				groupBlanco.percentWidth = 100;
+				groupBlanco.percentHeight = 100;
+				arrayGraficas.addItem(groupBlanco);
+				
+				arrayGraficas.addItem(new GraficoCobrosETvsFT_AbiertoVsCerrado);
+				arrayGraficas.addItem(new GraficoCobrosETvsFT_CPagoPorCobrar);
+				arrayGraficas.addItem(new GraficoCobrosETvsFT_Clientes);
+				arrayGraficas.addItem(new GraficoCobrosETvsFT_DRC);
+				
+				arrayGraficas.addItem(new GraficoCobrosETVsFT_Secundaria);
+				
+				graficas2doNivel.insertarGraficasInverso(arrayGraficas);
+				espacioSelectedGrafica.addElement(graficas2doNivel);
+				
+				this.addEventListener(EventoConsultaCobros.MOSTRAR_SELECTED_GRAFICA,mostrarLasGraficasETvsFT);
+			}
+			
+			private function mostrarLasGraficasETvsFT(evt:EventoConsultaCobros):void
+			{
+				conceptoPie.text = evt.tipo.toUpperCase();
+				
+				if(evt.valorAdicional =="grafETVsFT"){
+					stack.selectedIndex=evt.seleccionarGraficas; 
+					
+					var eventoSetFiltro:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_FILTRO_GRAFICO_SECUNDARIO);
+					eventoSetFiltro.tipo = evt.tipo; 
+					dispatchEvent(eventoSetFiltro); 
+				}
+			}
+			public function agregarEspacioTrabajo(espacio:IVisualElement):void{
+				if(espacio == null){
+					return;
+				}
+				this.catalogoGraficas.addItem(espacio);
+				if(catalogoGraficas.length == 1){
+					this.espacioGraficas.removeAllElements();
+					this.espacioGraficas.addElement(espacio);
+				}
+			}
+			
+			private function buttonRegresar_clickEventListener(eve:Event):void
+			{
+				stack.selectedIndex=0;
+			}
+			
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "btnTotales":
+							{
+								if(btnTotales.isCurrentButtonActualizar){
+									btnTotales.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnTotales.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			
+			private function encuentraTotalesXPeriodo():void{
+				var evtTotalesPasado:EventoConsultaCobros;
+				var evtTotalesPostPasado:EventoConsultaCobros;
+				if(_InfoCondicionesTotales != null){
+					
+					//Configurar Espera
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+					eventEspera.mensaje = "iniciarEspera";
+					eventEspera.idButtons = [];
+					eventEspera.tipoEventos = [];
+					eventEspera.idButtons.push("btnTotales");
+					eventEspera.tipoEventos.push("OBTENER_TOTALES_COBROS_PASADO");
+					eventEspera.tipoEventos.push("OBTENER_TOTALES_COBROS_POSTPASADO");
+					dispatchEvent(eventEspera);
+					
+					evtTotalesPasado = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_TOTALES_COBROS_PASADO);
+					evtTotalesPasado.parametros.fechaInicio = dtpFInicioPasado.selectedDate;
+					evtTotalesPasado.parametros.fechaFin = dtpFFinPasado.selectedDate;
+					evtTotalesPasado.parametros.idCliente = _InfoCondicionesTotales.parametros.idCliente;
+					evtTotalesPasado.parametros.medioPago = _InfoCondicionesTotales.parametros.medioPago;
+					evtTotalesPasado.parametros.fpor = _InfoCondicionesTotales.parametros.fpor; 
+					evtTotalesPasado.parametros.estado = _InfoCondicionesTotales.parametros.estado;
+					evtTotalesPasado.parametros.cpago = _InfoCondicionesTotales.parametros.cpago; 
+					evtTotalesPasado.parametros.drc = _InfoCondicionesTotales.parametros.drc;
+					evtTotalesPasado.parametros.factura = _InfoCondicionesTotales.parametros.factura;
+					evtTotalesPasado.parametros.individual = true;
+					dispatchEvent(evtTotalesPasado);
+					
+					evtTotalesPostPasado = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_TOTALES_COBROS_POSTPASADO);
+					evtTotalesPostPasado.parametros.fechaInicio = dtpFInicioPosPasado.selectedDate;
+					evtTotalesPostPasado.parametros.fechaFin = dtpFFinPosPasado.selectedDate;
+					evtTotalesPostPasado.parametros.idCliente = _InfoCondicionesTotales.parametros.idCliente;
+					evtTotalesPostPasado.parametros.medioPago = _InfoCondicionesTotales.parametros.medioPago;
+					evtTotalesPostPasado.parametros.fpor = _InfoCondicionesTotales.parametros.fpor; 
+					evtTotalesPostPasado.parametros.estado = _InfoCondicionesTotales.parametros.estado;
+					evtTotalesPostPasado.parametros.cpago = _InfoCondicionesTotales.parametros.cpago; 
+					evtTotalesPostPasado.parametros.drc = _InfoCondicionesTotales.parametros.drc;
+					evtTotalesPostPasado.parametros.factura = _InfoCondicionesTotales.parametros.factura;
+					evtTotalesPostPasado.parametros.individual = true;
+					dispatchEvent(evtTotalesPostPasado);
+					
+					//Resetaer
+					resetControlDeCambiosEnFiltros();
+				} 
+			}
+			
+			public function set obtenerTotalCobros($infoTotal:ArrayCollection):void{
+				if($infoTotal == null) return;
+				
+				var currentItem:ResumenConsulta;
+				
+				for(var d:int = 0; d<$infoTotal.length ; d++){
+					currentItem = $infoTotal[d] as ResumenConsulta;
+					if(currentItem.etiqueta == "Actual"){
+						_montoTotal = currentItem.total;
+						_piezasTotal = currentItem.piezasTotal; 	
+						_compraTotal = currentItem.totalFolios;
+						_finicio = UtilsFecha.formatoFecha_dia_mes_Anio(currentItem.fechaInicio);
+						_ffin = UtilsFecha.formatoFecha_dia_mes_Anio(currentItem.fechaFinal);
+					}else 	if(currentItem.etiqueta == "Pasado"){
+						_montoPasado = currentItem.total;
+						_piezaPasado = currentItem.piezasTotal;	
+						_compraPasado = currentItem.totalFolios;
+						currentDatePasadoIni  = dtpFInicioPasado.selectedDate = currentItem.fechaInicio;
+						currentDatePasadoFin = dtpFFinPasado.selectedDate = currentItem.fechaFinal;
+					}else if(currentItem.etiqueta == "Postpasado"){
+						_montoPosPasado =  currentItem.total;
+						_piezaPosPasado =  currentItem.piezasTotal;
+						_compraPosPasado =  currentItem.totalFolios;
+						currentDatePostpasadoIni = dtpFInicioPosPasado.selectedDate = currentItem.fechaInicio;
+						currentDatePostpasadoFin = dtpFFinPosPasado.selectedDate = currentItem.fechaFinal;
+					}
+				}
+				
+				lbMonto.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoTotal);
+				lbMontoPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPasado);
+				lbMontoPosPasado.text = '$ ' + UtilsFormatosNumericos.precisionADosDecimalesConComas(_montoPosPasado);
+				lbNumCobros.text = _compraTotal.toString();
+				lbNumCobrosPasado.text = _compraPasado.toString();
+				lbNumCobrosPosPasado.text = _compraPosPasado.toString();
+				lbNumPiezas.text = _piezasTotal.toString();
+				lbNumPiezasPasado.text = _piezaPasado.toString();
+				lbNumPiezasPosPasado.text = _piezaPosPasado.toString();
+				
+				var _promedioCompras:int = (_compraPasado + _compraPosPasado)/2;
+				var _promedioMonto:Number = (_montoPasado + _montoPosPasado)/2;
+				var _promedioPiezas:Number = (_piezaPasado + _piezaPosPasado)/2;
+				
+				if(_compraTotal > _promedioCompras) 
+					_imgCobros = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				else if(_compraTotal < _promedioCompras) 
+					_imgCobros = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				else if(_compraTotal == _promedioCompras) 
+					_imgCobros = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_montoTotal > _promedioMonto) 
+					_imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				else if(_montoTotal < _promedioMonto) 
+					_imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				else if(_montoTotal == _promedioMonto) 
+					_imgMonto = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+				
+				if(_piezasTotal > _promedioPiezas) 
+					_imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_verdeflecha;
+				else if(_piezasTotal < _promedioPiezas) 
+					_imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_rojoflecha;
+				else if(_piezasTotal == _promedioPiezas) 
+					_imgPiezas = catalogoIconosEtiquetas.getInstance().etiquetas_amarillolinea;
+			}
+			
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private var currentDatePasadoIni:Date;
+			private var currentDatePasadoFin:Date;
+			private var currentDatePostpasadoIni:Date;
+			private var currentDatePostpasadoFin:Date;
+			protected function fechasPasadas_changeHandler(event:CalendarLayoutChangeEvent):void
+			{
+				switch(event.currentTarget.id)
+				{
+					case "dtpFInicioPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoIni.time,"dtpFInicioPasado",btnTotales);break;}
+					case "dtpFFinPasado":{CompararYControlarBoton(event.newDate.time,currentDatePasadoFin.time,"dtpFFinPasado",btnTotales);	break;}
+					case "dtpFInicioPosPasado":	{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoIni,"dtpFInicioPosPasado",btnTotales);break;}
+					case "dtpFFinPosPasado":{CompararYControlarBoton(event.newDate.time,currentDatePostpasadoFin,"dtpFFinPosPasado",btnTotales);break;}
+				}
+			}
+			
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2){
+					if(!keyModificados.hasOwnProperty($currentFiltroModif)){
+						$button.CambiarToActualizarTipoBoton(false);
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}else{
+					if(numFiltrosModificados==1){
+						$button.CambiarToActualizarTipoBoton(true);
+						numFiltrosModificados =0;
+						keyModificados=  new Object();
+					}else{
+						delete keyModificados[$currentFiltroModif];
+						numFiltrosModificados --;
+					}
+				}
+			}
+			
+			private function generaArchivo():void{
+				var file:File = new File();
+				var hoja:ArrayCollection = new ArrayCollection;
+				var fila:Array = new Array;
+				if(gridCobros.visible == true){
+				fila[0] = hoja.addItem("#");
+				fila[1] = hoja.addItem("Cliente");
+				fila[2] = hoja.addItem("P. Interno");
+				fila[3] = hoja.addItem("Referencia");
+				fila[4] = hoja.addItem("Factura");
+				fila[5] = hoja.addItem("UUID");
+				fila[6] = hoja.addItem("Vendió");
+				fila[7] = hoja.addItem("MEC");
+				fila[8] = hoja.addItem("MonedaFactura");
+				fila[9] = hoja.addItem("TC");
+				fila[10] = hoja.addItem("C.Pago");
+				fila[11] = hoja.addItem("F. Facturación");
+				fila[12] = hoja.addItem("FEP");
+				fila[13] = hoja.addItem("DRC");
+				fila[14] = hoja.addItem("FRC");
+				fila[15] = hoja.addItem("Estado");
+				fila[16] = hoja.addItem("Sub Total USD");
+				fila[17] = hoja.addItem("IVA USD");
+				fila[18] = hoja.addItem("Total USD");
+				fila[19] = hoja.addItem("Sub Total M.N.");
+				fila[20] = hoja.addItem("IVA M.N.");
+				fila[21] = hoja.addItem("Total M.N.");
+				fila[22] = hoja.addItem("Cuenta bancaria");
+				fila[23] = hoja.addItem("Banco");
+				fila[24] = hoja.addItem("FUE");
+				fila[25] = hoja.addItem("Resultado Entrega");
+				fila[26] = hoja.addItem("FEE");
+				fila[27] = hoja.addItem("Cobrador");
+				fila[28] = hoja.addItem("EVT");
+				fila[29] = hoja.addItem("EV");
+				fila[30] = hoja.addItem("ESAC");
+			
+				
+				for(var i:int = 0; i < gridCobros.dataProvider.length; i++){
+					fila = new Array();
+					fila[0] = (gridCobros.dataProvider[i] as Cobros).numFila;
+					fila[1] = '"' + (gridCobros.dataProvider[i] as Cobros).nombreCliente + '"';
+					fila[2] = '"' + (gridCobros.dataProvider[i] as Cobros).cpedido + '"';
+					fila[3] = '"' + (gridCobros.dataProvider[i] as Cobros).referencia + '"';
+					fila[4] = '"' + (gridCobros.dataProvider[i] as Cobros).factura + '"';
+					fila[5] = '"' + (gridCobros.dataProvider[i] as Cobros).uuid + '"';
+					fila[6] = '"' + (gridCobros.dataProvider[i] as Cobros).fpor + '"';
+					fila[7] = '"$' + (gridCobros.dataProvider[i] as Cobros).montoDolares + '"';
+					fila[8] = '"' + (gridCobros.dataProvider[i] as Cobros).monedaFactura + '"';
+					fila[9] = '"' + (gridCobros.dataProvider[i] as Cobros).tipoCambio + '"';
+					fila[10] = '"' + (gridCobros.dataProvider[i] as Cobros).cpago + '"';
+					fila[11] = '"' + (gridCobros.dataProvider[i] as Cobros).formatoFechaFacturacion + '"';
+					fila[12] = '"' + (gridCobros.dataProvider[i] as Cobros).formatoFechaEsperadaPago + '"';
+					fila[13] = '"' + (gridCobros.dataProvider[i] as Cobros).diasRestantesCobro + '"';
+					fila[14] = '"' + UtilsFecha.formatoFechaDDMMMYYYY((gridCobros.dataProvider[i] as Cobros).fechaPago) + '"';
+					fila[15] = '"' + (gridCobros.dataProvider[i] as Cobros).estado + '"';
+					fila[16] = '"' + (gridCobros.dataProvider[i] as Cobros).subTotalDlls + '"';
+					fila[17] = '"' + (gridCobros.dataProvider[i] as Cobros).ivaDlls + '"';
+					fila[18] = '"' + (gridCobros.dataProvider[i] as Cobros).totalDlls + '"';
+					fila[19] = '"' + (gridCobros.dataProvider[i] as Cobros).subtotalPesos + '"';
+					fila[20] = '"' + (gridCobros.dataProvider[i] as Cobros).ivaPesos + '"';
+					fila[21] = '"' + (gridCobros.dataProvider[i] as Cobros).totalPesos + '"';
+					fila[22] = '"' + (gridCobros.dataProvider[i] as Cobros).noCuenta + '"';
+					fila[23] = '"' + (gridCobros.dataProvider[i] as Cobros).banco + '"';
+					fila[24] = '"' + (gridCobros.dataProvider[i] as Cobros).formatoFechaUE + '"';
+					fila[25] = '"' + (gridCobros.dataProvider[i] as Cobros).resultadoEntrega + '"';
+					fila[26] = '"' + UtilsFecha.formatoFechaDDMMMYYYY((gridCobros.dataProvider[i] as Cobros).fechaPEntrega) + '"';
+					fila[27] = '"' + (gridCobros.dataProvider[i] as Cobros).cobrador + '"';
+					fila[28] = '"' + (gridCobros.dataProvider[i] as Cobros).evt + '"';
+					fila[29] = '"' + (gridCobros.dataProvider[i] as Cobros).ev + '"';
+					fila[30] = '"' + (gridCobros.dataProvider[i] as Cobros).esac + '"';
+					hoja.addItem('\r' + fila);
+				}
+				}else{
+				
+					fila[0] = hoja.addItem("#");
+					fila[1] = hoja.addItem("Cliente");
+					fila[2] = hoja.addItem("P. Interno");
+					fila[3] = hoja.addItem("Referencia");
+					fila[4] = hoja.addItem("Factura");
+					fila[5] = hoja.addItem("UUID");
+					fila[6] = hoja.addItem("Vendió");
+					fila[7] = hoja.addItem("MEC");
+					fila[8] = hoja.addItem("MonedaFactura");
+					fila[9] = hoja.addItem("TC");
+					fila[10] = hoja.addItem("C.Pago");
+					fila[11] = hoja.addItem("F. Facturación");
+					fila[12] = hoja.addItem("FEP");
+					fila[13] = hoja.addItem("DRC");
+					fila[14] = hoja.addItem("FRC");
+					fila[15] = hoja.addItem("Estado");
+					fila[16] = hoja.addItem("Sub Total USD");
+					fila[17] = hoja.addItem("IVA USD");
+					fila[18] = hoja.addItem("Total USD");
+					fila[19] = hoja.addItem("Sub Total M.N.");
+					fila[20] = hoja.addItem("IVA M.N.");
+					fila[21] = hoja.addItem("Total M.N.");
+					fila[22] = hoja.addItem("Cuenta bancaria");
+					fila[23] = hoja.addItem("Banco");
+					fila[24] = hoja.addItem("FUE");
+					fila[25] = hoja.addItem("Resultado Entrega");
+					fila[26] = hoja.addItem("Cobrador");
+					fila[27] = hoja.addItem("EVT");
+					fila[28] = hoja.addItem("EV");
+					fila[29] = hoja.addItem("ESAC");
+					
+					for(var j:int = 0; j < gridCobrosBanco.dataProvider.length; j++){
+						fila = new Array();
+						fila[0] = (gridCobrosBanco.dataProvider[j] as Cobros).numFila;
+						fila[1] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).nombreCliente + '"';
+						fila[2] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).cpedido + '"';
+						fila[3] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).referencia + '"';
+						fila[4] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).factura + '"';
+						fila[5] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).uuid + '"';
+						fila[6] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).fpor + '"';
+						fila[7] = '"$' + (gridCobrosBanco.dataProvider[j] as Cobros).montoDolares + '"';
+						fila[8] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).monedaFactura + '"';
+						fila[9] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).tipoCambio + '"';
+						fila[10] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).cpago + '"';
+						fila[11] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).formatoFechaFacturacion + '"';
+						fila[12] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).formatoFechaEsperadaPago + '"';
+						fila[13] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).diasRestantesCobro + '"';
+						fila[14] = '"' + UtilsFecha.formatoFechaDDMMMYYYY((gridCobrosBanco.dataProvider[j] as Cobros).fechaPago) + '"';
+						fila[15] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).estado + '"';
+						fila[16] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).subTotalDlls + '"';
+						fila[17] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).ivaDlls + '"';
+						fila[18] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).totalDlls + '"';
+						fila[19] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).subtotalPesos + '"';
+						fila[20] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).ivaPesos + '"';
+						fila[21] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).totalPesos + '"';
+						fila[22] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).noCuenta + '"';
+						fila[23] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).banco + '"';
+						fila[24] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).formatoFechaUE + '"';
+						fila[25] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).resultadoEntrega + '"';
+						fila[26] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).cobrador + '"';
+						fila[27] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).evt + '"';
+						fila[28] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).ev + '"';
+						fila[29] = '"' + (gridCobrosBanco.dataProvider[j] as Cobros).esac + '"';
+						hoja.addItem('\r' + fila);
+					}
+				}
+				file.save(hoja,"ConsultaCobros-" + UtilsFecha.formatoPAraGuardarFechaDDMMMYYYYHHMM(new Date()) + ".csv");
+				
+			}
+			[Bindable] private var _switchBusqueda:String ="DESISTEMA";
+			protected function cobrosBancos(event:*):void
+			{
+				// TODO Auto-generated method stub
+				_switchBusqueda = btnExportar.checkCombo.selected ? "FUERADESISTEMA" : "DESISTEMA";
+				
+				validarVisibilidadDeLosGrids();
+				
+				switchCombo.selected = btnExportar.checkCombo.selected;
+				switchCombo.dispatchEvent(new Event(Event.CHANGE));
+				
+				
+			
+			}
+			
+			private function validarVisibilidadDeLosGrids():void
+			{
+				gridCobros.visible = false;
+				gridCobrosBanco.visible = false;
+				
+				if(_switchBusqueda == "DESISTEMA")
+				{
+					gridCobros.visible = true;
+					this.btnGraficaTabla.visible = true;
+				
+				}
+				else
+				{
+					gridCobrosBanco.visible = true;
+					this.btnGraficaTabla.visible = false;
+			
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<comun:espacioA>
+	
+		<s:VGroup width="100%" height="100%" id="gridConsultaCobros" paddingTop="20" paddingLeft="20" paddingRight="20" gap="10">
+			<!--<s:VGroup width="100%" paddingTop="20" >
+				<chekbox:CheckBoxPq id="checkComboCobros" labelLeft="Fecha Facturación" click="cobrosBancos(event)"  labelRight="Fecha Cobro"/>
+			</s:VGroup>-->
+			<consultas:HeaderParaGridConsultas id="btnExportar" mostrarBtnExportar="true" clickExportar="generaArchivo()" width="100%" textIzqquierdo="Fecha Facturacion" clickCheckCombo="cobrosBancos(event)" textDerecho="Fecha Cobro" conCheckbox="true"/>
+			<otros:divisionGruesa width="100%"/>
+			<s:Group width="100%" height="100%">
+				
+				<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridCobros" width="100%" height="100%" anchoColumnas="{['45','20%','=','=','=','=','235','=','=','=','=','=','115','=','50']}" tipoDeConsulta="Cobros" 
+															 disableSortableColumns="{[12]}" disableDragableColumns="{[0,12]}" disableResizableColumns="{[0,12]}" >
+					<AdvancedDataGrid:columns>
+						<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+						<mx:AdvancedDataGridColumn headerText="Cliente">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+											]]>
+										</fx:Script>
+										<s:Label text="{(data as Cobros).nombreCliente}" width="100%" maxDisplayedLines="2" />
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Cobrador" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100" >
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+											]]>
+										</fx:Script>
+										<s:Label text="{(data as Cobros).cobrador}" width="100%" maxDisplayedLines="2" />
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="P. Interno" dataField="cpedido" />
+						<mx:AdvancedDataGridColumn headerText="Referencia" dataField="referencia" />
+						<mx:AdvancedDataGridColumn headerText="Factura" dataField="factura"/>
+						<mx:AdvancedDataGridColumn headerText="UUID" dataField="uuid" />
+						<mx:AdvancedDataGridColumn headerText="Vendió" dataField="fpor"/>
+						<mx:AdvancedDataGridColumn headerText="MEC" dataField="formatoMontoDolares"/>
+						<mx:AdvancedDataGridColumn headerText="C.Pago" dataField="cpago"/>
+						<mx:AdvancedDataGridColumn headerText="F. Facturación" dataField="formatoFechaFacturacion"/>
+						<mx:AdvancedDataGridColumn headerText="FEP" dataField="formatoFechaEsperadaPago"/>
+						<mx:AdvancedDataGridColumn headerText="DRC" dataField="diasRestantesCobro">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+										<fx:Script>
+											<![CDATA[
+												import skins.catalogos.catalogoColores;
+												import skins.catalogos.catalogoIconosGrid;
+												import skins.skin.AdvancedDataGrid.PQNetWhitCSS;
+												
+												override public function set data(value:Object):void{
+													if( listData == value ) return;
+													lblDiasRestantesC.setStyle("fontFamily",(automationOwner as PQNetWhitCSS).fontFamily);
+													lblDiasRestantesC.setStyle("fontSize", (automationOwner as PQNetWhitCSS).fontSize);
+													lblDiasRestantesC.setStyle("fontStyle",(automationOwner as PQNetWhitCSS).styleFont);
+													
+													canvasEllipse.visible =canvasEllipse.includeInLayout= false;
+													imgEstado.visible = imgEstado.includeInLayout = false;
+													if(value.diasRestantesCobro == 'Cobrado'){
+														imgEstado.visible = imgEstado.includeInLayout = true;
+														imgEstado.source = catalogoIconosGrid.getInstance().render_banderameta
+														lblDiasRestantesC.text = value.diasRestantesCobro;
+													}else if(value.diasRestantesCobro == 'Pendiente'){
+														imgEstado.visible = imgEstado.includeInLayout = true;
+														imgEstado.source = catalogoIconosGrid.getInstance().render_banderaroja;	
+														lblDiasRestantesC.text = value.diasRestantesCobro;
+													}else if(value.diasRestantesCobro == 'Cancelado'){
+														lblDiasRestantesC.text = " NA";
+													}else{
+														canvasEllipse.visible = canvasEllipse.includeInLayout= true;
+														lblDiasRestantesC.text = value.diasRestantesCobro;
+													}
+													super.data = value; 
+												}
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:HGroup width="100%" verticalAlign="middle" paddingRight="10">
+											<s:Label  width="100%" id="lblDiasRestantesC" toolTip="Días restantes de crédito" textAlign="center"/> 
+											<s:Ellipse id="canvasEllipse" width="20" height="20">
+												<s:fill>
+													<s:SolidColor color="{data.color}"/>
+												</s:fill>		
+												<s:filters>
+													<s:DropShadowFilter alpha="1" angle="45" blurX="1" blurY="2"
+																		color="#909090" distance="2" hideObject="false" inner="false" knockout="false" 
+																		quality="1" strength="1"/>
+												</s:filters>
+											</s:Ellipse>
+											<s:Image id="imgEstado"/> 
+										</s:HGroup>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Estado" dataField="estadoParaMostrar"/>
+						<mx:AdvancedDataGridColumn headerText="">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.finanzas.facturacion.EventoConsultaFacturacion2013;
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.facturista.Facturacion;
+												import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.cobros.EventoConsultaCobros;
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+												
+												import skins.catalogos.catalogoIconosGrid;
+												public function obtenerHistorialCobros():void{
+													var evt:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_HISTORIAL_FACTURA);
+													evt.factura = (this.data as Cobros).factura.toString();
+													evt.fpor = (this.data as Cobros).fpor;
+													dispatchEvent(evt);
+													
+													var evento:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_LINEA_DTIEMPO);
+													evento.factura = (this.data as Cobros).factura.toString();
+													evento.fpor = (this.data as Cobros).fpor;
+													dispatchEvent(evento);
+													
+													var evtF:EventoConsultaCobros = new EventoConsultaCobros( EventoConsultaCobros.ENVIAR_DATOS_DE_FACTURA );
+													evtF.factura = (this.data as Cobros).factura.toString();
+													evtF.fpor = (this.data as Cobros).fpor;
+													dispatchEvent(evtF);
+												}
+											]]>
+										</fx:Script>
+										<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="obtenerHistorialCobros()" id="imgInfo" horizontalCenter="0"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+					</AdvancedDataGrid:columns>
+				</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				
+				<AdvancedDataGrid:PQNetAdvanceDataGridFooter id="gridCobrosBanco" width="100%" height="100%" anchoColumnas="{['45','20%','=','=','=','=','235','=','=','=','=','=','=','=','=','115','=','50']}" tipoDeConsulta="Cobros" visible="false"
+															 disableSortableColumns="{[12]}" disableDragableColumns="{[0,12]}" disableResizableColumns="{[0,12]}" >
+					<AdvancedDataGrid:columns>
+						<mx:AdvancedDataGridColumn headerText="#" dataField="numFila"/>
+						<mx:AdvancedDataGridColumn headerText="Cliente" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+											]]>
+										</fx:Script>
+										<s:Label text="{(data as Cobros).nombreCliente}" width="100%" maxDisplayedLines="2" />
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Cobrador" >
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100" >
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+											]]>
+										</fx:Script>
+										<s:Label text="{(data as Cobros).cobrador}" width="100%" maxDisplayedLines="2" />
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="P. Interno" dataField="cpedido" />
+						<mx:AdvancedDataGridColumn headerText="Referencia" dataField="referencia" />
+						<mx:AdvancedDataGridColumn headerText="Factura" dataField="factura"/>
+						<mx:AdvancedDataGridColumn headerText="UUID" dataField="uuid" />
+						<mx:AdvancedDataGridColumn headerText="Vendió" dataField="fpor"/>
+						<mx:AdvancedDataGridColumn headerText="MEC" dataField="formatoMontoDolares"/>
+						<mx:AdvancedDataGridColumn headerText="Banco" dataField="banco"/>
+						<mx:AdvancedDataGridColumn headerText="Cuenta" dataField="noCuenta" />
+						<mx:AdvancedDataGridColumn headerText="Fecha Real" dataField="formatoFechaPago" />
+						<mx:AdvancedDataGridColumn headerText="C.Pago" dataField="cpago"/>
+						<mx:AdvancedDataGridColumn headerText="F. Facturación" dataField="formatoFechaFacturacion"/>
+						<mx:AdvancedDataGridColumn headerText="FEP" dataField="formatoFechaEsperadaPago"/>
+						<mx:AdvancedDataGridColumn headerText="DRC" dataField="diasRestantesCobro">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+										<fx:Script>
+											<![CDATA[
+												import skins.catalogos.catalogoColores;
+												import skins.catalogos.catalogoIconosGrid;
+												import skins.skin.AdvancedDataGrid.PQNetWhitCSS;
+												
+												override public function set data(value:Object):void{
+													if( listData == value ) return;
+													lblDiasRestantesC.setStyle("fontFamily",(automationOwner as PQNetWhitCSS).fontFamily);
+													lblDiasRestantesC.setStyle("fontSize", (automationOwner as PQNetWhitCSS).fontSize);
+													lblDiasRestantesC.setStyle("fontStyle",(automationOwner as PQNetWhitCSS).styleFont);
+													
+													canvasEllipse.visible =canvasEllipse.includeInLayout= false;
+													imgEstado.visible = imgEstado.includeInLayout = false;
+													if(value.diasRestantesCobro == 'Cobrado'){
+														imgEstado.visible = imgEstado.includeInLayout = true;
+														imgEstado.source = catalogoIconosGrid.getInstance().render_banderameta
+														lblDiasRestantesC.text = value.diasRestantesCobro;
+													}else if(value.diasRestantesCobro == 'Pendiente'){
+														imgEstado.visible = imgEstado.includeInLayout = true;
+														imgEstado.source = catalogoIconosGrid.getInstance().render_banderaroja;	
+														lblDiasRestantesC.text = value.diasRestantesCobro;
+													}else if(value.diasRestantesCobro == 'Cancelado'){
+														lblDiasRestantesC.text = " NA";
+													}else{
+														canvasEllipse.visible = canvasEllipse.includeInLayout= true;
+														lblDiasRestantesC.text = value.diasRestantesCobro;
+													}
+													super.data = value; 
+												}
+											]]>
+										</fx:Script>
+										<s:states>
+											<s:State name="normal"/>
+											<s:State name="hovered"/>
+											<s:State name="selected"/>
+										</s:states>
+										<s:HGroup width="100%" verticalAlign="middle" paddingRight="10">
+											<s:Label  width="100%" id="lblDiasRestantesC" toolTip="Días restantes de crédito" textAlign="center"/> 
+											<s:Ellipse id="canvasEllipse" width="20" height="20">
+												<s:fill>
+													<s:SolidColor color="{data.color}"/>
+												</s:fill>		
+												<s:filters>
+													<s:DropShadowFilter alpha="1" angle="45" blurX="1" blurY="2"
+																		color="#909090" distance="2" hideObject="false" inner="false" knockout="false" 
+																		quality="1" strength="1"/>
+												</s:filters>
+											</s:Ellipse>
+											<s:Image id="imgEstado"/> 
+										</s:HGroup>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+						<mx:AdvancedDataGridColumn headerText="Estado" dataField="estadoParaMostrar"/>
+						<mx:AdvancedDataGridColumn headerText="">
+							<mx:itemRenderer>
+								<fx:Component>
+									<s:MXAdvancedDataGridItemRenderer autoDrawBackground="false" width="100">
+										<fx:Script>
+											<![CDATA[
+												import mx.com.proquifa.proquifanet.rsl.vista.eventos.consultas.compras.cobros.EventoConsultaCobros;
+												import mx.com.proquifa.proquifanet.rsl.vista.modelo.cobrosypagos.Cobros;
+												
+												import skins.catalogos.catalogoIconosGrid;
+												public function obtenerHistorialCobros():void{
+													var evt:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_HISTORIAL_FACTURA);
+													evt.factura = (this.data as Cobros).factura.toString();
+													evt.fpor = (this.data as Cobros).fpor;
+													dispatchEvent(evt);
+													
+													var evento:EventoConsultaCobros = new EventoConsultaCobros(EventoConsultaCobros.OBTENER_LINEA_DTIEMPO);
+													evento.factura = (this.data as Cobros).factura.toString();
+													evento.fpor = (this.data as Cobros).fpor;
+													dispatchEvent(evento);
+												}
+											]]>
+										</fx:Script>
+										<s:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="obtenerHistorialCobros()" id="imgInfo" horizontalCenter="0"/>
+									</s:MXAdvancedDataGridItemRenderer>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:AdvancedDataGridColumn>
+					</AdvancedDataGrid:columns>
+				</AdvancedDataGrid:PQNetAdvanceDataGridFooter>
+				
+			</s:Group>
+		</s:VGroup>	
+	</comun:espacioA>
+	
+	<comun:espacioB>
+		<pq:MobViewStack id="stack" width="100%" height="100%">
+			<s:VGroup id="grpGraficas" height="100%" gap="0" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}">
+				<s:HGroup width="100%" height="100%" gap="0">
+					<s:HGroup width="100%" height="100%" id="espacioGraficas"/>
+					<s:BorderContainer width="260" height="100%" backgroundColor="#363636"> 
+						<s:Scroller height="100%">
+							<s:VGroup width="100%" height="100%" paddingLeft="15" paddingRight="15" >
+								<s:Label width="100%" text="TOTALES" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal" paddingTop="20" />
+								<otros:divisionGruesa color="0x{catalogoColores.LABEL_BLANCO}"/>
+								<s:HGroup width="100%" paddingTop="30" paddingBottom="15">
+									<s:Image source="{this._imgMonto}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Monto USD:"  color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbMonto" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbMontoPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbMontoPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15"> 
+									<s:Image source="{this._imgCobros}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="No. Cobros:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="lbNumCobros" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="lbNumCobrosPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%"  id="lbNumCobrosPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup width="100%" paddingBottom="15">
+									<s:Image source="{this._imgPiezas}" />
+									<s:VGroup width="100%" paddingLeft="10">
+										<s:Label width="100%" text="Total piezas:" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbNumPiezas" color="0x{catalogoColores.LABEL_BLANCO}" fontWeight="bold" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbNumPiezasPasado" color="0x{catalogoColores.LABEL_AZUL_REY}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+										<s:Label width="100%" id="lbNumPiezasPosPasado" color="0x{catalogoColores.LABEL_MORADO_FUERTE}" fontWeight="normal" fontSize="16" fontFamily="Helvetica" fontStyle="normal"/>
+									</s:VGroup>
+								</s:HGroup>
+								<otros:divisionHueca color="#{catalogoColores.LABEL_NEGRO}"/>
+								<s:Label text="{this._finicio == null ? '' : this._finicio} - {this._ffin == null ? '' : this._ffin}" width="100%" color="0x{catalogoColores.LABEL_BLANCO}" fontSize="14" paddingTop="15" paddingBottom="25" textAlign="center"/>
+								<s:HGroup paddingBottom="30">
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_AZUL_REY}"/>
+												</s:fill>
+											</s:Ellipse>
+											<mx:DateField id="dtpFInicioPasado"  width="100" textAlign="center" fontStyle="normal" change="fechasPasadas_changeHandler(event)" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPasado" width="100" textAlign="center" fontStyle="normal" change="fechasPasadas_changeHandler(event)" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}"/>
+									</s:VGroup>
+								</s:HGroup>
+								<s:HGroup paddingBottom="30" >
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Del" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<s:HGroup verticalAlign="middle">
+											<s:Ellipse width="10" height="10" horizontalCenter="0" verticalCenter="0" depth="50">
+												<s:fill>
+													<s:SolidColor color="0x{catalogoColores.LABEL_MORADO_FUERTE}"/>
+												</s:fill>
+											</s:Ellipse>
+											<mx:DateField id="dtpFInicioPosPasado"  width="100" textAlign="center" fontStyle="normal" change="fechasPasadas_changeHandler(event)" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}"/>
+										</s:HGroup>
+									</s:VGroup>
+									<s:Spacer width="100%"/>
+									<s:VGroup width="50%">
+										<s:Label fontWeight="bold" text="Al" color="0x{catalogoColores.LABEL_BLANCO}"/>
+										<mx:DateField id="dtpFFinPosPasado" width="100" textAlign="center" fontStyle="normal" change="fechasPasadas_changeHandler(event)" contentBackgroundColor="0x{catalogoColores.LABEL_BLANCO}" color="0x{catalogoColores.LABEL_NEGRO}"/>
+									</s:VGroup>
+								</s:HGroup>	
+								<pqNet1:botonPqNetLargo id="btnTotales"	width="100%" click="encuentraTotalesXPeriodo()" botonRedondo="true" icono="iconoActualizarNormal"/>
+							</s:VGroup>
+						</s:Scroller>	
+					</s:BorderContainer>
+				</s:HGroup>
+			</s:VGroup>
+			<s:VGroup height="100%" width="100%" showEffect="{fadeMostrar}" hideEffect="{fadeOcultar}" gap="0" paddingTop="28" paddingLeft="10" paddingRight="20">
+				<label:Titulo fontWeight="bold" id="conceptoPie" maxWidth="{this.width}" paddingTop="0" paddingBottom="6"/>
+				<otros:divisionGruesa width="100%"/>
+				<s:HGroup width="100%" height="100%" id="espacioSelectedGrafica"/>
+			</s:VGroup>
+		</pq:MobViewStack>
+	</comun:espacioB>
+</comun:ContenedorComparacionConsultas>

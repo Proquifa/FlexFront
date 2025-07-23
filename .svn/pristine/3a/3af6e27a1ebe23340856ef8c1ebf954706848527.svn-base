@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Llamada;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			private var _currentType:String;
+			private var keys:Object;
+			private var _infoDestinoET:ArrayCollection;
+			private var _infoDestinoFT:ArrayCollection;
+			
+			public function set obtenerFiltroGrafico(tipo:String):void{
+				if(_currentType != tipo){
+					_currentType = tipo;
+					if(_currentType =="ET")
+						myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoDestinoET,null,'totalLlamadas');
+					else if(_currentType =="FT")
+						myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoDestinoFT,null,'totalLlamadas');
+				}
+			}
+			
+			public function set recibeLlamadas($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return ;
+				
+				_infoDestinoET = new ArrayCollection();
+				_infoDestinoFT = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				/**
+				 * Se dividen todos los tipos llamadas que estan en tiempo vs las fuera de tiempo y se ordenan
+				 * */ 
+				arrayTemp.forEach(setearETyFT);
+				var arrayDestinoET:Array = new Array();
+				var arrayDestinoFT:Array = new Array();
+				
+				arrayDestinoET = arrayTemp.filter(ObtenerTodosClientesET);
+				arrayDestinoFT = arrayTemp.filter(ObtenerTodosClientesFT);
+				arrayDestinoET.sortOn("destino");
+				arrayDestinoFT.sortOn("destino");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada  tipo
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalDestinoET:Array = new Array();
+				arrayTotalDestinoET = arrayDestinoET.filter(quitaDuplicados);
+				
+				keys= new Object();
+				var arrayTotalDestinoFT:Array = new Array();
+				arrayTotalDestinoFT = arrayDestinoFT.filter(quitaDuplicados);
+				
+				FormarLosDestinatarios(arrayTotalDestinoET,arrayDestinoET,_infoDestinoET);
+				FormarLosDestinatarios(arrayTotalDestinoFT,arrayDestinoFT,_infoDestinoFT);
+				
+				if(_currentType =="ET")
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoDestinoET,null,'totalLlamadas');
+				else if(_currentType =="FT")
+					myChart.dataProvider = myChart.aplicarFormatoConsultasDeDosEtiquetas(_infoDestinoFT,null,'totalLlamadas');
+				
+				//Para liberar memoria
+				arrayTotalDestinoET = new Array();
+				arrayDestinoET= new Array();
+				arrayTotalDestinoFT= new Array();
+				arrayDestinoFT= new Array();
+			}
+			
+			private function FormarLosDestinatarios(TotalDestinatarios:Array,destinatariosInfo:Array,infoDestinatarios:ArrayCollection):void
+			{
+				
+				var totalLlamadas:int;
+				var currentLlamada:Llamada; 
+				var j:int;
+				var totalClientes:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalDestinatarios.length; i++){
+					j=0;
+					totalLlamadas =0;
+					totalClientes =0;
+					keys = new Object();
+					currentLlamada = destinatariosInfo[j] as Llamada;
+					while( (TotalDestinatarios[i] as Llamada).destino == currentLlamada.destino ){
+						
+						totalLlamadas++;
+						
+						if(!keys.hasOwnProperty(currentLlamada.empresa)){
+							keys[currentLlamada.empresa] = currentLlamada.empresa;
+							totalClientes++;
+						}
+						
+						destinatariosInfo.shift();
+						if(destinatariosInfo.length >0)
+							currentLlamada = destinatariosInfo[j] as Llamada;
+						else
+							currentLlamada =new Llamada();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.etiqueta = (TotalDestinatarios[i] as Llamada).destino.toLocaleUpperCase();
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalLlamadas = totalLlamadas;
+					
+					infoDestinatarios.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function setearETyFT(item:Llamada, id:uint, llamadas:Array):void
+			{
+				if(item.enTiempo == 'NA' || item.enTiempo == 'ET'){
+					item.enTiempo = 'ET';
+				}
+			}
+			
+			private function ObtenerTodosClientesET(item:Llamada, id:uint, llamadas:Array):Boolean
+			{
+				return item.enTiempo == 'ET' ? true : false;	
+			}
+			private function ObtenerTodosClientesFT(item:Llamada, id:uint, llamadas:Array):Boolean
+			{
+				return item.enTiempo == 'FT' ? true : false;	
+			}
+			public function quitaDuplicados(item:Llamada, idx:uint, esacs:Array):Boolean{
+				if (keys.hasOwnProperty(item.destino)) {
+					return false;
+				} else {
+					keys[item.destino] = item.destino;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="10%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="totalLlamadas"/> 
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="DESTINO" textAlign="center"/>
+		</s:VGroup>
+	</s:VGroup>
+</s:Group>

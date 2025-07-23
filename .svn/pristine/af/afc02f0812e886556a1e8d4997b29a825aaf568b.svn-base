@@ -1,0 +1,1075 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vistas:PanelPropiedadesPlantillas xmlns:fx="http://ns.adobe.com/mxml/2009"
+								   xmlns:s="library://ns.adobe.com/flex/spark" 
+								   xmlns:mx="library://ns.adobe.com/flex/mx" 
+								   xmlns:comboPqNet="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+								   xmlns:vistas="mx.com.proquifa.proquifanet.rsl.vista.vistas.*"
+								   xmlns:btnToggleEstados="skins.botonesToggle.btnToggleEstados.*"
+								   xmlns:botonesToggle="skins.botonesToggle.*"
+								   xmlns:pqNet="skins.botones.pqNet.*"
+								   xmlns:otros="skins.otros.*"
+								   xmlns:chekbox="skins.skin.chekbox.*"
+								   xmlns:label="skins.skin.label.*"
+								   titulo="REPORTE PRODUCTO EN ALMACÉN"
+								   chromeColor="#CCCCCC"
+								   creationComplete="inicio()">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoCambioIndex;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.compras.prodAlmacen2012.EventoRepProAlmacen2012;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.StringFunciones;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] public var _isVistaAvanzada:Boolean = true;
+			[Bindable] private var _icoGrafica:Class = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+			[Bindable] private var _icoTabla:Class = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+			
+			private var claveUsuario:int;
+			
+			[Bindable] 
+			private var _clickeado:String = "HOY";
+			
+			private var _vistaSelected:String = 'tabla';
+			
+			private var _obtenerDatosDesdeServicioStock:Boolean = true;
+			
+			private var _isActualiando:Boolean=false;
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizar.png")]
+			private var imgNormal:Class;
+			
+			[Embed (source="skins/imagenes/iconos/botones/botoneras/actualizarverde.png")]
+			private var imgDown:Class;
+			
+			[Bindable] private var _arrBotonesBusquedaAvanzaYRapi:ArrayCollection = new ArrayCollection( [{valor:'Avanzada',llave:0}, 
+				{valor:'Rápida',llave:1} ] );
+			[Bindable]	private var _arrButtonTranProgYStock:ArrayCollection = new ArrayCollection([{label:"Tránsito", icono: "transito"},
+				{label:"Programado", icono: "programado"},
+				{label:"Stock", icono: "stock"}]);
+			
+			
+			//NUEVAS VARIABLES
+			private var _currentEtiqueta:String = "transito";
+			private var _oldEtiqueta:String = "transito";
+			
+			private var llamarAServicioStock:Boolean;
+			private var llamarAServicioTranProg:Boolean;
+			private var isModoStockEnBotoneraAHYM:Boolean = false;
+			
+			[Bindable]
+			public static var isAvanzada:Boolean = true;
+			[Bindable]
+			public static var isStock:Boolean = false;
+			
+			public function inicio():void{
+				
+				addEventListener("clickCustomButton",escucharBotonTablaGrafica);				
+				imgActualizar.source = imgDown;
+				
+				solicitarElUniversoDeProductos();
+				
+				lblPromedio1.text = 'FR: 0 días';
+				lblPromedio2.text = 'FE: 0 días';
+				
+				var enviarBusqueda:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.ENVIAR_TIPO_BUSQUEDA_A_PANELS);
+				enviarBusqueda.isBusquedaAvanzada = true;
+				dispatchEvent(enviarBusqueda);
+				
+				claveUsuario = DatosGlobales.getInstance()._usuario.clave;
+				var funcionEvento:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_FUNCION_EMPLEADO_REPORTE_ALMACEN);
+				funcionEvento.usuario = claveUsuario;
+				dispatchEvent(funcionEvento);
+				
+				isAvanzada = true;
+				isStock = false;
+				
+				var cargarBotoneraMontos:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_MONTO_BOTONERA);
+				cargarBotoneraMontos.usuario = claveUsuario;
+				dispatchEvent(cargarBotoneraMontos);
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				if($actualizarEstadoEspera.hasOwnProperty("isBusy")){
+					if(!$actualizarEstadoEspera.isBusy){
+						imgActualizar.source = imgNormal;
+						_isActualiando = false;
+					}						
+				}
+			}
+			
+			private function solicitarElUniversoDeProductos():void
+			{
+				llamarAServicioStock = false;
+				llamarAServicioTranProg = false;
+				var evt:EventoRepProAlmacen2012;
+				//configurar Espera
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.tipoEventos = [];
+				eventEspera.tipoEventos.push("OBTENER_PRODUCTO_ALMACEN");
+				dispatchEvent(eventEspera);
+				
+				if(_currentEtiqueta == "stock"){
+					evt = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PRODUCTO_ALMACEN) ;
+					evt.usuario = DatosGlobales.getInstance()._usuario.clave;
+					evt.stock = true;
+					dispatchEvent(evt);
+					llamarAServicioTranProg = true;
+					
+				}else{
+					evt = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PRODUCTO_ALMACEN) ;
+					evt.usuario = DatosGlobales.getInstance()._usuario.clave;
+					evt.stock = false;
+					dispatchEvent(evt);
+					llamarAServicioStock = true;
+				}
+				
+			}
+			
+			//Esta es la función que recibe el click de la botonera AHyM
+			protected function escucharBotonTablaGrafica(event:Event):void
+			{
+				var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+				eventoindex.vieneD = "reporteDeProductoAlmacen"; 
+				_vistaSelected = event.target.imagen;
+				
+				
+				if(event.target.imagen == "tabla"){
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+					
+					eventoindex.nuevoIndex = 0;
+					
+				}else if(event.target.imagen == "grafica"){
+					_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_tablaminigris;
+					_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_graficamini;
+					
+					eventoindex.nuevoIndex = 1;
+					
+				}
+				
+				dispatchEvent(eventoindex);
+				
+				if( event.target.id != null ){
+					var id:String = event.target.id.toString();
+					
+					switch(id)
+					{
+						case "btn0":{_clickeado = "PASADO";break;}
+						case "btn1":{_clickeado = "ANTE ANTIER";break;}
+						case "btn2":{_clickeado = "ANTIER";break;}
+						case "btn3":{_clickeado = "AYER";break;}
+						case "btn4":{_clickeado = "HOY";break;}
+						case "btn5":{_clickeado = "MAÑANA";break;}
+						case "btn6":{_clickeado = "PASADO MAÑANA";break;}
+						case "btn7":{_clickeado = "POS PASADO";break;}
+						case "btn8":{_clickeado = "FUTURO";break;}
+						case "btn9":{_clickeado = "TODO";break;}
+					}
+				}
+				
+			}
+			
+			private function seleccionBotonBarTransProgYStock(evt:IndexChangeEvent):void{
+				
+				if( evt.currentTarget.selectedItem == null || _isActualiando) {
+					evt.preventDefault();
+				}else{
+					
+					_oldEtiqueta = _currentEtiqueta;
+					
+					var settearFiltros:EventoRepProAlmacen2012;
+					var filtrarEnVista:EventoRepProAlmacen2012;
+					
+					var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						
+					// Limpia Variables
+					currentClienOPro = "--TODOS--";
+					currentEsac = "--TODOS--";
+					currentManejo = "--TODOS--";
+					currentTipo = "--TODOS--";
+					currentMarca = "--TODOS--";
+					currentFlete = "--TODOS--";
+					currentControl = "--TODOS--";
+					currentEdoProquifa = "--TODOS--";
+
+					if(botoneraBarraTranProgYStock.selectedItem.label	== 'Stock'){
+						
+						isStock = true;
+						_currentEtiqueta = "stock";
+						lblTituloclientProvee.text = "Proveedor:";
+						grpCmbFlete.visible = grpCmbFlete.includeInLayout = false;
+						grpCmbsFleteRuta.visible = grpCmbsFleteRuta.includeInLayout = false;
+						lblPromedio1.visible = lblPromedio1.includeInLayout = true;
+						lblPromedio2.visible = lblPromedio2.includeInLayout = false;
+						lblPromedio1.text = 'STOCK: 0 días';
+						
+						if(llamarAServicioStock){
+							
+							resetearBotonesAHYMyComprobarVistaSeleccionadaATabla();
+							habilitarModoStockEnBotoneraAHYM(true);
+							
+							eventEspera.mensaje = "iniciarEspera";
+							eventEspera.tipoEventos = [];
+							eventEspera.tipoEventos.push("OBTENER_PRODUCTO_ALMACEN");
+							dispatchEvent(eventEspera);
+							
+							settearFiltros = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.SETTEAR_FILTROS_PARA_BUSQUEDA);
+							settearFiltros.clienOPro = '--TODOS--';
+							settearFiltros.manejo = '--TODOS--';
+							settearFiltros.tipo = '--TODOS--';
+							settearFiltros.marca = '--TODOS--';
+							settearFiltros.flete = '--TODOS--';
+							settearFiltros.edoProquifa = '--TODOS--';
+							settearFiltros.diaSeleccionado = currentDia = "TODO";
+							settearFiltros.isBusquedaAvanzada = true;
+							settearFiltros.etiqueta = _currentEtiqueta;
+							settearFiltros.vistaSelected = _vistaSelected;
+							settearFiltros.esac = '--TODOS--';
+							dispatchEvent(settearFiltros);
+							
+							var llamarAProductoEnStock:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PRODUCTO_ALMACEN);
+							llamarAProductoEnStock.usuario = DatosGlobales.getInstance()._usuario.clave;
+							llamarAProductoEnStock.stock = true;
+							dispatchEvent(llamarAProductoEnStock);
+							llamarAServicioStock = false;
+							
+						}else{
+							
+							habilitarModoStockEnBotoneraAHYM(true);
+							
+							filtrarEnVista = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.FILTRAR_PRODUCTOS_VISTA);
+							filtrarEnVista.clienOPro = currentClienOPro;
+							filtrarEnVista.manejo = currentManejo;
+							filtrarEnVista.tipo = currentTipo;
+							filtrarEnVista.marca = currentMarca;
+							filtrarEnVista.flete = '--TODOS--';
+							filtrarEnVista.edoProquifa = currentEdoProquifa;
+							filtrarEnVista.esac = "--TODOS--";
+							filtrarEnVista.diaSeleccionado = currentDia = "TODO";
+							filtrarEnVista.isBusquedaAvanzada = true;
+							filtrarEnVista.etiqueta = _currentEtiqueta;
+							filtrarEnVista.vistaSelected = _vistaSelected;
+							dispatchEvent(filtrarEnVista);
+							
+						}
+						btn9.currentState = "seleccionado";
+						
+					}else{
+						isStock = false;
+						habilitarModoStockEnBotoneraAHYM(false);
+						
+						if(botoneraBarraTranProgYStock.selectedItem.label == 'Programado'){
+							_currentEtiqueta = "programado";
+							grpCmbFlete.visible = grpCmbFlete.includeInLayout = false;
+							grpCmbsFleteRuta.visible = grpCmbsFleteRuta.includeInLayout = true;
+							lblTituloclientProvee.text = "Cliente:";
+							lblPromedio1.visible = lblPromedio1.includeInLayout = true;
+							lblPromedio2.visible = lblPromedio2.includeInLayout = false;
+							lblPromedio1.text = 'FP: 0 días';
+							
+						}else{
+							_currentEtiqueta = "transito";
+							grpCmbFlete.visible = grpCmbFlete.includeInLayout = true;
+							grpCmbsFleteRuta.visible = grpCmbsFleteRuta.includeInLayout = true;
+							lblTituloclientProvee.text = "Cliente:";
+							lblPromedio1.visible = lblPromedio1.includeInLayout = true;
+							lblPromedio2.visible = lblPromedio2.includeInLayout = true;
+							lblPromedio1.text = 'FR: 0 días';
+							lblPromedio2.text = 'FE: 0 días';	
+						}
+						
+						if(llamarAServicioTranProg){
+							
+							resetearBotonesAHYMyComprobarVistaSeleccionadaATabla();
+							
+							eventEspera.mensaje = "iniciarEspera";
+							eventEspera.tipoEventos = [];
+							eventEspera.tipoEventos.push("OBTENER_PRODUCTO_ALMACEN");
+							dispatchEvent(eventEspera);
+							
+							var llamarAProductosTransYProg:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PRODUCTO_ALMACEN) ;
+							llamarAProductosTransYProg.usuario = DatosGlobales.getInstance()._usuario.clave;
+							llamarAProductosTransYProg.stock = false;
+							dispatchEvent(llamarAProductosTransYProg);
+							
+							
+							settearFiltros = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.SETTEAR_FILTROS_PARA_BUSQUEDA);
+							settearFiltros.clienOPro = '--TODOS--';
+							settearFiltros.manejo = '--TODOS--';
+							settearFiltros.tipo = '--TODOS--';
+							settearFiltros.marca = '--TODOS--';
+							settearFiltros.flete = '--TODOS--';
+							settearFiltros.edoProquifa = '--TODOS--';
+							settearFiltros.esac = "--TODOS--";
+							settearFiltros.diaSeleccionado = currentDia = _clickeado;
+							settearFiltros.isBusquedaAvanzada = true;
+							settearFiltros.etiqueta = _currentEtiqueta;
+							settearFiltros.vistaSelected = _vistaSelected;
+							dispatchEvent(settearFiltros);
+							
+							
+						}else{
+							
+							filtrarEnVista = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.FILTRAR_PRODUCTOS_VISTA);
+							filtrarEnVista.clienOPro = currentClienOPro;
+							filtrarEnVista.manejo = currentManejo;
+							filtrarEnVista.tipo = currentTipo;
+							filtrarEnVista.marca = currentMarca;
+							filtrarEnVista.flete = currentFlete;
+							filtrarEnVista.edoProquifa = currentEdoProquifa;
+							filtrarEnVista.esac = currentEsac;
+							
+							if(_oldEtiqueta == "stock"){
+								filtrarEnVista.diaSeleccionado = currentDia = _clickeado;
+							}else{
+								//_clickeado = currentDia;
+								filtrarEnVista.diaSeleccionado = currentDia;
+							}
+							
+							filtrarEnVista.isBusquedaAvanzada = true;
+							filtrarEnVista.etiqueta = _currentEtiqueta;
+							filtrarEnVista.vistaSelected = _vistaSelected;
+							dispatchEvent(filtrarEnVista);
+						}
+						
+						if(_clickeado == "HOY"){
+							btn4.currentState = "seleccionado"; // Muestra como seleccionado el boton de 'HOY'
+						}
+					}
+				}
+			}
+			
+			private function resetearBotonesAHYMyComprobarVistaSeleccionadaATabla():void{
+				
+				
+				_icoTabla = catalogoIconosEtiquetas.getInstance().etiquetas_tablamini;
+				_icoGrafica = catalogoIconosEtiquetas.getInstance().etiquetas_graficaminigris;
+				
+				
+				if(_vistaSelected == "grafica"){
+					_vistaSelected = "tabla";
+					
+					var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+					eventoindex.vieneD = "reporteDeProductoAlmacen"; 
+					eventoindex.nuevoIndex = 0;
+					dispatchEvent(eventoindex);
+				}
+				
+				switch(_clickeado)
+				{
+					case 'PASADO': {btn0.imagen = 'tabla'; btn0.currentState = 'normal';	break;}
+					case 'ANTE ANTIER': {btn1.imagen = 'tabla';btn1.currentState = 'normal';	break;}
+					case 'ANTIER': {btn2.imagen = 'tabla';btn2.currentState = 'normal';	break;}
+					case 'AYER': {btn3.imagen = 'tabla';btn3.currentState = 'normal';	break;}
+					case 'HOY': {btn4.imagen = 'tabla';btn4.currentState = 'normal';	break;}
+					case 'MAÑANA': {btn5.imagen = 'tabla';btn5.currentState = 'normal';	break;}
+					case 'PASADO MAÑANA': {btn6.imagen = 'tabla';btn6.currentState = 'normal';	break;}
+					case 'POS PASADO': {btn7.imagen = 'tabla';btn7.currentState = 'normal';	break;}
+					case 'FUTURO': {btn8.imagen = 'tabla';btn8.currentState = 'normal';	break;}
+					case 'TODO': {btn9.imagen = 'tabla';btn9.currentState = 'normal';	break;}
+				}
+				
+				btn0.total = '';
+				btn1.total = '';
+				btn2.total = '';
+				btn3.total = '';
+				btn4.total = '';
+				btn5.total = '';
+				btn6.total = '';
+				btn7.total = '';
+				btn8.total = ''; 
+				btn9.total = '';
+			}
+			
+			private function habilitarModoStockEnBotoneraAHYM(habilitar:Boolean):void
+			{
+				
+				if(habilitar && !isModoStockEnBotoneraAHYM){
+					isModoStockEnBotoneraAHYM = true;
+					btn3.enabled = false; //"ayer"
+					btn2.enabled = false; //"antier" 
+					btn1.enabled = false; //"anteantier" 
+					btn0.enabled = false; //"pasado" 	
+					btn4.enabled = false; //"hoy" 
+					btn5.enabled = false; //"manana" 
+					btn6.enabled = false; //"pasadomanana" 
+					btn7.enabled = false; //"pospasado" 
+					btn8.enabled = false; //"futuro" 
+					btn9.enabled = true; //"futuro" 
+					_clickeado = "TODO";
+					if(_vistaSelected == "grafica")
+						btn9.imagen = "grafica";
+				}else if(isModoStockEnBotoneraAHYM){
+					isModoStockEnBotoneraAHYM = false;
+					btn3.enabled = true; //"ayer"
+					btn2.enabled = true; //"antier" 
+					btn1.enabled = true; //"anteantier" 
+					btn0.enabled = true; //"pasado" 	
+					btn4.enabled = true; //"hoy" 
+					btn5.enabled = true; //"manana" 
+					btn6.enabled = true; //"pasadomanana" 
+					btn7.enabled = true; //"pospasado" 
+					btn8.enabled = true; //"futuro" 
+					btn9.enabled = true; //"futuro" 
+					_clickeado = "HOY";
+					if(_vistaSelected =="grafica")
+						btn4.imagen = "grafica";
+				}
+			}
+			
+			
+			
+			//funcion para actualiar los datos 
+			protected function actualizarUniverso():void{
+				
+				_clickeado = ""
+				if(!_isActualiando){
+					
+					llamarAServicioStock = false;
+					llamarAServicioTranProg = false;
+					
+					_isActualiando = true;
+					imgActualizar.source = imgDown;
+					
+					var settearFiltros:EventoRepProAlmacen2012;
+					if(_isVistaAvanzada){
+						
+						// Limpia Variables
+						currentClienOPro = "--TODOS--";
+						currentEsac = "--TODOS--";
+						currentManejo = "--TODOS--";
+						currentTipo = "--TODOS--";
+						currentMarca = "--TODOS--";
+						currentFlete = "--TODOS--";
+						currentControl = "--TODOS--";
+						currentEdoProquifa = "--TODOS--";
+						
+						resetearBotonesAHYMyComprobarVistaSeleccionadaATabla();
+						
+						var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+						eventEspera.mensaje = "iniciarEspera";
+						eventEspera.tipoEventos = [];
+						eventEspera.tipoEventos.push("OBTENER_PRODUCTO_ALMACEN");
+						dispatchEvent(eventEspera);
+						
+						if(botoneraBarraTranProgYStock.selectedItem.label	== 'Stock'){
+							
+							llamarAServicioTranProg = true;
+							_clickeado = "TODO";
+							
+							settearFiltros = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.SETTEAR_FILTROS_PARA_BUSQUEDA);
+							settearFiltros.clienOPro = '--TODOS--';
+							settearFiltros.manejo = '--TODOS--';
+							settearFiltros.tipo = '--TODOS--';
+							settearFiltros.marca = '--TODOS--';
+							settearFiltros.flete = '--TODOS--';
+							settearFiltros.edoProquifa = '--TODOS--';
+							settearFiltros.diaSeleccionado = currentDia = "TODO";
+							settearFiltros.isBusquedaAvanzada = true;
+							settearFiltros.etiqueta = _currentEtiqueta;
+							settearFiltros.vistaSelected = _vistaSelected;
+							dispatchEvent(settearFiltros);
+							
+							var llamarAProductoEnStock:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PRODUCTO_ALMACEN);
+							llamarAProductoEnStock.usuario = DatosGlobales.getInstance()._usuario.clave;
+							llamarAProductoEnStock.stock = true;
+							dispatchEvent(llamarAProductoEnStock);
+							
+							isModoStockEnBotoneraAHYM = false;
+							habilitarModoStockEnBotoneraAHYM(true);							
+							
+						}else{
+							
+							llamarAServicioStock = true;
+							_clickeado = "HOY";
+							
+							settearFiltros = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.SETTEAR_FILTROS_PARA_BUSQUEDA);
+							settearFiltros.clienOPro = '--TODOS--';
+							settearFiltros.manejo = '--TODOS--';
+							settearFiltros.tipo = '--TODOS--';
+							settearFiltros.marca = '--TODOS--';
+							settearFiltros.flete = '--TODOS--';
+							settearFiltros.edoProquifa = '--TODOS--';
+							settearFiltros.diaSeleccionado = currentDia = _clickeado = "HOY";
+							settearFiltros.isBusquedaAvanzada = true;
+							settearFiltros.etiqueta = _currentEtiqueta;
+							settearFiltros.vistaSelected = _vistaSelected;
+							dispatchEvent(settearFiltros);
+							
+							var llamarAProductosTransYProg:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012( EventoRepProAlmacen2012.OBTENER_PRODUCTO_ALMACEN) ;
+							llamarAProductosTransYProg.usuario = DatosGlobales.getInstance()._usuario.clave;
+							llamarAProductosTransYProg.stock = false;
+							dispatchEvent(llamarAProductosTransYProg);
+							
+							isModoStockEnBotoneraAHYM = true;
+							habilitarModoStockEnBotoneraAHYM(false);
+						}
+						
+						var cargarBotoneraMontos:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_MONTO_BOTONERA);
+						cargarBotoneraMontos.usuario = claveUsuario;
+						dispatchEvent(cargarBotoneraMontos);
+						
+					}else{
+						buscaFD("vieneDeActualizar");
+					}
+				}
+			}
+			
+			
+			//muestra la busqueda Seleccionada: avanzada o rapida
+			private function seleccionBotonBarBusquedaAvanzaYRapida(event:IndexChangeEvent):void{
+				
+				if( event.currentTarget.selectedItem == null || _isActualiando) {
+					event.preventDefault();
+				}else{
+					
+					var enviarBusqueda:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.ENVIAR_TIPO_BUSQUEDA_A_PANELS);
+					
+					if( event.currentTarget.selectedItem.llave == 0 ){ //BUSQUEDA AVANZADA
+						isAvanzada = true;
+						enviarBusqueda.isBusquedaAvanzada = true;
+						dispatchEvent(enviarBusqueda);
+						
+						menuAvanzado.visible = menuAvanzado.includeInLayout = true;
+						MenuRapido.visible = MenuRapido.includeInLayout = false;
+						botoneraBarraTranProgYStock.visible = botoneraBarraTranProgYStock.includeInLayout = true;
+						_isVistaAvanzada = true;
+						
+						// Limpia Variables en caso de ser Null
+						if(!currentClienOPro){ currentClienOPro = "--TODOS--"; }
+						if(!currentEsac){ currentEsac = "--TODOS--"; }
+						if(!currentManejo){ currentManejo = "--TODOS--"; }
+						if(!currentTipo){ currentTipo = "--TODOS--"; }
+						if(!currentMarca){ currentMarca = "--TODOS--"; }
+						if(!currentFlete){ currentFlete = "--TODOS--"; }
+						if(!currentControl){ currentControl = "--TODOS--"; }
+						if(!currentEdoProquifa){ currentEdoProquifa = "--TODOS--"; }						
+						if(_clickeado == ""){
+							if(botoneraBarraTranProgYStock.selectedItem.label	== 'Stock'){
+								_clickeado = "TODO"; 
+							}else{
+								_clickeado = "HOY";
+							}
+						}
+						
+						var filtrarEnVista:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.FILTRAR_PRODUCTOS_VISTA);
+						filtrarEnVista.clienOPro = currentClienOPro;
+						filtrarEnVista.manejo = currentManejo;
+						filtrarEnVista.tipo = currentTipo;
+						filtrarEnVista.marca = currentMarca;
+						filtrarEnVista.flete = currentFlete;
+						filtrarEnVista.esac = currentEsac;
+						filtrarEnVista.edoProquifa = currentEdoProquifa;
+						filtrarEnVista.diaSeleccionado = currentDia = _clickeado;
+						filtrarEnVista.isBusquedaAvanzada = true;
+						filtrarEnVista.etiqueta = _currentEtiqueta;
+						filtrarEnVista.vistaSelected = _vistaSelected;
+						dispatchEvent(filtrarEnVista);
+						
+					}else{
+						isAvanzada = false;
+						enviarBusqueda.isBusquedaAvanzada = false;
+						dispatchEvent(enviarBusqueda);
+						
+						_isVistaAvanzada = false;
+						
+						menuAvanzado.visible = menuAvanzado.includeInLayout = false;
+						MenuRapido.visible = MenuRapido.includeInLayout =  true;
+						botoneraBarraTranProgYStock.visible = botoneraBarraTranProgYStock.includeInLayout = false;
+						
+						buscaFD("BusquedaRapida");
+						
+						if(_vistaSelected == "grafica"){
+							_vistaSelected = "tabla";
+							
+							var eventoindex:EventoCambioIndex = new EventoCambioIndex(EventoCambioIndex.CAMBIAR_INDEX);
+							eventoindex.vieneD = "reporteDeProductoAlmacen"; 
+							eventoindex.nuevoIndex = 0;
+							dispatchEvent(eventoindex);
+						}
+						
+					}
+				}
+			}
+			
+			
+			public static var busqRapida:String = "";
+			
+			private function buscaFD($vieneDe:String):void{
+				
+				var settearFiltros:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.SETTEAR_FILTROS_PARA_BUSQUEDA);
+				settearFiltros.isBusquedaAvanzada = false;
+				settearFiltros.textoBusquedaRapida = StringUtil.trim(txtFD.text);
+				dispatchEvent(settearFiltros);
+				
+				
+				var evtRapidaXFolioDespacho:EventoRepProAlmacen2012;
+				var evtRapidaPedido:EventoRepProAlmacen2012;
+				var eventEspera2:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera2.mensaje = "iniciarEspera";
+				eventEspera2.tipoEventos = [];
+				
+				
+				if($vieneDe == "BusquedaRapida"){
+					if(StringUtil.trim(txtFD.text).length && currentTextRapida != StringUtil.trim(txtFD.text)){
+						
+						busqRapida = currentTextRapida = StringUtil.trim(txtFD.text);
+						
+						if(isRapidaXFolioDespacho){
+							
+							eventEspera2.tipoEventos.push("BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_FOLIO_DESPACHO");
+							dispatchEvent(eventEspera2);
+							
+							evtRapidaXFolioDespacho = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_FOLIO_DESPACHO);
+							evtRapidaXFolioDespacho.folioDesignado = currentTextRapida;
+							dispatchEvent( evtRapidaXFolioDespacho );	
+						}else{
+							
+							eventEspera2.tipoEventos.push("BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_PEDIDO");
+							dispatchEvent(eventEspera2);
+							
+							evtRapidaPedido = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_PEDIDO);
+							evtRapidaPedido.cpedido = currentTextRapida;
+							dispatchEvent( evtRapidaPedido );
+						}
+					}
+				}else{
+						if(isRapidaXFolioDespacho){
+							
+							if( StringUtil.trim(txtFD.text ) != ""){
+							eventEspera2.tipoEventos.push("BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_FOLIO_DESPACHO");
+							dispatchEvent(eventEspera2);
+							
+							
+							evtRapidaXFolioDespacho = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_FOLIO_DESPACHO);
+							evtRapidaXFolioDespacho.folioDesignado = txtFD.text;
+							dispatchEvent( evtRapidaXFolioDespacho );
+							}else{
+								imgActualizar.source = imgNormal;
+								_isActualiando = false;
+							}
+						}else{
+							if( StringUtil.trim(txtFD.text ) != ""){
+								
+								eventEspera2.tipoEventos.push("BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_PEDIDO");
+								dispatchEvent(eventEspera2);
+								
+								evtRapidaPedido = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.BUSCAR_PRODUCTO_ALMACEN_RAPIDA_POR_PEDIDO);
+								evtRapidaPedido.cpedido = txtFD.text;
+								dispatchEvent( evtRapidaPedido );		
+							}else{
+								imgActualizar.source = imgNormal;
+								_isActualiando = false;
+							}
+								
+						}
+				}
+			}
+			
+			public function set recibeConteoParaBotoneraAHYM($labelsConteo:Object):void
+			{
+				if($labelsConteo == null){
+					return;
+				} 
+				
+				btn0.total = validaDisplay( $labelsConteo["PASADO"] );
+				btn1.total = validaDisplay( $labelsConteo["ANTE ANTIER"] );
+				btn2.total = validaDisplay( $labelsConteo["ANTIER"] );
+				btn3.total = validaDisplay( $labelsConteo["AYER"] );
+				btn4.total = validaDisplay( $labelsConteo["HOY"] );
+				btn5.total = validaDisplay( $labelsConteo["MAÑANA"] );
+				btn6.total = validaDisplay( $labelsConteo["PASADO MAÑANA"] );
+				btn7.total = validaDisplay( $labelsConteo["POS PASADO"] );
+				btn8.total = validaDisplay( $labelsConteo["FUTURO"] ); 
+				
+				btn9.total = validaDisplay( $labelsConteo["todosClienOPro"] );
+				btn3.label2 = validaDisplay( $labelsConteo.etiquetaAyer);
+				btn4.label2 = validaDisplay( $labelsConteo.etiquetaHoy);
+				btn5.label2 = validaDisplay( $labelsConteo.etiquetaManiana);
+				
+				if(_currentEtiqueta == "transito"){
+					lblPromedio1.text = $labelsConteo.promedioFRegular;
+					lblPromedio2.text = $labelsConteo.promedioFExpress;
+				}else if(_currentEtiqueta == "programado"){
+					lblPromedio1.text = $labelsConteo.promedioFProgramado;
+				}else{
+					lblPromedio1.text = $labelsConteo.promedioStock;
+				}				
+			}
+			
+			private function validaDisplay( $propiedad:* ):String{
+				if( $propiedad == null ) return '';
+				return $propiedad.toString();
+			}
+			
+			public function set recibeObjetoParaLlenarCombos($combos:Object):void
+			{
+				if($combos != null){
+					
+					if($combos.hasOwnProperty("cmbClienOProv")){
+						cmbClienOProv.setDataProvider(new ArrayCollection($combos.cmbClienOProv),currentClienOPro);
+					}
+					if($combos.hasOwnProperty("cmbManejo")){
+						cmbManejo.setDataProvider(new ArrayCollection($combos.cmbManejo),currentManejo);
+					}
+					if($combos.hasOwnProperty("cmbTipo")){
+						cmbTipo.setDataProvider(new ArrayCollection($combos.cmbTipo),currentTipo);
+					}
+					if($combos.hasOwnProperty("cmbMarca")){
+						cmbMarca.setDataProvider(new ArrayCollection($combos.cmbMarca),currentMarca);
+					}
+					if($combos.hasOwnProperty("cmbFlete")){
+						cmbFlete.setDataProvider(new ArrayCollection($combos.cmbFlete),currentFlete);
+					}
+					if($combos.hasOwnProperty("cmbControl")){
+						cmbControl.setDataProvider(new ArrayCollection($combos.cmbControl),currentControl);
+					} 
+					if($combos.hasOwnProperty("cmbEdoProquifa")){
+						cmbEdoProquifa.setDataProvider(new ArrayCollection($combos.cmbEdoProquifa),currentEdoProquifa);
+					}
+					if($combos.hasOwnProperty("cmbESAC")){
+						cmbESAC.setDataProvider(new ArrayCollection($combos.cmbESAC), currentEsac );
+					}
+					if($combos.hasOwnProperty("cmbRuta")){
+						cmbRuta.setDataProvider(new ArrayCollection($combos.cmbRuta), currentRuta );
+					}
+					if($combos.hasOwnProperty("cmbZonaMensajeria")){
+						cmbZona.setDataProvider(new ArrayCollection($combos.cmbZonaMensajeria), currentZona );
+					}
+				}
+			}
+			
+			private var currentClienOPro:String;
+			private var currentManejo:String;
+			private var currentTipo:String;
+			private var currentMarca:String;
+			private var currentFlete:String;
+			private var currentControl:String;
+			private var currentEdoProquifa:String;
+			private var currentRuta:String;
+			private var currentZona:String;
+			private var currentEsac:String;
+			private var currentDia:String = "HOY";
+			private var currentTextRapida:String;
+			
+			protected function filtrarDatos($filtro:String):void
+			{
+				var dispararEvento:Boolean = false;
+				
+				switch($filtro)
+				{
+					case "cmbClienOProv":
+					{
+						if(cmbClienOProv.selectedItem != null &&  currentClienOPro != cmbClienOProv.selectedItem){
+							currentClienOPro = cmbClienOProv.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbManejo":
+					{
+						if(cmbManejo.selectedItem != null &&  currentManejo != cmbManejo.selectedItem){
+							currentManejo = cmbManejo.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbTipo":
+					{
+						if(cmbTipo.selectedItem != null &&  currentTipo != cmbTipo.selectedItem){
+							currentTipo = cmbTipo.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbMarca":
+					{
+						if(cmbMarca.selectedItem != null &&  currentMarca != cmbMarca.selectedItem){
+							currentMarca = cmbMarca.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbFlete":
+					{
+						if(cmbFlete.selectedItem != null &&  currentFlete != cmbFlete.selectedItem){
+							currentFlete = cmbFlete.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbControl":
+					{
+						if(cmbControl.selectedItem != null &&  currentControl != cmbControl.selectedItem){
+							currentControl = cmbControl.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbEdoProquifa":
+					{
+						if(cmbEdoProquifa.selectedItem != null &&  currentEdoProquifa != cmbEdoProquifa.selectedItem){
+							currentEdoProquifa = cmbEdoProquifa.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbESAC":
+					{
+						if (cmbESAC.selectedItem != null && currentEsac != cmbESAC.selectedItem ){
+							currentEsac = cmbESAC.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "filtroDias":
+					{
+						if(currentDia != _clickeado ){
+							currentDia = _clickeado;
+						}
+						
+						dispararEvento = true;
+						break;
+					}
+					case "cmbRuta":
+					{
+						if(cmbRuta.selectedItem != null &&  currentRuta != cmbRuta.selectedItem){
+							currentRuta = cmbRuta.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					case "cmbZona":
+					{
+						if(cmbZona.selectedItem != null &&  currentZona != cmbZona.selectedItem){
+							currentZona = cmbZona.selectedItem;
+							dispararEvento = true;
+						}
+						break;
+					}
+					default:
+					{
+						break;
+					}
+				}
+				
+				if(dispararEvento){
+					var evento:EventoRepProAlmacen2012 = new EventoRepProAlmacen2012(EventoRepProAlmacen2012.FILTRAR_PRODUCTOS_VISTA);
+					evento.clienOPro = currentClienOPro;
+					evento.manejo = currentManejo;
+					evento.tipo = currentTipo;
+					evento.marca = currentMarca;
+					evento.control = currentControl;
+					evento.edoProquifa = currentEdoProquifa;
+					evento.ruta = currentRuta;
+					evento.zona = currentZona;
+					
+					if (!isStock ){
+						evento.flete = currentFlete;
+						evento.esac = currentEsac;
+					}
+					
+					evento.diaSeleccionado = currentDia;
+					evento.isBusquedaAvanzada = true;
+					
+					evento.etiqueta = _currentEtiqueta;
+					evento.vistaSelected = _vistaSelected;
+					dispatchEvent(evento);
+				}
+			}
+			
+			private var isRapidaXFolioDespacho:Boolean = true;
+			protected function checkBusquedaPorFolioOPedido_clickHandler(event:MouseEvent):void
+			{
+				txtFD.text = "";
+				currentTextRapida = "";
+				
+				if(!checkBusquedaPorFolioOPedido.selected){
+					isRapidaXFolioDespacho = true;
+					lblTituloBRapida.text = "FD:";
+					txtFD.toolTip = "FD";
+					
+				}else{
+					isRapidaXFolioDespacho = false;
+					lblTituloBRapida.text = "Pedido interno:";
+					txtFD.toolTip = "Pedido interno";
+				}
+				
+			}
+			
+			public function set recibeFuncionUsuario($funcion:String):void{
+				if ($funcion != null && $funcion == 'Ejecutivo de Servicio a Clientes'){
+					vgpEsac.visible = vgpEsac.includeInLayout = false;
+				}
+				else{
+					vgpEsac.visible = vgpEsac.includeInLayout = true;
+				}
+			}
+			
+			public function set recibeListaMontosBotonera($montosBtn:ArrayCollection):void
+			{
+				var resumen:ResumenConsulta;
+				
+				if($montosBtn == null)
+					return;
+				
+				for (var i:int = 0; i < $montosBtn.length; i++) 
+				{
+					resumen = $montosBtn[i] as ResumenConsulta;
+					
+					if( resumen.etiqueta == "transito" )
+					{
+						if(resumen.montoString != null && resumen.montoString != ""){
+							_arrButtonTranProgYStock[0].monto = resumen.montoString.replace(" ", "");
+						}else{
+							_arrButtonTranProgYStock[0].monto = "$0.00";
+						}
+					}
+					
+					else if( resumen.etiqueta == "programado" )
+					{
+						if(resumen.montoString != null && resumen.montoString != ""){
+							_arrButtonTranProgYStock[1].monto = resumen.montoString.replace(" ", "");
+						}else{
+							_arrButtonTranProgYStock[1].monto = "$0.00";
+						}
+					}
+					else if( resumen.etiqueta == "stock" )
+					{
+						if(resumen.montoString != null && resumen.montoString != ""){
+							_arrButtonTranProgYStock[2].monto = resumen.montoString.replace(" ", "");
+						}else{
+							_arrButtonTranProgYStock[2].monto = "$0.00";
+						}
+					}					
+				}				
+				botoneraBarraTranProgYStock.dataProvider = _arrButtonTranProgYStock;
+			}
+			
+			public function set recibeListaMontosBotoneraTransito($monto:String):void
+			{
+				_arrButtonTranProgYStock[0].monto = $monto.replace(" USD", "");
+				botoneraBarraTranProgYStock.dataProvider = _arrButtonTranProgYStock;
+			}
+			
+			public function set recibeListaMontosBotoneraProgramado($monto:String):void
+			{
+				_arrButtonTranProgYStock[1].monto = $monto.replace(" USD", "");
+				botoneraBarraTranProgYStock.dataProvider = _arrButtonTranProgYStock;
+			}			
+		]]>
+	</fx:Script>
+	
+	<vistas:contenido>
+		
+		<s:VGroup width="100%" height="100%">
+			
+			<s:HGroup horizontalAlign="center" width="100%">
+				<s:Image id="imgActualizar"  click="actualizarUniverso()"/>
+			</s:HGroup>
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="1"/>
+			<s:ButtonBar changing="seleccionBotonBarBusquedaAvanzaYRapida(event)" selectedIndex="0" id="btnBarra" labelField="valor" dataProvider="{this._arrBotonesBusquedaAvanzaYRapi}" width="100%" requireSelection="true"/>
+			<s:Spacer height="1"/>
+			<otros:divisionHueca width="100%"/>
+			<s:Spacer height="0"/>
+			<botonesToggle:ButtonBarColores width="100%" height="45" id="botoneraBarraTranProgYStock" selectedIndex="0"  requireSelection="true" mostrarMonto="true"
+											dataProvider="{_arrButtonTranProgYStock}" changing="seleccionBotonBarTransProgYStock(event)" />
+			<s:Spacer height="0"/>
+			<s:VGroup width="100%" height="100%" id="menuAvanzado" visible="true" >
+				<label:Titulo id="lblTituloclientProvee" text="Cliente:" paddingTop="0"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbClienOProv" change="filtrarDatos('cmbClienOProv')" />
+				<s:VGroup width="100%" id="vgpEsac">
+					<s:Spacer height="1"/>
+					<label:Titulo text="Responsable:" paddingTop="0" id="lblEsac" visible="{!isStock}" includeInLayout="{!isStock}"/>
+					<comboPqNet:ComboItemsSinServicio width="100%" id="cmbESAC" change="filtrarDatos('cmbESAC')" labelField="valor" visible="{!isStock}" includeInLayout="{!isStock}"/>
+				</s:VGroup>
+				<s:Spacer height="1"/>
+				<label:Titulo text="Manejo:" paddingTop="0"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbManejo" change="filtrarDatos('cmbManejo')" labelField="valor"/>
+				<s:Spacer height="1"/>
+				<label:Titulo text="Tipo:" paddingTop="0"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbTipo" change="filtrarDatos('cmbTipo')" labelField="valor"/>
+				<s:Spacer height="1"/>
+				<label:Titulo text="Marca:" paddingTop="0"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbMarca" change="filtrarDatos('cmbMarca')" labelField="valor"/>
+				<s:VGroup width="100%" id="grpCmbFlete">
+					<s:Spacer height="1"/>
+					<label:Titulo text="Flete:" paddingTop="0"/>
+					<comboPqNet:ComboItemsSinServicio width="100%" id="cmbFlete" change="filtrarDatos('cmbFlete')" labelField="valor"/>
+				</s:VGroup>  
+				<s:Spacer height="1"/>
+				<label:Titulo text="Control:" paddingTop="0"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbControl" change="filtrarDatos('cmbControl')" labelField="valor"/>
+				<s:Spacer height="1"/>
+				<label:Titulo text="ProquifaNet:" paddingTop="0"/>
+				<comboPqNet:ComboItemsSinServicio width="100%" id="cmbEdoProquifa" change="filtrarDatos('cmbEdoProquifa')" labelField="valor"/>
+				<s:VGroup width="100%" id="grpCmbsFleteRuta">
+					<s:Spacer height="1"/>
+					<label:Titulo text="Ruta:" paddingTop="0"/>
+					<comboPqNet:ComboItemsSinServicio width="100%" id="cmbRuta" change="filtrarDatos('cmbRuta')" labelField="valor"/>
+					<s:Spacer height="1"/>
+					<label:Titulo text="Zona:" paddingTop="0"/>
+					<comboPqNet:ComboItemsSinServicio width="100%" id="cmbZona" change="filtrarDatos('cmbZona')" labelField="valor"/>
+				</s:VGroup>
+				<s:Spacer height="1"/>
+				<otros:divisionHueca width="100%"/>
+				<s:Spacer height="10"/>
+				
+				<s:HGroup width="100%" horizontalAlign="right" gap="9" visible="{this._isVistaAvanzada}" includeInLayout="{this._isVistaAvanzada}" paddingBottom="10" >
+					<s:Image id="icoGrafica" source="{ this._icoGrafica }" />
+					<s:Image id="icoTabla" source="{ this._icoTabla }" />
+				</s:HGroup>
+				
+				<s:Group width="100%" id="grid" visible="{this._isVistaAvanzada}" includeInLayout="{this._isVistaAvanzada}" >
+					<s:layout>
+						<btnToggleEstados:LayoutBotoneraReporteAHyM minGap="2" minWidthElement="92"/>
+					</s:layout>
+					<btnToggleEstados:botonReporteAHyM id="btn3" tipoBoton="ayer" label1="AYER" currentState="{_clickeado == 'AYER' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/> 
+					<btnToggleEstados:botonReporteAHyM id="btn4" tipoBoton="hoy" label1="HOY" currentState="{_clickeado == 'HOY' ? 'seleccionado': 'normal' }"  click="filtrarDatos('filtroDias')"/> 
+					<btnToggleEstados:botonReporteAHyM id="btn5" tipoBoton="manana" label1="MAÑANA" currentState="{_clickeado == 'MAÑANA' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')" /> 
+					<btnToggleEstados:botonReporteAHyM id="btn2" tipoBoton="antier" label1="ANTIER" currentState="{_clickeado == 'ANTIER' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/> 
+					<btnToggleEstados:botonReporteAHyM id="btn6" tipoBoton="pasadomanana" label1="PASADO MAÑANA" currentState="{_clickeado == 'PASADO MAÑANA' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/>
+					<btnToggleEstados:botonReporteAHyM id="btn1" tipoBoton="anteantier" label1="ANTE ANTIER"  currentState="{_clickeado == 'ANTE ANTIER' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/>
+					<btnToggleEstados:botonReporteAHyM id="btn9" tipoBoton="todo" label1="TODO" currentState="{_clickeado == 'TODO' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/>
+					<btnToggleEstados:botonReporteAHyM id="btn7" tipoBoton="pospasado" label1="POS PASADO" currentState="{_clickeado == 'POS PASADO' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/>
+					<btnToggleEstados:botonReporteAHyM id="btn0" tipoBoton="pasado" label1="PASADO" currentState="{_clickeado == 'PASADO' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/>
+					<btnToggleEstados:botonReporteAHyM id="btn8" tipoBoton="futuro" label1="FUTURO" currentState="{_clickeado == 'FUTURO' ? 'seleccionado': 'normal' }" click="filtrarDatos('filtroDias')"/>
+				</s:Group>
+				
+				<!--<s:Spacer height="5"/>-->
+				<otros:divisionHueca width="100%"/>
+				<!--<s:Spacer height="5"/>-->
+				
+				<s:VGroup width="100%" horizontalAlign="center">
+					<s:Label text="TT PROMEDIO:" color="0x{catalogoColores.LABEL_CASI_NEGRO}" fontSize="15" paddingTop="5"/>
+					<s:Label id="lblPromedio1" color="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+					<s:Label id="lblPromedio2" color="0x{catalogoColores.LABEL_CASI_NEGRO}"/>
+				</s:VGroup>
+				
+			</s:VGroup>
+			<s:VGroup id="MenuRapido" includeInLayout="false" visible="false" width="100%" height="100%">
+				<chekbox:CheckBoxPq id="checkBusquedaPorFolioOPedido" selected="false" labelLeft="FOLIO DE DESPACHO" labelRight="PEDIDO INTERNO" click="checkBusquedaPorFolioOPedido_clickHandler(event)"/>
+				<s:Spacer height="5"/>
+				<label:Titulo id="lblTituloBRapida" paddingTop="0" text="FD:"/>
+				<s:TextInput width="100%" enter="buscaFD('BusquedaRapida')" id="txtFD" fontStyle="normal" />
+				<s:Spacer height="15"/>
+				<otros:divisionHueca width="100%"/>
+			</s:VGroup>
+		</s:VGroup>
+	</vistas:contenido>	
+</vistas:PanelPropiedadesPlantillas>

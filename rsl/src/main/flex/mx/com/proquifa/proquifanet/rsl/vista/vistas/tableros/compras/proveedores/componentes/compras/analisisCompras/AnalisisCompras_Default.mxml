@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:todos="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.compras.analisisCompras.todos.*" 
+		 xmlns:analisis="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.compras.proveedores.componentes.compras.analisisCompras.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:grafica="skins.botones.grafica.*" 
+		 xmlns:shaders="skins.skin.shaders.*"
+		 xmlns:pqNet="skins.botones.pqNet.*" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%" 
+		 creationComplete="inicio()"
+		 >
+	
+	<fx:Metadata>
+		[Event(name="Regresar_VistaDefaultAnalisisCompras", type="flash.events.Event")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.compras.proveedores.EventoTabProveedores;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.clientes.ResumenProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			
+			private var _event:EventoTabProveedores;
+			public var vistaARegresar:String;
+			private var _vistaSeleccionada:String ="todos";
+			private var _servicioResumen:Boolean = false;
+			private const _GRAFICA:String = "grafica_VistaDefaultAnalisisCompras";
+			private const _INICIO:String = "incio_VistaDefaultAnalisisCompras";
+			
+			protected function inicio():void
+			{
+				addEventListener(EventoTabProveedores.SELECCION_OPCION_MENU_ANALISIS,seleccionVista,false,0,true);
+				addEventListener(EventoTabProveedores.CAMBIO_GRAFICAS_ESTRATEGICOS,seleccionChartEstrategicos,false,0,true);
+				addEventListener(EventoTabProveedores.CAMBIO_GRAFICAS_NORMALES,seleccionChartNormales,false,0,true);
+				disparaEventos();
+			}
+			
+			public function set recibirFiltrosTableroProveedores( $event:EventoTabProveedores ):void
+			{
+				if( $event == null )
+					return;
+				
+				_event = $event;
+				_servicioResumen = false;
+				grpAnalisisCompra.filtros = _event;
+				disparaEventos();
+			} 
+			
+			protected function disparaEventos():void
+			{
+				var soliResumenVentas:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.CONSULTAR_RESUMEN_COMPRAS);
+				soliResumenVentas.parametros = _event.parametros;
+				dispatchEvent(soliResumenVentas);
+				
+				if(!_servicioResumen)
+				{
+					var evt:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.CONSULTAR_RESUMEN_AGRUPADAS_COMPRADOR);
+					evt.parametros = _event.parametros;
+					evt.parametros.agrupadoComprador = true;
+					dispatchEvent(evt);
+					
+					var evnet:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.CONSULTAR_RESUMEN_AGRUPADAS_PAGADOR);
+					evnet.parametros = _event.parametros;
+					evnet.parametros.agrupadoComprador = false;
+					dispatchEvent(evnet);
+				} 
+			}
+			
+			
+			protected function btnRegresarGrafica_clickHandler(event:MouseEvent):void
+			{
+				vistaARegresar = _GRAFICA;
+				dispatchEvent(new Event("Regresar_VistaDefaultAnalisisCompras"));
+			}
+			
+			protected function btnRegresarInicio_clickHandler(event:MouseEvent):void
+			{
+				vistaARegresar = _INICIO; 
+				dispatchEvent(new Event("Regresar_VistaDefaultAnalisisCompras"));
+			}
+			
+			public function seleccionVista(event:EventoTabProveedores):void
+			{
+				_vistaSeleccionada = event.seleccionMenuAnalisis;
+				
+				if(_vistaSeleccionada != "todos" && !_servicioResumen)
+				{
+					var evn:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.CONSULTAR_RESUMEN_AGRUPADAS_COMPRADOR);
+					evn.parametros = _event.parametros;
+					evn.parametros.agrupadoComprador = true;
+					dispatchEvent(evn);
+					
+					var evnt:EventoTabProveedores = new EventoTabProveedores(EventoTabProveedores.CONSULTAR_RESUMEN_AGRUPADAS_PAGADOR);
+					evnt.parametros = _event.parametros;
+					evnt.parametros.agrupadoComprador = false;
+					dispatchEvent(evnt);
+					_servicioResumen = true;
+				}
+				
+				switch(_vistaSeleccionada)
+				{
+					case "todos":
+					{
+						grpAnalisisCompra.vistaPrincipal.selectedIndex = 0;
+						areaGrafica.grpGraficasTodas.selectedIndex = 0;
+						break;
+					}
+					case "estrategicos":
+					{
+						grpAnalisisCompra.vistaPrincipal.selectedIndex = 1;
+						areaGrafica.grpGraficasTodas.selectedIndex = 1;
+						break;
+					}
+					case "normales":
+					{
+						grpAnalisisCompra.vistaPrincipal.selectedIndex = 2;
+						areaGrafica.grpGraficasTodas.selectedIndex = 2;
+						break;
+					}
+				} 
+				
+			}
+			
+			public function seleccionChartEstrategicos(event:EventoTabProveedores):void
+			{
+				areaGrafica.chartEstrategicos.currentVista = event.currentVista;
+			}
+			
+			public function seleccionChartNormales(event:EventoTabProveedores):void
+			{
+				areaGrafica.chartNormales.currentVista = event.currentVista;
+			}
+
+			
+			private var _sqlComprador:Query;
+			public function set recibeAgrupadosComprador($compradores:ArrayCollection):void
+			{
+				if($compradores == null || $compradores.length == 0)
+					return;
+				
+				_sqlComprador = new Query($compradores,["tipoProveedor","comprador","pagador"]);
+				
+				var _estrategicos:Array = _sqlComprador.getPunteros(["Estrategico"]);
+				var _normales:Array = _sqlComprador.getPunteros(["Normal"]);
+				
+				
+				grpAnalisisCompra.grpEstrategicos.AC_EstrateticoComprador.recibeAgrupadosComprador(sendTotales(_estrategicos,true));
+				grpAnalisisCompra.grpNormales.ac_normalesComprador.recibeAgrupadosComprador(sendTotales(_normales,true));
+				
+				areaGrafica.chartEstrategicos.recibeInfoComprador( _sqlComprador.armarLista(_estrategicos));
+				areaGrafica.chartNormales.recibeInfoComprador( _sqlComprador.armarLista(_normales));
+			}
+			
+			
+			private var _sqlPagador:Query;
+			public function set recibeAgrupadosPagador($pagadores:ArrayCollection):void
+			{
+				if($pagadores == null || $pagadores.length == 0)
+					return;
+				
+				_sqlPagador = new Query($pagadores,["tipoProveedor","comprador","pagador"]);
+				
+				var _estrategicos:Array = _sqlPagador.getPunteros(["Estrategico"]);
+				var _normales:Array = _sqlPagador.getPunteros(["Normal"]);
+				
+				grpAnalisisCompra.grpEstrategicos.AC_EstrateticoPagador.recibeAgrupadosPagador(sendTotales(_estrategicos,false));
+				grpAnalisisCompra.grpNormales.ac_normalesPagador.recibeAgrupadosPagador(sendTotales(_normales,false));
+				
+				areaGrafica.chartEstrategicos.recibeInfoPagador( _sqlPagador.armarLista(_estrategicos));
+				areaGrafica.chartNormales.recibeInfoPagador( _sqlPagador.armarLista(_normales));
+			}
+			
+			private function sendTotales($array:Array,isComprador:Boolean):ArrayCollection
+			{
+				if(isComprador)
+				{
+					
+					var _resTotalCompra:Number = _sqlComprador.getSumarCampo("totalCompra",$array,"",false);
+					var _resObjetivoDeseado:Number = _sqlComprador.getSumarCampo("objetivoDeseado",$array,"",false);
+					var _resObjetivoMontoDeseado:Number = _sqlComprador.getSumarCampo("objetivoMontoDeseado",$array,"",false);
+					var _resObjetivoFundamental:Number = _sqlComprador.getSumarCampo("objetivoFundamental",$array,"",false);
+					var _resObjetivoMontoFundamental:Number = _sqlComprador.getSumarCampo("objetivoMontoFundamental",$array,"",false);
+					var _resMontoCompraAnterior:Number = _sqlComprador.getSumarCampo("montoCompraAnterior",$array,"",false);
+					var _resTotalProveedores:Number = _sqlComprador.getSumarCampo("totalProveedores",$array,"",false);
+					
+					var tmp:ArrayCollection = _sqlComprador.armarLista($array);
+					
+					for(var p:int = 0; p < tmp.length; p++)
+					{
+						var temp:ResumenProveedor = tmp[p] as ResumenProveedor;
+						temp.footer_totalCompra = _resTotalCompra;
+						temp.footer_objetivoDeseado = _resObjetivoDeseado;
+						temp.footer_objetivoMontoDeseado = _resObjetivoMontoDeseado;
+						temp.footer_objetivoFundamental = _resObjetivoFundamental;
+						temp.footer_objetivoMontoFundamental = _resObjetivoMontoFundamental;
+						temp.footer_montoCompraAnterior = _resMontoCompraAnterior;
+						temp.distribucionProveedor = ((temp.totalCompra * 100) / _resTotalCompra );
+						temp.distribucionProveedorAnterior = ((temp.montoCompraAnterior * 100) / _resMontoCompraAnterior );
+						temp.footer_totalProveedores = _resTotalProveedores;
+					}
+					
+					return tmp;
+				}
+				else
+				{
+					var _resTotalCompra_P:Number = _sqlPagador.getSumarCampo("totalCompra",$array,"",false);
+					var _resObjetivoDeseado_P:Number = _sqlPagador.getSumarCampo("objetivoDeseado",$array,"",false);
+					var _resObjetivoMontoDeseado_P:Number = _sqlPagador.getSumarCampo("objetivoMontoDeseado",$array,"",false);
+					var _resObjetivoFundamental_P:Number = _sqlPagador.getSumarCampo("objetivoFundamental",$array,"",false);
+					var _resObjetivoMontoFundamental_P:Number = _sqlPagador.getSumarCampo("objetivoMontoFundamental",$array,"",false);
+					var _resMontoCompraAnterior_P:Number = _sqlPagador.getSumarCampo("montoCompraAnterior",$array,"",false);
+					var _resTotalProveedores_P:Number = _sqlPagador.getSumarCampo("totalProveedores",$array,"",false);
+					
+					var tmp2:ArrayCollection = _sqlPagador.armarLista($array);
+					
+					for(var n:int = 0; n < tmp2.length; n++)
+					{
+						var temp2:ResumenProveedor = tmp2[n] as ResumenProveedor;
+						temp2.footer_totalCompra = _resTotalCompra_P;
+						temp2.footer_objetivoDeseado = _resObjetivoDeseado_P;
+						temp2.footer_objetivoMontoDeseado = _resObjetivoMontoDeseado_P;
+						temp2.footer_objetivoFundamental = _resObjetivoFundamental_P;
+						temp2.footer_objetivoMontoFundamental = _resObjetivoMontoFundamental_P;
+						temp2.footer_montoCompraAnterior = _resMontoCompraAnterior_P;
+						temp2.distribucionProveedor = ((temp2.totalCompra * 100) / _resTotalCompra_P );
+						temp2.distribucionProveedorAnterior = ((temp2.montoCompraAnterior * 100) / _resMontoCompraAnterior_P );
+						temp2.footer_totalProveedores = _resTotalProveedores_P;
+					}
+					
+					return tmp2;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	
+	<s:HGroup width="100%" height="100%" gap="0" paddingRight="-20">
+		<s:VGroup width="100%" height="100%">
+			
+			<analisis:AnalisisCompra_VistaTrabajo id="grpAnalisisCompra" width="100%"/>
+			
+			<otros:divisionGruesa width="100%"/>
+			<s:VGroup width="100%" paddingLeft="20" paddingRight="20" paddingBottom="20">
+				<s:HGroup width="100%" height="40" verticalAlign="middle" paddingBottom="5" paddingTop="10" >
+					<grafica:botonPopUp id="btnRegresarGrafica" icono="chart" click="btnRegresarGrafica_clickHandler(event)"/>
+					<pqNet:botonPqNetLargo id="btnRegresarInicio" label="Inicio" click="btnRegresarInicio_clickHandler(event)" />
+				</s:HGroup>
+			</s:VGroup>  
+			
+		</s:VGroup>
+		
+		<analisis:AnalisisCompra_AreaGrafica id="areaGrafica" width="40%" height="100%" />
+		
+	</s:HGroup>
+	
+	
+</s:Group>

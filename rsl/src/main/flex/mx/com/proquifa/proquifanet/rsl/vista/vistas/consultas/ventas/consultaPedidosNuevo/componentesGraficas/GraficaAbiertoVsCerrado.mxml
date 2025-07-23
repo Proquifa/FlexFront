@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" width="100%" height="100%" 
+		 xmlns:graficas="skins.skin.graficas.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Pedido;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			
+			private var keys:Object;
+			[Bindable] private var _infoAbiertoCerrado:ArrayCollection
+			
+			public function set obtenerInfopedidoGrafica($infoGrafica:ArrayCollection):void{
+				if( $infoGrafica == null ){ return ;	}
+				
+				_infoAbiertoCerrado = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				var arrayTemp:Array = new Array();
+				arrayTemp = ObjectUtil.copy(($infoGrafica) as ArrayCollection).source;
+				arrayTemp.sortOn("estado");
+				
+				/**
+				 * Se obtiene un array con Estado Abierto y Cerrado con el fin de saber si vienen los dos o sólo uno 
+				 *  sin duplicarse, que será el que controlará el for para las sumas.
+				 * */
+				keys = new Object();
+				var arrayTotalEstados:Array = new Array();
+				arrayTotalEstados = arrayTemp.filter(quitaDuplicados);
+				
+				FormarLosEstados(arrayTotalEstados,arrayTemp,"Estados",_infoAbiertoCerrado);
+				
+				myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoAbiertoCerrado,null,"totalPedidos");
+				
+				//Para liberar Memoria
+				arrayTemp = new Array();
+				arrayTotalEstados = new Array();
+				keys = new Object();
+			}
+			
+			private function FormarLosEstados(TotalEstados:Array,estadosInfo:Array,etiqueta:String,infoEstados:ArrayCollection):void
+			{
+				
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPedidos:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClientesAbiertas:Object= new Object();
+				var keysPedidosAbiertos:Object= new Object();
+				var keys2:Object = new Object();
+				keys = new Object();
+				
+				var currentPartidaPedido:Pedido; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalEstados.length; i++){
+					j=0;
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPedidos =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaPedido = estadosInfo[j] as Pedido;
+					while( (TotalEstados[i] as Pedido).estado == currentPartidaPedido.estado ){
+						totalPartidas += currentPartidaPedido.totalPartidas;
+						totalPiezas += currentPartidaPedido.totalPiezas;
+						totalMonto += currentPartidaPedido.montoDolares;
+						
+						/**
+						 * Para el conteo de cotizaciones Dando Peso a las cotizaciones que están FT
+						 * */
+						if( currentPartidaPedido.estado == "ABIERTA"){
+							if(!keysPedidosAbiertos.hasOwnProperty(currentPartidaPedido.cpedido)){
+								keysPedidosAbiertos[currentPartidaPedido.cpedido] = currentPartidaPedido.cpedido;
+								totalPedidos++
+							}
+							if(!keysClientesAbiertas.hasOwnProperty(currentPartidaPedido.nombreCliente)){
+								keysClientesAbiertas[currentPartidaPedido.nombreCliente] = currentPartidaPedido.nombreCliente;
+								totalClientes++;
+							}
+						}else{
+							if(!keys.hasOwnProperty(currentPartidaPedido.cpedido) && !keysPedidosAbiertos.hasOwnProperty(currentPartidaPedido.cpedido)){
+								keys[currentPartidaPedido.cpedido]=currentPartidaPedido.cpedido;
+								totalPedidos++
+							}
+							if(!keys2.hasOwnProperty(currentPartidaPedido.nombreCliente) && !keysClientesAbiertas.hasOwnProperty(currentPartidaPedido.nombreCliente)){
+								keys2[currentPartidaPedido.nombreCliente] = currentPartidaPedido.nombreCliente;
+								totalClientes++;
+							}
+						}
+						
+						estadosInfo.shift();
+						if(estadosInfo.length >0)
+							currentPartidaPedido = estadosInfo[j] as Pedido;
+						else
+							currentPartidaPedido =new Pedido();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalEstados[i] as Pedido).estado.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalPedidos = totalPedidos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoEstados.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+				/**
+				 * Se necesita ordenar inversamente primero la suma de los cerrados y luego abiertos para invertir colores en la gráfica.
+				 * */ 
+				if(infoEstados.length>0){
+					if(infoEstados.length == 1){
+						if((infoEstados[0] as ResumenConsulta).conceptoResultado == "ABIERTA"){
+							itemResumenConsulta = new ResumenConsulta();
+							itemResumenConsulta.conceptoResultado ="CERRADO";
+							itemResumenConsulta.total = 0;
+							itemResumenConsulta.piezasTotal =0;
+							itemResumenConsulta.totalPedidos =0;
+							itemResumenConsulta.totalClientes =0;
+							itemResumenConsulta.partidas =0;
+							infoEstados.addItemAt(itemResumenConsulta,0);
+						}
+					}else{
+						var sortField:SortField = new SortField();
+						sortField.name = "conceptoResultado";
+						sortField.numeric = false;
+						
+						var sort:Sort = new Sort();
+						sort.fields = [sortField];
+						sort.reverse();
+						infoEstados.sort = sort;
+						infoEstados.refresh();
+					}
+				}
+			}
+			private function quitaDuplicados(item:Pedido, idx:uint, _clientes:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.estado)){
+					return false;
+				}else{
+					keys[item.estado]= item.estado;
+					return true;
+				}
+				
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%" verticalAlign="top" horizontalAlign="center" gap="0">
+		<s:Spacer width="100%" height="2%"/>
+		<s:VGroup width="100%" verticalAlign="middle" height="8%">
+			<componentes:tituloChartTablero  width="100%" text="ABIERTOS VS CERRADOS" textAlign="center" />
+		</s:VGroup>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" gap="0">
+		<s:Spacer width="100%" height="10%" />
+			<graficas:PieChartPqGris id="myChart" width="100%" height="100%" horizontalCenter="0" verticalCenter="0"
+						 dataProvider="{null}"
+						 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+						 showDataTips="false"  innerRadius=".5">   
+				<graficas:series>
+					<graficas:pieSeriesVS field="totalPedidos"/> <!--totalPartidas-->
+				</graficas:series>
+			</graficas:PieChartPqGris>
+					<s:Spacer width="100%" height="30%"/>
+	</s:VGroup>
+</s:Group>

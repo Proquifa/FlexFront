@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 width="100%" height="100%" 
+		 xmlns:graficas="skins.skin.graficas.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ProductoAlmacen;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _botonBar:String;
+			private var _infoPqNet:ArrayCollection;
+			
+			public function set recibeLabelButonBar(boton:String):void{
+				_botonBar = boton;
+				myChart.dataProvider = new ArrayCollection();
+			}
+			
+			public function set recibirProductoPorFechaGrafico($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				_infoPqNet = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				/**
+				 * Filtrar la lista deacuerdo a lo seleccionado en el button bar
+				 * */
+				var arrayFiltrado:Array = new Array();
+				arrayFiltrado = arrayTemp.filter(filtrarPorBotonBar);
+				arrayFiltrado.sortOn("estadoProquifaNet");
+				// Limpiar Memoria
+				arrayTemp = new Array();
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Marca
+				 * quitando las duplicados
+				 * */
+				keys = new Object();
+				var arrayTotalEstatus:Array = new Array();
+				arrayTotalEstatus = arrayFiltrado.filter(quitarDuplicados);
+				
+				FormarLosEstatus(arrayTotalEstatus,arrayFiltrado,_infoPqNet);
+				
+				myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoPqNet,null,"totalPedidos");
+				
+				//Limpiar Memoria
+				arrayFiltrado = null;
+				arrayTotalEstatus = null;
+			}
+			
+			private function FormarLosEstatus(TotalEstatus:Array,estatusInfo:Array,infoEstatus:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPedidos:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysClienteProveedor:Object;
+				
+				var currentPartidaProducto:ProductoAlmacen; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalEstatus.length; i++){
+					j=0;
+					keys = new Object();
+					keysClienteProveedor = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPedidos =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaProducto = estatusInfo[j] as ProductoAlmacen;
+					while( (TotalEstatus[i] as ProductoAlmacen).estadoProquifaNet== currentPartidaProducto.estadoProquifaNet ){
+						totalPartidas ++;
+						totalPiezas += currentPartidaProducto.cantidad;
+						totalMonto += currentPartidaProducto.pcompra.montoTotal;
+						
+						if(!keys.hasOwnProperty(currentPartidaProducto.piRelacionada)){
+							keys[currentPartidaProducto.piRelacionada] = currentPartidaProducto.piRelacionada;
+							totalPedidos++;
+						}
+						
+						//Para el conteo de clientes en cada marca
+						if(!keysClienteProveedor.hasOwnProperty(currentPartidaProducto.nombreCliente)){
+							keysClienteProveedor[currentPartidaProducto.nombreCliente] = currentPartidaProducto.nombreCliente;
+							totalClientes++;
+						}
+						
+						estatusInfo.shift();
+						if(estatusInfo.length >0)
+							currentPartidaProducto = estatusInfo[j] as ProductoAlmacen;
+						else
+							currentPartidaProducto =new ProductoAlmacen();
+						
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado =  (TotalEstatus[i] as ProductoAlmacen).estadoProquifaNet.toLocaleUpperCase();
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.totalPedidos = totalPedidos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoEstatus.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function filtrarPorBotonBar(item:ProductoAlmacen, id:uint, array:Array):Boolean
+			{
+				if(_botonBar == 'Programado'){
+					if((item.tipoFlete == 'Flete Express') || (item.tipoFlete == 'Regular') || (item.destino == 'Stock'))
+						return false;
+					else
+						return true;
+				}
+				return false;
+			} 
+			
+			private function quitarDuplicados(item:ProductoAlmacen, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.estadoProquifaNet)){
+					return false;
+				}else{
+					keys[item.estadoProquifaNet] = item.estadoProquifaNet;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" verticalAlign="middle" gap="0">
+		<s:Spacer width="100%" height="15%"/>
+		<graficas:PieChartPqGris id="myChart" width="100%" height="100%" 
+								 dataProvider="{null}"
+								 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+								 showDataTips="false"  innerRadius=".5">   
+			<graficas:series>
+				<graficas:pieSeriesPqNet field="piezasTotal"/> <!--piezasTotal-->
+			</graficas:series>
+		</graficas:PieChartPqGris>
+		<s:Spacer width="100%" height="10%"/>
+	</s:VGroup>
+	<s:VGroup width="100%" height="100%" verticalAlign="bottom" horizontalAlign="center" gap="0">
+		<s:VGroup width="100%" height="8%" verticalAlign="middle">
+			<componentes:tituloChartTablero width="100%" text="ESTATUS PQNET" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="100%" height="2%"/>
+	</s:VGroup>
+</s:Group>

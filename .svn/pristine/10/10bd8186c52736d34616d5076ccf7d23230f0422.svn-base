@@ -1,0 +1,724 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%"
+		 xmlns:otros="skins.otros.*"
+		 resize="calc(event)" xmlns:gestionarBackOrder="mx.com.proquifa.vista.vistas.gestionarBackOrder.*"
+		 creationComplete="init(event)" xmlns:GestionarBackXCancelar="mx.com.proquifa.vista.vistas.GestionarBackXCancelar.*"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.catalogos.proveedores.ConfiguracionPrecio;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaCompra;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RegistroConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.com.proquifa.vista.eventos.gestionarBackOrder.EventoGestionarBackOrder;
+			import mx.com.proquifa.vista.eventos.gestionarBackXCancelar.EventoGestionarBackXCancelar;
+			import mx.com.proquifa.vista.eventos.tramitarCompra.EventoTramitarComprarMateriales;
+			import mx.com.proquifa.vista.vistas.GestionarBackXCancelar.componentes.PopUpRegistrarBOCancelar;
+			import mx.com.proquifa.vista.vistas.monitorearOcNoArribada.componentes.popUpHistorialOc;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoAlertas;
+			
+			[Bindable] public var sizeFontP:Number;
+			[Bindable] public var universoBO:ArrayCollection;
+			[Bindable] public var nombreProveedorO:String;
+			[Bindable] public var tipoSelect:String = "todos";
+			[Bindable] public var tipoSelectTiempo:String = "todos";
+			[Bindable] public var ocString:String = "";
+			public var recargarVista:Boolean;
+			private var fechaHistorial:Number;
+			private var diasOmes:String;
+			//////////UNIVERSO DE PARTIDAS 
+			[Bindable] public var universo:ArrayCollection;
+			//////////LISTA A MOSTRAR
+			[Bindable] public var listaFiltrada:ArrayCollection;
+			//////////UNIVERSO DE PARTIDAS FILTRADA POR TIPO (PARCIALES O NO REGISTRADOS) 
+			[Bindable] public var universoActual:ArrayCollection;
+			private var fechaEvento:Date;
+			private var comentariosEvento:String; // checar!!!!!
+			private var ultima_Modificacion:Number;
+			private var partidas:ArrayCollection;
+			private var familiaPorPartida:ArrayCollection;
+			private var familias:ArrayCollection;
+			private var universoPartidas:ArrayCollection;
+			private var partidasPorFamilia:ArrayCollection;
+			private var partPro:ArrayCollection;
+			private var compraProveedor:ArrayCollection;
+			private var query:Query;
+			private var sqlPartida:Query;
+			private var total:Object
+			public var valorRegistrada:int;
+			public var familiaActual:String;
+			
+			
+			//variables del boton dias
+			public var dAyer:Number = 0;
+			public var dHoy:Number = 0;
+			public var dMañana:Number = 0;
+			public var dPasado:Number = 0;
+			public var dFuturo:Number = 0;
+			public var dAntier:Number = 0;
+			public var dPasadoM:Number = 0;
+			public var dTodos: Number = 0;
+			
+			public var  sql:Query;
+			
+			private var punterosProvee:Array;
+			
+			protected function init(event:FlexEvent):void
+			{
+				vistaLista.grpBotoneraFoot.addEventListener(EventoGestionarBackXCancelar.CLIC_BOTONERA_FOOT,verificarBotoneraFoot);
+				vistaLista.addEventListener("seleccionarPrimero",seleccionarPrimero);
+				vistaLista.lstOrdenesCompra.addEventListener(IndexChangeEvent.CHANGE,cambioIndice);
+				vistaLista.cmpCoverflow.addEventListener(EventoTramitarComprarMateriales.CAMBIA_NIVEL_VISTA_COVERFLOW,cambiarNivel);
+			    vistaLista.addEventListener(EventoGestionarBackXCancelar.BUSCA_TEXTO, verificarBotoneraFoot);
+				vistaGrid.gridPartidas.addEventListener("terminarEspera",terminarEspera);
+				addEventListener("activarExito",abrirPopUpExito);
+				vistaGrid.addEventListener("registrarConfirmacionPopUp",abrirPopUpAceptar);
+				addEventListener(EventoGestionarBackXCancelar.INICIA_ESPERA,AbrirPopUpEspera);
+			}
+			
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontP = (12 / 2005) * (unscaledWidth);
+				sizeFontP = sizeFontP > 12 ? 12:sizeFontP;
+				sizeFontP = sizeFontP < 10 ? 10:sizeFontP;
+			}
+			
+			public function set recibirUniversoBO(value:ArrayCollection):void
+			{
+				if(recargarVista)
+				{
+					recargarVista = false;
+					var evt:EventoGestionarBackXCancelar = new EventoGestionarBackXCancelar(EventoGestionarBackXCancelar.IR_ORDEN_SELECCIONADA);
+					evt.nombreProveedor = nombreProveedorO;
+					dispatchEvent(evt);
+				}
+				else
+				{
+					universoBO = value;
+					sql = new Query(universoBO,["nombreProveedor","todos"],true);
+					
+				}
+			
+				
+			}
+			
+			public function crearOrdenesCompra():void
+			{
+				total = new Object();
+				compraProveedor = new ArrayCollection();
+				var punteroProveedores:Array = sql.getPunteros([nombreProveedorO.toLowerCase()]);
+				total.totalProveedores = punteroProveedores.length;
+				compraProveedor = sql.armarLista(punteroProveedores);
+				
+			}
+			
+			public function crearFamiliasPorPartida():void
+			{ 
+				universoPartidas = ObjectUtil.copy(compraProveedor) as ArrayCollection;
+				var sqlPartida:Query;
+				var sqlTipo:Query;
+				var punteroFamiliasPartida:Array;
+				familias = new ArrayCollection();
+				partidas = new ArrayCollection();
+				query = new Query(compraProveedor,["familia"],true);
+				familiaPorPartida = new ArrayCollection();
+				punteroFamiliasPartida = query.getPunteros(["familia"],"familia");
+				
+				var familiasTemp:ArrayCollection = new ArrayCollection();
+				for (var i:int = 0; i < punteroFamiliasPartida.length; i++) 
+				{
+					var cp:ConfiguracionPrecio = new ConfiguracionPrecio();
+					var arreglo:Array;
+					arreglo = (punteroFamiliasPartida[i] as String).split('-');
+					cp.tipo = arreglo[0] != 'null' ? arreglo[0]:'';
+					cp.subtipo = arreglo[1] != 'null' ? arreglo[1]:'';
+					cp.control = arreglo[2] != 'null' ? arreglo[2]:'';
+					familiasTemp.addItem(cp);
+				}
+				
+				familias = familySort(ObjectUtil.copy(familiasTemp) as ArrayCollection);
+				recibirFamiliasPorPartida(familias);
+				recibirUniversoPartidas(universoPartidas);
+				
+			}
+			
+			
+			private function familySort(familias:ArrayCollection):ArrayCollection
+			{
+				var tempSort:ArrayCollection = new ArrayCollection();
+				var filtrado:Query = new Query(familias,["industria","tipo","subtipo","control"]);
+				var arrayIndustrial:ArrayCollection = new ArrayCollection(['Farma','Alimentos','Aguas','Clínico','Gobierno','null']);
+				var arrayTipoFarma:ArrayCollection = new ArrayCollection(['Estandares','Reactivos','Publicaciones','Labware','Medicamentos','Asesorías','Capacitaciones']);
+				var arrayTipoAlimentos:ArrayCollection = new ArrayCollection(['Estandares','Reactivos','Labware','Diagnóstico','Publicaciones','Medicamentos','Asesorías','Capacitaciones']);
+				var arrayTipoAgua:ArrayCollection = new ArrayCollection(['Estandares','Reactivos','Labware','Pruebas de aptitud','Publicaciones','Medicamentos','Asesorías','Capacitaciones']);
+				var arraySubtipo:ArrayCollection = new ArrayCollection(['Químico','Biológico']);
+				var arrayControl:ArrayCollection = new ArrayCollection(['Normal','Nacionales','Mundiales','Origen']);
+				var punteros:Array = new Array;
+				var arrayTipo:ArrayCollection = new ArrayCollection;
+				
+				
+				for (var i:int = 0; i < arrayIndustrial.length; i++ )
+				{
+					if (arrayIndustrial[i] == 'Farma' || 
+						arrayIndustrial[i] == 'Clínico' || arrayIndustrial[i] == 'Gobierno' )
+					{
+						arrayTipo = arrayTipoFarma;
+					}
+					else if(arrayIndustrial[i] == 'Alimentos')
+					{
+						arrayTipo = arrayTipoAlimentos;
+					}
+					else
+					{
+						arrayTipo = arrayTipoAgua;
+					}
+					
+					for (var j:int = 0; j < arrayTipo.length; j++)
+					{
+						if (arrayTipo[j] == 'Estandares' || arrayTipo[j] == 'Reactivos')
+						{
+							for (var k:int = 0; k < arraySubtipo.length; k++)
+							{
+								for (var l:int = 0; l < arrayControl.length; l++)
+								{
+									punteros = filtrado.getPunteros([arrayIndustrial[i].toLowerCase(),arrayTipo[j].toLowerCase(),arraySubtipo[k].toLowerCase(),arrayControl[l].toLowerCase()],'industria');
+									tempSort.addAll(filtrado.armarLista(punteros));
+								}
+							}
+						}
+						else
+						{
+							punteros = filtrado.getPunteros([arrayIndustrial[i].toLowerCase(),arrayTipo[j].toLowerCase(),null,null],'industria');
+							tempSort.addAll(filtrado.armarLista(punteros));
+						}
+					}
+				}
+				var familiasOrdenadas:ArrayCollection;
+				familiasOrdenadas = ObjectUtil.copy(tempSort) as ArrayCollection;
+				return familiasOrdenadas;
+			}
+			
+			public function recibirFamiliasPorPartida($familias:ArrayCollection):void
+			{
+				if(!$familias || $familias.length == 0){
+					vistaLista.cmpCoverflow.recibeFamilias(new ArrayCollection());
+					return;
+				}
+				familiaActual = "";
+				vistaLista.cmpCoverflow.recibeFamilias($familias);
+			}
+			
+			public function recibirUniversoPartidas(value:ArrayCollection):void
+			{
+				universo = value;
+				if(universo.length == 0){
+					dispatchEvent(new Event("listaVacia"));
+				}
+			}
+			
+			
+			private function obtenerPartidasPorOC(value:ArrayCollection,oc:String):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlPartida:Query = new Query(lista,["compra"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlPartida.getPunteros([oc]);
+				
+				for (var i:int = 0; i < punteros.length; i++) 
+				{
+					var temp:PartidaCompra = ObjectUtil.copy(sqlPartida.universo.getItemAt(punteros[i])) as RegistroConfirmacion;
+					temp.tipoPendiente = "normal";
+					temp.cantidadCompra = temp.totalPiezas;
+					temp.numFila = 0;
+					partidas.addItem(temp);
+				}
+				return partidas;
+			}
+			
+			private function cambiarNivel(evt:EventoTramitarComprarMateriales):void
+			{
+				if(inEspera)
+					iniciaEspera(true);
+				
+				var familiaSelect:String = evt.familiaSelect.toLowerCase();
+				
+				if(familiaActual != familiaSelect){
+					
+					universoActual = agruparPorFamilia(universo,familiaSelect);
+					
+					var listaTemp:ArrayCollection;
+					listaTemp = agruparPorTipo(universoActual,valorRegistrada);
+					if(tipoSelectTiempo == "todos" ){
+						listaFiltrada = listaTemp
+					}
+					else{
+						listaFiltrada = agruparPorTiempo(listaTemp,tipoSelectTiempo);
+					}
+					
+					vistaLista.dataProvider = agruparPorOC(listaFiltrada);
+					familiaActual = familiaSelect;
+				}
+			}
+			
+			private function agruparPorFamilia(value:ArrayCollection,familia:String):ArrayCollection
+			{
+				if(familia == 'publicaciones--'){
+					familia = "publicaciones-null-null"
+				}
+				
+				else if(familia == 'labware--'){
+					familia = "labware-null-null"
+				}
+				
+				else if(familia == 'capacitaciones--'){
+					familia = "capacitaciones-null-null"
+				}
+				
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlPartida:Query = new Query(lista,["familia"],true);
+				var partidas:ArrayCollection = new ArrayCollection();
+				var punteros:Array;
+				punteros = sqlPartida.getPunteros([familia]);
+				
+				for (var j:int = 0; j < punteros.length; j++) 
+				{
+					var partidaTemp:RegistroConfirmacion;
+					partidaTemp = ObjectUtil.copy(sqlPartida.universo.getItemAt(punteros[j])) as RegistroConfirmacion;
+					partidaTemp.tipoPendiente = "normal";
+					partidaTemp.cantidadCompra = partidaTemp.totalPiezas;
+					partidaTemp.numFila = 0;
+					partidas.addItem(partidaTemp);
+				}
+				
+				return partidas;
+			}
+			
+			
+			private function verificarBotoneraFoot(event:EventoGestionarBackXCancelar):void
+			{
+				if(inEspera)
+					iniciaEspera(true);
+				
+				if(event.tipoSelect == 'noRegistradas')
+					valorRegistrada = 0;
+					
+				else if(event.tipoSelect == 'parciales')
+					valorRegistrada = 1;
+				
+				tipoSelect = event.tipoSelect;
+				if(tipoSelectTiempo == "todos" ){
+					listaFiltrada = agruparPorTipo(compraProveedor,valorRegistrada);
+				}else{
+					var listaTemp:ArrayCollection;
+					listaTemp = agruparPorTipo(compraProveedor,valorRegistrada);
+					listaFiltrada = agruparPorTiempo(listaTemp,tipoSelectTiempo);
+				}
+				
+				vistaLista.dataProvider = agruparPorOC(listaFiltrada);
+				}
+			
+
+			private function agruparPorTiempo(value:ArrayCollection,tiempo:String):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlTipo:Query = new Query(lista,["tipoDia"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlTipo.getPunteros([tiempo]);
+				for (var k:int = 0; k < punteros.length; k++) 
+				{
+					var partidaTemp:RegistroConfirmacion;
+					partidaTemp = ObjectUtil.copy(sqlTipo.universo.getItemAt(punteros[k])) as RegistroConfirmacion;
+					partidas.addItem(partidaTemp);
+				}
+				return partidas;
+			}
+			
+			
+			
+			private function agruparPorTipo(value:ArrayCollection,esRegistrada:int):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				if(tipoSelect != "todos"){
+					var sqlTipo:Query = new Query(lista,["gestionarBool"],true);
+					var punteros:Array;
+					var partidas:ArrayCollection = new ArrayCollection();
+					punteros = sqlTipo.getPunteros([esRegistrada]);
+					for (var k:int = 0; k < punteros.length; k++) 
+					{
+						var partidaTemp:RegistroConfirmacion;
+						partidaTemp = ObjectUtil.copy(sqlTipo.universo.getItemAt(punteros[k])) as RegistroConfirmacion;
+						partidas.addItem(partidaTemp);
+					}
+					return partidas;
+				}else
+					return lista;
+			}
+			
+			private var mapa:Object = new Object;
+			private function agruparPorOC(value:ArrayCollection):ArrayCollection
+			{
+				var lista:ArrayCollection = ObjectUtil.copy(value) as ArrayCollection;
+				var sqlPartida:Query = new Query(lista,["compra","tipoDia"],true);
+				var punteros:Array;
+				var partidas:ArrayCollection = new ArrayCollection();
+				punteros = sqlPartida.getPunteros(["compra"]);
+				
+				dAyer = 0;
+				dHoy = 0;
+				dMañana = 0;
+				dAntier = 0;
+				dPasadoM = 0;
+				dPasado = 0;				
+				dFuturo = 0;
+				dTodos = 0;
+				
+				for (var i:int = 0; i < punteros.length; i++) 
+				{
+					
+					var punterosOC:Array;
+					punterosOC = sqlPartida.getPunteros([punteros[i]]);
+					var partidaTemp:RegistroConfirmacion;
+					var antigua:int;
+					var indice:int;
+					
+					mapa = new Object();
+					for (var j:int = 0; j < punterosOC.length; j++) 
+					{
+						var temp:RegistroConfirmacion = ObjectUtil.copy(sqlPartida.universo.getItemAt(punterosOC[j])) as RegistroConfirmacion;
+						var diferencia:int;
+						
+						
+						if(temp.diasFiltrados == "AYER")
+							dAyer = dAyer+1;
+						if(temp.diasFiltrados== "DIA0")
+							dHoy= dHoy+1;
+						if(temp.diasFiltrados == "DIA1")
+							dMañana = dMañana+1;
+						if(temp.diasFiltrados == "ANTIER")
+							dAntier = dAntier+1;
+						if(temp.diasFiltrados == "DIA2")
+							dPasadoM = dPasadoM+1;
+						if(temp.diasFiltrados == "PASADO")
+							dPasado = dPasado+1;
+						if(temp.diasFiltrados == "FUTURO")
+							dFuturo = dFuturo + 1;
+						
+						dTodos = dTodos + 1;
+						
+						
+						
+						if (mapa.hasOwnProperty(temp.compra))
+						{
+							mapa[temp.compra].AYER += dAyer;
+							mapa[temp.compra].DIA0 += dHoy;
+							mapa[temp.compra].DIA1 += dMañana;
+							mapa[temp.compra].ANTIER += dAntier;
+							mapa[temp.compra].DIA2 += dPasadoM;
+							mapa[temp.compra].FUTURO += dFuturo;
+							mapa[temp.compra].PASADO += dPasado;
+							
+						}
+						else
+						{
+							mapa[temp.compra] = new Object();
+							mapa[temp.compra].AYER = dAyer;
+							mapa[temp.compra].DIA0 = dHoy;
+							mapa[temp.compra].DIA1 = dMañana;
+							mapa[temp.compra].ANTIER = dAntier;
+							mapa[temp.compra].DIA2 = dPasadoM;
+							mapa[temp.compra].FUTURO = dFuturo;
+							mapa[temp.compra].PASADO = dPasado;
+						}
+						
+						
+						if(temp.fechaEstimadaEntrega){
+							diferencia = UtilsFecha.regresaDiferenciaEntreFechasEnDias(new Date,temp.fechaEstimadaEntrega);
+							if(j == 0){
+								antigua = diferencia
+								indice = punterosOC[0];  
+							}
+							if(diferencia < antigua){
+								indice = punterosOC[j];
+								antigua = diferencia;
+							}
+						}
+					}
+					var fecha:Date=new Date();
+					var dia:Number = fecha.getDay();
+					trace(dia);
+					
+					partidaTemp = ObjectUtil.copy(sqlPartida.universo.getItemAt(indice)) as RegistroConfirmacion;
+					partidaTemp.montoTotal = sqlPartida.getSumarCampo('montoTotal',punterosOC);
+					partidaTemp.totalPiezas = sqlPartida.getSumarCampo('totalPiezas',punterosOC);
+					partidaTemp.totalProductos = sqlPartida.getPunteros([punteros[i]],"idProducto").length;
+					
+					partidaTemp.piezasRegular = sqlPartida.getSumarCampo('piezasRegular',punterosOC);
+					partidaTemp.piezasProgramado = sqlPartida.getSumarCampo('piezasProgramado',punterosOC);
+					partidaTemp.piezasExpress = sqlPartida.getSumarCampo('piezasExpress',punterosOC);
+					partidaTemp.piezasEntregaUnica = partidaTemp.piezasRegular + partidaTemp.piezasExpress;
+					partidaTemp.piezasFleteNormal = partidaTemp.piezasRegular + partidaTemp.piezasProgramado;
+					//piezas
+					partidas.addItem(partidaTemp);
+					
+					/*vistaLista.botonDias(dia);*/
+				}
+				return partidas;
+			}
+			
+			
+			
+			
+			private function cambioIndice(event:IndexChangeEvent):void
+			{
+				var tempPartida:RegistroConfirmacion;
+				tempPartida = ObjectUtil.copy(vistaLista.lstOrdenesCompra.dataProvider[event.newIndex]) as RegistroConfirmacion;
+				if(tempPartida.gestionarBool == 0)
+					vistaGrid.estadoGestionada = 0;
+				else if(tempPartida.gestionarBool == 1)
+					vistaGrid.estadoGestionada = 1;	
+				vistaGrid.producto = tempPartida.codigo+' '+ tempPartida.concepto +' '+ tempPartida.fabrica;
+				vistaGrid.totalPizas = tempPartida.totalPiezas;
+				vistaGrid.idCompra = tempPartida.idPartidaCompra;
+				vistaGrid.indice = ""+(event.newIndex+1);
+				vistaGrid.monto = UtilsFormatosNumericos.precisionADosDecimalesConComas(tempPartida.montoTotal);
+				vistaGrid.preciou = UtilsFormatosNumericos.precisionADosDecimalesConComas(tempPartida.precioUnitario);
+				
+				var eve:EventoGestionarBackOrder = new EventoGestionarBackOrder(EventoGestionarBackOrder.OBTENER_ULTIMA_MODIFICACION_HISTORIAL);
+				eve.idPCompra = tempPartida.idPartidaCompra;
+				dispatchEvent(eve); 
+				
+				
+				
+				if(tempPartida.diferenciaDias == 1)
+					vistaGrid.dia = "1 DÍA";
+				else if(tempPartida.diferenciaDias == 2)
+					vistaGrid.dia = "2 DÍAS";
+				else if(tempPartida.diferenciaDias == 3)
+					vistaGrid.dia = "3 DÍAS";
+				else if(tempPartida.diferenciaDias > 3)
+					vistaGrid.dia = "3+ DÍAS";
+				else
+					vistaGrid.dia = "ND";
+				
+				vistaGrid.setDatos(obtenerPartidasPorOC(compraProveedor,tempPartida.compra));
+				
+			}
+			
+			private function seleccionarPrimero(event:Event):void
+			{
+				var tempPartida:RegistroConfirmacion;
+			
+				tempPartida = ObjectUtil.copy(vistaLista.lstOrdenesCompra.dataProvider[0]) as RegistroConfirmacion;
+				if(tempPartida.gestionarBool == 0)
+					vistaGrid.estadoGestionada = 0;
+				else if(tempPartida.gestionarBool == 1)
+					vistaGrid.estadoGestionada = 1;	
+				vistaGrid.producto = tempPartida.codigo+' '+ tempPartida.concepto +' '+ tempPartida.fabrica;
+				vistaGrid.totalPizas = tempPartida.totalPiezas;
+				vistaGrid.idCompra = tempPartida.idPartidaCompra;
+				vistaGrid.currentContacto = tempPartida.contacto;
+				vistaGrid.monto = UtilsFormatosNumericos.precisionADosDecimalesConComas(tempPartida.montoTotal);
+				vistaGrid.preciou = UtilsFormatosNumericos.precisionADosDecimalesConComas(tempPartida.precioUnitario);
+			    vistaGrid.ocString = tempPartida.compra;
+			    ocString = tempPartida.compra;
+				vistaGrid.indice = ""+(0+1);
+				var eve:EventoGestionarBackOrder = new EventoGestionarBackOrder(EventoGestionarBackOrder.OBTENER_ULTIMA_MODIFICACION_HISTORIAL);
+				eve.idPCompra = tempPartida.idPartidaCompra;
+				dispatchEvent(eve); 
+				
+				
+				
+				if(tempPartida.diferenciaDias == 1)
+					vistaGrid.dia = "1 DÍA";
+				else if(tempPartida.diferenciaDias == 2)
+					vistaGrid.dia = "2 DÍAS";
+				else if(tempPartida.diferenciaDias == 3)
+					vistaGrid.dia = "3 DÍAS";
+				else if(tempPartida.diferenciaDias > 3)
+					vistaGrid.dia = "3+ DÍAS";
+				else
+					vistaGrid.dia = "ND";
+				
+				vistaGrid.setDatos(obtenerPartidasPorOC(compraProveedor,tempPartida.compra));
+			}
+			
+			private var popUpHistorial:popUpHistorialOc;
+			
+			public function set recibirUltimaModificacion(listaHistorial:ArrayCollection): void
+			{	
+				if(listaHistorial != null)
+				{
+					var listaSeleccionada:EventoGestionarBackOrder = listaHistorial.removeItemAt(0) as EventoGestionarBackOrder;
+					if( popUpHistorial == null ){
+						
+						if(listaHistorial.length > 0)
+						{
+							fechaEvento = listaHistorial[listaHistorial.length-1].fecha;
+							comentariosEvento = listaHistorial[listaHistorial.length-1].comentarios;
+							
+							var fechaAc:Date = new Date();
+							
+							fechaHistorial = Util.substract(fechaAc,fechaEvento,[4]).days
+							
+							if(fechaHistorial == 1)
+								diasOmes = "Hace" +" "+ fechaHistorial +" "+ "Dia";
+							
+							if (fechaHistorial < 30 && fechaHistorial > 1 )
+								diasOmes = "Hace" +" "+ fechaHistorial +" "+ "Dias";
+								
+							else if(fechaHistorial > 30)
+							{
+								fechaHistorial = Math.round(fechaHistorial/30);
+								diasOmes = "Hace" +" "+ fechaHistorial +" "+ "Meses";
+							}
+								
+							else if (fechaHistorial == 30)
+								diasOmes = "Hace" +" "+ fechaHistorial +" "+ "Mes";
+							
+							if(fechaHistorial == 0)
+								diasOmes= "Hoy";
+							
+						}
+						
+					}
+				}
+				vistaGrid.ultimaModificacion = diasOmes;
+				vistaGrid.fechaEvento = fechaEvento;
+				vistaGrid.observaciones = comentariosEvento;
+			}
+			
+		
+			private var inEspera:Boolean = false;
+			public function iniciaEspera(iniciar:Boolean):void
+			{
+				if(iniciar)
+				{
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+					inEspera = true;
+				}
+				else
+				{
+					inEspera = false;
+					alertaSingleton.remove(true);
+				}
+			}
+			private function terminarEspera(event:Event):void
+			{
+				iniciaEspera(false);
+			}
+			private function AbrirPopUpEspera(event:EventoGestionarBackXCancelar):void
+			{
+				iniciaEspera(true);
+			}
+			
+			public function set recibirRespuestaRegistrar(value:int):void
+			{
+				iniciaEspera(false);
+				if(value == 1){
+					dispatchEvent( new Event("activarExito",true));
+					dispatchEvent( new Event("recargarPendientes",true));
+					recargarVista = true;
+					
+					var eveBOR:EventoGestionarBackXCancelar = new EventoGestionarBackXCancelar(EventoGestionarBackXCancelar.OBTENER_PARTIDAS_AGRUPADAS);
+					eveBOR.empleado = DatosGlobales.getInstance()._usuario;
+					dispatchEvent(eveBOR);
+					
+				}else if(value == -1){
+					alertaSingleton.show("No se pudo registrar ");
+				}
+			}
+			
+			private var popUpExito:PopUpRegistrarBOCancelar;
+			protected function abrirPopUpAceptar(event:Event):void
+			{
+				crearPopUpExito(true);
+			}
+			protected function abrirPopUpExito(event:Event):void
+			{
+				crearPopUpExito(false);
+			}
+			private function cerrarPopUpRegistrar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpExito );
+				popUpExito = null;
+				
+			}
+			
+			private function aceptarPopUpRegistrar(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpExito );
+				popUpExito = null;
+				registrarObtenerPartidas();
+				
+			}
+			private function registrarObtenerPartidas():void
+			{
+				
+				vistaGrid.registrarConfirmacion();
+			}
+			
+			private function crearPopUpExito(value:Boolean):void
+			{
+				if( popUpExito == null ){
+					popUpExito = PopUpRegistrarBOCancelar(PopUpManager.createPopUp( this, PopUpRegistrarBOCancelar, true ) );
+					PopUpManager.centerPopUp( popUpExito );
+					popUpExito.ordenDespacho = ocString;
+					popUpExito.tipoExito(value);
+					popUpExito.addEventListener("cancelarPopUP",cerrarPopUpRegistrar);
+					popUpExito.addEventListener("aceptarPopUP",aceptarPopUpRegistrar);
+					
+				}else{
+					PopUpManager.addPopUp( popUpExito , this, true );
+				}
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" >
+		<s:HGroup width="100%" height="100%" gap="0" paddingLeft="6" paddingTop="20" paddingRight="20" paddingBottom="20">
+			<GestionarBackXCancelar:VistaOperacion_ListaPartidaGestionarXCancelar width="32%" height="100%" id="vistaLista"/>
+			<s:Spacer width="18" maxHeight="20"/>
+			<otros:divisionDegradadoVertical height="100%" width="2" />
+			<s:Spacer width="20" maxHeight="20"/>
+			<GestionarBackXCancelar:VistaOperacion_GridGestionarXCancelar width="68%" height="100%" id="vistaGrid"/>
+			<!--<vistas1:VistaRegistrar_OperacionGrip_MonitorearOC width="68%" height="100%" id="vistaGrid"/>-->
+		</s:HGroup>  
+		
+		<s:VGroup width="100%" height="15%" maxHeight="50" verticalAlign="middle" horizontalAlign="center" id="footer">
+			<s:HGroup paddingLeft="-14" width="100%" >
+				<otros:division width="100%" grueso="1" color="#404040"/>
+			</s:HGroup>
+			<s:HGroup width="60%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+				
+				<s:HGroup width="60%" height="100%"  verticalAlign="middle" horizontalAlign="center">
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="FDM" color="#008894" height="100%" verticalAlign="middle"/>
+					<s:Label styleName="tab_texto_14_Helvetica" fontSize="{sizeFontP}" textAlign="center" text="Fecha de Monitoreo" height="100%" verticalAlign="middle"/>
+				</s:HGroup> 
+				
+			</s:HGroup> 
+		</s:VGroup>  
+	</s:VGroup>  
+	
+</s:Group>

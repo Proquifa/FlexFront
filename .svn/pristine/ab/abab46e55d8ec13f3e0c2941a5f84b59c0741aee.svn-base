@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" 
+		 xmlns:pqNet="skins.skin.datagrid.pqNet.*" xmlns:graficas="skins.skin.graficas.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.getTimer;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaConfirmacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.RechazoPartida;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.utils.ObjectUtil;
+			private var _partidaConfirmacion:PartidaConfirmacion;
+			[Bindable]
+			public var tituloEstado:String;
+			[Bindable]
+			private var _listaPartidas:ArrayCollection = null;
+			[Bindable]
+			private var _partidasTotales:int;
+			[Bindable]
+			private var _datosGrafica:ArrayCollection;
+			private var _partidasFT:int;
+			private var _partidasET:int;
+			public  var _rechazo:Boolean;
+			/**
+			 * Funcion que incia el componente para la lectura de Partidas A Confirmar. Es un funcion publica q se declara desde el componente
+			 * padre (ViewStackGeneral) lo cahcha el mapa MapaGeneralDePendientes.mxml
+			 */ 
+			public function iniciaEstadoPartidasAConfirmar($tipoBusuqeda:Boolean):void{
+				_rechazo = $tipoBusuqeda;
+				var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs( EventoGeneralCompradorPhs.CONSULTA_PARTIDAS_A_CONFIRMAR );
+				evento.rechazado = $tipoBusuqeda;
+				dispatchEvent( evento );
+			}
+			/**
+			 * Funcionque recibe del mapa (MapaGeneralDePendientes.mxml) la Lista de las Partidas A Confirmar
+			 */ 
+			public function set recibeListaPartidasAConfirmar( lista:ArrayCollection ):void{
+				if( lista == null ){
+					return;
+				}
+				this._partidasTotales = 0;
+				this._partidasET = 0;
+				this._partidasFT = 0;
+				var resultadoEnTimepo:String = "";
+				this._listaPartidas = new ArrayCollection();
+				for( var i:int = 0; i < lista.length; i++ ){
+					resultadoEnTimepo =  UtilsFecha.determinarFechaEnTiempoDeUnDiaAOtro( lista[i].fechaInicio );
+					
+					//con todo el universo de datos se hace un barrido a toda la lista para juntar los existentes
+					//si es el primer dato de la lista
+					if( this._listaPartidas == null || this._listaPartidas.length == 0){
+						this._listaPartidas.addItem(  lista[i] );
+						this._listaPartidas[0].numFila = 1;
+						this._listaPartidas[0].noPiezas = this._listaPartidas[0].noPiezas + 1; 
+						this._partidasTotales = this._partidasTotales + 1;
+						if(  resultadoEnTimepo != "enTiempo"  ){ //440 repredenta la diferencia de un dia en minutos			
+							//Esta fuera de tiempo
+							this._listaPartidas[0].partidasFT = 1;
+							this._listaPartidas[0].partidasET = 0;
+							this._partidasFT = 1;
+						}else{
+							//Esta en tiempo
+							this._listaPartidas[0].partidasET = 1;
+							this._listaPartidas[0].partidasFT = 0;
+							this._partidasET = 1;
+						}
+					}else{//si ya existe datos en la lista
+						//se busca coincidencias dentro de la nueva lista
+						var _encontro:Boolean = false;
+						for( var p:int = 0; p < _listaPartidas.length; p++ ){
+							if( this._listaPartidas[p].nombreProveedor ==  lista[i].nombreProveedor ){
+								//se le suma la cantidad al proveedor y se determina si esta en tiempo o fuera de tiempo la partida 
+								this._listaPartidas[p].noPiezas = this._listaPartidas[p].noPiezas + 1; 
+								this._partidasTotales = this._partidasTotales + 1;
+								if(   resultadoEnTimepo != "enTiempo"  ){ //440 repredenta la diferencia de un dia en minutos			
+									//Esta fuera de tiempo
+									this._listaPartidas[p].partidasFT = this._listaPartidas[p].partidasFT + 1;
+									this._partidasFT = this._partidasFT + 1;
+								}else{
+									//Esta en tiempo
+									this._listaPartidas[p].partidasET = this._listaPartidas[p].partidasET + 1;
+									this._partidasET = this._partidasET + 1;
+								}
+								_encontro = true;
+							}
+						}
+						if( _encontro == false ){ //si no encuentra coincidencia se insertan los datos
+							this._listaPartidas.addItem(  lista[i] ); 
+							// se le agrega al final y se modifica los valores del ultimo item agregado la variable p conserva ese valor
+							this._listaPartidas[p].numFila = p + 1;
+							this._listaPartidas[p].noPiezas = this._listaPartidas[p].noPiezas + 1; 
+							this._partidasTotales = this._partidasTotales + 1;
+							if(  resultadoEnTimepo != "enTiempo"  ){ //440 repredenta la diferencia de un dia en minutos			
+								//Esta fuera de tiempo
+								this._listaPartidas[p].partidasFT = 1;
+								this._listaPartidas[p].partidasET = 0;
+								this._partidasFT = this._partidasFT + 1;
+							}else{
+								//Esta en tiempo
+								this._listaPartidas[p].partidasFT = 0;
+								this._listaPartidas[p].partidasET = 1;
+								this._partidasET = this._partidasET + 1;
+							}
+						}
+					}
+				}
+				this.lblTotalPartidas.text = _partidasTotales + ' Partidas  ·  ' + _partidasET  + ' ET  ·  ' + _partidasFT + ' FT' ;
+				this._datosGrafica = new ArrayCollection([
+					{estado:"En Tiempo", Monto: _partidasET , EtiquetaMonto: "Total de Pendientes En Tiempo ( "+ _partidasET + " )"},
+					{estado:"Fuera de Tiempo", Monto: _partidasFT, EtiquetaMonto: "Total de Pendientes Fuera de Tiempo ( "+ _partidasFT + " )" }				        
+				]);
+			}
+			
+		]]>
+	</fx:Script>
+	<label:labelTitulo text="{this.tituloEstado}" width="100%"/>
+	<otros:divisionHueca width="100%"/>
+	<s:HGroup width="100%">
+		<label:labelSubtitulo text="LISTADO" fontSize="18" fontWeight="bold" />
+		<s:Spacer width="100%"/>
+		<label:labelSubtitulo fontSize="18" fontWeight="bold" id="lblTotalPartidas"/>
+	</s:HGroup>
+	<!--<otros:division width="100%"/>-->
+	<otros:divisionGruesa width="100%"/>
+	<pqNet:dataGridPqNet  width="100%" height="100%" dataProvider="{this._listaPartidas}" porcentajesColumnasPq="{ [4,22,22,17,9,9,9,4 ] }">
+		<pqNet:columns>
+			<mx:DataGridColumn headerText="#" dataField="numFila"  />
+			<mx:DataGridColumn headerText="Proveedor" dataField="nombreProveedor"/>
+			<mx:DataGridColumn headerText="Origen" dataField="paisProveedor"  />
+			<mx:DataGridColumn headerText="Tipo" dataField="tipoProveedor" />
+			<mx:DataGridColumn headerText="No. Partidas" dataField="noPiezas" />
+			<mx:DataGridColumn headerText="ET" dataField="partidasET"  />
+			<mx:DataGridColumn headerText="FT" dataField="partidasFT" />
+			<mx:DataGridColumn headerText="" >
+				<mx:itemRenderer>
+					<fx:Component>
+						<s:MXItemRenderer width="100%"  >
+							<mx:Image source="{catalogoIconosGrid.getInstance().render_flechitacirculo}" click="ejecutar()" horizontalCenter="0">
+								<fx:Script>
+									<![CDATA[
+										import mx.com.proquifa.proquifanet.compradorPhs.vistas.eventos.EventoGeneralCompradorPhs;
+										import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PartidaConfirmacion;
+										import skins.catalogos.catalogoIconosEtiquetas;
+										import skins.catalogos.catalogoIconosGrid;
+										private function ejecutar():void{
+											var evento:EventoGeneralCompradorPhs = new EventoGeneralCompradorPhs(EventoGeneralCompradorPhs.SELECCIONA_OPCION );
+											evento.idOpcionSeleccionada = "espacioVistaPlanificacion";
+											evento.rechazado = outerDocument._rechazo;
+											evento.partidaSeleccionada = data as Object;												
+											dispatchEvent(evento);
+										}
+									]]>
+								</fx:Script>
+							</mx:Image>
+						</s:MXItemRenderer>
+ 					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+		</pqNet:columns>
+	</pqNet:dataGridPqNet>
+	<otros:divisionGruesa width="100%"/>
+	<s:HGroup width="100%" height="100%">
+		<s:Spacer width="3%"/>
+		<s:VGroup width="100%" height="100%">
+			<mx:PieChart id="graficoPieVs"  showDataTips="true" width="100%" height="100%" dataProvider="{_datosGrafica}" >
+				<mx:series>
+					<graficas:pieSeriesVS  field="Monto" 
+										   nameField="estado"
+										   labelField= "EtiquetaMonto"
+										   labelPosition="none"   
+										   />
+				</mx:series>
+			</mx:PieChart>
+			<label:labelSubtitulo text="ET vs. FT" width="100%" textAlign="center"/>
+		</s:VGroup>
+		<s:VGroup width="100%" height="100%">
+			<mx:PieChart id="graficoPieProv"  showDataTips="true" width="100%" height="100%" dataProvider="{_listaPartidas}">
+				<mx:series>
+					<graficas:pieSeriesPqNet field="noPiezas" 
+											 nameField="nombreProveedor"
+											 labelField= "noPiezas"
+											 labelPosition="none"/>
+				</mx:series>
+			</mx:PieChart>	
+			<label:labelSubtitulo width="100%" text="Proveedores" textAlign="center"/>
+		</s:VGroup>
+		<s:Spacer width="3%"/>
+	</s:HGroup>
+</s:VGroup>

@@ -1,0 +1,746 @@
+<?xml version="1.0" encoding="utf-8"?>
+<contenedores:VGroupConPaddingStandardPqNet 
+	xmlns:fx="http://ns.adobe.com/mxml/2009"
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx"  
+	xmlns:otros="skins.otros.*" 
+	xmlns:label="skins.skin.label.*" 
+	xmlns:pqNet="skins.botones.pqNet.*"
+	xmlns:contenedores="skins.skin.contenedores.*" 
+	width="100%" height="100%"
+	xmlns:botonesToggle="skins.botonesToggle.*"
+	creationComplete="cargaMarcas()" >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoCatProMArcas;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Destinos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Fabricante;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.RutasPdF;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.comerciales.marca.popUps.AgregarMarca_popUp;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.layouts.HorizontalLayout;
+			import spark.layouts.TileLayout;
+			import spark.layouts.VerticalLayout;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			
+			
+			private var _proveedor:Proveedor;
+			[Bindable] private var _marcasAsociadas:ArrayCollection;
+			[Bindable] private var _marcasRelacionadas:ArrayCollection;
+			[Bindable] private var _habilitados:ArrayCollection;
+			[Bindable] private var _deshabilitados:ArrayCollection;
+			private var _currentItem:Fabricante;
+			private var _nombreMarcas:Array;
+			private var findOneImagen:Boolean = false;
+			private var pasoDivideMarca:Boolean;
+			
+			private var _arregloSinImagenes:ArrayCollection;
+			private var listaTemp:ArrayCollection;
+			private var seRelaciono:Boolean=false;
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection( [  { valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+				{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }
+			] );
+			
+			private var seCargaronMarcas:Boolean;
+			private var seCargaronMarcasAsociadas:Boolean;
+			
+			protected function cargaMarcas():void{
+				this.addEventListener( EventoCatProMArcas.EDITA_ASOCIACION_MARCA_ENVISTA, guardaAsociacion )
+				this.addEventListener( EventoCatProMArcas.EDITA_MARCA_VISTA, editarFabricante )
+				this.seRelaciono = false;
+			}
+			
+			public function set recibeProveedorSeleccionado($pro:Proveedor):void{
+				if( $pro == null )
+					return;
+				_proveedor = $pro;
+				this.busquedaAsociadas.text = '';
+				this.busquedaOtrosDeshab.text = '';
+				this.busquedaOtrosHab.text = '';
+				this.busquedaRelacionadas.text = '';
+				this.seRelaciono = false;
+				var evt:EventoCatProMArcas = new EventoCatProMArcas( EventoCatProMArcas.OBTENER_MARCAS_ASOCIADAS );
+				evt.idProveedor = _proveedor.idProveedor;
+				dispatchEvent( evt );
+			}
+			
+			
+			public function set recibeProveedorSeleccionadoDesdeProductos($pro:Proveedor):void
+			{
+				if( $pro == null )
+					return;
+				_proveedor = $pro;
+				this.busquedaAsociadas.text = '';
+				this.busquedaOtrosDeshab.text = '';
+				this.busquedaOtrosHab.text = '';
+				this.busquedaRelacionadas.text = '';
+				this.seRelaciono = false;
+				var evt:EventoCatProMArcas = new EventoCatProMArcas( EventoCatProMArcas.OBTENER_MARCAS_ASOCIADAS );
+				evt.idProveedor = _proveedor.idProveedor;
+				dispatchEvent( evt );
+			}
+			
+			public function set recibeMarcasAsociadas( $listaDatos:ArrayCollection ):void
+			{
+				if($listaDatos == null)
+					return;
+				
+				var _sql:Query = new Query($listaDatos,["nombre"],true);
+				_nombreMarcas = _sql.getPunteros(["nombre"],"nombre");
+				_marcasAsociadas = new ArrayCollection();
+				_marcasRelacionadas = new ArrayCollection();
+				listaTemp = new ArrayCollection();
+				_habilitados = new ArrayCollection();
+				_deshabilitados = new ArrayCollection();
+				
+				grpAsociadas.visible = grpAsociadas.includeInLayout = false;
+				grpRelacionadas.visible = grpRelacionadas.includeInLayout = false;
+				grpOtras.visible = grpOtras.includeInLayout = false;
+				
+				if( $listaDatos == null ){
+					return;
+				}
+				this.busquedaAsociadas.text = '';
+				this.busquedaOtrosDeshab.text = '';
+				this.busquedaOtrosHab.text = '';
+				this.busquedaRelacionadas.text = '';
+				this.busquedaAsociadas.prompt = 'Marca';
+				this.busquedaOtrosDeshab.prompt = 'Marca';
+				this.busquedaOtrosHab.prompt = 'Marca';
+				this.busquedaRelacionadas.prompt = 'Marca';
+				
+				listaTemp = ObjectUtil.copy( $listaDatos ) as ArrayCollection;
+				
+				//Optimización para recorrido en busca de las imágenes de cada proveedor
+				arrayKeyConImagenes = new Object;
+				var _arrTempSinImagenes:Array = ObjectUtil.copy( $listaDatos.source ) as Array;
+				var temp:Array = _arrTempSinImagenes.filter(quitarFabricanteSinImagen);
+				_arrTempSinImagenes = null;
+				_arregloSinImagenes = new ArrayCollection(temp);
+				
+				solicitaImagenes();
+				
+				
+			}
+			
+			public function divideFabricante():void
+			{
+				pasoDivideMarca = false;
+				var asoc:int =0;
+				var rela:int =0;
+				var otra:int =0;
+				for( var i:int = 0; i < listaTemp.length; i++ ){
+					
+					if( ( listaTemp[i] as Fabricante ).asociado ){
+						_marcasAsociadas.addItem( listaTemp[i] );
+						asoc=1;
+					}else if( ( listaTemp[i] as Fabricante ).relacionado ){
+						_marcasRelacionadas.addItem( listaTemp[i] );
+						rela=1;
+					}else {
+						otra=1;
+						if ((listaTemp[i] as Fabricante).habilitado){
+							_habilitados.addItem( listaTemp[i] )
+						}else{
+							_deshabilitados.addItem( listaTemp[i] )
+						}
+					}
+				}
+				
+				var total:int= asoc+rela+otra;
+				
+				lstAsociadas3div.visible = lstAsociadas3div.includeInLayout = total > 2 ? true:false;
+				lstAsociadas.visible = lstAsociadas.includeInLayout = total > 2 ?  false:true;
+				lstRelacionadas3div.visible = lstRelacionadas3div.includeInLayout = total > 2 ?  true:false;
+				lstRelacionadas.visible = lstRelacionadas.includeInLayout = total > 2 ?  false:true;
+				lstOtrasHab3div.visible = lstOtrasHab3div.includeInLayout = total > 2 ?  true:false;
+				lstOtrasHab.visible = lstOtrasHab.includeInLayout = total > 2 ?  false:true;
+				lstOtrasDes3div.visible = lstOtrasDes3div.includeInLayout = total > 2 ?  true:false;
+				lstOtrasDes.visible = lstOtrasDes.includeInLayout = total > 2 ?  false:true;
+				
+				
+				lblFUA.fecha = ( listaTemp[0] as Fabricante ).fechaUA 
+				
+				if(_marcasAsociadas.length > 0 )
+					grpAsociadas.visible = grpAsociadas.includeInLayout = true;
+				
+				if(_marcasRelacionadas.length >0 )
+					grpRelacionadas.visible = grpRelacionadas.includeInLayout = true;
+				
+				if(_habilitados.length > 0 || _deshabilitados.length > 0){
+					if (_habilitados.length > 0){
+						grphabilitados.visible = grphabilitados.includeInLayout = true;
+						grpdeshabilitados.visible = grpdeshabilitados.includeInLayout = false;
+					}else{
+						grphabilitados.visible = grphabilitados.includeInLayout = false;
+						grpdeshabilitados.visible = grpdeshabilitados.includeInLayout = true;
+					}
+				}
+				if(_habilitados.length > 0 || _deshabilitados.length > 0)
+					grpOtras.visible = grpOtras.includeInLayout = true;
+			}
+			
+			private var arrayKeyConImagenes:Object;
+			private function quitarFabricanteSinImagen($item:Fabricante, $id:uint,$array:Array):Boolean
+			{
+				
+				if($item.logoExt == null || StringUtil.trim($item.logoExt).length <= 0)
+				{
+					return false;
+				}
+				else
+				{
+					arrayKeyConImagenes[$item.idFabricante] = $id;
+					return true;
+				}
+			}
+			
+			/**
+			 *permitira iniciar y/o continuar la solicitud de imagenes
+			 */ 
+			private function solicitaImagenes():void
+			{
+				
+				for( var i:int = 0 ; i < _arregloSinImagenes.length; i++ )
+				{
+					_currentItem = ObjectUtil.copy( _arregloSinImagenes[ i ] ) as Fabricante;
+					if( _currentItem.logoExt != null && _currentItem.logoExt != '' )
+					{ 
+						
+						findOneImagen = true;
+						
+						var variables:URLLoader = new URLLoader();
+						var request:URLRequest = new URLRequest();
+						variables.dataFormat = URLLoaderDataFormat.BINARY;
+						
+						request = new URLRequest( "http://" + Destinos.ipUsandose+'/logoMarcas/' + _currentItem.idFabricante +'.' + _currentItem.logoExt ); //ip oscar
+						
+						request.idleTimeout = 1*1000;
+						
+						variables.addEventListener(Event.COMPLETE, completeHandler);
+						variables.addEventListener(IOErrorEvent.IO_ERROR, completeHandlerError);
+						
+						try
+						{
+							variables.load(request);
+						} 
+						catch (error:Error)
+						{
+							trace( "Unable to load URL: " + error );
+						}
+						_arregloSinImagenes.length > 0 ? _arregloSinImagenes.removeItemAt( i ) : null;
+						i = _arregloSinImagenes.length;
+					}
+				}
+				if (!findOneImagen)
+					divideFabricante();
+			}
+			
+			/**
+			 * recibe sel request la imagen, se valida si existe la 
+			 */ 
+			private function completeHandlerError(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				trace("no existe archivo ERRORRR   " + _currentItem.idFabricante + " : " + _currentItem.nombre);	
+				bytes = null;
+				
+				remueveDatos();
+			}
+			
+			private function completeHandler(event:Event):void{
+				var loader:URLLoader = URLLoader(event.target);
+				var bytes:ByteArray = new ByteArray();
+				try{
+					bytes = loader.data;
+				}catch (error:*){
+					trace("no existe archivo COMPLETE EOROROROR");
+					bytes = null;
+				}
+				
+				if(arrayKeyConImagenes.hasOwnProperty(_currentItem.idFabricante)){
+					trace (RutasPdF.GENERAL_RUTA + 'logofabricantes/' + _currentItem.idFabricante +'.' + _currentItem.logoExt);
+					var posicion:uint = arrayKeyConImagenes[_currentItem.idFabricante] as Number;
+					(listaTemp[posicion] as Fabricante).bytes = bytes;
+				}
+				
+				remueveDatos();
+			}
+			
+			private function remueveDatos():void{
+				if( _arregloSinImagenes.length > 0 ){  //si aun existen datos se continuan solicitando las imagenes
+					solicitaImagenes();
+				}else{									//si ya no existen mas datos se continua generarndo la vista
+					divideFabricante();
+				}
+			}
+			
+			private function guardaAsociacion( $evt:EventoCatProMArcas ):void{
+				var evt:EventoCatProMArcas = new EventoCatProMArcas( EventoCatProMArcas.EDITA_ASOCIACION_MARCA ); //los demas datos fueron enviados desde el item renderer
+				evt.idProveedor = _proveedor.idProveedor
+				evt.idFabricante = $evt.idFabricante;
+				evt.estado = $evt.estado;
+				dispatchEvent( evt );
+				var fa:Fabricante = $evt.fabricante;
+				moverItemPorSecciones(fa);
+			}
+			
+			private function moverItemPorSecciones($fab:Fabricante):void{
+				var curre:Fabricante = $fab;
+				var tempArray:ArrayCollection;
+				var sort:Sort = new Sort();
+				var i:Number;
+				var item:Fabricante = null;
+				sort.fields = [new SortField('nombre', true)];
+				
+				if( curre.asociado )
+				{
+					//SE QUITA EL ITEM DE ASOCIADO Y SE ACOMODA CONFORME A SUS PROPIEDADES
+					tempArray = new ArrayCollection();
+					for ( i=0; i<_marcasAsociadas.length; i++)
+					{
+						item = (_marcasAsociadas[i] as Fabricante);
+						if (curre.idFabricante != item.idFabricante )
+						{
+							tempArray.addItem(item);
+						}
+						else
+						{
+							item.asociado = item.asociado == false ? true:false;
+							if(item.relacionado)
+							{
+								_marcasRelacionadas.addItem(item);
+							}
+							else
+							{
+								if(item.habilitado)
+								{
+									_habilitados.addItem(item);
+								}
+								else
+								{
+									_deshabilitados.addItem(item);
+								}
+							}
+						}
+					}
+					_marcasAsociadas = new ArrayCollection();
+					_marcasAsociadas = ObjectUtil.copy(tempArray) as ArrayCollection;
+					
+				}else if( curre.relacionado ){
+					//SE QUITA EL ITEM DE RELACIONADO Y SE ACOMODA CONFORME A SUS PROPIEDADES
+					tempArray = new ArrayCollection();
+					for ( i=0; i<_marcasRelacionadas.length; i++)
+					{
+						item = (_marcasRelacionadas[i] as Fabricante);
+						if (curre.idFabricante != item.idFabricante )
+						{
+							tempArray.addItem(item);
+						}
+						else
+						{
+							item.asociado = item.asociado == false ? true:false;
+							if(item.asociado)
+							{
+								_marcasAsociadas.addItem(item);
+							}
+							else
+							{
+								if(item.habilitado)
+								{
+									_habilitados.addItem(item);
+								}
+								else
+								{
+									_deshabilitados.addItem(item);
+								}
+							}
+						}
+					}
+					_marcasRelacionadas = new ArrayCollection();
+					_marcasRelacionadas = ObjectUtil.copy( tempArray ) as ArrayCollection;
+					
+				}else {
+					if( curre.habilitado ){
+						//SE QUITA EL ITEM DE HABILITADO Y SE ACOMODA CONFORME A SUS PROPIEDADES
+						tempArray = new ArrayCollection();
+						for ( i=0; i<_habilitados.length; i++)
+						{
+							item = (_habilitados[i] as Fabricante);
+							if (curre.idFabricante != item.idFabricante )
+							{
+								tempArray.addItem(item);
+							}
+							else
+							{
+								item.asociado = item.asociado == false ? true:false;
+								if(item.asociado)
+								{
+									_marcasAsociadas.addItem(item);
+								}
+								else
+								{
+									if(item.relacionado)
+									{
+										_marcasRelacionadas.addItem(item);
+									}
+								}
+							}
+						}
+						_habilitados = new ArrayCollection();
+						_habilitados = ObjectUtil.copy( tempArray ) as ArrayCollection;
+					}
+				}
+				_marcasAsociadas.sort = sort;
+				_marcasAsociadas.refresh();
+				_marcasRelacionadas.sort = sort;
+				_marcasRelacionadas.refresh();
+				_habilitados.sort=sort;
+				_habilitados.refresh();
+				_deshabilitados.sort;
+				_deshabilitados.refresh();
+				
+				var cont:Number=0;
+				if( _marcasAsociadas.length > 0 ){
+					grpAsociadas.visible = grpAsociadas.includeInLayout = true;
+					cont++;
+				}else{
+					grpAsociadas.visible = grpAsociadas.includeInLayout = false;
+				}
+				if( _marcasRelacionadas.length > 0 ){
+					grpRelacionadas.visible = grpRelacionadas.includeInLayout = true;
+					cont++;
+				}else{
+					grpRelacionadas.visible = grpRelacionadas.includeInLayout = false;
+				}
+				if(_habilitados.length > 0 || _deshabilitados.length > 0){
+					cont++;
+				}
+				
+				lstAsociadas3div.visible = lstAsociadas3div.includeInLayout = cont > 2 ? true:false;
+				lstAsociadas.visible = lstAsociadas.includeInLayout = cont > 2 ?  false:true;
+				lstRelacionadas3div.visible = lstRelacionadas3div.includeInLayout = cont > 2 ?  true:false;
+				lstRelacionadas.visible = lstRelacionadas.includeInLayout = cont > 2 ?  false:true;
+				lstOtrasHab3div.visible = lstOtrasHab3div.includeInLayout = cont > 2 ?  true:false;
+				lstOtrasHab.visible = lstOtrasHab.includeInLayout = cont > 2 ?  false:true;
+				lstOtrasDes3div.visible = lstOtrasDes3div.includeInLayout = cont > 2 ?  true:false;
+				lstOtrasDes.visible = lstOtrasDes.includeInLayout = cont > 2 ?  false:true;
+				
+			}
+			
+			private var _popUpEditarMarca:AgregarMarca_popUp;
+			private function editarFabricante( $evt:EventoCatProMArcas ):void{
+				var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+				
+				if(_popUpEditarMarca == null)
+				{
+					_popUpEditarMarca = AgregarMarca_popUp(PopUpManager.createPopUp(app,AgregarMarca_popUp,true));
+				}
+				else
+				{
+					PopUpManager.addPopUp(_popUpEditarMarca,app,true);
+				}
+				
+				_popUpEditarMarca.inizializar();
+				_popUpEditarMarca.inizializarEditar($evt.fabricante);
+				PopUpManager.centerPopUp(_popUpEditarMarca);
+			}
+			
+			public function set recibeConfirmacionEditarMarca($confirma:Boolean):void
+			{
+				if($confirma)
+				{
+					this.busquedaAsociadas.text = '';
+					this.busquedaOtrosHab.text = '';
+					this.busquedaOtrosDeshab.text = '';
+					this.busquedaRelacionadas.text = '';
+					var evt:EventoCatProMArcas = new EventoCatProMArcas( EventoCatProMArcas.OBTENER_MARCAS_ASOCIADAS );
+					evt.idProveedor = _proveedor.idProveedor;
+					dispatchEvent( evt );
+					_popUpEditarMarca.cerrar();
+				}
+			}
+			
+			
+			
+			public function set confirmaAsociacionMarcas( $dato:Boolean ):void{
+				if( !$dato )
+					return;
+			}
+			/**
+			 * funcion que busca las conincidencias en el universo de contactos segun el texto ingresado al Textinput
+			 */ 
+			private function filtroPorTexto( $tipo:String ):void{
+				// asociado , relacionado , otro
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				var _listaPrincipal:ArrayCollection = new ArrayCollection();
+				if( $tipo == 'asociado' ){
+					_listaPrincipal = ObjectUtil.copy( _marcasAsociadas ) as ArrayCollection;
+					_listaVisual = ObjectUtil.copy( _listaPrincipal ) as ArrayCollection;
+					if( this.busquedaAsociadas.text  != ""){
+						_listaVisual = UtilsGrid.queryCampoXLike( _listaPrincipal, 'nombre', this.busquedaAsociadas.text ); 
+					}
+					this.lstAsociadas.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+					this.lstAsociadas3div.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+				}else if( $tipo == 'relacionado' ){
+					_listaPrincipal = ObjectUtil.copy( _marcasRelacionadas ) as ArrayCollection;
+					_listaVisual = ObjectUtil.copy( _listaPrincipal ) as ArrayCollection;
+					if( this.busquedaRelacionadas.text != "" ){
+						_listaVisual = UtilsGrid.queryCampoXLike( _listaPrincipal, 'nombre', this.busquedaRelacionadas.text ); 
+					}
+					this.lstRelacionadas.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+					this.lstRelacionadas3div.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+				}
+			}
+			
+			private var _popUpAgregarMarca:AgregarMarca_popUp;
+			protected function bntAgregarMarca_clickHandler(event:MouseEvent):void
+			{
+				var app:DisplayObject = FlexGlobals.topLevelApplication as DisplayObject;
+				
+				if(_popUpAgregarMarca == null)
+				{
+					_popUpAgregarMarca = AgregarMarca_popUp(PopUpManager.createPopUp(app,AgregarMarca_popUp,true));
+				}
+				else
+				{
+					PopUpManager.addPopUp(_popUpAgregarMarca,app,true);
+				}
+				_popUpAgregarMarca.inizializar();
+				_popUpAgregarMarca.recibeNombreMarcas(_nombreMarcas);
+				PopUpManager.centerPopUp(_popUpAgregarMarca);
+			}
+			
+			
+			public function set recibeConfirmacionDeGuardadoDeMarca($confirma:Boolean):void
+			{
+				if($confirma)
+				{
+					this.busquedaAsociadas.text = '';
+					this.busquedaOtrosHab.text = '';
+					this.busquedaOtrosDeshab.text = '';
+					this.busquedaRelacionadas.text = '';
+					var evt:EventoCatProMArcas = new EventoCatProMArcas( EventoCatProMArcas.OBTENER_MARCAS_ASOCIADAS );
+					evt.idProveedor = _proveedor.idProveedor;
+					dispatchEvent( evt );
+					_popUpAgregarMarca.cerrar();
+				}
+			}
+			
+			protected function botoneraBarra_clickHandler():void{
+				if( botoneraBarra.selectedItem != undefined ){
+					grphabilitados.visible = grphabilitados.includeInLayout = false;
+					grpdeshabilitados.visible = grpdeshabilitados.includeInLayout = false;	
+					var $dato:String = '';
+					botoneraBarra.selectedItem.valor == 'Habilitados' ? $dato = 'habilitados' : $dato = 'deshabilitados' ;
+					if( $dato == 'deshabilitados' ){
+						grpdeshabilitados.visible = grpdeshabilitados.includeInLayout = true;
+					}else{
+						grphabilitados.visible = grphabilitados.includeInLayout = true;
+					}
+				}
+			}
+			
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private function filtroPorTextoOtras($vieneDe:String):void{
+				var listaAFiltrar:ArrayCollection = new ArrayCollection();
+				var _listaVisual:ArrayCollection = new ArrayCollection();
+				if( $vieneDe == 'habilitados' ){
+					//this.busquedaOtrosDeshab.text = ""; 
+					_listaVisual = ObjectUtil.copy( _habilitados ) as ArrayCollection;
+					if( this.busquedaOtrosHab.text != "" ){
+						_listaVisual = UtilsGrid.queryCampoXLike( _habilitados, 'nombre', this.busquedaOtrosHab.text ); 
+					}
+					this.lstOtrasHab.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+					this.lstOtrasHab3div.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+				}else{
+					//this.busquedaOtrosHab.text = "";
+					_listaVisual = ObjectUtil.copy( _deshabilitados ) as ArrayCollection;
+					if( this.busquedaOtrosDeshab.text != "" ){
+						_listaVisual = UtilsGrid.queryCampoXLike( _deshabilitados, 'nombre', this.busquedaOtrosDeshab.text ); 
+					}
+					this.lstOtrasDes.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+					this.lstOtrasDes3div.dataProvider = ObjectUtil.copy( _listaVisual ) as ArrayCollection;
+				}
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				if(unscaledHeight != 0)
+				{
+					var horizontalLayout:HorizontalLayout = new HorizontalLayout();
+					var verticalLayout:VerticalLayout = new VerticalLayout();
+					var verticalLayout1:VerticalLayout = new VerticalLayout();
+					var verticalLayout2:VerticalLayout = new VerticalLayout();
+					var verticalLayout3:VerticalLayout = new VerticalLayout();
+					
+					var tile:TileLayout = new TileLayout();
+					tile.orientation = "rows";
+					tile.columnWidth = 280;
+					var tile1:TileLayout = new TileLayout();
+					tile1.orientation = "rows";
+					tile1.columnWidth = 280;
+					var tile2:TileLayout = new TileLayout();
+					tile2.orientation = "rows";
+					tile2.columnWidth = 280;
+					var tile3:TileLayout = new TileLayout();
+					tile3.orientation = "rows";
+					tile3.columnWidth = 280;
+					
+					if(unscaledHeight > 1100)
+					{
+						grpListas.layout = verticalLayout;
+						if(lstOtrasDes3div.visible)
+						{
+							lstOtrasHab3div.layout = tile;
+							lstAsociadas3div.layout = tile1
+							lstRelacionadas3div.layout = tile2;
+							lstOtrasDes3div.layout = tile3;
+						}
+						else
+						{
+							lstOtrasHab.layout = tile;
+							lstAsociadas.layout = tile1
+							lstRelacionadas.layout = tile2;
+							lstOtrasDes.layout = tile3;
+						}
+						
+						busquedaAsociadas.width = 300;
+						busquedaOtrosDeshab.width = 300;
+						busquedaOtrosHab.width = 300;
+						busquedaRelacionadas.width = 300;
+						botoneraBarra.width = 350;
+						div1.visible = div2.visible = true;
+						fondo.visible= false;
+						
+					}
+					else
+					{
+						grpListas.layout = horizontalLayout;
+						if(lstOtrasDes3div.visible)
+						{
+							lstOtrasHab3div.layout = verticalLayout;
+							lstAsociadas3div.layout = verticalLayout1;
+							lstRelacionadas3div.layout = verticalLayout2;
+							lstOtrasDes3div.layout = verticalLayout3;
+						}
+						else
+						{
+							lstOtrasHab.layout = verticalLayout;
+							lstAsociadas.layout = verticalLayout1;
+							lstRelacionadas.layout = verticalLayout2;
+							lstOtrasDes.layout = verticalLayout3;
+						}
+						
+						busquedaAsociadas.percentWidth = 100;
+						busquedaOtrosDeshab.percentWidth = 100;
+						busquedaOtrosHab.percentWidth = 100;
+						busquedaRelacionadas.percentWidth = 100;
+						botoneraBarra.percentWidth = 100;
+						div1.visible = div2.visible = false;
+						fondo.visible = true;
+						
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup id="grpPrincipal" width="100%" height="100%" horizontalAlign="center" gap="10">
+		<s:HGroup width="100%" verticalAlign="bottom" >
+			<s:Image source="{catalogoIconosEtiquetas.getInstance().etiquetas_marcaGris}"/>
+			<label:TituloBankGothic_30 text="MARCAS"/>
+			<s:Spacer width="100%"/>
+			<s:HGroup height="100%" verticalAlign="bottom" horizontalAlign="right">
+				<label:Texto_13_VerdeAzul text="Última actualización: "/>
+				<label:Fecha_13_VerdeAzul id="lblFUA"/>
+			</s:HGroup>
+		</s:HGroup>
+		<otros:divisionGruesa width="100%"/>
+		
+		<s:Group id="grpListas" width="100%" height="100%" >
+			<s:VGroup id="grpAsociadas" width="100%" height="100%" horizontalAlign="center" paddingRight="10">
+				<s:Label fontSize="16" fontWeight="bold" text="Asociadas" width="100%" textAlign="center"/>
+				<s:TextInput fontStyle="normal" id="busquedaAsociadas"  skinClass="skins.textinput.busqueda.skinTextInputBusqueda" width="100%"
+							 prompt="Marca" text="" change="filtroPorTexto('asociado')" enter="filtroPorTexto('asociado')"/>
+				<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstAsociadas" dataProvider="{_marcasAsociadas}"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas">
+				</s:List>
+				<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstAsociadas3div" dataProvider="{_marcasAsociadas}" visible="false" includeInLayout="false"
+						itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas3divisiones">
+				</s:List>
+				<otros:division width="100%" id="div1"/>
+			</s:VGroup>  
+			<s:VGroup id="grpRelacionadas" width="100%" height="100%" paddingRight="-10" paddingLeft="-10" paddingBottom="-10" paddingTop="-10">
+				<s:Group width="100%" height="100%" >
+					<s:Rect width="100%" height="100%" id="fondo">
+						<s:fill>
+							<s:SolidColor color="#eaeaea"/>
+						</s:fill>
+					</s:Rect>
+					<s:VGroup  width="100%" height="100%" horizontalAlign="center" paddingTop="10" paddingRight="10" paddingLeft="10" paddingBottom="10" >
+						<s:Label fontSize="16" fontWeight="bold" text="Relacionadas" width="100%" textAlign="center"/>
+						<s:TextInput fontStyle="normal" id="busquedaRelacionadas" skinClass="skins.textinput.busqueda.skinTextInputBusqueda"  width="100%"
+									 prompt="Marca" text="" change="filtroPorTexto('relacionado')" enter="filtroPorTexto('relacionado')"  />
+						<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstRelacionadas" 
+								dataProvider="{_marcasRelacionadas}" contentBackgroundAlpha="0"
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas" >
+						</s:List>
+						<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstRelacionadas3div" dataProvider="{_marcasRelacionadas}" 
+								visible="false" includeInLayout="false" contentBackgroundAlpha="0"
+								itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas3divisiones">
+						</s:List>
+						<otros:division width="100%" id="div2"/>
+					</s:VGroup>  
+				</s:Group>
+			</s:VGroup>
+			
+			<s:VGroup id="grpOtras" width="100%" height="100%" horizontalAlign="center" paddingTop="10" paddingLeft="10">
+				<s:Label fontSize="16" fontWeight="bold" text="Otras" width="100%" textAlign="center"/>
+				<botonesToggle:ButtonBarColores height="30" id="botoneraBarra" click="botoneraBarra_clickHandler()" dataProvider="{_arrButton}" selectedIndex="0" requireSelection="true"/>
+				<s:VGroup id="grphabilitados" width="100%" height="100%" horizontalAlign="center" >
+					<s:TextInput fontStyle="normal" id="busquedaOtrosHab" skinClass="skins.textinput.busqueda.skinTextInputBusqueda"  width="100%" 
+								 prompt="MARCAS" text="" change="filtroPorTextoOtras('habilitados')" enter="filtroPorTextoOtras('habilitados')"  />
+					<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstOtrasHab" dataProvider="{_habilitados}" 
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas">
+					</s:List>
+					<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstOtrasHab3div" dataProvider="{_habilitados}" visible="false" includeInLayout="false"
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas3divisiones">
+						
+					</s:List>
+				</s:VGroup>
+				<s:VGroup id="grpdeshabilitados" width="100%" height="100%" horizontalAlign="center" >
+					<s:TextInput fontStyle="normal" id="busquedaOtrosDeshab" skinClass="skins.textinput.busqueda.skinTextInputBusqueda"  width="100%" 
+								 prompt="MARCAS" text="" change="filtroPorTextoOtras('deshabilitados')" enter="filtroPorTextoOtras('deshabilitados')"  />
+					<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstOtrasDes" dataProvider="{_deshabilitados}" 
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas">
+					</s:List>
+					<s:List borderVisible="false" horizontalScrollPolicy="off" width="100%" height="100%"  id="lstOtrasDes3div" dataProvider="{_deshabilitados}" visible="false" includeInLayout="false"
+							itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.comerciales.CatPro_IR_Marcas3divisiones">
+					</s:List>
+				</s:VGroup>
+			</s:VGroup>
+		</s:Group> 
+		
+		<otros:divisionHueca width="100%" />
+		<pqNet:botonPqNetLargo id="bntAgregarMarca" icono="agregar" label="Agregar" click="bntAgregarMarca_clickHandler(event)"/>
+	</s:VGroup>
+</contenedores:VGroupConPaddingStandardPqNet>

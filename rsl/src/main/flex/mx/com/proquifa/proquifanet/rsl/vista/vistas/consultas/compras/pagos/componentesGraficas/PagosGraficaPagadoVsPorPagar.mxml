@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*"
+		 xmlns:graficaPie="mx.com.proquifa.proquifanet.rsl.vista.vistas.consultas.compras.pagos.componentesGraficas.*"
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.PagoProveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			private var _listaTotalVs:ArrayCollection;
+			
+			public function set obtenerListaPagos($infoGrafica:ArrayCollection):void{
+				if($infoGrafica == null) return;
+				
+				_listaTotalVs = new ArrayCollection();
+				chartAbiertoVsCerrado.recibirDataProvider = new ArrayCollection();
+				
+				/**
+				 * Se obtiene un array del ArrayCollection con el fin de aplicar funciones espécificas de los Arrays como el ordenar
+				 * */
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				/**
+				 * Se ordenan por el estado Abierto/Cerrado
+				 * */
+				arrayTemp.sortOn('estado');
+				
+				/**
+				 * Se obtiene un array con todos los estados con el fin de saber si se encuentran los dos tipos, o sólo uno de los dos (Abierto/Cerrado)
+				 * */
+				keys = new Object();
+				
+				var arrayTotalEstados:Array = new Array();
+				arrayTotalEstados = arrayTemp.filter(quitaDuplicados);
+				
+				FormarLosPagosAbiertosVsCerrado(arrayTotalEstados,arrayTemp,"ABIERTOSvsCERRADO",_listaTotalVs);
+				if(_listaTotalVs.length ==2){
+					/**
+					 * Se necesita invertir el orden del arreglo para que la gráfica muestre los abiertos, en rojo, y cerrados en color verde
+					 * */
+					_listaTotalVs.addItem(ObjectUtil.copy(_listaTotalVs[0]));
+					_listaTotalVs.removeItemAt(0);
+					
+				}else if(_listaTotalVs.length ==1){
+					var itemResumenConsulta:ResumenConsulta;
+					if((_listaTotalVs[0] as ResumenConsulta).conceptoResultado == 'ABIERTO'){
+						itemResumenConsulta = new ResumenConsulta();
+						itemResumenConsulta.conceptoResultado = 'CERRADO';
+						itemResumenConsulta.etiqueta = 'ABIERTOSvsCERRADO';
+						itemResumenConsulta.total = 0;
+						itemResumenConsulta.clientes_proveedores = 0;
+						itemResumenConsulta.totalPagos = 0;
+						itemResumenConsulta.partidas = 0;
+						itemResumenConsulta.piezasTotal = 0;
+						_listaTotalVs.addItemAt(itemResumenConsulta,0);
+					}
+				}
+				
+				chartAbiertoVsCerrado.recibirDataProvider = _listaTotalVs;
+				
+				//Para liberar Memoria
+				arrayTotalEstados = new Array();
+				arrayTemp = new Array();
+				keys = new Object();
+				
+				
+			}
+			private function FormarLosPagosAbiertosVsCerrado(TotalInfoVS:Array,infoVSInfo:Array,etiqueta:String,infoInfoVs:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalPagos:int;
+				var totalMonto:Number;
+				var keysMarca:Object;
+				var totalClientes_proveedores:int;
+				
+				var currentPagoProveedor:PagoProveedor; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalInfoVS.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalPagos =0;
+					totalMonto =0;
+					totalClientes_proveedores =0;
+					currentPagoProveedor = infoVSInfo[j] as PagoProveedor;
+					while( (TotalInfoVS[i] as PagoProveedor).estado == currentPagoProveedor.estado ){
+						totalPartidas += currentPagoProveedor.cantidad;
+						totalPiezas += currentPagoProveedor.totalPiezas;
+						totalMonto += currentPagoProveedor.montoDolares;
+						
+						totalPagos++;
+						
+						if(!keysMarca.hasOwnProperty(currentPagoProveedor.nombreProveedor)){
+							keysMarca[currentPagoProveedor.nombreProveedor] = currentPagoProveedor.nombreProveedor;
+							totalClientes_proveedores++;
+						}
+						
+						infoVSInfo.shift();
+						if(infoVSInfo.length >0)
+							currentPagoProveedor = infoVSInfo[j] as PagoProveedor;
+						else
+							currentPagoProveedor =new PagoProveedor();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalInfoVS[i] as PagoProveedor).estado.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.clientes_proveedores = totalClientes_proveedores;
+					itemResumenConsulta.totalPagos = totalPagos;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					infoInfoVs.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			public function quitaDuplicados(item:PagoProveedor, id:uint, proveedor:Array):Boolean{
+				if (keys.hasOwnProperty(item.estado)) {
+					return false;
+				} else {
+					keys[item.estado] = item.estado;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+	<graficaPie:GraficaChartGrisTituloArribaConsultaPagos id="chartAbiertoVsCerrado" tituloGrafica="ABIERTO VS CERRADO" tipoGrafica="pieSeriesVS"/>
+</s:Group>

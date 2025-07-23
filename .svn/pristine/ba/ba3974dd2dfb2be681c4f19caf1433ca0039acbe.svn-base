@@ -1,0 +1,1485 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.reportes.compras.repProdAlmacen2012
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	
+	import mx.collections.ArrayCollection;
+	import mx.com.proquifa.proquifanet.rsl.vista.eventos.reportes.compras.prodAlmacen2012.EventoRepProAlmacen2012;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.ProductoAlmacen;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaPedido;
+	import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.DateUtils;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+	import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+	import mx.formatters.DateFormatter;
+	import mx.utils.ObjectUtil;
+	import mx.utils.StringUtil;
+	
+	import skins.catalogos.catalogoAlertas;
+	import skins.catalogos.catalogoColores;
+	
+	public class ModeloRepProdAlmacen2012 extends EventDispatcher
+	{
+		private var _pasado:ArrayCollection; 
+		private var _anteAntier:ArrayCollection;
+		private var _antier:ArrayCollection; 
+		private var _ayer:ArrayCollection;
+		private var _hoy:ArrayCollection; 
+		private var _manana:ArrayCollection;
+		private var _pasadoManana:ArrayCollection; 
+		private var _posPasado:ArrayCollection;
+		private var _fututro:ArrayCollection;
+		private var _todo:ArrayCollection;
+		
+		
+		
+		// NUEVAS VARIABLES
+		private var _currentDiaSeleccionado:String = "HOY";
+		private var _currentEtiqueta:String = "transito";
+		private var _currentVista:String = "tabla";
+		
+		//Listas para las columnas 
+		private var _listaClientesProveedores:ArrayCollection;
+		
+		private var _objLabels:Object;
+		private var _arrEtiquetaDia:Array= ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+		private var _isBusquedaAvanzada:Boolean = true;
+		
+		private var _tituloPanelDos:String;
+		
+		
+		private var _sqlTranPro:Query;
+		private var _sqlStock:Query;
+		private var _currentSQL:Query;
+		private var _sqlRapida:Query;
+		
+		//variables para los filtros
+		private var _clienOPro:String;
+		private var _manejoProducto:String;
+		private var _tipoProducto:String;
+		private var _marcaProducto:String;
+		private var _tipoFlete:String;
+		private var _controlProducto:String;
+		private var _proquifaNet:String;
+		private var _esac:String;
+		private var _ruta:String;
+		private var _zonaMensajeria:String;
+		
+		private var funcion:String;
+		//variables para llenar los combos del Menu Reporte Compras
+		private var todosCombosBox:Object;
+		
+		//Busqueda rápida
+		private var _textoBusquedaRapida:String;
+		
+		
+		//Static Panel 1
+		public static var fueraTiempo:ArrayCollection = new ArrayCollection;
+		public static var enTiempo:ArrayCollection = new ArrayCollection;
+		
+		private var _montoTransito:String;
+		private var _montoProgramado:String;
+		
+		/**
+		 *************************************** todos los productos encontrados, se utiliza la primera vez al iniciar el reporte o cad que se da actualizar  *************************************************************
+		 */
+		
+		
+		public function setProductoA($listaProductos:ArrayCollection):void{
+			if($listaProductos == null){
+				return;
+			}
+			
+			if(_isBusquedaAvanzada){
+				if(_currentEtiqueta == "transito" || _currentEtiqueta == "programado"){
+					_sqlTranPro = new Query($listaProductos,["diasFiltro","etiqueta","nombreCliente","manejoProducto","tipoProducto","marcaProducto","tipoFlete","controlProducto","estadoProquifaNet","esac","piRelacionada","ruta_Zona","esEnTiempo","ruta","zonaMensajeria"]);
+				}else{
+					_sqlStock = new Query($listaProductos,["diasFiltro","etiqueta","nombreProveedor","manejoProducto","tipoProducto","marcaProducto","tipoFlete","controlProducto","estadoProquifaNet","esac","piRelacionada","ruta_Zona","ttproducto","origenStock","folioOC","descripcionProducto"]);
+				}
+			}else{
+				_sqlRapida = new Query($listaProductos,["etiqueta","destino","nombreCliente","nombreProveedor","manejoProducto","tipoProducto","marcaProducto","tipoFlete","controlProducto","estadoProquifaNet","esac","piRelacionada","ruta_Zona","ttproducto","origenStock"]);
+			}
+			filtrarProductos(_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,_currentVista,_isBusquedaAvanzada,_ruta,_zonaMensajeria);
+			
+			if(actualizarEspera!= null && currentEnEspera){
+				setControlDeBloqueoPantalla("terminaEspera",null,null,"llegaListaProductosAlmacenReporteProductoAlmacen");
+			}
+		}
+		
+		
+		////////////////////////////////////////////////////////////////  Control de Bloqueo de Pantalla ////////////////////////////////////////////////////////
+		
+		private function verificarSiElExistenLosTiposDeEvento($tiposEventos:Array):Boolean
+		{
+			for (var i:int = 0; i < $tiposEventos.length; i++) 
+			{
+				if(new EventoRepProAlmacen2012(EventoRepProAlmacen2012[$tiposEventos[i]])== null){
+					return false;
+				}
+			}
+			return true;
+		}
+		
+		private var currentEnEspera:Boolean;
+		private var actualizarEspera:Object = new Object;
+		private var numServices:uint;
+		private var numServicioCompletos:uint;
+		private var serviciosCompletosDifKey:Object = new Object;
+		public function setControlDeBloqueoPantalla(mensaje:String,$tiposEvento:Array,$idCurrentBottons:Array,$errorOrWhoFinish:Object):void
+		{
+			if(mensaje == "iniciarEspera"){
+				if(Boolean(verificarSiElExistenLosTiposDeEvento($tiposEvento))){
+					numServicioCompletos=0;
+					numServices = 0;
+					actualizarEspera = new Object();
+					serviciosCompletosDifKey = new Object();
+					numServices = $tiposEvento.length;
+					currentEnEspera = true;
+					actualizarEspera.isBusy = true;
+					actualizarEspera["idCurrentButtons"] = $idCurrentBottons;
+					alertaSingleton.show(catalogoAlertas.INICIAR_ESPERA,"","","","","","",null,true);
+				}
+			}else if (mensaje =="terminaEspera"){
+				if(!serviciosCompletosDifKey.hasOwnProperty($errorOrWhoFinish as String)){
+					numServicioCompletos++;
+					serviciosCompletosDifKey[($errorOrWhoFinish as String)] = ($errorOrWhoFinish as String);
+				}
+				if(numServicioCompletos == numServices){
+					alertaSingleton.remove(true);
+					actualizarEspera.isBusy=false;
+					currentEnEspera = false;
+					numServices = 0;
+				}
+			}else if(mensaje =="error"){
+				alertaSingleton.remove(true);
+				currentEnEspera = false;
+				alertaSingleton.showReintentar( $errorOrWhoFinish.toString(), catalogoAlertas.TIT_ERR);
+				actualizarEspera.isBusy=false;
+			}
+			
+			dispatchEvent( new Event("actualizaEsperaYBloqueoModeloReporteproductoAlmacen") );
+		}
+		[Bindable(event="actualizaEsperaYBloqueoModeloReporteproductoAlmacen")]
+		public function get actualizarEstadoDeEsperaYBloqueo():Object
+		{
+			return actualizarEspera;
+		}
+		
+		
+		/**
+		 ***************************************************** resultado bsuqueda rapida *************************************************************
+		 */
+		private var _arregloBusuqedaRapida:ArrayCollection;
+		public function setRecibeBusquedaRapidaPorFiolioFD( $dato:ProductoAlmacen ):void{
+			
+			if($dato != null){
+				_arregloBusuqedaRapida = new ArrayCollection();
+				_arregloBusuqedaRapida.addItem( $dato );
+			}
+			
+			setProductoA(_arregloBusuqedaRapida);
+			/*dispatchEvent( new Event("evnviaBusuqedaRapidaProdAlmacenModeloRepProdAlmacen2012") );*/
+		}
+		
+		[Bindable(Event="evnviaBusuqedaRapidaProdAlmacenModeloRepProdAlmacen2012")]
+		public function get busquedaRapida():ArrayCollection{
+			return this._arregloBusuqedaRapida;
+		}
+		/**
+		 ***************************************************** resultado bsuqueda rapida x pedido *************************************************************
+		 */
+		
+		public function setEnviaBusquedaRapidaPorPedido( $dato:ArrayCollection ):void{
+			
+			_arregloBusuqedaRapida = new ArrayCollection();
+			_arregloBusuqedaRapida = ObjectUtil.copy( $dato ) as ArrayCollection;
+			dispatchEvent( new Event("evnviaBusuqedaRapidaProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		
+		private var _chartMarca:ArrayCollection;
+		private var _chartTipo:ArrayCollection;
+		private var _chartManejo:ArrayCollection;
+		private var _chartTipoFlete:ArrayCollection;
+		private var _chartEstado:ArrayCollection;
+		private var _chartRuta:ArrayCollection;
+		private var _chartOrigen:ArrayCollection;
+		private var _chartControl:ArrayCollection;
+		
+		public function generarGraficas():void{
+			
+			_chartMarca = new ArrayCollection;
+			_chartTipo = new ArrayCollection;
+			_chartManejo = new ArrayCollection;
+			_chartTipoFlete = new ArrayCollection;
+			_chartEstado = new ArrayCollection;
+			_chartRuta = new ArrayCollection;
+			
+			if (_currentEtiqueta != "stock" ){
+				_chartMarca = generateChartReporte("marcaProducto",_marcaProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,"marcaProducto",_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+				_chartTipo = generateChartReporte("tipoProducto",_tipoProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,"tipoProducto",_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+				_chartManejo =  generateChartReporte("manejoProducto",_manejoProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,"manejoProducto",_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+				
+				_chartTipoFlete =  generateChartReporte("tipoFlete",_tipoFlete,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"tipoFlete",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+				_chartEstado =  generateChartReporte("estadoProquifaNet",_proquifaNet,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,"estadoProquifaNet",_esac,null,null,null,_ruta,_zonaMensajeria]);
+				_chartRuta =  generateChartReporte("ruta_Zona",null,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,"ruta_Zona",null,_ruta,_zonaMensajeria]);
+				
+				dispatchEvent( new Event("enviaGraficoMarcasModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoTipoModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoManejoModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoFleteModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoEstadoModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoRutaModeloReporteProductoAlmacen"));
+			}else{
+				_chartMarca = generateChartReporte("marcaProducto",_marcaProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,"marcaProducto",_tipoFlete,_controlProducto,_proquifaNet,_esac]);
+				_chartTipo = generateChartReporte("tipoProducto",_tipoProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,"tipoProducto",_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac]);
+				_chartManejo =  generateChartReporte("manejoProducto",_manejoProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,"manejoProducto",_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac]);
+				
+				_chartControl =  generateChartReporte("controlProducto",_controlProducto,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,"controlProducto",_proquifaNet,_esac]);
+				_chartOrigen =  generateChartReporte("origenStock",null,[_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,"origenStock"]);
+				
+				dispatchEvent( new Event("enviaGraficoMarcasStockModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoTipoStockModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoManejoStockModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoOrigenModeloReporteProductoAlmacen"));
+				dispatchEvent( new Event("enviaGraficoControlModeloReporteProductoAlmacen"));
+			}
+			
+		}
+		private function generateChartReporte( $propiedad:String, $filtro:String, $consulta:Array ):ArrayCollection
+		{
+			
+			var inicioTiempo:Number = new Date().time;
+			
+			var arrayProvider:ArrayCollection = new ArrayCollection();
+			if( _currentSQL.indexObject[ $propiedad ] != null )
+			{
+				// determino si el filtro aplica por campo o por propiedad en campo
+				var posIdx:int = $consulta.indexOf( $propiedad );
+				for( var key:String in _currentSQL.indexObject[ $propiedad ] )
+				{
+					
+					var consultaReformulada:Array = ObjectUtil.copy( $consulta ) as Array; 
+					if( posIdx != -1 )
+						consultaReformulada[ posIdx ] = key;
+					if( $filtro != null )
+						consultaReformulada[ posIdx ] = $filtro;
+					if( posIdx != -1 && $filtro == null || key == $filtro )
+					{// contiene el campo a filtrar
+						var cachoPie:ResumenConsulta = new ResumenConsulta();
+						cachoPie.etiqueta = key;
+						var punterosFiltro:Array = _currentSQL.getPunteros( consultaReformulada );
+						cachoPie.partidas = punterosFiltro.length;
+						cachoPie.total = _currentSQL.getSumarCampo("pcompra.montoTotal",punterosFiltro);
+						cachoPie.clientes_proveedores = _currentSQL.getPunteros(consultaReformulada,"nombreProveedor").length;
+						cachoPie.clientes = _currentSQL.getPunteros(consultaReformulada,"nombreCliente").length;
+						cachoPie.piezasTotal = _currentSQL.getSumarCampo("cantidad",punterosFiltro);
+						cachoPie.totalCompras = cachoPie.totalPedidos = _currentSQL.getValoresCampo("piRelacionada",punterosFiltro).length;
+						arrayProvider.addItem( cachoPie );	
+					}
+					
+				}
+			}
+			return Util.sortArray(arrayProvider,"total");
+		}
+		
+		[Bindable(event="regresaEtiquetaGraficaReporteProductoAlmacen")]
+		public function get enviarEtiquetaGraficas():String{
+			return _currentEtiqueta;
+		}
+		
+		//Panel Uno Panel Clientes O Prveedores
+		public function filtrarProductos($diaSeleccionado:String, $etiqueta:String, $nombreClieOPro:String,$manejoPro:String, $tipoPro:String,$marcaPro:String, 
+										 $tipoFlete:String, $controlPro:String, $estadoProqui:String,$esac:String,$vistaSelected:String,$isBusquedaAvanzada:Boolean, $ruta:String, $zonaMensajeria:String):void
+		{
+			//Filtro para combos
+			_clienOPro = longitudCadena($nombreClieOPro) == 0 || $nombreClieOPro == "--TODOS--" ? null : $nombreClieOPro;
+			_manejoProducto = longitudCadena($manejoPro) == 0 || $manejoPro == "--TODOS--" ? null : $manejoPro;
+			_tipoProducto = longitudCadena($tipoPro) == 0 || $tipoPro == "--TODOS--" ? null : $tipoPro;
+			_marcaProducto = longitudCadena($marcaPro) == 0 || $marcaPro == "--TODOS--" ? null : $marcaPro;
+			_tipoFlete = longitudCadena($tipoFlete) == 0 || $tipoFlete == "--TODOS--" ? null : $tipoFlete;
+			_controlProducto = longitudCadena($controlPro) == 0 || $controlPro == "--TODOS--" ? null : $controlPro;
+			_proquifaNet = longitudCadena($estadoProqui) == 0 || $estadoProqui == "--TODOS--" ? null : $estadoProqui;
+			_ruta = longitudCadena($ruta) == 0 || $ruta == "--TODOS--" ? null : $ruta;
+			_zonaMensajeria = longitudCadena($zonaMensajeria) == 0 || $zonaMensajeria == "--TODOS--" ? null : $zonaMensajeria;
+			
+			_esac = longitudCadena($esac) == 0 || $esac == "--TODOS--" ? null : $esac;
+			
+			//otros filtros
+			_currentDiaSeleccionado = $diaSeleccionado == "TODO" ? null : $diaSeleccionado;
+			_currentEtiqueta = $etiqueta != null && longitudCadena($etiqueta) > 0 ? $etiqueta : _currentEtiqueta;
+			_currentVista = $vistaSelected != null && longitudCadena($vistaSelected) > 0 ? $vistaSelected : _currentVista;
+			
+			_isBusquedaAvanzada = $isBusquedaAvanzada;
+			
+			dispatchEvent(new Event("regresaEtiquetaGraficaReporteProductoAlmacen"));
+			
+			if(_isBusquedaAvanzada){
+				if(_currentEtiqueta == "transito" || _currentEtiqueta == "programado")
+					_currentSQL = _sqlTranPro;
+				else
+					_currentSQL = _sqlStock;
+			}else{
+				_currentSQL = _sqlRapida;
+				if(_currentSQL != null && _currentSQL.universo.length == 0 && _currentVista == "tabla"){
+					_listaClientesProveedores = null;
+					_objLabels.currentTitulo = "";
+					panelDos = null;
+					tituloPanel2 = "";
+					dispatchEvent(new Event("regresarListaDeClienOProPanelUnoModeloReporteProductoAlmacen"));
+					dispatchEvent(new Event("setearTituloPanelUnoClienOProModeloReporteProductoAlmacen"));
+					dispatchEvent(new Event("regresarListaClienteOProveedoresModeloReporteProductoAlmacen"));
+					dispatchEvent(new Event("regresarTituloPanelDosClienteProveeddorReporteProductoAlmacen"));
+					return;
+				}
+			}
+			
+			
+			if(_currentSQL != null){
+				var productosXFiltros:Array;
+				var nombreClienYPro:Array;
+				
+				var productosXFiltrosFT:Array;
+				var productosXFiltrosET:Array;
+				var nombreClienYProET:Array;
+				var nombreClienYProFT:Array;
+				fueraTiempo = new ArrayCollection;
+				enTiempo = new ArrayCollection;
+				
+				if(_currentVista == "grafica"){
+					
+					generarGraficas();
+				}
+				
+				_listaClientesProveedores = new ArrayCollection;
+				
+				var totalMonto:Number = 0;
+				var totalPiezas:uint = 0;
+				var itemClienteOProvee:ReporteProductoAItemClientesProveedores;
+				
+				
+				var productosFiltros:Array;
+				
+				if(_isBusquedaAvanzada){
+					
+					
+					if(_currentEtiqueta == "stock"){
+						productosXFiltros = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,_ruta,_zonaMensajeria]);
+						productosFiltros = _currentSQL.getPunteros([null,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,_ruta,_zonaMensajeria]);
+						
+						
+						nombreClienYPro = _clienOPro == null ? _currentSQL.getValoresCampoOmitiendoRepetidos("nombreProveedor",productosXFiltros) : [_clienOPro];
+					}else{
+						productosXFiltros = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+						productosFiltros = _currentSQL.getPunteros([null,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+						
+						
+						nombreClienYPro = _clienOPro == null ? _currentSQL.getValoresCampoOmitiendoRepetidos("nombreCliente",productosXFiltros) : [_clienOPro];
+						productosXFiltrosFT = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,"FT"]);
+						productosXFiltrosET = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,"ET"]);
+						nombreClienYProFT = _clienOPro == null ? _currentSQL.getValoresCampoOmitiendoRepetidos("nombreCliente",productosXFiltrosFT) : [_clienOPro];
+						nombreClienYProET = _clienOPro == null ? _currentSQL.getValoresCampoOmitiendoRepetidos("nombreCliente",productosXFiltrosET) : [_clienOPro];
+						
+						fueraTiempo = obtenerValoresPorClienteOProveedor(nombreClienYProFT,"FT");
+						enTiempo = obtenerValoresPorClienteOProveedor(nombreClienYProET,"ET");
+						
+						
+						/*var lstClienProvParaMontoTransito:ArrayCollection = new ArrayCollection();
+						
+						if(_currentEtiqueta == "transito"){
+						//Obtiene el Monto Total de las de Transito							
+						lstClienProvParaMontoTransito = obtenerValoresPorClienteOProveedor(nombreClienYPro, null, "transito");
+						_montoTransito = (lstClienProvParaMontoTransito[lstClienProvParaMontoTransito.length-1] as ReporteProductoAItemClientesProveedores).totalMontoString;					
+						dispatchEvent(new Event("regresarMontosBotonerTransitoaModeloRepProdAlmacen"));
+						}else{
+						//Obtiene el Monto Total de las de Programado							
+						lstClienProvParaMontoTransito = obtenerValoresPorClienteOProveedor(nombreClienYPro, null, "programado");
+						_montoProgramado = (lstClienProvParaMontoTransito[lstClienProvParaMontoTransito.length-1] as ReporteProductoAItemClientesProveedores).totalMontoString;
+						dispatchEvent(new Event("regresarMontosBotonerProgramadoModeloRepProdAlmacen"));	
+						}*/
+						
+					}
+				}else{
+					_currentEtiqueta = (_currentSQL.universo[0].etiqueta);
+					
+					productosXFiltros = _currentSQL.getPunteros([_currentEtiqueta]);
+					
+					if(_currentEtiqueta == "stock")
+						nombreClienYPro = _currentSQL.getValoresCampoOmitiendoRepetidos("nombreProveedor",productosXFiltros)
+					else
+						nombreClienYPro = _currentSQL.getValoresCampoOmitiendoRepetidos("nombreCliente",productosXFiltros)
+				}
+				
+				_listaClientesProveedores = obtenerValoresPorClienteOProveedor(nombreClienYPro);
+				
+				dispatchEvent(new Event("regresarStockTransitoReporteProductoAlmacen"));
+				
+				if(_isBusquedaAvanzada){
+					
+					// SE LLENAN LOS ARRAYS PARA LOS COMBOS DEL MENU REPORTE PRODUCTO ALMACEN
+					todosCombosBox = new Object;
+					if(_currentEtiqueta == "transito"){
+						todosCombosBox["cmbFlete"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("tipoFlete",productosXFiltros));
+					}
+					
+					if(_currentEtiqueta == "stock"){
+						todosCombosBox["cmbClienOProv"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("nombreProveedor",productosXFiltros));
+					}else{
+						todosCombosBox["cmbClienOProv"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("nombreCliente",productosXFiltros));
+					}
+					
+					todosCombosBox["cmbManejo"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("manejoProducto",productosXFiltros));
+					todosCombosBox["cmbTipo"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("tipoProducto",productosXFiltros));
+					todosCombosBox["cmbMarca"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("marcaProducto",productosXFiltros));
+					todosCombosBox["cmbControl"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("controlProducto",productosXFiltros));
+					todosCombosBox["cmbEdoProquifa"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("estadoProquifaNet",productosXFiltros));
+					
+					todosCombosBox["cmbESAC"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("esac",productosXFiltros));
+					
+					todosCombosBox["cmbRuta"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("ruta",productosXFiltros));
+					todosCombosBox["cmbZonaMensajeria"] = agregarTodosACombos(_currentSQL.getValoresCampoOmitiendoRepetidos("zonaMensajeria",productosXFiltros));
+					
+					//Para los combos
+					dispatchEvent(new Event("regresarArrayParaCombosModeloReporteProductoAlamacen"));
+					
+					
+					//SE REALIZAN LOS CONTEOS DE PRODUCTOS POR DIA PARA EL FILTRO DE AYER HOY Y MAÑANA
+					
+					var diasFiltro:Array = [ "MAÑANA","PASADO MAÑANA","POS PASADO","FUTURO", "HOY", "AYER", "ANTIER", "ANTE ANTIER", "PASADO"];
+					_objLabels = new Object();
+					var hoy:Date;
+					var maniana:Date;
+					var ayer:Date
+					
+					if(_currentEtiqueta == "stock"){
+						
+						var sumTTStock:int;
+						
+						for (var j:int = 0; j < diasFiltro.length; j++) 
+						{
+							_objLabels[ diasFiltro[j] ]  = 0;
+						}
+						
+						hoy = new Date();
+						maniana = UtilsFecha.regresaFechaRespectoAOtra(hoy,"MAÑANA");
+						ayer = UtilsFecha.regresaFechaRespectoAOtra(hoy,"AYER");
+						_objLabels.etiquetaHoy = _arrEtiquetaDia[hoy.day] +' '+ hoy.date;
+						_objLabels.etiquetaManiana = _arrEtiquetaDia[maniana.day] +' '+ maniana.date;
+						_objLabels.etiquetaAyer = _arrEtiquetaDia[ayer.day] +' '+ ayer.date;
+						_objLabels.todosClienOPro = _currentSQL.getValoresCampoOmitiendoRepetidos("nombreProveedor",productosFiltros).length;
+						_objLabels.currentTitulo = "TODO";
+						
+						//CALCULANDO PROMEDIO DE DIAS QUE EL PRODUCTO ESTA EN STOCK
+						
+						sumTTStock = _currentSQL.getSumarCampo("ttproducto",productosXFiltros);
+						_objLabels.promedioStock = "STOCK: " + generarEtiquetaDias(int(sumTTStock / productosXFiltros.length));
+						
+					}else{
+						
+						var totalClienYPro:int = 0;
+						var sumTTFRegular:int;
+						var sumTTFExpress:int;
+						var sumTTFProgramado:int;
+						var punterosXFRegular:Array;
+						var punterosXFExpress:Array;
+						var punterosXFProgramado:Array;
+						
+						
+						for ( j = 0; j < diasFiltro.length; j++) 
+						{
+							var punterosXdia:Array;
+							punterosXdia = _currentSQL.getPunteros([diasFiltro[j],_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac],"nombreCliente");
+							
+							_objLabels[ diasFiltro[j] ] = String(punterosXdia.length);
+							totalClienYPro+= punterosXdia.length;
+							
+							
+							//CALCULANDO PROMEDIOS DE TIPO DE FLETES POR DIAS
+							
+							if(_currentDiaSeleccionado == diasFiltro[j]){
+								
+								if(_currentEtiqueta == "transito"){
+									
+									punterosXFRegular = _currentSQL.getPunteros([diasFiltro[j],_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"Regular",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+									punterosXFExpress = _currentSQL.getPunteros([diasFiltro[j],_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"Flete Express",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+									
+									sumTTFRegular = _currentSQL.getSumarCampo("ttproducto",punterosXFRegular);
+									sumTTFExpress = _currentSQL.getSumarCampo("ttproducto",punterosXFExpress);
+									
+									_objLabels.promedioFRegular = "FR: " + generarEtiquetaDias(int(sumTTFRegular / punterosXFRegular.length));
+									_objLabels.promedioFExpress = "FE: " + generarEtiquetaDias(int(sumTTFExpress / punterosXFExpress.length));
+									
+								}else if(_currentEtiqueta == "programado"){
+									
+									punterosXFProgramado = _currentSQL.getPunteros([diasFiltro[j],_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"Programado",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]); 
+									sumTTFProgramado = _currentSQL.getSumarCampo("ttproducto",punterosXFProgramado);
+									
+									_objLabels.promedioFProgramado = "FP: " + generarEtiquetaDias(int(sumTTFProgramado / punterosXFProgramado.length));
+								}
+							}else if(_currentDiaSeleccionado == null){
+								if(_currentEtiqueta == "transito"){
+									
+									punterosXFRegular = _currentSQL.getPunteros([null,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"Regular",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+									punterosXFExpress = _currentSQL.getPunteros([null,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"Flete Express",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+									
+									sumTTFRegular = _currentSQL.getSumarCampo("ttproducto",punterosXFRegular);
+									sumTTFExpress = _currentSQL.getSumarCampo("ttproducto",punterosXFExpress);
+									
+									_objLabels.promedioFRegular = "FR: " + generarEtiquetaDias(int(sumTTFRegular / punterosXFRegular.length));
+									_objLabels.promedioFExpress = "FE: " + generarEtiquetaDias(int(sumTTFExpress / punterosXFExpress.length));
+								}else if(_currentEtiqueta == "programado"){
+									
+									punterosXFProgramado = _currentSQL.getPunteros([null,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,"Programado",_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]); 
+									sumTTFProgramado = _currentSQL.getSumarCampo("ttproducto",punterosXFProgramado);
+									
+									_objLabels.promedioFProgramado = "FP: " + generarEtiquetaDias(int(sumTTFProgramado / punterosXFProgramado.length));
+								}
+							}
+						}
+						
+						hoy = new Date();
+						maniana = UtilsFecha.regresaFechaRespectoAOtra(hoy,"MAÑANA");
+						ayer = UtilsFecha.regresaFechaRespectoAOtra(hoy,"AYER");
+						_objLabels.etiquetaHoy = _arrEtiquetaDia[hoy.day] +' '+ hoy.date;
+						_objLabels.etiquetaManiana = _arrEtiquetaDia[maniana.day] +' '+ maniana.date;
+						_objLabels.etiquetaAyer = _arrEtiquetaDia[ayer.day] +' '+ ayer.date;
+						_objLabels.todosClienOPro = _currentSQL.getValoresCampoOmitiendoRepetidos("nombreCliente",productosFiltros).length;
+						
+						switch(_currentDiaSeleccionado){
+							case "PASADO":_objLabels.currentTitulo = "PASADO";break;
+							case "ANTE ANTIER":_objLabels.currentTitulo = "ANTE ANTIER";break;
+							case "ANTIER":_objLabels.currentTitulo = "ANTIER";break;
+							case "AYER":_objLabels.currentTitulo = 'AYER / '+_objLabels.etiquetaAyer;break;
+							case "HOY":_objLabels.currentTitulo = 'HOY / '+_objLabels.etiquetaHoy;break;
+							case "MAÑANA":_objLabels.currentTitulo = "MAÑANA / "+_objLabels.etiquetaManiana;break;
+							case "PASADO MAÑANA":_objLabels.currentTitulo = "PASADO MAÑANA";break;
+							case "POS PASADO":_objLabels.currentTitulo = "POS PASADO";break;
+							case "FUTURO":_objLabels.currentTitulo = "FUTURO";break;
+							default:
+							{
+								_objLabels.currentTitulo = "TODO";
+							}
+						}
+					}
+					//para el conteode botonera AHYM
+					dispatchEvent(new Event("regresaConteoParaBotonesAHYMDelMenuModeloReporteProductoAlmacen"));
+					
+				}//FIN DE BUSQUEDA AVANZADA PARA CÁLCULO DE DIAS
+				else{ //PARA BUSQUEDA RÁPIDA SOLO SE NECESITA EL TITUTLO
+					
+					if(_listaClientesProveedores.length>0){
+						if(_currentEtiqueta == "stock")
+							_objLabels.currentTitulo = (_listaClientesProveedores[0] as ReporteProductoAItemClientesProveedores).nombreProveedor;
+						else
+							_objLabels.currentTitulo = (_listaClientesProveedores[0] as ReporteProductoAItemClientesProveedores).nombreCliente;
+					}else{
+						_objLabels.currentTitulo = "";
+					}
+				}
+				
+				if(_currentVista == "tabla"){
+					dispatchEvent(new Event("regresarListaDeClienOProPanelUnoModeloReporteProductoAlmacen"));
+					dispatchEvent(new Event("setearTituloPanelUnoClienOProModeloReporteProductoAlmacen"));
+				}
+				
+			}
+		}
+		
+		private function obtenerValoresPorClienteOProveedor($nombreClienYPro:Array, $enTiempo:String = null, $etiqutaParaBotonera:String = null):ArrayCollection{
+			
+			var totalMonto:Number = 0;
+			var totalPiezas:uint = 0;
+			var itemClienteOProvee:ReporteProductoAItemClientesProveedores;
+			var listaClientesProveedoresReturn:ArrayCollection = new ArrayCollection;
+			
+			for (var i:int = 0; i < $nombreClienYPro.length; i++) 
+			{
+				var currentNombre:String;
+				
+				if($nombreClienYPro[i] != null){
+					currentNombre = $nombreClienYPro[i];
+					
+					
+					var punterosXNombre:Array;
+					var fechaMasProxima:Date = null;
+					var fechaPivote:Number = 0;
+					
+					if(_isBusquedaAvanzada){
+						if($etiqutaParaBotonera == null)
+							punterosXNombre = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,currentNombre,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,$enTiempo]);
+						else
+							punterosXNombre = _currentSQL.getPunteros([_currentDiaSeleccionado,$etiqutaParaBotonera,currentNombre,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,$enTiempo]);
+					}else{
+						
+						if(_currentEtiqueta == "stock")
+							punterosXNombre = _currentSQL.getPunteros([_currentEtiqueta,null,null,currentNombre]);
+						else
+							punterosXNombre = _currentSQL.getPunteros([_currentEtiqueta,null,currentNombre]);
+					}
+					
+					if(punterosXNombre.length >0){
+						
+						itemClienteOProvee = new ReporteProductoAItemClientesProveedores;
+						itemClienteOProvee.numFila = i+1;
+						itemClienteOProvee.numPiezas = _currentSQL.getSumarCampo("cantidad",punterosXNombre);
+						
+						
+						//Reporte csv
+						itemClienteOProvee.cpedido = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).piRelacionada;
+						itemClienteOProvee.parciales = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).parciales == false ? 'No parciales' : 'Parciales';
+						itemClienteOProvee.alertaParciales = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).alertaParciales;
+						itemClienteOProvee.descripcion = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).descripcionProducto;
+						itemClienteOProvee.diasAlmacen = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).ttproducto.toString();
+						itemClienteOProvee.ruta = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).ruta;
+						itemClienteOProvee.control = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).controlProducto;
+						itemClienteOProvee.cpedido = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).piRelacionada;
+						
+						
+						
+						for (var k:int = 0; k < punterosXNombre.length; k++) 
+						{
+							if (itemClienteOProvee.pap == null || itemClienteOProvee.pap == '')
+								itemClienteOProvee.pap = (_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).pap;
+							
+							if (itemClienteOProvee.oCOriginal == null || itemClienteOProvee.oCOriginal == '')
+								itemClienteOProvee.oCOriginal = (_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).OCOriginal;
+							
+							if (itemClienteOProvee.restOc == null || itemClienteOProvee.restOc == '')
+								itemClienteOProvee.restOc = (_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).oc;
+							
+							if (itemClienteOProvee.autorizacion == null || itemClienteOProvee.autorizacion == '')
+								itemClienteOProvee.autorizacion = (_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).autorizacion;
+							
+							if (isNaN(itemClienteOProvee.restriccionEntrega) || itemClienteOProvee.restriccionEntrega == 1)
+								itemClienteOProvee.restriccionEntrega = (_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).restriccionRuta;
+							
+							if ((_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).porFacturar == 'Por Factura' )
+								if (itemClienteOProvee.diasFinMes == null || itemClienteOProvee.diasFinMes == '')
+									itemClienteOProvee.diasFinMes = (_currentSQL.universo[punterosXNombre[k]] as ProductoAlmacen).diasFinMes.toString();
+						}
+						
+						
+						
+						
+						
+						
+						if (itemClienteOProvee.parciales == 'No parciales' )
+							if (itemClienteOProvee.alertaParciales == 1)
+								itemClienteOProvee.alerta = true;
+						
+						if (itemClienteOProvee.pap != null && itemClienteOProvee.pap != '')
+							itemClienteOProvee.alerta = true;
+						
+						if (itemClienteOProvee.restOc != null && itemClienteOProvee.restOc != '')
+							itemClienteOProvee.alerta = true;
+						
+						if (itemClienteOProvee.oCOriginal != null && itemClienteOProvee.oCOriginal != '')
+							itemClienteOProvee.alerta = true;
+						
+						if (itemClienteOProvee.autorizacion != null && itemClienteOProvee.autorizacion != '')
+							itemClienteOProvee.alerta = true;
+						
+						if (itemClienteOProvee.diasFinMes != null && itemClienteOProvee.diasFinMes != '')
+							itemClienteOProvee.alerta = true;
+
+						if (!isNaN(itemClienteOProvee.restriccionEntrega) && itemClienteOProvee.restriccionEntrega == 1)
+							itemClienteOProvee.alerta = true;
+						
+						
+						
+						
+						if(_currentEtiqueta == "stock"){
+							itemClienteOProvee.numOrdenesCompra = _currentSQL.getValoresCampo("piRelacionada",punterosXNombre).length;
+							itemClienteOProvee.nombreProveedor = currentNombre;
+							
+						}else{
+							
+							itemClienteOProvee.nombreCliente = currentNombre;
+							itemClienteOProvee.numPedidos = _currentSQL.getValoresCampo("piRelacionada",punterosXNombre).length;
+							var tempFechas:Array = _currentSQL.getValoresCampoOmitiendoRepetidos("pcompra.fechaEstimadaEntrega",punterosXNombre);
+							fechaMasProxima = tempFechas[0];
+							
+							if(tempFechas.length > 1){
+								fechaPivote = tempFechas[0].time;
+								
+								for (var j:int = 1; j <tempFechas.length; j++) 
+								{
+									if(fechaPivote > tempFechas[j].time){
+										fechaPivote = tempFechas[j].time;
+										fechaMasProxima = tempFechas[j];
+									}
+								}
+							}
+							
+							itemClienteOProvee.fee = fechaMasProxima;
+							itemClienteOProvee.enTiempo = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).esEnTiempo == "ET" ? true : false;
+							itemClienteOProvee.colorEnTiempo = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).esEnTiempo == "ET" ? 0x70a047 : 0xd10c0c;
+							
+							if (itemClienteOProvee.fee != null ){
+								var diffDate:int = DateUtils.dateDiff(itemClienteOProvee.fee,new Date());
+								if (diffDate == 0 || diffDate == -1){
+									itemClienteOProvee.colorEnTiempo = 0xFFCC00;//AMARILLO SEMAFORO
+								}
+							}
+						}
+						itemClienteOProvee.responsable = (_currentSQL.universo[punterosXNombre[0]] as ProductoAlmacen).esac;
+						itemClienteOProvee.monto = _currentSQL.getSumarCampo("pcompra.montoTotal",punterosXNombre);
+						itemClienteOProvee.currentEtiqueta = _currentEtiqueta;
+						listaClientesProveedoresReturn.addItem(itemClienteOProvee);
+						totalMonto += itemClienteOProvee.monto;
+						totalPiezas += itemClienteOProvee.numPiezas;
+					}
+				}
+			}
+			
+			
+			var ultimoItemClienYPro:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+			ultimoItemClienYPro.isUltimoItem = true;
+			if(_currentEtiqueta == "stock"){
+				ultimoItemClienYPro.totalProveedores = listaClientesProveedoresReturn.length;
+			}else{
+				ultimoItemClienYPro.totalClientes = listaClientesProveedoresReturn.length;
+			}
+			ultimoItemClienYPro.totalMonto = totalMonto;
+			ultimoItemClienYPro.totalPiezas = totalPiezas;
+			ultimoItemClienYPro.currentEtiqueta = _currentEtiqueta;
+			listaClientesProveedoresReturn.addItem(ultimoItemClienYPro);
+			
+			return listaClientesProveedoresReturn;
+		}
+		
+		//PANEL 2
+		private var panelDos:ArrayCollection = new ArrayCollection;
+		private var tituloPanel2:String;
+		private var esEnTiempo:String = null;
+		
+		public function obtenerClienteProveedor($clienteProveedor:String, $enTiempo:String):void{
+			panelDos = new ArrayCollection;
+			var punteros:Array = new Array;
+			var punterosPedidos:Array = new Array;
+			tituloPanel2 = null;
+			esEnTiempo = $enTiempo;
+			if (_currentSQL != null ){
+				if ($clienteProveedor){
+					
+					tituloPanel2 = $clienteProveedor;
+					if (_isBusquedaAvanzada){
+						if (_currentEtiqueta == "stock" ){
+							punteros = punterosPedidos = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac]);
+							punterosPedidos = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac],"piRelacionada");
+						}else{
+							punteros = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,$enTiempo,_ruta,_zonaMensajeria]);
+							punterosPedidos = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,$enTiempo,_ruta,_zonaMensajeria],"piRelacionada");
+						}
+					}else{
+						if (_currentEtiqueta == "stock"){
+							punteros = _currentSQL.getPunteros([_currentEtiqueta,null,null,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac]);
+							punterosPedidos = _currentSQL.getPunteros([_currentEtiqueta,null,null,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac],"piRelacionada");
+						}else{
+							punteros = _currentSQL.getPunteros([_currentEtiqueta,null,$clienteProveedor,null,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria]);
+							punterosPedidos = _currentSQL.getPunteros([_currentEtiqueta,null,$clienteProveedor,null,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,null,null,null,_ruta,_zonaMensajeria],"piRelacionada");
+						}
+						
+					}
+					var listaPedidos:Array = new Array;
+					var itemPedidos:ReporteProductoAItemClientesProveedores;
+					
+					var totalPiezas:Number = 0;
+					for (var i:int = 0; i < punterosPedidos.length; i++ ){
+						var item:ProductoAlmacen = new ProductoAlmacen();
+						itemPedidos = new ReporteProductoAItemClientesProveedores;
+						item = (_currentSQL.universo[punterosPedidos[i]] ) as ProductoAlmacen;
+						var punteroPedido:Array;
+						if (_isBusquedaAvanzada){
+							if (_currentEtiqueta == "stock"){
+								//punteroPedido = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac]);
+								punteroPedido = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,item.piRelacionada,null,null,null,null,item.descripcionProducto]);
+							}else{
+								punteroPedido = _currentSQL.getPunteros([_currentDiaSeleccionado,_currentEtiqueta,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,item.piRelacionada,null,$enTiempo,_ruta,_zonaMensajeria]);
+							}
+						}else{
+							if (_currentEtiqueta == "stock"){
+								punteroPedido = _currentSQL.getPunteros([_currentEtiqueta,null,null,$clienteProveedor,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,item.piRelacionada]);
+							}
+							else{
+								punteroPedido = _currentSQL.getPunteros([_currentEtiqueta,null,$clienteProveedor,null,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,item.piRelacionada,_ruta,_zonaMensajeria]);
+							}
+						}
+						itemPedidos.cpedido = item.piRelacionada;
+						itemPedidos.referencia = item.referencia;
+						itemPedidos.doctoR = item.doctoR;
+						if (item.tipoFlete == "Programado"){
+							itemPedidos.flete = "FP";
+							itemPedidos.color = "0x" + catalogoColores.LABEL_MORADO;
+						}else if(item.tipoFlete == "Flete Express"){
+							itemPedidos.flete = "FE";
+							itemPedidos.color = "0x" + catalogoColores.LABEL_ROJO;
+						}else if(item.tipoFlete == "Regular"){
+							itemPedidos.flete = "FR";
+							itemPedidos.color = "0x" + catalogoColores.LABEL_AZUL_ESPECTRAL;
+						}else if (item.destino == "stock"){
+							itemPedidos.flete = "STOCK";
+							itemPedidos.color = "0x" + catalogoColores.LABEL_VERDE_AZUL;
+						}
+						itemPedidos.fpe = item.pcompra.fechaEstimadaEntrega;
+						itemPedidos.enTiempo = item.esEnTiempo == "ET" ? true : false;
+						itemPedidos.colorEnTiempo = item.esEnTiempo == "ET" ? 0x70a047 : 0xd10c0c;
+						if (itemPedidos.fpe != null ){
+							var diffDate:int = DateUtils.dateDiff(itemPedidos.fpe,new Date());
+							if (diffDate == 0 || diffDate == -1){
+								itemPedidos.colorEnTiempo = 0xFFCC00;//AMARILLO SEMAFORO
+							}
+						}
+						itemPedidos.parciales = item.parciales == false ? 'No parciales' : 'Parciales';
+						itemPedidos.monto= item.pcompra.montoTotal;
+						itemPedidos.monto= _currentSQL.getSumarCampo("pcompra.montoTotal",punteroPedido);
+						itemPedidos.numPiezas = _currentSQL.getSumarCampo("cantidad",punteroPedido);
+						totalPiezas = itemPedidos.numPiezas;
+						itemPedidos.zona = item.ruta_Zona;
+						itemPedidos.destino = item.destino;
+						itemPedidos.descripcion = item.descripcionProducto;
+						itemPedidos.precioUnitario = item.producto.costo;
+						itemPedidos.tipo = item.tipoProducto; 
+						itemPedidos.control = item.controlProducto;
+						itemPedidos.manejo = item.manejoProducto;
+						itemPedidos.ttproducto = item.ttproducto;
+						itemPedidos.folioOC = item.folioOC;
+						itemPedidos.numFila = i + 1;
+						itemPedidos.cpago = item.cpago;
+						
+						if (_currentEtiqueta == "stock" ){
+							//itemPedidos.monto= item.producto.costo * item.numeroPartidasCompra;
+							//itemPedidos.numPiezas = item.numeroPartidasCompra;    // ESTO SE COMENTO POR LA PARTE DE SUPLEMENTOS
+							itemPedidos.disponible = isDisponible(item.pcompra.fcadPartida);
+						}
+						panelDos.addItem(itemPedidos);
+						
+					}
+				}
+				var ultimoItem:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+				
+				if (_currentEtiqueta == "stock"){
+					ultimoItem.totalMonto = _currentSQL.getSumarCampo("producto.costo", punteros);
+				}else{
+					ultimoItem.totalMonto = _currentSQL.getSumarCampo("pcompra.montoTotal", punteros);
+				}
+				ultimoItem.totalPiezas = totalPiezas;
+				ultimoItem.totalPedidos = punterosPedidos.length;
+				ultimoItem.isUltimo = true;
+				
+				panelDos.addItem(ultimoItem);
+				
+				dispatchEvent(new Event("regresarListaClienteOProveedoresModeloReporteProductoAlmacen"));
+				dispatchEvent(new Event("regresarTituloPanelDosClienteProveeddorReporteProductoAlmacen"));
+			}
+		}
+		
+		
+		private function isDisponible($fecha:String):Boolean{
+			var today:Date = new Date();
+			var meses:Object = {"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12};
+			var mes:int = today.month + 1;
+			var year:int = parseInt(trimWhitespace($fecha).replace(/[^0-9]/g, ""));
+			var month:int = meses[trimWhitespace($fecha).replace(/[^a-zA-Z]/g, "").toLocaleLowerCase()];
+			if ($fecha == null || $fecha == "ND"){
+				return true;
+			}else if(year == today.getFullYear()){
+				if( month >= mes ){
+					return true;
+				}
+				else{
+					return false;
+				}
+			}else if (year > today.getFullYear()){
+				return true;
+			}else{
+				return false;
+			}
+		}
+		
+		private function trimWhitespace($string:String):String {
+			if ($string == null) {
+				return "";
+			}
+			return $string.replace(/^\s+|\s+$/g, "");
+		}
+		
+		public function limpiarPanelTresCuatro():void{
+			listaPartidas = new ArrayCollection();
+			tituloPanel3 = null;
+			_infoGeneral = null;
+			if (_currentEtiqueta == "stock"){
+				var ultimoItem:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+				ultimoItem.isUltimo = true;
+				listaPartidas.addItem(ultimoItem);
+			}
+			dispatchEvent(new Event("regresarTituloPanelTresReporteProductoAlmacen"));
+			dispatchEvent(new Event("regresarListaPartidasParaPanelTresModeloReporteProductoAlmacen"));
+			dispatchEvent( new Event("evnviaInfoGeneralProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		
+		//PaNeL 3
+		private var listaPartidas:ArrayCollection;
+		private var tituloPanel3:String;
+		public function setFiltrarPedidoPanelTres($cpedido:ArrayCollection):void{
+			var $sql:Query;
+			var listaPartidasTemp:Array = new Array;
+			var arrayTempProgramado:ArrayCollection = new ArrayCollection();
+			var arrayTempFlete:ArrayCollection = new ArrayCollection();
+			var tiempo:Boolean;
+			if (esEnTiempo != null ){
+				tiempo = esEnTiempo == "ET" ? true : false;
+			}
+			
+			if($cpedido != null){
+				
+				var punteros:Array;
+				var punteroEtiqueta:Array;
+				var partidaItem:ReporteProductoAItemClientesProveedores;
+				
+				$sql = new Query($cpedido,["diasFiltro","destinos","estado","tipoFlete","FPEntrega","entregaEnTiempo","control","manejo","tipo","fabrica"]);
+				if (_currentEtiqueta == "stock"){
+					punteros = $sql.getPunteros([null,"stock"]);
+				}else if (_currentEtiqueta == "programado"){
+					punteros = $sql.getPunteros([null,"Cliente",null,"Programado"]);
+				}
+				else{
+					arrayTempProgramado = new ArrayCollection($sql.getPunteros([null,"Cliente",null,"Regular"]));
+					arrayTempFlete = new ArrayCollection($sql.getPunteros([null,"Cliente",null,"Flete Express"]));
+					arrayTempProgramado.addAll(arrayTempFlete);
+					//punteros = $sql.getPunteros([_currentDiaSeleccionado,"Cliente",null,"Regular"]);
+					punteros = arrayTempProgramado.source;
+				}
+				
+				for (var i:int = 0; i < punteros.length; i++){
+					partidaItem = new ReporteProductoAItemClientesProveedores();
+					var date:Date = new Date(CurrentDateTimeString(new Date()));
+					partidaItem.enTiempo = new Date(CurrentDateTimeString($sql.universo[punteros[i]].FPEntrega)).time >= date.time ? true : false;
+					partidaItem.colorEnTiempo = partidaItem.enTiempo == true ? 0x70a047 : 0xd10c0c;
+					
+					if (($sql.universo[punteros[i]].estado == "STOCK" || $sql.universo[punteros[i]].estado == "Despachable" || $sql.universo[[punteros[i]]].estado == "A destrucción" ||
+						$sql.universo[punteros[i]].estado == "No entregado" || $sql.universo[punteros[i]].estado == "En asignacion" || $sql.universo[punteros[i]].estado == "A programacion" ||
+						$sql.universo[punteros[i]].estado == "A facturacion" || $sql.universo[punteros[i]].estado == "En entrega" || $sql.universo[punteros[i]].estado == "En inspección" ||
+						$sql.universo[punteros[i]].estado == "A surtir" || $sql.universo[[punteros[i]]].estado == "Por embalar" || $sql.universo[[punteros[i]]].estado == "A embalar" || $sql.universo[[punteros[i]]].estado == "Por colecatar"
+						|| $sql.universo[[punteros[i]]].estado == "Embalado" || $sql.universo[punteros[i]].estado == "En ruta") && 
+						(_currentDiaSeleccionado == null || _currentDiaSeleccionado == $sql.universo[punteros[i]].diasFiltro) && (esEnTiempo == null || partidaItem.enTiempo == tiempo )){
+						
+						partidaItem.isEnfocado = true;
+					}
+					if ($sql.universo[punteros[i]].tipoFlete == "Programado"){
+						partidaItem.flete = "FP";
+						partidaItem.color = "0x" + catalogoColores.LABEL_MORADO;
+					}else if($sql.universo[punteros[i]].tipoFlete == "Flete Express"){
+						partidaItem.flete = "FE";
+						partidaItem.color = "0x" + catalogoColores.LABEL_ROJO;
+					}else if($sql.universo[punteros[i]].tipoFlete == "Regular"){
+						partidaItem.flete = "FR";
+						partidaItem.color = "0x" + catalogoColores.LABEL_AZUL_ESPECTRAL;
+					}else if ($sql.universo[punteros[i]].destino == "stock"){
+						partidaItem.flete = "STOCK";
+						partidaItem.color = "0x" + catalogoColores.LABEL_VERDE_AZUL;
+					}
+					if ($sql.universo[punteros[i]].estado != "En entrega"){
+						partidaItem.ubicacion = "NO EN EL ALMACÉN";
+						partidaItem.colorUbicacion = "0x" + catalogoColores.LABEL_ROJO
+					}
+					if ($sql.universo[punteros[i]].estado == "Entregado"){
+						partidaItem.ubicacion = "ENTREGADO";
+						partidaItem.colorUbicacion = "0x" + catalogoColores.LABEL_VERDE;
+					}
+					else if ($sql.universo[punteros[i]].estado == "Enviado"){
+						partidaItem.ubicacion = "ENVIADO";
+						partidaItem.colorUbicacion = "0x" + catalogoColores.LABEL_VERDE;
+					}
+					partidaItem.fpe = $sql.universo[punteros[i]].FPEntrega;
+					if (partidaItem.fpe != null ){
+						var diffDate:int = DateUtils.dateDiff(partidaItem.fpe,new Date());
+						if (diffDate == 0 || diffDate == -1){
+							partidaItem.colorEnTiempo = 0xFFCC00;//AMARILLO SEMAFORO
+						}
+					}
+					partidaItem.avisoCambio = $sql.universo[punteros[i]].avisoCambio;
+					partidaItem.numPiezas = $sql.universo[punteros[i]].cantidadPedida;
+					partidaItem.precioUnitario = $sql.universo[punteros[i]].precioUnitarioDLS;
+					partidaItem.monto = partidaItem.numPiezas * partidaItem.precioUnitario;
+					partidaItem.descripcion = $sql.universo[punteros[i]].descripcion;
+					partidaItem.estado = $sql.universo[punteros[i]].estado;
+					partidaItem.diasAlmacen = $sql.universo[punteros[i]].diasEnAlmacen;
+					partidaItem.tipo = $sql.universo[punteros[i]].tipo;
+					partidaItem.control = $sql.universo[punteros[i]].control;
+					partidaItem.manejo = $sql.universo[punteros[i]].manejo;
+					partidaItem.cpedido = $sql.universo[punteros[i]].cpedido;
+					partidaItem.folioFD = $sql.universo[punteros[i]].folioFD;
+					partidaItem.numPedidos = 1;
+					partidaItem.fea = $sql.universo[punteros[i]].fea;
+					
+					partidaItem.restOc = $sql.universo[punteros[i]].restOc;
+					partidaItem.oCOriginal = $sql.universo[punteros[i]].oCOriginal;
+					partidaItem.autorizacion = $sql.universo[punteros[i]].autorizacion;
+					partidaItem.diasFinMes = $sql.universo[punteros[i]].diasFinMes;
+					partidaItem.pap = $sql.universo[punteros[i]].pap;
+					
+					listaPartidasTemp.push(partidaItem);
+					tituloPanel3 = $sql.universo[punteros[i]].cpedido;
+				}
+				if (listaPartidasTemp.length > 1){
+					listaPartidasTemp.sortOn("isEnfocado",Array.DESCENDING);
+				}
+				for (i = 0; i < listaPartidasTemp.length; i++){
+					listaPartidasTemp[i].numFila = i + 1;
+				}
+			}
+			listaPartidas = new ArrayCollection(listaPartidasTemp);
+			dispatchEvent(new Event("regresarTituloPanelTresReporteProductoAlmacen"));
+			dispatchEvent(new Event("regresarListaPartidasParaPanelTresModeloReporteProductoAlmacen"));
+		}
+		
+		private function CurrentDateTimeString($date:Date):String
+		{               
+			var CurrentDateTime:Date = $date;
+			var CurrentDF:DateFormatter = new DateFormatter();
+			CurrentDF.formatString = "MM/DD/YY"
+			var DateTimeString:String = CurrentDF.format(CurrentDateTime);
+			return DateTimeString;
+		}
+		
+		
+		public function filtradoPanelTresStock($cpedido:String, $tproducto:String, $producto:String):void{
+			var punteros:Array = new Array;
+			if(_isBusquedaAvanzada){
+				punteros = _currentSQL.getPunteros([null,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,$cpedido,null,$tproducto,null,null,$producto]);
+			}else{
+				punteros = _currentSQL.getPunteros([_currentEtiqueta,null,null,null,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,$cpedido,null,$tproducto,null]);
+			}
+			tituloPanel3 = $producto;
+			var partidaItem:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+			listaPartidas = new ArrayCollection;
+			for(var i:int = 0; i < punteros.length; i++ ){
+				partidaItem = new ReporteProductoAItemClientesProveedores();
+				partidaItem.stock = true;
+				partidaItem.numFila = i + 1;
+				partidaItem.folioOC = _currentSQL.universo[punteros[i]].folioOC;
+				partidaItem.folioFD = _currentSQL.universo[punteros[i]].folioFD;
+				partidaItem.numPiezas = _currentSQL.universo[punteros[i]].cantidad;
+				partidaItem.monto = _currentSQL.universo[punteros[i]].pcompra.montoTotal;
+				partidaItem.precioUnitario = _currentSQL.universo[punteros[i]].producto.costo;
+				listaPartidas.addItem(partidaItem)
+			}
+			
+			var ultimoItem:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+			ultimoItem.totalMonto = _currentSQL.getSumarCampo("pcompra.montoTotal", punteros);
+			ultimoItem.totalPiezas = _currentSQL.getSumarCampo("cantidad",punteros);
+			ultimoItem.totalPedidos = punteros.length;
+			ultimoItem.isUltimo = true;
+			listaPartidas.addItem(ultimoItem);
+			
+			dispatchEvent(new Event("regresarTituloPanelTresReporteProductoAlmacen"));
+			dispatchEvent(new Event("regresarListaPartidasParaPanelTresModeloReporteProductoAlmacen"));
+		}
+		
+		[Bindable(event="regresarListaPartidasParaPanelTresModeloReporteProductoAlmacen")]
+		public function get regresarListaPanelTres():ArrayCollection{
+			return listaPartidas;
+		}
+		
+		[Bindable(event="regresarListaClienteOProveedoresModeloReporteProductoAlmacen")]
+		public function get regresarListaClienteProveedorPanelDos():ArrayCollection{
+			return panelDos;
+		}
+		
+		[Bindable(event="regresarStockTransitoReporteProductoAlmacen")]
+		public function get regresarEtiquetaPanel():Boolean{
+			return _currentEtiqueta == "stock" ? true : false;
+		}
+		
+		[Bindable(event="regresarTituloPanelDosClienteProveeddorReporteProductoAlmacen")]
+		public function get regresarTituloPanelDos():String{
+			return tituloPanel2;
+		}
+		
+		[Bindable(event="regresarTituloPanelTresReporteProductoAlmacen")]
+		public function get regresarTituloPanelTres():String{
+			return tituloPanel3;
+		}
+		
+		[Bindable(event="regresarListaDeClienOProPanelUnoModeloReporteProductoAlmacen")]
+		public function get regresaListaDeClienOProPanelUno():ArrayCollection
+		{
+			return _listaClientesProveedores;
+		}
+		
+		[Bindable(event="setearTituloPanelUnoClienOProModeloReporteProductoAlmacen")]
+		public function get regresarTituloDelPanelUnoClienOPro():String
+		{
+			if(_objLabels != null && _objLabels.hasOwnProperty("currentTitulo"))
+				return _objLabels.currentTitulo;
+			else 
+				return null;
+		}
+		
+		[Bindable(event="regresarArrayParaCombosModeloReporteProductoAlamacen")]
+		public function get regresaObjetoParallenarCombosEnMenu():Object
+		{
+			return todosCombosBox;
+		}
+		
+		[Bindable(event="regresaConteoParaBotonesAHYMDelMenuModeloReporteProductoAlmacen")]
+		public function get regresarConteoParaBotonesAHYM():Object
+		{
+			return _objLabels;	
+		}
+		
+		private function agregarTodosACombos(array:Array):Array
+		{
+			var arraytemp:Array = ObjectUtil.copy(array) as Array;
+			arraytemp.sort();
+			arraytemp.unshift("--TODOS--");
+			return arraytemp;
+		}
+		
+		private function longitudCadena($cadena:String):int
+		{
+			return StringUtil.trim($cadena).length;
+		}
+		
+		private function generarEtiquetaDias(dias:int):String
+		{
+			if(dias == 1){
+				return dias + " día";
+			}else{
+				return dias + " días";
+			}
+			return "";
+		}
+		
+		
+		public function settearTodosLosFiltrosParaLaBusqueda($diaSeleccionado:String, $etiqueta:String, $nombreClieOPro:String,$manejoPro:String, $tipoPro:String,$marcaPro:String, $tipoFlete:String, $controlPro:String, $estadoProqui:String,$esac:String,$vistaSelected:String,$isBusquedaAvanzada:Boolean,$textoBusquedaRpida:String):void
+		{
+			//Filtro para combos
+			_clienOPro = longitudCadena($nombreClieOPro) == 0 || $nombreClieOPro == "--TODOS--" ? null : $nombreClieOPro;
+			_manejoProducto = longitudCadena($manejoPro) == 0 || $manejoPro == "--TODOS--" ? null : $manejoPro;
+			_tipoProducto = longitudCadena($tipoPro) == 0 || $tipoPro == "--TODOS--" ? null : $tipoPro;
+			_marcaProducto = longitudCadena($marcaPro) == 0 || $marcaPro == "--TODOS--" ? null : $marcaPro;
+			_tipoFlete = longitudCadena($tipoFlete) == 0 || $tipoFlete == "--TODOS--" ? null : $tipoFlete;
+			_controlProducto = longitudCadena($controlPro) == 0 || $controlPro == "--TODOS--" ? null : $controlPro;
+			_proquifaNet = longitudCadena($estadoProqui) == 0 || $estadoProqui == "--TODOS--" ? null : $estadoProqui;
+			_esac = longitudCadena($esac) == 0 || $esac == "--TODOS--" ? null : $esac;
+			//otros filtros
+			_currentDiaSeleccionado = $diaSeleccionado == "TODO" ? null : $diaSeleccionado;
+			_currentEtiqueta = $etiqueta != null && longitudCadena($etiqueta) > 0 ? $etiqueta : _currentEtiqueta;
+			_currentVista = $vistaSelected != null && longitudCadena($vistaSelected) > 0 ? $vistaSelected : _currentVista;
+			
+			_isBusquedaAvanzada = $isBusquedaAvanzada;
+			
+			if(!_isBusquedaAvanzada){
+				_currentEtiqueta = null;
+				_objLabels = new Object;
+				
+				if($textoBusquedaRpida != null && $textoBusquedaRpida.length ==0 ){
+					_listaClientesProveedores = new ArrayCollection;
+					
+					var ultimoItemClienYPro:ReporteProductoAItemClientesProveedores = new ReporteProductoAItemClientesProveedores;
+					ultimoItemClienYPro.isUltimoItem = true;
+					ultimoItemClienYPro.totalClientes = 0;
+					ultimoItemClienYPro.totalMonto = 0;
+					ultimoItemClienYPro.totalPiezas = 0;
+					ultimoItemClienYPro.currentEtiqueta = _currentEtiqueta = "transito";
+					_listaClientesProveedores.addItem(ultimoItemClienYPro);
+					_objLabels.currentTitulo = '';
+					
+					dispatchEvent(new Event("regresarListaDeClienOProPanelUnoModeloReporteProductoAlmacen"));
+					dispatchEvent(new Event("setearTituloPanelUnoClienOProModeloReporteProductoAlmacen"));
+				}else{
+					
+					if($textoBusquedaRpida != null && $textoBusquedaRpida == _textoBusquedaRapida ){
+						filtrarProductos(_currentDiaSeleccionado,_currentEtiqueta,_clienOPro,_manejoProducto,_tipoProducto,_marcaProducto,_tipoFlete,_controlProducto,_proquifaNet,_esac,_currentVista,_isBusquedaAvanzada,_ruta,_zonaMensajeria);
+					}else if($textoBusquedaRpida != null){
+						_textoBusquedaRapida = $textoBusquedaRpida;
+					}
+				}
+			}
+		}
+		
+		/**
+		 ***************************************************** envia etiqueta de tipo busqueda *************************************************************
+		 */
+		private var _isAvanzada:Boolean;
+		public function setEnviaEtiquetaTipoBusqueda( $isBusquedaAvanzada:Boolean ):void{
+			_isAvanzada = $isBusquedaAvanzada;
+			dispatchEvent( new Event("enviarEtiquetaTipoBusquedaModeloReporteProductoAlmacen") );
+		}
+		[Bindable(Event="enviarEtiquetaTipoBusquedaModeloReporteProductoAlmacen")]
+		public function get enviaEtiquetaTipoBusqueda():Boolean{
+			return _isAvanzada;
+		}
+		
+		
+		/**
+		 ***************************************************** se envia la lista de productos de almacen	*************************************************************
+		 */
+		private var _listaProductos:ArrayCollection;
+		private var _botonBar:String;
+		public function setEnviaProdSigVistas( $lista:ArrayCollection,boton:String):void{
+			_botonBar = boton;
+			_listaProductos = new ArrayCollection();
+			_listaProductos = $lista;
+			dispatchEvent( new Event("enviaCondicionDeButtonBar"));
+			dispatchEvent( new Event("evnviaListaProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="enviaCondicionDeButtonBar")]
+		public function get enviaLabelBotonBar():String{
+			return this._botonBar;
+		}
+		[Bindable(Event="evnviaListaProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaProdSigVistas():ArrayCollection{
+			return this._listaProductos;
+		}
+		
+		/**
+		 ***************************************************** se envia la lista de pedidos de almacen *************************************************************
+		 */
+		private var _listaPedidos:ArrayCollection;
+		public function setEnviaPedidoSigVistas( $lista:ArrayCollection ):void{
+			_listaPedidos = new ArrayCollection();
+			_listaPedidos = $lista;
+			dispatchEvent( new Event("evnviaListaPedidosProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="evnviaListaPedidosProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaPedidoSigVistas():ArrayCollection{
+			return this._listaPedidos;
+		}
+		
+		/**
+		 ***************************************************** se envia la lista de partidas por pedido *************************************************************
+		 */
+		private var _listaPartidas:ArrayCollection;
+		public function setEnviaPartidasSigVistas( $lista:ArrayCollection ):void{
+			_listaPartidas = new ArrayCollection();
+			_listaPartidas = $lista;
+			dispatchEvent( new Event("evnviaListaPartidasProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="evnviaListaPartidasProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaPartidasSigVistas():ArrayCollection{
+			return this._listaPartidas;
+		}
+		
+		/**
+		 *****************************************************  segunda Implementación; se envia la lista de partidas por pedido   *************************************************************
+		 */
+		private var _listPartidas:ArrayCollection;
+		public function setPartidasPedidos( $lista:ArrayCollection ):void{
+			for(var d:int = 0; d<$lista.length ; d++){
+				($lista[d] as PartidaPedido).numeroFila = d+1;
+			}
+			_listPartidas = new ArrayCollection();
+			_listPartidas = $lista;
+			dispatchEvent( new Event("enviaListaPartidasPedidoProdAlmacenProdAlmacen2012") );
+		}
+		[Bindable(Event="enviaListaPartidasPedidoProdAlmacenProdAlmacen2012")]
+		public function get partidasPedido():ArrayCollection{
+			return this._listPartidas;
+		}
+		
+		/**
+		 ***************************************************** se envia info general *************************************************************
+		 */
+		private var _infoGeneral:ProductoAlmacen;
+		public function setEnviaInfoGeneral( $dato:ProductoAlmacen ):void{
+			_infoGeneral = new ProductoAlmacen();
+			_infoGeneral = $dato;
+			dispatchEvent( new Event("evnviaInfoGeneralProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="evnviaInfoGeneralProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaInfoGeneral():ProductoAlmacen{
+			return this._infoGeneral;
+		}
+		
+		/**
+		 ***************************************************** envia etiqueta Boton barra *************************************************************
+		 */
+		private var _barra:String;
+		public function setEnviaEtiquetaBoton( $boton:String ):void{
+			_barra = new String();
+			_barra = $boton;
+			dispatchEvent( new Event("evnviaEtiquetaBotonBarraProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="evnviaEtiquetaBotonBarraProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaEtiquetaBoton():String{
+			return this._barra;
+		}
+		
+		
+		/**
+		 ***************************************************** envia objeto combo box *************************************************************
+		 */
+		private var _combo:Object;
+		public function setFiltroComboBox( $filtroBox:Object ):void{
+			_combo = new Object();
+			_combo = $filtroBox;
+			dispatchEvent( new Event("enviarFiltroComboBox") );
+		}
+		[Bindable(Event="enviarFiltroComboBox")]
+		public function get filtroComboBox():Object{
+			return this._combo;
+		}
+		
+		/**
+		 ***************************************************** envia conteo de Fechas *************************************************************
+		 */
+		private var _conteo:ArrayCollection = new ArrayCollection();
+		public function setConteoPorFecha(fechas:ArrayCollection):void{
+			_conteo = new ArrayCollection();
+			_conteo.addItem(_pasado);
+			_conteo.addItem(_anteAntier);
+			_conteo.addItem(_antier);
+			_conteo.addItem(_ayer);
+			_conteo.addItem(_hoy);
+			_conteo.addItem(_manana);
+			_conteo.addItem(_pasadoManana);
+			_conteo.addItem(_posPasado);
+			_conteo.addItem(_fututro);
+			_conteo.addItem(_todo);
+			dispatchEvent( new Event("enviaConteoFechasModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="enviaConteoFechasModeloRepProdAlmacen2012")]
+		public function get recibeConteoPorFecha():ArrayCollection{
+			return this._conteo;
+		}
+		
+		/**
+		 ************************************************************* el Fault de busqueda de documento por folio *************************************************************
+		 */
+		
+		[Bindable(event="enviaGraficoMarcasModeloReporteProductoAlmacen")]
+		public function get graficaMarcasReporteProductoAlmacen():ArrayCollection{
+			return _chartMarca;
+		}
+		
+		[Bindable(event="enviaGraficoTipoModeloReporteProductoAlmacen")]
+		public function get graficaTipoReporteProductoAlmacen():ArrayCollection{
+			return _chartTipo;
+		}
+		
+		[Bindable(event="enviaGraficoManejoModeloReporteProductoAlmacen")]
+		public function get graficaManejoReporteProductoAlmacen():ArrayCollection{
+			return _chartManejo;
+		}
+		
+		[Bindable(event="enviaGraficoFleteModeloReporteProductoAlmacen")]
+		public function get graficaFleteReporteProductoAlmacen():ArrayCollection{
+			return _chartTipoFlete;
+		}
+		
+		[Bindable(event="enviaGraficoEstadoModeloReporteProductoAlmacen")]
+		public function get graficaEstadoReporteProductoAlmacen():ArrayCollection{
+			return _chartEstado;
+		}
+		
+		[Bindable(event="enviaGraficoRutaModeloReporteProductoAlmacen")]
+		public function get graficaRutaReporteProductoAlmacen():ArrayCollection{
+			return _chartRuta;
+		}
+		
+		[Bindable(event="enviaGraficoOrigenModeloReporteProductoAlmacen")]
+		public function get graficaOrigenReporteProductoAlmacen():ArrayCollection{
+			return _chartOrigen;
+		}
+		
+		[Bindable(event="enviaGraficoControlModeloReporteProductoAlmacen")]
+		public function get graficaControlReporteProductoAlmacen():ArrayCollection{
+			return _chartControl;
+		}
+		
+		
+		[Bindable(event="enviaGraficoMarcasStockModeloReporteProductoAlmacen")]
+		public function get graficaMarcasStockReporteProductoAlmacen():ArrayCollection{
+			return _chartMarca;
+		}
+		
+		[Bindable(event="enviaGraficoTipoStockModeloReporteProductoAlmacen")]
+		public function get graficaTipoStockReporteProductoAlmacen():ArrayCollection{
+			return _chartTipo;
+		}
+		
+		[Bindable(event="enviaGraficoManejoStockModeloReporteProductoAlmacen")]
+		public function get graficaManejoStockReporteProductoAlmacen():ArrayCollection{
+			return _chartManejo;
+		}
+		
+		
+		public function error(objeto:Object):void{
+			if(actualizarEspera!= null && currentEnEspera){
+				setControlDeBloqueoPantalla("terminaEspera",null,null,"");
+			}
+			alertaSingleton.showReintentar(objeto.toString());
+			
+		}
+		public function errorPartidasPedido(objeto:Object):void{
+			dispatchEvent( new Event("errorPartidaPedidoProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="errorPartidaPedidoProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaErrorPartidaPedido():Boolean{
+			return true;
+		}
+		public function errorInfoGeneral(objeto:Object):void{
+			dispatchEvent( new Event("errorInfoGeneralProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="errorInfoGeneralProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaErrorInfoGeneral():Boolean{
+			return true;
+		}
+		
+		public function errorBusquedaRapida(objeto:Object):void{
+			dispatchEvent( new Event("errorBusquedaRapidaProdAlmacenModeloRepProdAlmacen2012") );
+		}
+		[Bindable(Event="errorBusquedaRapidaProdAlmacenModeloRepProdAlmacen2012")]
+		public function get enviaErrorBusquedaRapida():Boolean{
+			return true;
+		}
+		
+		public function setEnviaFuncionUsuario($funcion:String):void{
+			funcion = $funcion;
+			
+			dispatchEvent(new Event("enviarFuncionUsuarioRepProdAlmacen2012"))
+		}
+		[Bindable(event="enviarFuncionUsuarioRepProdAlmacen2012")]
+		public function get enviarFuncionUsuario():String{
+			return funcion;
+		}
+		
+		public function ModeloRepProdAlmacen2012()
+		{
+		}
+		
+		/* --------------- Mostrar Montos en Botonera --------------- */
+		
+		private var _montosBotoneraArr:ArrayCollection
+		public function setmontosBotonera($datos:ArrayCollection):void{
+			
+			_montosBotoneraArr = new ArrayCollection;
+			if ( $datos ){				
+				_montosBotoneraArr = $datos;
+			}			
+			dispatchEvent(new Event("regresarMontosBotoneraModeloRepProdAlmacen"));
+			
+		}
+		
+		[Bindable(event="regresarMontosBotoneraModeloRepProdAlmacen")]
+		public function get listaMontoBotonera():ArrayCollection{
+			return _montosBotoneraArr;
+		}
+		
+		[Bindable(event="regresarMontosBotonerTransitoaModeloRepProdAlmacen")]
+		public function get montoTransito():String
+		{
+			return _montoTransito;
+		}
+		
+		[Bindable(event="regresarMontosBotonerProgramadoModeloRepProdAlmacen")]
+		public function get montoProgramado():String
+		{
+			return _montoProgramado;
+		}
+	}
+}

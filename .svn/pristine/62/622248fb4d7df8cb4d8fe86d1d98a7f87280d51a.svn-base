@@ -1,0 +1,254 @@
+package mx.com.proquifa.proquifanet.rsl.vista.modelo.comun
+{
+	import flash.utils.ByteArray;
+
+	[RemoteClass(alias="mx.com.proquifa.proquifanet.modelo.comun.Fabricante")]
+	[Bindable]
+	public class Fabricante
+	{
+		private var _numFila:Number;
+		private var _idFabricante:Number;
+		private var _nombre:String;
+		private var _productosEstandares:Number;
+		private var _productosReactivos:Number;
+		private var _productosMedicamentos:Number;
+		private var _productosLabware:Number;
+		private var _productosPublicaciones:Number;
+		private var _asociado:Boolean;
+		private var _relacionado:Boolean;
+		private var _fechaUA:Date;
+		
+		
+		
+		private var _bytes:ByteArray;
+		private var _paisManufactura:String;
+		private var _paisCompra:String;
+		private var _logoExt:String;
+		private var _habilitado:Boolean;
+	    private var _razonSocial:String;
+		private var  _taxID:String;
+		private var _direccion:String;
+		
+		//variables para la vista
+		private var _existeMarca:Boolean;
+		private var _idProveedor:Number;
+		
+		public function Fabricante()
+		{
+		}
+
+		public function get direccion():String
+		{
+			return _direccion;
+		}
+
+		public function set direccion(value:String):void
+		{
+			_direccion = value;
+		}
+
+		public function get taxID():String
+		{
+			return _taxID;
+		}
+
+		public function set taxID(value:String):void
+		{
+			_taxID = value;
+		}
+
+		public function get razonSocial():String
+		{
+			return _razonSocial;
+		}
+
+		public function set razonSocial(value:String):void
+		{
+			_razonSocial = value;
+		}
+
+		public function get fechaUA():Date
+		{
+			return _fechaUA;
+		}
+
+		public function set fechaUA(value:Date):void
+		{
+			_fechaUA = value;
+		}
+
+		public function get relacionado():Boolean
+		{
+			return _relacionado;
+		}
+
+		public function set relacionado(value:Boolean):void
+		{
+			_relacionado = value;
+		}
+
+		public function get asociado():Boolean
+		{
+			return _asociado;
+		}
+
+		public function set asociado(value:Boolean):void
+		{
+			_asociado = value;
+		}
+
+		public function get numFila():Number
+		{
+			return _numFila;
+		}
+
+		public function set numFila(value:Number):void
+		{
+			_numFila = value;
+		}
+
+		public function get idProveedor():Number
+		{
+			return _idProveedor;
+		}
+
+		public function set idProveedor(value:Number):void
+		{
+			_idProveedor = value;
+		}
+
+		public function get existeMarca():Boolean
+		{
+			return _existeMarca;
+		}
+
+		public function set existeMarca(value:Boolean):void
+		{
+			_existeMarca = value;
+		}
+
+		public function get idFabricante():Number
+		{
+			return _idFabricante;
+		}
+
+		public function set idFabricante(value:Number):void
+		{
+			_idFabricante = value;
+		}
+
+		public function get nombre():String
+		{
+			return _nombre;
+		}
+
+		public function set nombre(value:String):void
+		{
+			_nombre = value;
+		}
+
+		public function get productosEstandares():Number
+		{
+			return _productosEstandares;
+		}
+
+		public function set productosEstandares(value:Number):void
+		{
+			_productosEstandares = value;
+		}
+
+		public function get productosReactivos():Number
+		{
+			return _productosReactivos;
+		}
+
+		public function set productosReactivos(value:Number):void
+		{
+			_productosReactivos = value;
+		}
+
+		public function get productosMedicamentos():Number
+		{
+			return _productosMedicamentos;
+		}
+
+		public function set productosMedicamentos(value:Number):void
+		{
+			_productosMedicamentos = value;
+		}
+
+		public function get productosLabware():Number
+		{
+			return _productosLabware;
+		}
+
+		public function set productosLabware(value:Number):void
+		{
+			_productosLabware = value;
+		}
+
+		public function get productosPublicaciones():Number
+		{
+			return _productosPublicaciones;
+		}
+
+		public function set productosPublicaciones(value:Number):void
+		{
+			_productosPublicaciones = value;
+		}
+
+		public function get bytes():ByteArray
+		{
+			return _bytes;
+		}
+
+		public function set bytes(value:ByteArray):void
+		{
+			_bytes = value;
+		}
+
+		public function get paisCompra():String
+		{
+			return _paisCompra;
+		}
+
+		public function set paisCompra(value:String):void
+		{
+			_paisCompra = value;
+		}
+
+		public function get logoExt():String
+		{
+			return _logoExt;
+		}
+
+		public function set logoExt(value:String):void
+		{
+			_logoExt = value;
+		}
+
+		public function get paisManufactura():String
+		{
+			return _paisManufactura;
+		}
+
+		public function set paisManufactura(value:String):void
+		{
+			_paisManufactura = value;
+		}
+
+		public function get habilitado():Boolean
+		{
+			return _habilitado;
+		}
+
+		public function set habilitado(value:Boolean):void
+		{
+			_habilitado = value;
+		}
+
+		
+
+
+	}
+}

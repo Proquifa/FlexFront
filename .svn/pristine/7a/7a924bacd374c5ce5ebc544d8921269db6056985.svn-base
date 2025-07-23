@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:registrarVisita="mx.com.proquifa.vista.vistas.registrarVisita.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:otros="skins.otros.*" 
+		 width="100%" height="100%" xmlns:componentes="mx.com.proquifa.vista.vistas.registrarVisita.componentes.*" 
+		 creationComplete="init(event)" resize="calc(event)"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.comun.EventoComboCatalogos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.compras.OrdenDespacho;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.com.proquifa.vista.eventos.EventoGuardiaSeguridad;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import skins.catalogos.catalogoIconosBotoneras;
+			public var universo:ArrayCollection;
+			public var universoActual:ArrayCollection;
+			public var uni:ArrayCollection = new ArrayCollection;
+			public var sinFletera:Boolean;
+			[Bindable]public var totalVisita:int;
+			[Bindable] public var sizeFont:Number;
+			
+			protected function init(event:FlexEvent):void
+			{
+				botoneraGuardia.addEventListener(EventoGuardiaSeguridad.CLIC_BOTONERA,cambiarTipoLista);
+				
+			}
+			
+			public function cambiarTipoLista(event:EventoGuardiaSeguridad):void
+			{
+				var odLista:ArrayCollection = new ArrayCollection();
+				var todos:Boolean;
+				var punteros:Array;
+				var punterosAux:Array;
+				var query:Query;
+				var lista1:Array;
+				var lista2:Array;
+				var fechaAuxAgente:ArrayCollection = new ArrayCollection();
+				var fechaAuxFletera:ArrayCollection = new ArrayCollection();
+				var orden:OrdenDespacho;
+				var tipoVista:String;
+				var contador:int = 0;
+				var indiceFecha:int = 0;
+				EventoGuardiaSeguridad.indiceSeleccionado = -1;
+				punteros = new Array();
+				query = new Query(universo,["fletera","nombreAgenteAduanal","tipoVisita"],true);
+				
+				
+				if(botoneraGuardia.tipoSelect == "fleteras" ){
+					punteros = query.getPunteros(["fletera",null,null],"fletera");
+					tipoVista = "FL";
+				}
+				else if(botoneraGuardia.tipoSelect == "agente"){
+					punteros = query.getPunteros([null,"nombreAgenteAduanal",null],"nombreAgenteAduanal");
+					tipoVista = "AA";
+					
+				}
+				else if(botoneraGuardia.tipoSelect == "todos"){
+					todos = true;
+					tipoVista = "todos";
+				}
+				
+				var listaTemp:ArrayCollection = new ArrayCollection();
+				
+				if(!todos){
+					
+					var i:int = 1;
+					contador = 0;
+					for each (var campos:String in punteros) 
+					{
+						if(botoneraGuardia.tipoSelect == "fleteras")
+						{
+							punterosAux = query.getPunteros([campos]);
+							orden = new OrdenDespacho();
+						    orden = mandarFechamasVieja(punterosAux,ObjectUtil.copy(query.universo) as ArrayCollection);
+							orden.tipoVista = "FL";
+							if(orden.fletera != "" && orden.fletera != null) /// checar linea agregada
+								listaTemp.addItem(orden);
+						}
+							
+							
+						else if(botoneraGuardia.tipoSelect == "agente")
+						{
+							punterosAux = query.getPunteros([null,campos]);
+							orden = new OrdenDespacho();
+							orden = mandarFechamasViejaAgente(punterosAux,ObjectUtil.copy(query.universo) as ArrayCollection);
+						  if(orden)
+							{
+								orden.tipoVista = "AA";
+								listaTemp.addItem(orden);
+							}
+						}
+						
+					}
+			
+					gridOrdenes.dataProvider = listaTemp;
+					uni= ObjectUtil.copy(listaTemp) as ArrayCollection;
+					universoActual = ObjectUtil.copy(odLista) as ArrayCollection;
+					dispatchEvent(new Event("asignarTipoVista"));
+					dispatchEvent(new Event("seleccionarPrimero"));///agregado
+					sinFletera = false;
+				}
+				else 
+				{
+					listaTemp = new ArrayCollection;
+					punteros = query.getPunteros(["fletera",null,null],"fletera");
+					var listaTempFL:ArrayCollection = new ArrayCollection;
+					for each (var campos:String in punteros){
+						punterosAux = query.getPunteros([campos]);
+						orden = new OrdenDespacho();
+						/*indiceFecha = mandarFechamasVieja(punterosAux,query);
+						orden = ObjectUtil.copy(query.universo.getItemAt(indiceFecha)) as OrdenDespacho;*/
+						orden = mandarFechamasVieja(punterosAux,ObjectUtil.copy(query.universo) as ArrayCollection);
+						orden.tipoVista = "FL";
+						if(orden.fletera != "" && orden.fletera != null) /// checar linea agregada
+							listaTempFL.addItem(orden);
+					}
+					
+					listaTemp.addAll(listaTempFL);
+					
+					punteros = query.getPunteros([null,"nombreAgenteAduanal"],"nombreAgenteAduanal");
+					listaTempFL = new ArrayCollection;
+					for each (var campos1:String in punteros){
+						punterosAux = query.getPunteros([null,campos1]);
+						orden = new OrdenDespacho();
+						orden = mandarFechamasViejaAgente(punterosAux,ObjectUtil.copy(query.universo) as ArrayCollection);
+						/*if(orden.fletera == "" && orden.fletera == null)*/
+						if(orden)
+						{
+							orden.tipoVista = "AA";
+							listaTempFL.addItem(orden);
+						}
+					}
+					listaTemp.addAll(listaTempFL);
+					
+					gridOrdenes.dataProvider = listaTemp;
+					uni= ObjectUtil.copy(listaTemp) as ArrayCollection;
+					dispatchEvent(new Event("asignarTipoVista"));
+					dispatchEvent(new Event("seleccionarPrimero"));///agregado
+					
+				}
+				
+				totalVisita = gridOrdenes.dataProvider.length
+				
+			}
+			private function acomodarIndices():void
+			{
+				
+			}
+			public var current:OrdenDespacho;
+			
+			protected function cambioIndice(event:IndexChangeEvent):void
+			{
+				var eve:EventoGuardiaSeguridad = new EventoGuardiaSeguridad(EventoGuardiaSeguridad.CLIC_MANDAINDEX);
+				eve.index = gridOrdenes.selectedIndex;
+				dispatchEvent(eve);
+			}
+			
+			protected function no_programado(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("agerVisitaNoProgramada"));
+			}
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				gridOrdenes.dataProvider = UtilsGrid.queryCampoXLikeDosCampos(uni,"fletera","nombreAgenteAduanal",txtBuscador.text);
+			}
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFont = (17 / 572) * (unscaledWidth);
+				sizeFont = sizeFont > 17 ? 17:sizeFont;
+				sizeFont = sizeFont < 11 ? 11:sizeFont;
+			}
+			
+			public function cargarContactosFletera(fletera:Boolean):void
+			{
+				var eveContacto:EventoComboCatalogos = new EventoComboCatalogos(EventoComboCatalogos.OBTENER_CONTACTOS_FLETERA);
+				
+				eveContacto.isSolicitudDeHabilitados = true;
+				if(fletera)
+					eveContacto.tipo = "fletera";
+				else
+					eveContacto.tipo = "agenteAduanal";
+				dispatchEvent(eveContacto);
+			}
+			
+			public function mandarFechamasVieja(listaTemp:Array,valueUniverso:ArrayCollection):OrdenDespacho
+			{
+				var fechaAux:OrdenDespacho;
+				var k:int = 0;
+				var obj:OrdenDespacho = new OrdenDespacho;
+				var copiaUniverso:ArrayCollection = valueUniverso;
+				
+			    if(listaTemp.length > 0 && copiaUniverso)
+				{
+					fechaAux  = ObjectUtil.copy(copiaUniverso[listaTemp[0]]) as OrdenDespacho;
+					obj = fechaAux;
+					for (k = 0; k< listaTemp.length; k++) 
+					{
+						if(copiaUniverso[listaTemp[k]].FEA != null)
+						{
+							if( copiaUniverso[listaTemp[k]].FEA < fechaAux.FEA)
+								obj = ObjectUtil.copy(copiaUniverso[listaTemp[k]]) as OrdenDespacho;
+						}
+						
+					}//for
+				}
+				return obj;
+			}
+			
+			public function mandarFechamasViejaAgente(listaTemp:Array,valueUniverso:ArrayCollection):OrdenDespacho
+			{
+				var fechaAux:OrdenDespacho;
+				var k:int = 0;
+				var obj:OrdenDespacho;
+				var copiaUniverso:ArrayCollection = valueUniverso;
+				
+				if(listaTemp.length > 0 && copiaUniverso)
+				{
+					fechaAux  = ObjectUtil.copy(copiaUniverso[listaTemp[0]]) as OrdenDespacho;
+					obj = fechaAux;
+					for (k = 0; k< listaTemp.length; k++) 
+					{
+						if(copiaUniverso[listaTemp[k]].FEA != null)
+						{
+							if( copiaUniverso[listaTemp[k]].FEA <= fechaAux.FEA && copiaUniverso[listaTemp[k]].fletera == "")
+								obj = ObjectUtil.copy(copiaUniverso[listaTemp[k]]) as OrdenDespacho;
+						}
+						
+					}//for
+				}
+				return obj;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="20" paddingTop="14" paddingRight="20" horizontalAlign="center" gap="20" >
+		
+		<componentes:GuardiaSeguridad_botoneraVisita id="botoneraGuardia" width="100%" height="100%"/>
+		<s:TextInput id="txtBuscador" prompt="Nombre,hora" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" change="txtBuscador_changingHandler(event)"/>
+		
+		<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+				id="gridOrdenes" contentBackgroundAlpha="0" change="cambioIndice(event)"
+				itemRenderer="mx.com.proquifa.vista.vistas.registrarVisita.componentes.IR.IR_RegistarVisitaOrden"
+				/>
+		<s:VGroup width="100%" gap="10">
+			<otros:division width="100%" grueso="1"/>
+			<label:Texto_14_Helvetica id="lblTotalesVisitas" text="{ totalVisita+' '+(totalVisita == 1?'Visita':'Visitas')}" width="100%" textAlign="center" fontSize="{sizeFont}"/>
+			<otros:division width="100%" grueso="1"/>
+		</s:VGroup>  
+		<mx:Image source="{catalogoIconosBotoneras.getInstance().no_programada}" click="no_programado(event)"/>
+	</s:VGroup>  
+</s:Group>

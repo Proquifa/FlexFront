@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:Componentes="vista.AsignarSprintGV.Componentes.*"
+		 xmlns:otros="skins.otros.*"
+		 width="100%" height="100%"
+		 resize="calc(event)" 
+		 creationComplete="init(event)"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Sprint;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Query;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFecha;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsFormatosNumericos;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.catalogos.catalogoIconosEtiquetas;
+			
+			import vista.evento.EventoAsignarSprint;
+			
+			[Bindable]private var sizeFontLittle:Number;
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]private var sizeFontBoton:Number;
+			[Bindable] public var widthLogo:Number;
+			[Bindable] public var heightLogo:Number;
+			[Bindable] public var visitas:Number;
+			[Bindable] public var sprint:Sprint;
+			public var _sql:Query;
+			public var currentEV:VisitaCliente;
+			
+			[Bindable]public var cargadasSolicitudes:int; [Bindable]public var cargadasCRM:int;
+			
+			[Bindable]private var colorContadorSolicitudes:uint = 0xde0017;
+			[Bindable]private var colorContadorCRM:uint = 0xde0017;
+			[Bindable]private var colorContadorTodos:uint = 0xde0017;
+			[Bindable]private var colorPlanificar:uint = 0x008894;
+			
+			[Bindable]public var indiceSeleccionado:int = 0;
+			
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontLittle = (12/2005) * (unscaledWidth);
+				sizeFontLittle = sizeFontLittle > 12 ? 12:sizeFontLittle;
+				sizeFontLittle = sizeFontLittle < 7 ? 7:sizeFontLittle;
+				
+				sizeFontProvee = (30/2005) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 30 ? 30:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 15 ? 15:sizeFontProvee;
+				
+				sizeFontBoton = (22/2005) * (unscaledWidth);
+				sizeFontBoton = sizeFontBoton > 22 ? 22:sizeFontBoton;
+				sizeFontBoton = sizeFontBoton < 15 ? 15:sizeFontBoton;
+				
+				widthLogo = (15 / 2005) * (unscaledWidth);
+				widthLogo = widthLogo > 15 ? 15:widthLogo;
+				widthLogo = widthLogo < 10 ? 10:widthLogo;
+				
+				heightLogo = (15 / 1266) * (unscaledHeight);
+				heightLogo = heightLogo > 15 ? 15:heightLogo;
+				heightLogo = heightLogo < 10 ? 10:heightLogo;
+				
+				/*setTimeout(calcularResize,1000);*/
+			}
+			
+			public function setInfoLista(value:ArrayCollection):void
+			{
+				gridVisita.dataProvider = value;
+				if(gridVisita.dataProvider.length > 0){
+					gridVisita.selectedIndex = indiceSeleccionado;
+					currentEV = gridVisita.dataProvider[indiceSeleccionado];
+					sprint = value[0].sprint;
+				}
+				if(value.length > 0)
+					listaActividades.dataProvider = obtenerVisitaPlanificasEV(value[indiceSeleccionado].usuarioEV);
+				
+				visitas = 0;
+				for each (var i:VisitaCliente in gridVisita.dataProvider) 
+				{
+					visitas = i.numVisitas;
+				}
+				
+				
+				/*for each (var temp:VisitaCliente in listaActividades.dataProvider) 
+				{
+					temp.credito = 1;
+				}*/
+				setTimeout(totalVisitas,300);
+				recalcularValorCredito(new Event("recalcularCredito"));
+			}
+			
+			protected function completarSprint(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("completarSprint"));
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				addEventListener("recalcularCredito",recalcularValorCredito);
+				listaActividades.addEventListener(EventoAsignarSprint.ELIMINAR_VISITA_ASGINAR,eliminarActividad);
+			}
+			
+			private function calcularResize():void
+			{
+				
+			}
+			
+			private function obtenerVisitaPlanificasEV(usuarioEV:String):ArrayCollection
+			{
+				var universoActual:ArrayCollection = new ArrayCollection;
+				var punterosCliente:Array;
+				punterosCliente = _sql.getPunteros([usuarioEV]);
+				for (var i:int = 0; i < punterosCliente.length; i++) 
+				{
+					var temp:VisitaCliente = ObjectUtil.copy(_sql.universo.getItemAt(punterosCliente[i])) as VisitaCliente;
+					temp.numVisitas = _sql.getPunteros([usuarioEV]).length;
+					universoActual.addItem( temp );
+				}
+				return universoActual;
+			}
+			public function setUniverso(value:Query):void
+			{
+				if(value)
+					_sql = value;
+			}
+			
+			[Bindable]public var creditoTotal:Number;
+			private function recalcularValorCredito(event:Event):void
+			{
+				if(!listaActividades || !listaActividades.dataProvider)
+					return ;
+				var valor:Number
+				valor = 100/listaActividades.dataProvider.length;
+				creditoTotal = 0;
+				for each (var temp:VisitaCliente in listaActividades.dataProvider) 
+				{
+					creditoTotal += temp.credito;
+					temp.valor = Number (UtilsFormatosNumericos.precisionADosDecimales(valor) );
+				}
+			}
+			
+			private function totalVisitas():void
+			{
+				cargadasSolicitudes = 0;
+				cargadasCRM = 0;
+				var todos:int = 0;
+				for each (var temp:VisitaCliente in listaActividades.dataProvider) 
+				{
+					if(temp.tipo == 'solicitud')
+						cargadasSolicitudes += 1;
+					else if(temp.tipo == 'crm')
+						cargadasCRM += 1;
+				}
+				
+				todos = cargadasSolicitudes + cargadasCRM;
+				
+				if(cargadasSolicitudes == 0)
+					colorContadorSolicitudes = 0xde0017;
+				else if(cargadasSolicitudes < 15)
+					colorContadorSolicitudes = 0xf09500;
+				else if(cargadasSolicitudes == 15)
+					colorContadorSolicitudes = 0x4fa834;
+				
+				
+				if(cargadasCRM == 0)
+					colorContadorCRM = 0xde0017;
+				else if(cargadasCRM < 15)
+					colorContadorCRM = 0xf09500;
+				else if(cargadasCRM == 15)
+					colorContadorCRM = 0x4fa834;
+				
+				if(todos == 0)
+					colorContadorTodos = 0xde0017;
+				else if(todos < 30)
+					colorContadorTodos = 0xf09500;
+				else if(todos == 30)
+					colorContadorTodos = 0x4fa834;
+			}
+			
+			protected function asignarCurrentEV(event:IndexChangeEvent):void
+			{
+				currentEV = gridVisita.selectedItem;
+				
+				var arrayEV:Array = _sql.getPunteros([currentEV.usuarioEV],"usuarioEV");
+				
+				listaActividades.dataProvider = obtenerVisitaPlanificasEV(currentEV.usuarioEV);
+				
+				visitas = 0;
+				for each (var i:VisitaCliente in gridVisita.dataProvider) 
+				{
+					visitas = i.numVisitas;
+				}
+				
+				
+				setTimeout(totalVisitas,300);
+				recalcularValorCredito(new Event("recalcularCredito"));
+				
+			}
+			
+			private function obtenerCadenaFecha(fechaInicio:Date,fechaFin:Date):String
+			{
+				var fecha:String;
+				if(fechaInicio && fechaFin){
+					fecha = fechaInicio.getDay()+" - "+ fechaFin.getDay() +" / "+UtilsFecha.regresaNombreMesPrimeraMayuscula(fechaFin.getMonth())+" / "+fechaFin.getFullYear();
+				}else
+					fecha = "ND";
+				
+				return fecha;
+			}
+			
+			public var listaVisitasEliminadas:ArrayCollection = new ArrayCollection;
+			private function eliminarActividad(event:EventoAsignarSprint):void
+			{
+				if(listaActividades && listaActividades.dataProvider){
+					var temp:VisitaCliente = ObjectUtil.copy( listaActividades.dataProvider[event.indice] ) as VisitaCliente;
+					listaActividades.dataProvider.removeItemAt(event.indice);
+					agregarAListaEliminadas(temp);
+					
+					var listaTodos:ArrayCollection = ObjectUtil.copy( _sql.universo ) as ArrayCollection;
+					for each (var visita:VisitaCliente in listaTodos) 
+					{
+						if(temp.idVisitaCliente == visita.idVisitaCliente){
+							listaTodos.removeItem(visita);
+							break;
+						}
+					}
+					_sql = new Query(listaTodos,["usuarioEV"],false);
+				}
+				recalcularValorCredito(new Event("recalcularCredito"));
+			}
+			
+			protected function guardarVisitas(event:MouseEvent):void
+			{
+				if(listaActividades && listaActividades.dataProvider && listaActividades.dataProvider.length > 0){
+					var eventGuardar:EventoAsignarSprint = new  EventoAsignarSprint(EventoAsignarSprint.GUARDAR_VISITAS_SPRINT);
+					eventGuardar.visitas = ObjectUtil.copy( listaActividades.dataProvider ) as ArrayCollection;
+					eventGuardar.visitasComplemento = obtenerVisitaEliminadas();
+					eventGuardar.asignar = false;
+					dispatchEvent(eventGuardar);
+				}
+			}
+			
+			protected function asignarVisitas(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("asignarSprintEV"));
+			}
+			
+			public function asignarVisitasSprint():void
+			{
+				var visitas:ArrayCollection = ObjectUtil.copy( listaActividades.dataProvider ) as ArrayCollection;
+				for each (var temp:VisitaCliente in visitas) 
+				{
+					if(temp.credito == 0){
+						temp.credito = 1;
+					}
+				}
+				
+				if(listaActividades && listaActividades.dataProvider && listaActividades.dataProvider.length > 0){
+					var eventAsignar:EventoAsignarSprint = new  EventoAsignarSprint(EventoAsignarSprint.ASIGNAR_VISITAS_SPRINT);
+					eventAsignar.visitas = visitas;
+					eventAsignar.visitasComplemento = obtenerVisitaEliminadas();
+					eventAsignar.asignar = true;
+					dispatchEvent(eventAsignar);
+				}
+			}
+			
+			private function agregarAListaEliminadas(value:VisitaCliente):void
+			{
+				var encontrado:Boolean;
+				for each (var obj:Object in listaVisitasEliminadas) 
+				{
+					if(obj.usuario == currentEV.usuarioEV){
+						obj.lista.addItem(value);
+						encontrado = true;
+						break;						
+					}
+				}
+				if(!encontrado){
+					var newObj:Object = new Object;
+					newObj.usuario = "";
+					newObj.usuario = currentEV.usuarioEV;
+					newObj.lista = new ArrayCollection; 
+					newObj.lista.addItem(value);
+					listaVisitasEliminadas.addItem(newObj);
+				}
+			}
+			
+			//SOLO SE OBTIENE 1 VEZ, DE AHI SE ELIMINAN
+			private function obtenerVisitaEliminadas():ArrayCollection
+			{
+				var lista:ArrayCollection = new ArrayCollection;
+				if(listaVisitasEliminadas.length > 0){
+					for each (var temp:Object in listaVisitasEliminadas) 
+					{
+						if(temp.usuario == currentEV.usuarioEV){
+							lista.addAll(temp.lista);
+							listaVisitasEliminadas.removeItem(temp);
+							break;
+						}
+					}
+				}
+				return lista;
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" height="100%" gap="0" paddingRight="20" paddingLeft="6">
+		<s:VGroup width="30%" height="100%" gap="0" paddingTop="20">
+			<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="EJECUTIVO DE CUENTA" width="100%" textAlign="left" color="#424242" id="lblTitulo"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer1"/>
+			<Componentes:BotoneraSprintAsignados height="100%" width="100%" maxHeight="30" id="botoneraHead"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer2"/>
+			<otros:division width="100%" grueso="1" visible="{gridVisita.selectedIndex == 0 ? false:true}" id="division"/>
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="gridVisita" contentBackgroundAlpha="0"  change="asignarCurrentEV(event)"
+					itemRenderer="vista.AsignarSprintGV.IR.IR_ListaAsignacionEV"
+					/>
+			<otros:division width="100%" grueso="1"/>
+			<s:VGroup width="100%" height="55" verticalAlign="middle" paddingTop="20" paddingLeft="20" paddingRight="20">
+				<s:HGroup width="100%" height="100%" verticalAlign="middle">
+					<s:HGroup width="100%" height="100%" horizontalAlign="center">
+						<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontLittle+3}" text="#{gridVisita.dataProvider.length} EC" 
+								 color="#424242" />
+						<s:Spacer width="100%" />
+						<s:HGroup >
+							<s:Rect width="10" height="10">
+								<s:fill>
+									<s:SolidColor color="0x008894" />
+								</s:fill>
+							</s:Rect>
+							
+							<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontLittle+3}" text="{visitas} Visita{visitas==1?'':'s'}" 
+									 color="#008894" />
+						</s:HGroup>  
+						
+					</s:HGroup>
+				</s:HGroup>  
+				
+			</s:VGroup>
+		</s:VGroup>    
+		
+		<s:Spacer width="20" />
+		<otros:divisionDegradadoVertical height="100%" width="2" />
+		<s:Spacer width="20" />
+		
+		<s:VGroup width="100%" height="100%" gap="0">
+			<s:HGroup width="100%" height="{sizeFontProvee + 40}" verticalAlign="middle" gap="0">
+				<s:Label text="SPRINT #{sprint.numeroSprint} " height="100%" textAlign="center" verticalAlign="middle" color="#404040" 
+						 fontFamily="Novecento" fontSize="{sizeFontBoton}" fontWeight="bold" id="txtSprint"/>
+				<s:Spacer width="10" />
+				<s:Label text="({obtenerCadenaFecha(sprint.fechaInicio,sprint.fechaFin)})" height="100%" textAlign="center" verticalAlign="middle" color="#5f5f5f" 
+						 fontFamily="Novecento" fontSize="{sizeFontLittle}" paddingTop="5"/>
+				<s:Spacer width="100%" />
+				<s:VGroup width="100%" height="100%" maxHeight="40" maxWidth="150" click="completarSprint(event)" buttonMode="true">
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#008894" />
+							</s:fill>
+						</s:Rect>
+						<s:Label text="COMPLETAR" width="100%" height="100%" textAlign="center" verticalAlign="middle" color="0xFFFFFF" 
+								 fontFamily="Novecento" fontSize="{sizeFontBoton}" fontWeight="bold"/>
+					</s:Group>  
+				</s:VGroup>
+			</s:HGroup>  
+		
+			<s:VGroup width="100%" height="100%" >
+				<s:Group width="100%" height="100%" >
+					
+					<s:Rect width="100%" height="100%">
+						<s:stroke>
+							<s:SolidColorStroke color="#008894" weight="1"/>
+						</s:stroke>
+					</s:Rect>
+					<s:List id="listaActividades" width="100%" height="100%" itemRenderer="vista.AsignarSprintGV.IR.TarjetaInformacionAsignacion"
+							horizontalScrollPolicy="off" borderVisible="false" top="1" bottom="1" right="1" left="1" >
+						<s:layout>
+							<s:TileLayout verticalGap="0" horizontalGap="0" id="layoutLista" columnAlign="justifyUsingWidth">
+								
+							</s:TileLayout>
+						</s:layout>
+						
+					</s:List>
+				</s:Group>  
+				
+				
+			</s:VGroup>
+			
+			<s:HGroup width="100%" verticalAlign="middle" paddingTop="20" paddingBottom="20">
+				<s:HGroup width="9%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="CRM" fontSize="{sizeFontLittle}" color="{colorContadorCRM}"/>
+					<s:Spacer width="5%" />
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="{cargadasCRM}/15" fontSize="{sizeFontLittle}" color="{colorContadorCRM}"/>
+				</s:HGroup>
+				<s:HGroup width="12.5%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="SOLICITUDES" fontSize="{sizeFontLittle}" color="{colorContadorSolicitudes}"/>
+					<s:Spacer width="5%" />
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="{cargadasSolicitudes}/15" fontSize="{sizeFontLittle}" color="{colorContadorSolicitudes}" id="contadorSolicitudes"/>
+				</s:HGroup>
+				<s:HGroup width="13%" height="100%" gap="0" verticalAlign="middle" horizontalAlign="center">
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="VISITAS CARGADAS" fontSize="{sizeFontLittle}" color="{colorContadorTodos}"/>
+					<s:Spacer width="5%" />
+					<s:Label fontFamily="Novecento" fontWeight="bold" text="{cargadasCRM+cargadasSolicitudes}/30" fontSize="{sizeFontLittle}" color="{colorContadorTodos}"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().creditos_icono}" width="{widthLogo+5}" height="{widthLogo+5}"/>
+					<s:Label fontFamily="Helvetica" text="{creditoTotal+' Créditos'}" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle+2}" color="0xcf0354"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					
+					<mx:Image source="{catalogoIconosEtiquetas.getInstance().valor_icono}" width="{widthLogo+5}" height="{widthLogo+5}"/>
+					<s:Label fontFamily="Helvetica" text="100% Valor" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle+2}" color="0x009fdc"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().visita_pendiente}" width="{widthLogo}" height="{heightLogo}" />
+					<s:Label fontFamily="Helvetica" text="Visita pendiente" width="58%" maxDisplayedLines="2" fontSize="{sizeFontLittle}"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().reporte_pendiente}" width="{widthLogo}" height="{heightLogo}" />
+					<s:Label fontFamily="Helvetica" text="Reporte pendiente" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle}"/>
+				</s:HGroup>
+				<s:HGroup width="11%" height="100%" gap="5" verticalAlign="middle" horizontalAlign="center">
+					<mx:Image smoothBitmapContent="true" source="{catalogoIconosEtiquetas.getInstance().archivos_cargados_icono}" width="{widthLogo}" height="{heightLogo}" />
+					<s:Label fontFamily="Helvetica" text="Archivos cargados" width="60%" maxDisplayedLines="2" fontSize="{sizeFontLittle}"/>
+				</s:HGroup>
+				
+				<s:HGroup width="16%" height="35" buttonMode="true" click="guardarVisitas(event)">
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="#008894" />
+							</s:fill>
+						</s:Rect>
+						<s:Label fontFamily="Novecento" fontWeight="bold" text="GUARDAR" width="100%" height="100%" fontSize="{sizeFontBoton}"
+								 textAlign="center" verticalAlign="middle" color="#FFFFFF"/>						
+					</s:Group>  
+				</s:HGroup>  
+				<s:HGroup width="16%" height="35" buttonMode="true" id="botonPlanificar" click="asignarVisitas(event)">
+					<s:Group width="100%" height="100%" >
+						<s:Rect width="100%" height="100%">
+							<s:fill>
+								<s:SolidColor color="{colorPlanificar}" />
+							</s:fill>
+						</s:Rect>
+						<s:Label fontFamily="Novecento" fontWeight="bold" text="ASIGNAR" width="100%" height="100%" fontSize="{sizeFontBoton}"
+								 textAlign="center" verticalAlign="middle" color="#FFFFFF"/>						
+					</s:Group>
+				</s:HGroup>  
+				
+				
+			</s:HGroup>  
+			
+		</s:VGroup>  
+	</s:HGroup>  
+	
+</s:Group>

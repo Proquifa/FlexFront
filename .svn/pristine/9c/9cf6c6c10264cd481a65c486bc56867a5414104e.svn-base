@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  
+		 xmlns:otros="skins.otros.*" 
+		 xmlns:contenedores="skins.skin.contenedores.*" 
+		 xmlns:botBusq="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.*"
+		 xmlns:label="skins.skin.label.*" 
+		 xmlns:pqNet="skins.botones.pqNet.*"
+		 xmlns:lstscrl="skins.spark.components.*"
+		 xmlns:botonesToggle="skins.botonesToggle.*"
+		 xmlns:catalogos="skins.skin.comun.catalogos.*"
+		 xmlns:layouts="skins.layouts.*"
+		 width="100%" height="100%" xmlns:grafica="skins.botones.grafica.*" 
+		 
+		 >
+	
+	<fx:Metadata>
+		[Event(name="opcionSeleccionada", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Declarations>
+		<s:Parallel id="fxShowMenuConfiguracion" duration="300" effectEnd="fxShowMenuConfiguracion_effectEndHandler(event)">
+			<s:Resize target="{rectFondoMenuConfiguracion}" heightFrom="0" heightTo="80" />
+			<s:Fade target="{rectFondoMenuConfiguracion}" duration="30" alphaFrom="0" alphaTo=".9"/>		
+			<s:Resize target="{grpBotonesMenuConfig}" heightFrom="0" heightTo="80" />
+			<s:Fade target="{grpBotonesMenuConfig}" startDelay="200" alphaFrom="0" alphaTo="1"/>		
+		</s:Parallel>
+		
+		<s:Parallel id="fxHideMenuConfiguracion" duration="200" effectEnd="fxHideMenuConfiguracion_effectEndHandler(event)">
+			<s:Resize target="{rectFondoMenuConfiguracion}" heightFrom="80" heightTo="0" />
+			<s:Fade target="{rectFondoMenuConfiguracion}" duration="0" alphaFrom="30" alphaTo=".9"/>		
+			<s:Resize target="{grpBotonesMenuConfig}" heightFrom="80" heightTo="0" />
+			<s:Fade target="{grpBotonesMenuConfig}" alphaFrom="1" alphaTo="0" duration="100"/>		
+		</s:Parallel>
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.EventoCatProGeneral;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Proveedor;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.events.EffectEvent;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			
+			import skins.botones.grafica.botonPopUp;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosGrid;
+			
+			private var _habilitados:ArrayCollection;
+			private var _deshabilitados:ArrayCollection;
+			private var _universosProveedores:ArrayCollection;
+			private var _currentItem:Proveedor;
+			private var _idProveedor:int = 0;
+			private var seConstruyoDeshabilitados:Boolean = false;
+			private var isShowConfigurationMenu:Boolean;
+			public var currentButonClick:botonPopUp;
+			
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection
+				([  
+					{ valor:'Habilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }, 
+					{ valor:'Deshabilitados', colorBase: catalogoColores.LABEL_VERDE_AZUL, fontSize:14 }
+				] );
+			
+			/**
+			 * al crearse el componente se solicitan todos los proveedores
+			 */ 
+			public function iniciarCatalogoProveedores():void
+			{
+				botoneraProveeHabDesHabilitados.selectedIndex = 0;
+				_habilitados= null;
+				_deshabilitados= null;
+				_universosProveedores = null;
+				_currentItem = null;
+				_idProveedor = 0;
+				
+				btnBusqueda.addEventListener(EventoCatProGeneral.ENVIO_PROVEDORES_BUSCADOS,recibeBusqueda,false,0,true);
+				var $evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.OBTENER_PROVEEDORES );
+				$evt.empleado = DatosGlobales.getInstance()._usuario;
+				$evt.busquedaProveedores = 'Todos';
+				dispatchEvent($evt);
+				
+			}
+			
+			/**
+			 * al recibirse los proveedores, se solicitan las imagenes
+			 */ 
+			public function set recibeProveedores($datos:ArrayCollection):void
+			{
+				if( $datos == null || $datos.length == 0 ){
+					return;
+				}
+				
+				botoneraProveeHabDesHabilitados.selectedIndex = 0;
+				grpHabilitados.visible = grpHabilitados.includeInLayout = true;
+				_universosProveedores = new ArrayCollection();
+				_habilitados = new ArrayCollection();
+				_deshabilitados = new ArrayCollection();
+				_universosProveedores = ObjectUtil.copy( $datos ) as ArrayCollection;
+				divideTipoProveedor();
+				
+			}
+			
+			private function divideTipoProveedor():void
+			{
+				lblHabilitados.text ="0 Proveedores";
+				for( var i:int = 0; i < _universosProveedores.length ; i++ )
+				{
+					if( (_universosProveedores[i] as Proveedor).habilitado == false )
+					{
+						_deshabilitados.addItem( _universosProveedores[i] );
+					}
+					else if( (_universosProveedores[i] as Proveedor).habilitado )
+					{
+						_habilitados.addItem( _universosProveedores[i] );
+					}
+					
+					if( _idProveedor != 0 && (_universosProveedores[i] as Proveedor).idProveedor == _idProveedor )
+					{
+						var enviaProveedor:EventoCatProGeneral = new EventoCatProGeneral(EventoCatProGeneral.ACTUALIZAR_EL_PROVEEDOR_SELECCIONADO);
+						enviaProveedor.proveedorSeleccionado = _universosProveedores[i] as Proveedor;
+						dispatchEvent(enviaProveedor);
+					}
+				}
+				
+				if(botoneraProveeHabDesHabilitados.selectedIndex == 0)
+					btnBusqueda.recibeProveedores(_habilitados);
+				else
+					btnBusqueda.recibeProveedores(_deshabilitados);
+			}
+			
+			
+			/**
+			 * agregamos o reutilizamos la seccion de trabajo
+			 */ 
+			
+			protected function botoneraBarra_changingHandler(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBarColores).selectedItem == null)
+				{
+					event.preventDefault();
+				}
+				else
+				{
+					if( botoneraProveeHabDesHabilitados.selectedItem != undefined )
+					{
+						var $dato:String = '';
+						botoneraProveeHabDesHabilitados.selectedItem.valor == 'Habilitados' ? $dato = 'habilitados' : $dato = 'deshabilitados';
+						
+						if( $dato == 'deshabilitados' )
+						{
+							if( !seConstruyoDeshabilitados )
+							{
+								if(_deshabilitados == null)
+									btnBusqueda.recibeProveedores(new ArrayCollection());
+								else
+									btnBusqueda.recibeProveedores(_deshabilitados);
+								
+								btnBusqueda.switchClientes();
+							}
+						}
+						else
+						{
+							if( !seConstruyoDeshabilitados )
+							{
+								if(_habilitados == null)
+									btnBusqueda.recibeProveedores(new ArrayCollection());
+								else
+									btnBusqueda.recibeProveedores(_habilitados);
+								btnBusqueda.switchClientes();
+							}
+						}
+					}
+				}
+			}
+			
+			protected function agregarNuevoProveedor(event:MouseEvent):void
+			{
+				var evt:EventoCatProGeneral = new EventoCatProGeneral( EventoCatProGeneral.CAMBIA_VISTAS_NIVEL_SUPERIOR_CAT_PROVEEDORES );
+				evt.proveedorSeleccionado = new Proveedor();
+				evt.vieneDe = 'vistaTodosLosProveedores';
+				dispatchEvent( evt );
+			}
+			
+			public function set actualizaProveedoresDeGenerales( $evt:EventoCatProGeneral ):void
+			{
+				if($evt == null)
+					return;
+				
+				if( !isNaN( $evt.idProveedor ) && $evt.idProveedor != 0 ){
+					_idProveedor = $evt.idProveedor;
+				}
+			}
+			
+			private function recibeBusqueda(evt:EventoCatProGeneral):void
+			{
+				if(evt.proveedoresResultantes)
+				{
+					var _proveedores:ArrayCollection = Util.sortArray(evt.proveedoresResultantes,"nombre");
+					_proveedores.source = (Util.sortArray(evt.proveedoresResultantes,"nombre") as ArrayCollection).toArray();
+					lstHabilitados.dataProvider = ObjectUtil.copy( _proveedores ) as ArrayCollection;
+					lblHabilitados.text = _proveedores.length == 1 ? "1 Proveedor":_proveedores.length.toString() + " Proveedores";
+				}
+			}
+			
+			protected function grpBotonesConfiguracion_mouseOverHandler(event:MouseEvent):void
+			{
+				if(!fxShowMenuConfiguracion.isPlaying && !isShowConfigurationMenu)
+				{
+					fxShowMenuConfiguracion.play();
+				}
+			}
+			
+			protected function btnesOpcionesConfig_clickHandler(event:MouseEvent):void
+			{
+				if(isShowConfigurationMenu)
+				{
+					
+				}
+				currentButonClick = event.currentTarget as botonPopUp;
+				dispatchEvent(new Event("opcionSeleccionada"));
+			}
+			
+			protected function fxShowMenuConfiguracion_effectEndHandler(event:EffectEvent):void
+			{
+				rectFondoMenuConfiguracion.alpha = 0.9;
+				isShowConfigurationMenu = true;
+				setTimeout(comprobarIsMouseOverEnMenuConfig,700);
+			}
+			
+			protected function fxHideMenuConfiguracion_effectEndHandler(event:EffectEvent):void
+			{
+				rectFondoMenuConfiguracion.alpha = 0;
+				rectFondoMenuConfiguracion.height =0;
+				grpBotonesMenuConfig.alpha = 0;
+				grpBotonesMenuConfig.height = 0;
+				grpMenuConfig.invalidateSize();
+				isShowConfigurationMenu = false;
+			}
+			
+			private function comprobarIsMouseOverEnMenuConfig():void
+			{
+				if(isShowConfigurationMenu)
+				{
+					if(!(grpMenuConfig.contentMouseX > 0 && grpMenuConfig.contentMouseX <= grpMenuConfig.width) ||
+						!(grpMenuConfig.contentMouseY > 0 && grpMenuConfig.contentMouseY <= grpMenuConfig.height))
+					{
+						if(!fxHideMenuConfiguracion.isPlaying)
+						{
+							fxHideMenuConfiguracion.play();
+						}
+					}
+					else
+					{
+						setTimeout(comprobarIsMouseOverEnMenuConfig,500);
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup  width="100%" height="100%" id="grpProveedores" paddingTop="20" paddingBottom="20"  horizontalAlign="center" gap="10">
+		
+		
+		<s:HGroup width="100%" paddingLeft="20" paddingRight="20">
+			<catalogos:TituloParaVistaDefaultEnCatalogos id="btnRegresar" labelIzquierdo="PROVEEDORES" labelDerecho="[CATÁLOGOS]"/>
+		</s:HGroup>
+		
+		<s:Group width="100%" height="100%">
+			<s:VGroup width="100%" height="100%" gap="10" horizontalAlign="center">
+				<botonesToggle:ButtonBarColores width="350" height="30" id="botoneraProveeHabDesHabilitados" changing="botoneraBarra_changingHandler(event)" dataProvider="{_arrButton}" selectedIndex="0" requireSelection="true"/>
+				<s:Group  width="100%" height="100%">
+					<s:VGroup id="grpHabilitados" width="100%" height="100%" paddingTop="130" horizontalAlign="center" gap="10">
+						<lstscrl:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off" id="lstHabilitados" 
+									  itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.proveedores.zitemRenderer.vistaPrincipal.CatPro_IR_RenglonProveedores">
+							<lstscrl:layout>
+								<layouts:LayoutListaGrid id="layoutLista"  numColumnas="7" numFilas="4" horizontalGap="0" verticalGap="0" useVirtualLayout="true" 
+														 paddingTop="0" paddingBottom="0" widthMin="230" heightMin="230"/>
+							</lstscrl:layout>
+						</lstscrl:List>
+						<s:VGroup width="100%" horizontalAlign="center" gap="10">
+							<label:TituloGris id="lblHabilitados" paddingTop="0"/>
+							<label:TituloGris text="TOTAL" paddingTop="0"/>
+						</s:VGroup>
+					</s:VGroup>
+					<botBusq:CatProveedores_BotoneraBusqueda id="btnBusqueda" width="100%"/>
+				</s:Group>
+			</s:VGroup>
+		</s:Group>
+		<otros:divisionGruesa width="100%" />
+		<s:HGroup width="100%" horizontalAlign="right" paddingRight="20">
+			<pqNet:botonPqNetLargo icono="agregarPequenio" label="Agregar" click="agregarNuevoProveedor(event)"/>
+		</s:HGroup>  
+	</s:VGroup>
+	
+	<s:HGroup width="100%" paddingLeft="20" paddingRight="20" paddingBottom="20" bottom="0">
+		<s:Group id="grpMenuConfig" width="38" >
+			<s:Image id="imgEngraneConfigUp" source="{catalogoIconosGrid.getInstance().render_engraneGris20x20}" horizontalCenter="0" bottom="10" mouseOver="grpBotonesConfiguracion_mouseOverHandler(event)" />
+			<s:Rect id="rectFondoMenuConfiguracion" width="100%" height="0" visible="false" alpha="0" bottom="0">
+				<s:fill>
+					<s:SolidColor color="0x595959"/>
+				</s:fill>
+			</s:Rect>
+			<s:VGroup id="grpBotonesMenuConfig" width="100%" height="0" alpha="0" gap="3" horizontalAlign="center" bottom="0">
+				<grafica:botonPopUp width="100%" height="100%" icono="objetivosCrecimiento" id="btnObjetivosCrecimiento" fondoPq="false" click="btnesOpcionesConfig_clickHandler(event)" toolTip="Objetivos de crecimiento"/>
+				<s:Spacer height="{imgEngraneConfigUp.height + 15}" width="100%"/>
+			</s:VGroup>
+		</s:Group>
+	</s:HGroup>
+	
+	<s:HGroup  width="100%" height="100%" id="zonaTrabajo" includeInLayout="false" visible="false"/>
+</s:Group>

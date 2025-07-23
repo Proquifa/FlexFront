@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:componentes ="mx.com.proquifa.proquifanet.rsl.vista.vistas.tableros.clientes.componentes.*" 
+		 xmlns:graficas="skins.skin.graficas.*"
+		 width="100%" height="100%" 
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.PartidaCotizacion;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.consultas.comun.ResumenConsulta;
+			import mx.utils.ObjectUtil;
+			
+			private var keys:Object;
+			[Bindable] private var _infoESAC:ArrayCollection;
+			
+			public function set obtenerInfoGrafico($infoGrafica:ArrayCollection):void
+			{
+				if($infoGrafica == null) return;
+				
+				_infoESAC = new ArrayCollection();
+				myChart.dataProvider = new ArrayCollection();
+				
+				var arrayTemp:Array = new Array();
+				arrayTemp = (ObjectUtil.copy($infoGrafica) as ArrayCollection).source;
+				
+				arrayTemp.sortOn("cotizo");
+				
+				/**
+				 * arreglo temporal para controlar el ciclo del for que se encargará de sumar las cantidades de cada Esac
+				 * quitando las duplicados
+				 * */
+				
+				keys= new Object();
+				var arrayTotalEsacs:Array = new Array();
+				arrayTotalEsacs = arrayTemp.filter(quitaDuplicados);
+				
+				/**
+				 * Se forman los objetos que serán enviados a la grafica, los totales de cada Esac
+				 * */
+				
+				FormarLosEsacs(arrayTotalEsacs,arrayTemp,"ESACS",_infoESAC);
+				
+					myChart.dataProvider = myChart.aplicarFormatoConsultas(_infoESAC,null,"cotizacionesTotal");
+				
+				//Para liberar memoria
+				arrayTemp = new Array();
+				arrayTotalEsacs = new Array();
+			}
+			
+			private function FormarLosEsacs(TotalEsacs:Array,esacsInfo:Array,etiqueta:String,infoEsacs:ArrayCollection):void
+			{
+				var totalPartidas:int;
+				var totalPiezas:int;
+				var totalCotizaciones:int;
+				var totalMonto:Number;
+				var totalClientes:int;
+				var keysMarca:Object;
+				
+				var currentPartidaCoti:PartidaCotizacion; 
+				var j:int;
+				var itemResumenConsulta:ResumenConsulta;
+				for(var i:int =0; i<TotalEsacs.length; i++){
+					j=0;
+					keys = new Object();
+					keysMarca = new Object();
+					totalPartidas =0;
+					totalPiezas =0;
+					totalCotizaciones =0;
+					totalMonto =0;
+					totalClientes =0;
+					currentPartidaCoti = esacsInfo[j] as PartidaCotizacion;
+					while( (TotalEsacs[i] as PartidaCotizacion).cotizo == currentPartidaCoti.cotizo){
+						totalPartidas += currentPartidaCoti.partida;
+						totalPiezas += currentPartidaCoti.cantidad;
+						totalMonto += currentPartidaCoti.precio;
+						
+						if(!keys.hasOwnProperty(currentPartidaCoti.cotizacion)){
+							keys[currentPartidaCoti.cotizacion]= currentPartidaCoti.cotizacion;
+							totalCotizaciones++;
+						}
+						
+						if(!keysMarca.hasOwnProperty(currentPartidaCoti.cliente)){
+							keysMarca[currentPartidaCoti.cliente] = currentPartidaCoti.cliente;
+							totalClientes++;
+						}
+						
+						esacsInfo.shift();
+						if(esacsInfo.length >0)
+							currentPartidaCoti = esacsInfo[j] as PartidaCotizacion;
+						else
+							currentPartidaCoti =new PartidaCotizacion();
+					}
+					
+					itemResumenConsulta = new ResumenConsulta();
+					itemResumenConsulta.conceptoResultado = (TotalEsacs[i] as PartidaCotizacion).cotizo.toLocaleUpperCase();
+					itemResumenConsulta.etiqueta = etiqueta;
+					itemResumenConsulta.total = totalMonto;
+					itemResumenConsulta.totalClientes = totalClientes;
+					itemResumenConsulta.cotizacionesTotal = totalCotizaciones;
+					itemResumenConsulta.partidas = totalPartidas;
+					itemResumenConsulta.piezasTotal = totalPiezas;
+					
+					infoEsacs.addItem(ObjectUtil.copy(itemResumenConsulta));
+				}
+			}
+			private function quitaDuplicados(item:PartidaCotizacion, id:uint, array:Array):Boolean
+			{
+				if(keys.hasOwnProperty(item.cotizo)){
+					return false;
+				}else{
+					keys[item.cotizo] = item.cotizo;
+					return true;
+				}
+			}
+		]]>
+	</fx:Script>
+		<s:VGroup width="100%" height="10%" verticalAlign="middle" horizontalAlign="center">
+				<s:Spacer width="100%" height="5%"/>
+					<componentes:tituloChartTablero width="100%" text="ESAC" textAlign="center" />
+		</s:VGroup>
+		<s:VGroup width="100%" height="100%" gap="0">
+			<s:Spacer width="100%" height="10%" />
+				<graficas:PieChartPqGris id="myChart" width="100%" height="100%" horizontalCenter="0" verticalCenter="0"
+							 dataProvider="{null}"
+							 lineasHabilitadas="true" etiquetasHabilitadas="true" habilitarResumen="true"
+							 showDataTips="false"  innerRadius=".5">   
+					<graficas:series>
+						<graficas:pieSeriesPqNet field="total"/> <!--piezasTotal-->
+					</graficas:series>
+				</graficas:PieChartPqGris>
+			<s:Spacer width="100%" height="30%"/>
+		</s:VGroup>
+</s:Group>

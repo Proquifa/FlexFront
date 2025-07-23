@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.carteras.itemRenderer.*" 
+		  xmlns:cartera ="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.carteras.*" 
+		  xmlns:pq="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.pq.*" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" xmlns:lstscrl="skins.spark.components.*"  
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:chekbox="skins.skin.chekbox.*" 
+		  xmlns:otros="skins.otros.*" 
+		  width="100%" height="100%" gap="0"
+		  creationComplete="init(event)" xmlns:layouts="skins.layouts.*" 
+		  >
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.clientes.carteras.EventoCatClientes_Carteras;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Cartera;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Empleado;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.DatosGlobales;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosCarteras;
+			
+			private var _carterasPublicas:ArrayCollection;
+			private var _carterasBorrador:ArrayCollection;
+			private var _idCarteraGuardada:Number = 0;
+			private var _carteraUpdate:Cartera;
+			public var _update:Boolean;
+			private var _idUser:Number = DatosGlobales.getInstance()._usuario.idEmpleado;
+			public var _idCartSeleccionada:Number;
+			private var _modif:Boolean;
+			[Bindable] public static var master:Boolean;
+			
+			
+			protected function init(event:FlexEvent):void
+			{
+				switchPrincipal.selected = false;
+				seleccionarEspacio();
+				
+				
+				var roles:ArrayCollection = DatosGlobales.getInstance()._usuario.roles;
+				if (roles.length > 0)
+				{
+					for (var j:Number=0; j<roles.length; j++)
+					{
+						if (roles[j]=="CatCliente_Master" )
+						{
+							master = true;
+							break;
+						}
+					}
+					
+					if(!master)
+					{
+						switchPrincipal.visible = btnCarteraNew.visible = false;
+						switchPrincipal.selected = false;
+						seleccionarEspacio();
+					}
+				}				
+			}
+			
+			public function seleccionarEspacio():void
+			{
+				if (switchPrincipal.selected)
+				{
+					botoneraBusqueda.publicada = false;
+					lst_carteras.dataProvider = _carterasBorrador;
+					lst_carteras_15.dataProvider = _carterasBorrador;
+					if(_carterasBorrador)
+						botoneraBusqueda.ponerCartera(_carterasBorrador.length);
+				}
+				else
+				{
+					botoneraBusqueda.publicada = true;
+					lst_carteras.dataProvider = _carterasPublicas; 
+					lst_carteras_15.dataProvider = _carterasPublicas; 
+					if(_carterasPublicas)
+						botoneraBusqueda.ponerCartera(_carterasPublicas.length);
+				}
+			}
+			
+			public function set recibeCarterasdeBotonera($carteras:ArrayCollection):void
+			{
+				if ($carteras == null)
+					return;
+				
+				_carterasBorrador = new ArrayCollection();
+				_carterasPublicas = new ArrayCollection();
+				
+				for(var i:int =0; i<$carteras.length; i++)
+				{
+					var curr:Cartera = $carteras[i] as Cartera;
+					
+					if (curr.publicada)
+						_carterasPublicas.addItem(curr);
+					
+					if(!curr.publicada && curr.usuario == _idUser )
+						_carterasBorrador.addItem(curr);
+					
+					if(_update)
+					{
+						if(curr.idcartera == _idCarteraGuardada)
+						{
+							var evt:EventoCatClientes_Carteras = new EventoCatClientes_Carteras(EventoCatClientes_Carteras.MANDAR_CARTERA_SELECCIONADA_EXPANDIDA);
+							evt.carteraExtendida = ObjectUtil.copy(curr) as Cartera;
+							dispatchEvent(evt);
+							_update = false;
+						}
+					}
+				}
+				
+				seleccionarEspacio();
+				
+			}
+			
+			protected function mostrarEdita(event:MouseEvent):void
+			{
+				dispatchEvent(new Event("cambiarVistaEdicionCartera"));
+			}
+			
+			public function set confirmacionGuardadoCartera($id:Number):void
+			{
+				if (isNaN($id))
+					return;
+				
+				_update = true;
+				_carteraUpdate = new Cartera();
+				if($id > 0)
+				{
+					_idCarteraGuardada = $id;
+					
+					switchPrincipal.selected = true;
+					seleccionarEspacio();
+				}
+				
+			}
+			
+			public function set recibeConfirmacionModificacion($modif:Boolean):void
+			{
+				if($modif)
+				{
+					_update = true;
+					_idCarteraGuardada = ObjectUtil.copy(_idCartSeleccionada) as Number;
+					
+					var emp:Empleado = DatosGlobales.getInstance()._usuario;
+					var ev:EventoCatClientes_Carteras = new EventoCatClientes_Carteras(EventoCatClientes_Carteras.SOLICITAR_LISTA_CARTERAS);
+					ev.idNivel = emp.nivel;
+					ev.idResponsable = emp.clave;
+					dispatchEvent(ev);
+				}
+			}
+			
+			// +++++++++++++++++++++++++++++++++++++++ BUSQUEDA +++++++++++++++++++++++++++++++++++++++
+			/**
+			 * funcion que busca las conincidencias en el universo de partidas segun el texto ingresado al Textinput
+			 */ 
+			private	var temporizador:Timer;
+			private function filtroPorTexto():void
+			{
+				var _listaHab:ArrayCollection = new ArrayCollection();
+				var _listaDeshab:ArrayCollection = new ArrayCollection();
+				
+				if (StringUtil.trim(textBusqueda.text).length > 0 )
+				{
+					if(temporizador == null)
+					{
+						temporizador = new Timer(500,0);
+						temporizador.addEventListener(TimerEvent.TIMER,sendSerch,false,0,true);
+					}
+					if(temporizador)
+					{
+						if(temporizador.running)
+						{
+							temporizador.reset();
+							temporizador.start();
+						}
+						else
+						{
+							temporizador.start();
+						}
+					}
+				}
+				else
+				{
+					botoneraBusqueda.filtrarClientes("null")
+				}
+			}
+			
+			private function sendSerch(event:TimerEvent):void
+			{
+				temporizador.stop();
+				if (StringUtil.trim(textBusqueda.text).length > 0 )
+				{
+					botoneraBusqueda.filtrarClientes(textBusqueda.text)
+				}
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth,unscaledHeight);
+				if(unscaledHeight != 0)
+				{
+					 if(unscaledWidth > 1600)
+					{
+						//lst_carteras_15.visible = lst_carteras_15.includeInLayout = false;
+						//lst_carteras.visible = lst_carteras.includeInLayout = true;
+						 layoutLista.requestedColumnCount = 5;
+						 layoutLista.requestedRowCount = 2;
+						
+					}
+					else
+					{
+						//lst_carteras_15.visible = lst_carteras_15.includeInLayout = true;
+						//lst_carteras.visible = lst_carteras.includeInLayout = false;
+						 layoutLista.requestedColumnCount = 2;
+						 layoutLista.requestedRowCount = 1;
+					} 
+				}
+			} 
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" gap="20" paddingBottom="20" paddingTop="20" >
+		<s:Group width="100%">
+			
+			<s:HGroup width="100%" paddingLeft="20" verticalAlign="middle">
+				<pqNet:botonPqNetLargo id="btnCarteraNew" label="Nueva Cartera" colorBase="0x{catalogoColores.BTN_VERDE_AZUL}" click="mostrarEdita(event)"/>
+				<s:Spacer width="100%"/>
+				<chekbox:CheckBoxPq id="switchPrincipal" labelLeft="APLICADAS" labelRight="BORRADORES" fontSizeEtiqueta="12" width="250" click="seleccionarEspacio()"/>
+			</s:HGroup>
+			
+			<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10" verticalAlign="middle" >
+				<s:TextInput fontStyle="normal" id="textBusqueda" width="350" skinClass="skins.textinput.busqueda.skinTextInputBusqueda" 
+							 prompt="Clientes" change="filtroPorTexto()"  />
+			</s:VGroup>
+		</s:Group>
+	</s:VGroup>
+	
+	<s:Group width="100%" height="100%">
+		<s:VGroup height="100%" width="100%" gap="0" paddingTop="90" >
+			
+			<lstscrl:List id="lst_carteras_15" width="100%" height="100%"  borderVisible="false" horizontalScrollPolicy="off" visible="false" includeInLayout="false"
+						  itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.carteras.itemRenderer.IR_Vista_Cartera_15" >
+				<lstscrl:layout>
+					<s:TileLayout  horizontalGap="0" verticalGap="0"  />
+				</lstscrl:layout>
+			</lstscrl:List>
+			<lstscrl:List id="lst_carteras" width="100%" height="100%"  borderVisible="false" horizontalScrollPolicy="off"
+						  itemRenderer="mx.com.proquifa.proquifanet.rsl.vista.vistas.catalogos.clientes.carteras.itemRenderer.IR_Vista_Cartera" >
+				<lstscrl:layout>
+					<layouts:LayoutListaGrid id="layoutLista"  numColumnas="5" numFilas="2" horizontalGap="0" verticalGap="0" useVirtualLayout="true" 
+											 paddingTop="0" paddingBottom="0" widthMin="460" heightMin="490" />
+				</lstscrl:layout>	
+			</lstscrl:List>
+			
+		</s:VGroup>
+		<cartera:Carteras_BotoneraBusqueda id="botoneraBusqueda" width="100%" publicada="true" />
+	</s:Group>
+	
+</s:VGroup>

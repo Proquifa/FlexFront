@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%"
+		 xmlns:otros="skins.otros.*"
+		 resize="calc(event)" 
+		 creationComplete="init(event)" xmlns:ns1="vista.ev_ReportarVisita.*"
+		 >
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.Sprint;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.ventas.visita.VisitaCliente;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.UtilsGrid;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.TextOperationEvent;
+			
+			import vista.ev_ReportarVisita.Componentes.PopUpInformacionVisitaReportarVisita;
+			import vista.ev_ReportarVisita.Componentes.popUPAgregarAccionReVisita;
+			import vista.ev_ReportarVisita.Componentes.popUpAgregarHallazgosReVisita;
+			import vista.evento.EventoEVReportarVisita;
+			
+			
+			
+			
+			
+			private var universo:ArrayCollection;   
+			[Bindable] public var sprint:Sprint;
+			
+			[Bindable]private var sizeFontProvee:Number;
+			[Bindable]private var sizeFontLittle:Number;
+			
+			
+			protected function init(event:FlexEvent):void
+			{
+				gridVisita.addEventListener(IndexChangeEvent.CHANGE,cambioIndice);
+				addEventListener(EventoEVReportarVisita.ACTUALIZAR_LISTA_DOCUMENTOS_VISITA,actualizarListaDocumentosVisita);
+				addEventListener(EventoEVReportarVisita.ACTUALIZAR_LISTA_ACCIONES,actualizarListaAccionesVisita);
+				addEventListener(EventoEVReportarVisita.ACTUALIZAR_LISTA_HALLAZGOS,actualizarListaHallazgosVisita);
+				vistaDocumentacion.addEventListener("agregarReporteAVisita",actualizarReporteVisita);
+                vistaDocumentacion.Vst_Acciones.addEventListener("AbrirpopUpDeAcciones",reciveAgregarAccion)
+				addEventListener(EventoEVReportarVisita.EDITAR_ACCION,reciveModificarAccion);
+				vistaDocumentacion.Vst_Hallazgos.addEventListener("AbrirpopUpDeHallazgos",reciveAgregarHallazgo)
+				addEventListener(EventoEVReportarVisita.EDITAR_HALLAZGOS,reciveModificarHallazgo);
+				addEventListener(EventoEVReportarVisita.ABRIR_POPUP_PARAMETROS_VISITA_REPORTAR,mostrarInformacion);
+				
+			}
+			
+			private var popUpInformacion:PopUpInformacionVisitaReportarVisita;
+			private function mostrarInformacion(event:EventoEVReportarVisita):void
+			{
+				if( popUpInformacion == null ){
+					popUpInformacion = PopUpInformacionVisitaReportarVisita(PopUpManager.createPopUp( this, PopUpInformacionVisitaReportarVisita, true ) );
+					PopUpManager.centerPopUp( popUpInformacion );
+					popUpInformacion.y -= popUpInformacion.y/2
+					
+					popUpInformacion.setVisitaCliente(event.visita);
+					popUpInformacion.addEventListener("cerrarPopUp",cerrarpopUpInfo);
+					
+				}else{
+					PopUpManager.addPopUp( popUpInformacion , this, true );
+				}
+			}
+			
+			private function cerrarpopUpInfo(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpInformacion );
+				popUpInformacion = null;
+			}
+			
+			private function actualizarReporteVisita(event:Event):void
+			{
+				universo[gridVisita.selectedIndex].reporte = vistaDocumentacion.Vst_Reporte.reporte.text ;
+			}
+			
+			protected function txtBuscador_changingHandler(event:TextOperationEvent):void
+			{
+				gridVisita.dataProvider = UtilsGrid.queryCampoXLikeDosCampos(ObjectUtil.copy(universo) as ArrayCollection,"nombreCliente","ruta",txtBuscador.text);
+			}
+			
+			private function actualizarListaDocumentosVisita(even:EventoEVReportarVisita):void
+			{
+				universo[gridVisita.selectedIndex].listaDocumentos = even.listaDocumentos;
+			}
+			
+			private function actualizarListaAccionesVisita(even:EventoEVReportarVisita):void
+			{
+				universo[gridVisita.selectedIndex].acciones = even.listaAcciones;
+			}
+			private function actualizarListaHallazgosVisita(even:EventoEVReportarVisita):void
+			{
+				universo[gridVisita.selectedIndex].hallazgos = even.listaHallazgos;
+			}
+			
+			
+			
+			protected function calc(event:ResizeEvent):void
+			{
+				sizeFontLittle = (12/2005) * (unscaledWidth);
+				sizeFontLittle = sizeFontLittle > 12 ? 12:sizeFontLittle;
+				sizeFontLittle = sizeFontLittle < 7 ? 7:sizeFontLittle;
+				
+				sizeFontProvee = (20/2005) * (unscaledWidth);
+				sizeFontProvee = sizeFontProvee > 20 ? 20:sizeFontProvee;
+				sizeFontProvee = sizeFontProvee < 10 ? 10:sizeFontProvee;
+			}
+			
+			public function setUniverso(data:ArrayCollection):void
+			{
+				/*reset();*/
+				if(data.length > 0){
+					universo = data;
+					gridVisita.dataProvider = universo;
+					gridVisita.selectedIndex = 0;
+					vistaDocumentacion.visible = vistaDocumentacion. includeInLayout = true;
+					seleccionaPrimero();
+				}else{
+					gridVisita.dataProvider = new ArrayCollection;
+					vistaDocumentacion.visible = vistaDocumentacion. includeInLayout = false;
+					
+				}
+			}
+			
+			private function seleccionaPrimero():void
+			{
+				visitaSeleccionaActual = new VisitaCliente();
+				var tempPartida:VisitaCliente;
+				tempPartida = ObjectUtil.copy(gridVisita.dataProvider[0]) as VisitaCliente;
+				visitaSeleccionaActual = tempPartida;
+				vistaDocumentacion.reVisitaActual(tempPartida);
+				
+				if(tempPartida.listaDocumentos != null && tempPartida.listaDocumentos.length > 0)
+					vistaDocumentacion.cargarArchivos = true
+				else
+					vistaDocumentacion.cargarArchivos = false;
+				
+				if(tempPartida.reporte != "") 
+					
+					vistaDocumentacion.cargarReporte = true;
+				else
+					vistaDocumentacion.cargarReporte = false;
+				
+				if(tempPartida.acciones != null && tempPartida.acciones.length > 0)
+					vistaDocumentacion.cargarAcciones = true;
+				else
+					vistaDocumentacion.cargarAcciones = false;
+				
+				if(tempPartida.hallazgos != null && tempPartida.hallazgos.length > 0)
+					vistaDocumentacion.cargarHallazgos = true;
+				else
+					vistaDocumentacion.cargarHallazgos = false;
+                  
+					vistaDocumentacion.inicializar_Pantalla();
+			}
+			
+			private var visitaSeleccionaActual:VisitaCliente = new VisitaCliente();
+			
+			private function cambioIndice(event:IndexChangeEvent):void
+			{
+				visitaSeleccionaActual = new VisitaCliente();
+				var tempPartida:VisitaCliente;
+				tempPartida = ObjectUtil.copy(gridVisita.dataProvider[event.newIndex]) as VisitaCliente;
+				visitaSeleccionaActual = tempPartida;
+				vistaDocumentacion.reVisitaActual(tempPartida);
+				if(tempPartida.listaDocumentos != null && tempPartida.listaDocumentos.length > 0)
+					vistaDocumentacion.cargarArchivos = true
+				else
+					vistaDocumentacion.cargarArchivos = false;
+				
+				if(tempPartida.reporte != "")
+					vistaDocumentacion.cargarReporte = true;
+				else
+					vistaDocumentacion.cargarReporte = false;
+				
+				if(tempPartida.acciones != null && tempPartida.acciones.length > 0)
+					vistaDocumentacion.cargarAcciones = true;
+				else
+					vistaDocumentacion.cargarAcciones = false;
+				
+				if(tempPartida.hallazgos != null && tempPartida.hallazgos.length > 0)
+					vistaDocumentacion.cargarHallazgos = true;
+				else
+					vistaDocumentacion.cargarHallazgos = false;
+				
+				vistaDocumentacion.inicializar_Pantalla();
+		
+			}
+			private var modificarAccion:Boolean;
+			private var indiceListaAccciones:int;
+			private function reciveAgregarAccion(event:Event):void{
+				modificarAccion = false;
+				abrirPopUpdeAcciones();
+			}
+			
+			private function reciveModificarAccion(evet:EventoEVReportarVisita):void{
+				modificarAccion = true;
+				indiceListaAccciones = evet.index;
+				abrirPopUpdeAcciones();
+			}
+			
+			private var popUpAcciones:popUPAgregarAccionReVisita;
+			private function abrirPopUpdeAcciones():void
+			{
+				if( popUpAcciones == null ){
+					popUpAcciones = popUPAgregarAccionReVisita(PopUpManager.createPopUp( this, popUPAgregarAccionReVisita, true ) );
+					PopUpManager.centerPopUp( popUpAcciones );
+					if(modificarAccion){
+						popUpAcciones.textAccion.text = vistaDocumentacion.Vst_Acciones.lstAcciones.dataProvider[indiceListaAccciones];
+					}
+					popUpAcciones.reVisitaActual(visitaSeleccionaActual);
+					popUpAcciones.alistarVista(indiceListaAccciones,modificarAccion)
+					popUpAcciones.addEventListener("cerrarPopUp",cerrarLightBox);
+					popUpAcciones.addEventListener("aceptarPopUp",aceptarPopUp);
+				}else{
+					PopUpManager.addPopUp( popUpAcciones , this, true );
+				}
+			}
+			
+			private function cerrarLightBox(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpAcciones );
+				popUpAcciones = null;
+			}
+			
+			private function aceptarPopUp(event:Event):void	
+			{
+				var accion:String = "";
+				
+				accion = popUpAcciones.getAccion();
+				if(modificarAccion){
+					vistaDocumentacion.Vst_Acciones.lstAcciones.dataProvider[indiceListaAccciones] = accion;
+				}
+				else{
+					vistaDocumentacion.Vst_Acciones.recibeInformacion(accion);
+				}
+				
+				PopUpManager.removePopUp( popUpAcciones );
+				popUpAcciones = null;
+		
+			}
+			
+			/*sección de Hallazgos Editar e Insertar */
+			
+			private var modificarHallazgo:Boolean;
+			private var indiceListaHallazgos:int;
+			private function reciveAgregarHallazgo(event:Event):void{
+				modificarHallazgo = false;
+				abrirPopUpdeHallazgos();
+			}
+			
+			private function reciveModificarHallazgo(evet:EventoEVReportarVisita):void{
+				modificarHallazgo = true;
+				indiceListaHallazgos = evet.index;
+				abrirPopUpdeHallazgos();
+			}
+			
+			
+			
+			private var popUpHallazgos:popUpAgregarHallazgosReVisita;
+			private function abrirPopUpdeHallazgos():void
+			{
+				if( popUpHallazgos == null ){
+					popUpHallazgos = popUpAgregarHallazgosReVisita(PopUpManager.createPopUp( this, popUpAgregarHallazgosReVisita, true ) );
+					PopUpManager.centerPopUp( popUpHallazgos );
+					if(modificarHallazgo){
+						popUpHallazgos.textAccion.text = vistaDocumentacion.Vst_Hallazgos.lstHallazgos.dataProvider[indiceListaHallazgos];
+					}
+					popUpHallazgos.reVisitaActual(visitaSeleccionaActual);
+					popUpHallazgos.alistarVista(indiceListaHallazgos,modificarHallazgo);
+					popUpHallazgos.addEventListener("cerrarPopUp",cerrarpopUpHallazgos);
+					popUpHallazgos.addEventListener("aceptarPopUp",aceptarPopUpHallazgo);
+				}else{
+					PopUpManager.addPopUp( popUpHallazgos , this, true );
+				}
+			}
+			
+			private function cerrarpopUpHallazgos(event:Event):void
+			{
+				PopUpManager.removePopUp( popUpHallazgos );
+				popUpHallazgos = null;
+			}
+			
+			private function aceptarPopUpHallazgo(event:Event):void	
+			{
+				var hallazgo:String = "";
+				
+				hallazgo = popUpHallazgos.getAccion();
+				if(modificarHallazgo){
+					vistaDocumentacion.Vst_Hallazgos.lstHallazgos.dataProvider[indiceListaHallazgos] = hallazgo;
+				}
+				else{
+					vistaDocumentacion.Vst_Hallazgos.recibeInformacion(hallazgo);
+				}
+				
+				PopUpManager.removePopUp( popUpHallazgos );
+				popUpHallazgos = null;
+				
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" paddingLeft="20" paddingRight="20" gap="0" paddingTop="0" paddingBottom="0">
+		
+		<s:VGroup width="25%" height="100%" gap="0" paddingTop="20">
+			<s:Label styleName="TituloNovecento_18" fontWeight="bold" fontSize="{sizeFontProvee}" text="CLIENTES" width="100%" textAlign="left" color="#424242" id="lblTitulo"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer1"/>
+			<s:TextInput id="txtBuscador" prompt="Cliente, Ubicación" width="100%" skinClass="skins.textinput.busqueda.skinTextInputBusqueda2D" 
+						 change="txtBuscador_changingHandler(event)" fontStyle="normal"/>
+			<s:Spacer height="20%" maxHeight="20" width="100%" id="spacer2"/>
+			<otros:division width="100%" grueso="1" visible="{gridVisita.selectedIndex == 0 ? false:true}" id="division"/>
+			<s:List width="100%" height="100%" borderVisible="false" horizontalScrollPolicy="off"
+					id="gridVisita" contentBackgroundAlpha="0" itemRenderer="vista.ev_ReportarVisita.Componentes.IR_VisitasRealizadas_ReportarVisita"
+					/>
+			<otros:division width="100%" grueso="1"/>
+			<s:VGroup width="100%" height="55" verticalAlign="middle" paddingLeft="20" paddingRight="20">
+				<s:Label styleName="TituloNovecento_18" fontSize="{sizeFontLittle+3}" color="#424242" height="100%" verticalAlign="middle"
+						 text="{'#'+gridVisita.dataProvider.length+' Visita'+(gridVisita.dataProvider.length==1?'':'s')} " 
+						 />
+			</s:VGroup>
+		</s:VGroup>
+		<s:Spacer width="20" />
+		<otros:divisionDegradadoVertical height="100%" width="2" />
+		<s:Spacer width="20" />
+	<ns1:vistaReportarVisitaDocumentos id="vistaDocumentacion" width="75%" height="100%" />
+		
+		
+	</s:HGroup>
+</s:Group>

@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="utf-8"?>
+<popUp:PopUpDefaultPQNet 
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx" width="350"
+	xmlns:popUp="skins.popUp.*" xmlns:pqNet="skins.botones.pqNet.*"
+	xmlns:cmbCat="mx.com.proquifa.proquifanet.rsl.vista.vistas.componentes.comun.combos.*"
+	xmlns:label="skins.skin.label.*" xmlns:otros="skins.otros.*" xmlns:contenedores="skins.skin.contenedores.*" 
+	xmlns:textinput="skins.skin.textinput.*" xmlns:chekbox="skins.skin.chekbox.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filesystem.File;
+			import flash.globalization.StringTools;
+			
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.catalogos.proveedores.comerciales.EventoCatProMArcas;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.alertPqNet.ResultAlert;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.comun.Fabricante;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.alertaSingleton;
+			import mx.managers.PopUpManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.catalogos.catalogoAlertas;
+			import skins.catalogos.catalogoColores;
+			import skins.catalogos.catalogoIconosBotones;
+			
+			private var _newFabricante:Fabricante = new Fabricante;
+			private var _seGuardaImagen:Boolean;
+			private var _nombresMarcas:Array;
+			[Bindable] public var titulo:String  = "AGREGAR MARCA";
+			[Bindable] private var _fabricante:Fabricante;
+			
+			private var _soloUnaVez:Boolean;
+			protected function btnGuardarFabricante_clickHandler(event:MouseEvent):void
+			{
+				
+				if(StringUtil.trim(txtNombre.text).length <= 0 )
+				{
+					alertaSingleton.show("Es necesario indicar el nombre.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if(cmbPaisManufactura.selectedIndex < 1)
+				{
+					alertaSingleton.show("Es necesario indicar el país de manufactura.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if(cmbPaisCompra.selectedIndex < 1  )
+				{
+					alertaSingleton.show("Es necesario indicar el país de compra.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if(!validarNombreMarca())
+				{
+					alertaSingleton.show("Esta marca ya fue ingresada.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				_soloUnaVez = true;
+				alertaSingleton.show('Se agregará una nueva marca. ¿Desea continuar?.' ,catalogoAlertas.TIT_ADV_atencion,'AgregaMarca_popUp','','','SI','NO')
+			}
+			
+			
+			public function set recibeDelAlert( $dato:ResultAlert ):void{
+				if( $dato == null || $dato.vieneD == null ){
+					return;
+				}
+				if( _soloUnaVez ){
+					if( $dato.vieneD == "AgregaMarca_popUp" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						guardarMarcaService();
+					}
+					else if( $dato.vieneD == "EditarMarca_popUp" && $dato.botonSeleccionado == "SI"){
+						_soloUnaVez = false;
+						editarMarcaService();
+					}
+				}
+			}
+			
+			
+			private function guardarMarcaService():void
+			{
+				var agregarMarca:EventoCatProMArcas = new EventoCatProMArcas(EventoCatProMArcas.AGREGAR_NUEVA_MARCA);
+				_newFabricante.nombre = txtNombre.text;
+				_newFabricante.paisCompra = cmbPaisCompra.selectedItem.valor;
+				_newFabricante.paisManufactura = cmbPaisManufactura.selectedItem.valor;
+				agregarMarca.fabricante = _newFabricante;
+				agregarMarca.tipoDeOperacion = "insert";
+				dispatchEvent(agregarMarca);
+			}
+			
+			private function editarMarcaService():void
+			{
+				var editar:EventoCatProMArcas = new EventoCatProMArcas(EventoCatProMArcas.EDITAR_MARCA);
+				_newFabricante.nombre = txtNombre.text;
+				_newFabricante.paisCompra = cmbPaisCompra.selectedItem.valor;
+				_newFabricante.paisManufactura = cmbPaisManufactura.selectedItem.valor;
+				_newFabricante.habilitado = chkEstado.selected;
+				editar.fabricante = _newFabricante;
+				dispatchEvent(editar);
+			}
+			
+			protected function btnCancelar_clickHandler(event:MouseEvent):void
+			{
+				_newFabricante = new Fabricante;
+				imgTemporal.source =  catalogoIconosBotones.getInstance().proveedoresDefaultMax;
+				txtNombre.text = "";
+				
+				PopUpManager.removePopUp(this);
+			}
+			
+			private var file:File;
+			private function buscarArchivo():void{
+				file = new File();
+				file.addEventListener(Event.SELECT, selectHandler);
+				file.addEventListener(IOErrorEvent.IO_ERROR,ioErrorHandler);
+				file.addEventListener(ProgressEvent.PROGRESS,progressHandler);
+				file.addEventListener(Event.COMPLETE,completeHandler);
+				file.browse();
+			}
+			
+			private function selectHandler(event:Event):void {
+				var file:FileReference = FileReference(event.target);
+				file.load();
+			}
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("ioErrorHandler: " + event);
+			}
+			private function progressHandler(event:ProgressEvent):void {
+				var file:FileReference = FileReference(event.target);
+				trace("progressHandler: name=" + file.name + "bytesLoaded = " + event.bytesLoaded + " bytesTotal=" + event.bytesTotal);
+			}
+			private function completeHandler(event:Event):void {
+				trace("completeHandler: " + event);
+				creaReferencia();
+			}
+			
+			private function creaReferencia():void{
+				if( file.extension.toLocaleLowerCase() == 'jpeg' || file.extension.toLocaleLowerCase() == 'jpg' || file.extension.toLocaleLowerCase() == 'png' || file.extension.toLocaleLowerCase() == 'gif' ){
+					_newFabricante.bytes = file.data;
+					_newFabricante.logoExt = file.extension;
+					this.imgTemporal.source =  _newFabricante.bytes != null ? _newFabricante.bytes:catalogoIconosBotones.getInstance().proveedoresDefaultMax;
+					
+					_seGuardaImagen = true;
+				}else{
+					alertaSingleton.show( 'Formato de archivo no permitido', catalogoAlertas.TIT_ADV_operacionImposible );
+				}
+			}
+			
+			public function cerrar():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			
+			public function inizializar():void
+			{
+				cmbPaisManufactura.dataProvider = null;
+				cmbPaisCompra.dataProvider = null;
+				cmbPaisManufactura.cargaPaises("--NINGUNO--");
+				cmbPaisCompra.cargaPaises("--NINGUNO--");
+				_newFabricante = new Fabricante;
+				this.imgTemporal.source =  catalogoIconosBotones.getInstance().proveedoresDefaultMax;
+				txtNombre.text = "";
+				btnEditarFabricante.visible = btnEditarFabricante.includeInLayout = false;
+				btnGuardarFabricante.visible = btnGuardarFabricante.includeInLayout = true;
+				chkEstado.visible = chkEstado.includeInLayout = false;
+				chkEstado.selected = false;
+			}
+			
+			public function recibeNombreMarcas($marcas:Array):void
+			{
+				_nombresMarcas = new Array();
+				_nombresMarcas = $marcas;
+			}
+			
+			public function inizializarEditar($fabricante:Fabricante):void
+			{
+				_fabricante = ObjectUtil.copy($fabricante) as Fabricante;
+				titulo = "EDITAR MARCA";
+				txtNombre.text = $fabricante.nombre;
+				chkEstado.visible = chkEstado.includeInLayout = true;
+				chkEstado.selected = _fabricante.habilitado;
+				chkEstado.setFocus();
+				cargaPaisManufactura();
+				cargaPaiscompra();
+				_newFabricante = new Fabricante;
+				_newFabricante = ObjectUtil.copy(_fabricante) as Fabricante;
+				if ($fabricante.bytes != null){
+					this.imgTemporal.source =  $fabricante.bytes;
+				}else{
+					this.imgTemporal.source =  catalogoIconosBotones.getInstance().proveedoresDefaultMax;
+				}
+				
+				btnEditarFabricante.visible = btnEditarFabricante.includeInLayout = true;
+				btnGuardarFabricante.visible = btnGuardarFabricante.includeInLayout = false;
+			}
+			
+			private function cargaPaisManufactura():void{
+				if( cmbPaisManufactura.dataProvider != null && cmbPaisManufactura.dataProvider.length > 0 ){
+					this.cmbPaisManufactura.selectedIndex = cmbPaisManufactura.seleccionarValor(_fabricante.paisManufactura);
+				}else{
+					setTimeout( cargaPaisManufactura, 500 );
+				}
+			}
+			
+			private function cargaPaiscompra():void{
+				if( cmbPaisCompra.dataProvider != null && cmbPaisCompra.dataProvider.length > 0 ){
+					this.cmbPaisCompra.selectedIndex = cmbPaisCompra.seleccionarValor(_fabricante.paisCompra);
+				}else{
+					setTimeout( cargaPaiscompra, 500 );
+				}
+			}
+			
+			protected function btnEditarFabricante_clickHandler(event:MouseEvent):void
+			{
+				if(StringUtil.trim(txtNombre.text).length <= 0 )
+				{
+					alertaSingleton.show("Es necesario indicar el nombre.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if(cmbPaisManufactura.selectedIndex < 1)
+				{
+					alertaSingleton.show("Es necesario indicar el país de manufactura.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				if(cmbPaisCompra.selectedIndex < 1  )
+				{
+					alertaSingleton.show("Es necesario indicar el país de compra.",catalogoAlertas.TIT_ADV_informacionIncompleta);
+					return;
+				}
+				_soloUnaVez = true;
+				alertaSingleton.show('Esta a punto de modificar la marca. ¿Desea continuar?.' ,catalogoAlertas.TIT_ADV_atencion,'EditarMarca_popUp','','','SI','NO')
+			}
+			
+			private function validarNombreMarca():Boolean
+			{
+				var _nombre:String = StringUtil.trim(txtNombre.text.toLowerCase());
+				if(_nombresMarcas.indexOf(_nombre) < 0)
+					return true;
+				else
+					return false;
+			}
+			
+		]]>
+	</fx:Script>
+	<popUp:states >
+		<s:State name="normal"/>
+		<s:State name="hovered"/>
+		<s:State name="selected"/>
+	</popUp:states>
+	<s:VGroup width="100%" height="100%" horizontalAlign="center" gap="10">
+		<label:TituloBankGothic_22 text="{titulo}" width="100%"/>
+		<otros:division width="100%"/>
+		<label:Titulo_w100 text="GENERALES" paddingTop="0"/>
+		<otros:divisionHueca width="100%"/>
+		<s:VGroup width="100%" horizontalAlign="left" gap="10">
+			<s:CheckBox id="chkEstado" label="Habilitada" visible="false" includeInLayout="false"/>
+			<label:Titulo text="Nombre:" paddingTop="0"/>
+			<textinput:txtInputBlancoDefaultPQNet width="100%" id="txtNombre"/>
+			<label:Titulo text="País manufactura:" paddingTop="0"/>
+			<cmbCat:ComboCatalogos id="cmbPaisManufactura" width="100%"/>
+			<label:Titulo text="País de compra:" paddingTop="0"/>
+			<cmbCat:ComboCatalogos id="cmbPaisCompra" width="100%"/>
+		</s:VGroup>  
+		<label:Titulo_w100 text="LOGO" paddingTop="0"/>
+		<otros:divisionHueca width="100%"/>
+		<s:VGroup width="100%" gap="10" verticalAlign="middle" horizontalAlign="center">
+			<s:Group width="137" height="137" toolTip="{'Formatos permitidos: JPEG, JPG, PNG, GIF'}" mouseOver="this.grpEtiquetaEditar.visible = true">
+				<s:Image id="imgTemporal" source="{catalogoIconosBotones.getInstance().proveedoresDefaultMax}" width="137" height="137" />
+				<s:Group width="{this.imgTemporal.width}" height="137" id="grpEtiquetaEditar" visible="false" click="buscarArchivo(); this.grpEtiquetaEditar.visible = false" mouseOut="this.grpEtiquetaEditar.visible = false" >
+					<s:Rect width="{this.imgTemporal.width}" height="30" verticalCenter="52" horizontalCenter="0" id="fondoAzulImagen" >
+						<s:fill>
+							<s:SolidColor color="0x{catalogoColores.LABEL_VERDE_AZUL}" />
+						</s:fill>
+					</s:Rect>
+					<s:Label color="white" id="lblEditarImagen" text="Editar" horizontalCenter="0" verticalCenter="52" />
+				</s:Group>
+			</s:Group>
+			<s:HGroup width="100%"  horizontalAlign="center" >
+				<pqNet:botonPqNetLargo label="Limpiar" 
+									   click="this.imgTemporal.source = catalogoIconosBotones.getInstance().proveedoresDefaultMax;_seGuardaImagen=false;" />
+			</s:HGroup>
+		</s:VGroup>
+		<otros:division width="100%"/>
+		<pqNet:botonPqNetLargo id="btnGuardarFabricante" label="Agregar" click="btnGuardarFabricante_clickHandler(event)"/>
+		<pqNet:botonPqNetLargo id="btnEditarFabricante" label="Guardar" click="btnEditarFabricante_clickHandler(event)" visible="false" includeInLayout="false"/>
+		<pqNet:botonPqNetLargo id="btnCancelar" label="Cancelar" click="btnCancelar_clickHandler(event)"/> 
+	</s:VGroup>  
+</popUp:PopUpDefaultPQNet>

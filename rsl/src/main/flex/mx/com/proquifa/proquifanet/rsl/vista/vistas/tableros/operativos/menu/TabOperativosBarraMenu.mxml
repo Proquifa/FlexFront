@@ -1,0 +1,417 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" 
+		  xmlns:pqNet="skins.botones.pqNet.*"
+		  xmlns:label="skins.skin.label.*"
+		  xmlns:otros="skins.otros.*" 
+		  creationComplete="vgroup1_creationCompleteHandler(event)" 
+		  width="100%" 
+		  >
+	
+	<fx:Declarations>
+		<s:Resize id="fxResize" target="{cmbPerioMeses}" effectEnd="{cmbPerioMeses.percentWidth = 100}" duration="200"/>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.EventoEsperar;
+			import mx.com.proquifa.proquifanet.rsl.vista.eventos.tableros.operativos.EventoTableroOperativos;
+			import mx.com.proquifa.proquifanet.rsl.vista.modelo.tableros.operativos.ParametrosBusquedaOperativo;
+			import mx.com.proquifa.proquifanet.rsl.vista.utils.Util;
+			import mx.com.proquifa.proquifanet.rsl.vista.vistas.plantillaProquifa.gestion.VistaDefaultTabOperativos;
+			import mx.events.FlexEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var _fecha:Date = new Date();
+			private var currentAnioGlobal:Number;
+			private var currentPeriodoGlobal:String;
+			private var currentTipoPeriodoGlobal:Number;
+			private var currentMesGlobal:Number;
+			
+			[Bindable] private var _listaAnio:ArrayCollection = new ArrayCollection();
+			[Bindable]	private var _listadoClientes:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var _arrButton:ArrayCollection = new ArrayCollection
+				([	{ icono: "direccionBar"},
+					{ icono: "comercializacionBar"},
+					{ icono: "operacionesBar"},
+					{ icono: "finanzasBar"},
+					{ icono: "serviciosBar"}	]);
+			
+			
+			protected function btnBarra_changingHandler(event:IndexChangeEvent):void
+			{
+				if((event.currentTarget as ButtonBar).selectedItem == null)
+				{
+					event.preventDefault();					
+				}
+				else
+				{
+					resetControlDeCambiosEnFiltros();
+					filtros_change();
+				}
+			}
+			
+			protected function filtros_change():void
+			{
+				var tempTipoPeriodo:Number = cmbPeriodo.selectedIndex == 3 || cmbPeriodo.selectedIndex == 0 ? 0 : cmbPerioMeses.selectedIndex + 1;
+				var tempMesPeriodo:Number = cmbPeriodo.selectedIndex == 3 ? cmbPerioMeses.selectedIndex + 1: 0;
+				
+				CompararYControlarBoton(cmbAnio.selectedItem,currentAnioGlobal,"cmbAnio",btnConsultarCliente);
+				CompararYControlarBoton(cmbPeriodo.selectedItem,currentPeriodoGlobal,"cmbPerioodo",btnConsultarCliente);
+				CompararYControlarBoton(tempTipoPeriodo,currentTipoPeriodoGlobal,"cmbPerioMesesTipo",btnConsultarCliente);
+				CompararYControlarBoton(tempMesPeriodo,currentMesGlobal,"cmbPerioMeses",btnConsultarCliente);
+			}
+			
+			private function resetControlDeCambiosEnFiltros():void
+			{
+				numFiltrosModificados = 0;
+				keyModificados=  new Object();
+			}
+			
+			protected function filtros_changeEvent(event:*):void
+			{
+				var tempTipoPeriodo:Number = cmbPeriodo.selectedIndex == 3 || cmbPeriodo.selectedIndex == 0 ? 0 : cmbPerioMeses.selectedIndex + 1;
+				var tempMesPeriodo:Number = cmbPeriodo.selectedIndex == 3 ? cmbPerioMeses.selectedIndex + 1: 0;
+				
+				switch(event.currentTarget.id)
+				{
+					case "cmbAnio":
+					{
+						CompararYControlarBoton(cmbAnio.selectedItem,currentAnioGlobal,"cmbAnio",btnConsultarCliente);
+						break;
+					}
+					case "cmbPerioMeses":
+					{
+						CompararYControlarBoton(tempMesPeriodo,currentMesGlobal,"cmbPerioMeses",btnConsultarCliente);
+						CompararYControlarBoton(tempTipoPeriodo,currentTipoPeriodoGlobal,"cmbPerioMesesTipo",btnConsultarCliente);
+						break;
+					}
+				}
+			}
+			
+			private var numFiltrosModificados:int;
+			private var keyModificados:Object;
+			private function CompararYControlarBoton($dato1:Object,$dato2:Object,$currentFiltroModif:String,$button:botonPqNetLargo):void
+			{
+				if($dato1 != $dato2)
+				{
+					if(!keyModificados.hasOwnProperty($currentFiltroModif))
+					{
+						keyModificados[$currentFiltroModif]=$currentFiltroModif;
+						numFiltrosModificados ++;
+					}
+				}
+				else
+				{
+					if(numFiltrosModificados==1)
+					{
+						if(keyModificados.hasOwnProperty($currentFiltroModif))
+						{
+							numFiltrosModificados =0;
+							keyModificados=  new Object();
+						}
+					}
+					else
+					{
+						if(keyModificados.hasOwnProperty($currentFiltroModif))
+						{
+							delete keyModificados[$currentFiltroModif];
+							numFiltrosModificados --;
+						}
+					}
+				}
+				
+				if(numFiltrosModificados>=1)
+				{
+					$button.CambiarToActualizarTipoBoton(false);
+				}
+				else
+				{
+					$button.CambiarToActualizarTipoBoton(true);
+				}
+			}
+			
+			private var _anima:Boolean = true;
+			protected function cmbPeriodo_changeHandler(event:IndexChangeEvent):void
+			{
+				_anima = cmbPerioMeses.visible;
+				var indice:int = event.newIndex;
+				if(event.newIndex >= 0)
+				{
+					if(indice == 0)
+					{
+						fxResize.heightTo = 0;
+						cmbPerioMeses.visible = cmbPerioMeses.includeInLayout = false;
+					}
+					else
+					{
+						fxResize.heightTo = 28;
+						cmbPerioMeses.visible = cmbPerioMeses.includeInLayout = true;
+					}
+					if( _anima != cmbPerioMeses.visible){
+						fxResize.play();
+					}
+					if( indice == 1)
+					{
+						cmbPerioMeses.dataProvider = Util._listaSemestre;
+					}
+					else if( indice == 2)
+					{
+						cmbPerioMeses.dataProvider = Util._listaTrimestre;
+					} 
+					else if( indice == 3) 
+					{
+						cmbPerioMeses.dataProvider = Util._listaMensual;
+					}
+					else if( indice == 4) 
+					{
+						cmbPerioMeses.dataProvider = Util._listaquincenal;
+					}
+					cmbPerioMeses.selectedIndex = 0;
+				}
+			}
+			
+			protected function vgroup1_creationCompleteHandler(event:FlexEvent):void
+			{
+				resetControlDeCambiosEnFiltros();
+				for(var n:int = 0; (_fecha.getFullYear() - n) > 2008; n++)
+				{
+					_listaAnio.addItem(_fecha.getFullYear() - n);
+				}
+				
+				cmbAnio.selectedIndex = 0;
+				
+				if( cmbPerioMeses.selectedIndex == 1) {
+					cmbPerioMeses.dataProvider = Util._listaSemestre;
+				}
+				if( cmbPerioMeses.selectedIndex == 2) {
+					cmbPerioMeses.dataProvider = Util._listaTrimestre;
+				}
+				if( cmbPerioMeses.selectedIndex == 3) {
+					cmbPerioMeses.dataProvider = Util._listaMensual;
+				}
+				cmbPerioMeses.selectedIndex = 0;
+				
+				
+				btnConsultarCliente.dispatchEvent(new MouseEvent(MouseEvent.CLICK));				
+			}
+			
+			public function set actualizarEsperaYBloqueo($actualizarEstadoEspera:Object):void
+			{
+				var currenIdButton:String;
+				if($actualizarEstadoEspera.hasOwnProperty("idCurrentButtons")){
+					
+					for (var i:int = 0; i < $actualizarEstadoEspera.idCurrentButtons.length; i++) 
+					{
+						currenIdButton = $actualizarEstadoEspera.idCurrentButtons[i];
+						switch(currenIdButton)
+						{
+							case "buscarOperativos":
+							{
+								if(btnConsultarCliente.isCurrentButtonActualizar){
+									btnConsultarCliente.isBusyActualizar= $actualizarEstadoEspera.isBusy;
+								}else if(!$actualizarEstadoEspera.isBusy){
+									btnConsultarCliente.CambiarToActualizarTipoBoton(true);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			public var parametros:ParametrosBusquedaOperativo;
+			private var event:EventoTableroOperativos;
+			protected function buscarOperativos(evt:MouseEvent):void
+			{
+				var eventEspera:EventoEsperar = new EventoEsperar(EventoEsperar.CONFIGURAR_ESPERA);
+				eventEspera.mensaje = "iniciarEspera";
+				eventEspera.idButtons = [];
+				eventEspera.tipoEventos = [];
+				eventEspera.idButtons.push("buscarOperativos");
+				eventEspera.tipoEventos.push("CONSULTA_TABLERO");
+				dispatchEvent(eventEspera);
+				
+				if(VistaDefaultTabOperativos.cargarDatos.vista == "COMERCIALIZACIÓN")
+				{
+					if(VistaDefaultTabOperativos.cargarDatos.vistaMax == "ReqCotMax")
+					{
+						parametros = new ParametrosBusquedaOperativo();
+						event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TAB_REQCOT);
+						VistaDefaultTabOperativos.cargarDatos.newData = true;
+						VistaDefaultTabOperativos.cargarDatos.ReqCotMax = false;
+						VistaDefaultTabOperativos.cargarDatos.Pedidos = true;
+						VistaDefaultTabOperativos.cargarDatos.Confirmaciones = true;
+						VistaDefaultTabOperativos.cargarDatos.Seguimiento = true;
+					}
+					else if(VistaDefaultTabOperativos.cargarDatos.vistaMax == "Pedidos")
+					{
+						parametros = new ParametrosBusquedaOperativo();
+						event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TAB_PEDIDOS);
+						VistaDefaultTabOperativos.cargarDatos.newData = true;
+						VistaDefaultTabOperativos.cargarDatos.Confirmaciones = true;
+						VistaDefaultTabOperativos.cargarDatos.Pedidos = false;
+						VistaDefaultTabOperativos.cargarDatos.ReqCotMax = true;
+						VistaDefaultTabOperativos.cargarDatos.Seguimiento = true;
+					}
+					else if(VistaDefaultTabOperativos.cargarDatos.vistaMax == "Confirmaciones")
+					{
+						parametros = new ParametrosBusquedaOperativo();
+						event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TAB_CONFIRMACIONES);
+						VistaDefaultTabOperativos.cargarDatos.newData = true;
+						VistaDefaultTabOperativos.cargarDatos.Confirmaciones = false;
+						VistaDefaultTabOperativos.cargarDatos.Pedidos = true;
+						VistaDefaultTabOperativos.cargarDatos.ReqCotMax = true;
+						VistaDefaultTabOperativos.cargarDatos.Seguimiento = true;
+					}
+					else if(VistaDefaultTabOperativos.cargarDatos.vistaMax == "Seguimiento")
+					{
+						parametros = new ParametrosBusquedaOperativo();
+						event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TAB_SEGUIMIENTOS);
+						VistaDefaultTabOperativos.cargarDatos.newData = true;
+						VistaDefaultTabOperativos.cargarDatos.Confirmaciones = true;
+						VistaDefaultTabOperativos.cargarDatos.Pedidos = true;
+						VistaDefaultTabOperativos.cargarDatos.ReqCotMax = true;
+						VistaDefaultTabOperativos.cargarDatos.Seguimiento = false;
+					}
+					else
+					{						
+						parametros = new ParametrosBusquedaOperativo();
+						event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TABLERO);
+						VistaDefaultTabOperativos.cargarDatos.ReqCotMax = true;
+						VistaDefaultTabOperativos.cargarDatos.Pedidos = true;
+						VistaDefaultTabOperativos.cargarDatos.Confirmaciones = true;
+						VistaDefaultTabOperativos.cargarDatos.Seguimiento = true;
+					}
+					VistaDefaultTabOperativos.cargarDatos.vistaMax = "";
+					VistaDefaultTabOperativos.cargarDatos.operaciones = false;
+					VistaDefaultTabOperativos.cargarDatos.finanzas = false;
+				}	
+				if(VistaDefaultTabOperativos.cargarDatos.vista == "OPERACIONES")
+				{
+					parametros = new ParametrosBusquedaOperativo();
+					event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TABLERO_OPERACIONES);
+					VistaDefaultTabOperativos.cargarDatos.comercializacion = false;
+					VistaDefaultTabOperativos.cargarDatos.finanzas = false;
+				}
+				if(VistaDefaultTabOperativos.cargarDatos.vista == "FINANZAS")
+				{
+					parametros = new ParametrosBusquedaOperativo();
+					event = new EventoTableroOperativos(EventoTableroOperativos.CONSULTA_TABLERO_FINANZAS);
+					VistaDefaultTabOperativos.cargarDatos.comercializacion = false;
+					VistaDefaultTabOperativos.cargarDatos.operaciones = false;
+				}
+				
+				parametros.anio = cmbAnio.selectedItem;
+				parametros.periodo = cmbPeriodo.selectedItem;
+				if(parametros.periodo.toLowerCase() == "quincenal")
+				{
+					parametros.tipoPeriodo = cmbPerioMeses.selectedItem.llave;
+				}
+				else if(cmbPeriodo.selectedIndex == 3 || cmbPeriodo.selectedIndex == 0)
+				{
+					parametros.tipoPeriodo = 0 ;
+				}
+				else
+				{
+					parametros.tipoPeriodo = cmbPerioMeses.selectedIndex + 1;
+				}
+				if(parametros.periodo.toLowerCase() == "quincenal")
+				{
+					parametros.mes = cmbPerioMeses.selectedItem.mes;
+				}
+				else if(cmbPeriodo.selectedIndex == 3)
+				{
+					parametros.mes = cmbPerioMeses.selectedItem.llave;
+				}
+				else
+				{
+					parametros.mes = 0;
+				}
+				
+				if(cmbPeriodo.selectedIndex == 0 )
+				{
+					parametros.rangoMinMes = 1;
+					parametros.rangoMaxMes = 12;
+				}
+				else if(cmbPeriodo.selectedIndex == 1 )
+				{
+					if(cmbPerioMeses.selectedIndex == 0)
+					{
+						parametros.rangoMinMes = 1;
+						parametros.rangoMaxMes = 6;
+					}
+					else if(cmbPerioMeses.selectedIndex == 1)
+					{
+						parametros.rangoMinMes = 7;
+						parametros.rangoMaxMes = 12;
+					}
+				}
+				else if(cmbPeriodo.selectedIndex == 2)
+				{
+					if(cmbPerioMeses.selectedIndex == 0)
+					{
+						parametros.rangoMinMes = 1;
+						parametros.rangoMaxMes = 3;
+					}
+					else if(cmbPerioMeses.selectedIndex == 1)
+					{
+						parametros.rangoMinMes = 4;
+						parametros.rangoMaxMes = 6;
+					}
+					else if(cmbPerioMeses.selectedIndex == 2)
+					{
+						parametros.rangoMinMes = 7;
+						parametros.rangoMaxMes = 9;
+					}
+					else if(cmbPerioMeses.selectedIndex == 3)
+					{
+						parametros.rangoMinMes = 10;
+						parametros.rangoMaxMes = 12;
+					}
+				}
+				else if(cmbPeriodo.selectedIndex == 3)
+				{
+					parametros.rangoMinMes = cmbPerioMeses.selectedIndex + 1;
+					parametros.rangoMaxMes = cmbPerioMeses.selectedIndex + 1;
+				}
+				else if(cmbPeriodo.selectedIndex == 4)
+				{
+					parametros.rangoMinMes = cmbPerioMeses.selectedIndex;
+					parametros.rangoMaxMes = cmbPerioMeses.selectedIndex;
+				}
+				
+				
+				parametrosBusqueda = event.parametros = parametros;
+				dispatchEvent(event);
+				
+				currentAnioGlobal = parametros.anio;
+				currentPeriodoGlobal = parametros.periodo;
+				currentTipoPeriodoGlobal = parametros.tipoPeriodo;
+				currentMesGlobal = parametros.mes;
+			}
+			
+			public static var parametrosBusqueda:ParametrosBusquedaOperativo;
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" gap="0" paddingBottom="15">
+		<s:ButtonBar id="btnBarra" width="100%" height="30" dataProvider="{_arrButton}" selectedIndex="1" changing="btnBarra_changingHandler(event)" requireSelection="true"/>
+	</s:VGroup>
+	
+	<otros:divisionHueca width="100%"/>
+	
+	<label:Titulo text="Año" fontSize="10"/>
+	<s:ComboBox id="cmbAnio" width="100%" dataProvider="{_listaAnio}" selectedIndex="0" change="filtros_changeEvent(event)"  height="28" fontSize="14" focusColor="0x257d92"/>
+	<label:Titulo text="Periodo" fontSize="10"/>
+	<s:ComboBox id="cmbPeriodo" width="100%" dataProvider="{Util._listaPeriodo}" change="cmbPeriodo_changeHandler(event)" selectedIndex="0" height="28" fontSize="14" focusColor="0x257d92"/>
+	<s:ComboBox id="cmbPerioMeses" width="100%" height="0" visible="false" selectedIndex="0" change="filtros_changeEvent(event)"  fontSize="14" focusColor="0x257d92" labelField="valor"/>
+	
+	<s:Spacer height="10" />
+	<pqNet:botonPqNetLargo id="btnConsultarCliente"  width="100%" icono="iconoActualizarNormal" botonRedondo="true" click="buscarOperativos(event)" top="10"/>
+	<s:Spacer height="10" />
+</s:VGroup>
